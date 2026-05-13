@@ -1,0 +1,167 @@
+{
+  "entities": {
+    "Admin": {
+      "title": "Administrator",
+      "description": "System administrators with access to the dashboard",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin"] }
+      },
+      "required": ["email", "role"]
+    },
+    "Property": {
+      "title": "Property",
+      "description": "Real estate property details",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string" },
+        "businessType": { "type": "string", "enum": ["Venda", "Locação"] },
+        "propertyType": { "type": "string" },
+        "status": { "type": "string" },
+        "priceVenda": { "type": "number" },
+        "priceLocacao": { "type": "number" },
+        "condoFee": { "type": "number" },
+        "iptu": { "type": "number" },
+        "financing": { "type": "boolean" },
+        "exchange": { "type": "boolean" },
+        "documentationOk": { "type": "boolean" },
+        "furnished": { "type": "boolean" },
+        "rented": { "type": "boolean" },
+        "ownerName": { "type": "string" },
+        "ownerPhone": { "type": "string" },
+        "ownerEmail": { "type": "string" },
+        "ownerNotes": { "type": "string" },
+        "cep": { "type": "string" },
+        "state": { "type": "string" },
+        "city": { "type": "string" },
+        "neighborhood": { "type": "string" },
+        "address": { "type": "string" },
+        "number": { "type": "string" },
+        "complement": { "type": "string" },
+        "referencePoint": { "type": "string" },
+        "googleMapsLink": { "type": "string" },
+        "usefulArea": { "type": "number" },
+        "totalArea": { "type": "number" },
+        "privateArea": { "type": "number" },
+        "bedrooms": { "type": "number" },
+        "suites": { "type": "number" },
+        "bathrooms": { "type": "number" },
+        "halfBaths": { "type": "number" },
+        "livingRooms": { "type": "number" },
+        "kitchen": { "type": "boolean" },
+        "garageSpaces": { "type": "number" },
+        "floors": { "type": "number" },
+        "unitsPerFloor": { "type": "number" },
+        "floorLevel": { "type": "number" },
+        "yearBuilt": { "type": "number" },
+        "title": { "type": "string" },
+        "shortDescription": { "type": "string" },
+        "fullDescription": { "type": "string" },
+        "internalNotes": { "type": "string" },
+        "images": { "type": "array", "items": { "type": "string" } },
+        "mainImage": { "type": "string" },
+        "features": { "type": "array", "items": { "type": "string" } },
+        "installations": { "type": "array", "items": { "type": "string" } },
+        "finishes": { "type": "array", "items": { "type": "string" } },
+        "leisure": { "type": "array", "items": { "type": "string" } },
+        "locationTags": { "type": "array", "items": { "type": "string" } },
+        " destaca": { "type": "boolean" },
+        "publicado": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      }
+    },
+    "Visit": {
+      "title": "Visit Request",
+      "description": "Requested and confirmed property visits",
+      "type": "object",
+      "properties": {
+        "nomeCliente": { "type": "string" },
+        "telefone": { "type": "string" },
+        "email": { "type": "string" },
+        "imovelId": { "type": "string" },
+        "codigoImovel": { "type": "string" },
+        "tituloImovel": { "type": "string" },
+        "cidade": { "type": "string" },
+        "bairro": { "type": "string" },
+        "data": { "type": "string" },
+        "horario": { "type": "string" },
+        "mensagem": { "type": "string" },
+        "status": { "type": "string", "enum": ["pendente", "confirmada", "realizada", "cancelada"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Broker": {
+      "title": "Broker",
+      "description": "Real estate brokers",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "photo": { "type": "string" },
+        "phone": { "type": "string" },
+        "whatsapp": { "type": "string" },
+        "email": { "type": "string" },
+        "creci": { "type": "string" },
+        "instagram": { "type": "string" },
+        "active": { "type": "boolean" }
+      }
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "Financial expense record",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "value": { "type": "number" },
+        "paymentMethod": { "type": "string" },
+        "responsible": { "type": "string" },
+        "notes": { "type": "string" },
+        "receiptUrl": { "type": "string" }
+      }
+    },
+    "Revenue": {
+      "title": "Revenue",
+      "description": "Financial revenue record",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string" },
+        "description": { "type": "string" },
+        "type": { "type": "string" },
+        "value": { "type": "number" },
+        "brokerId": { "type": "string" },
+        "propertyId": { "type": "string" },
+        "notes": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "administradores": {
+      "schema": "Admin",
+      "description": "List of authorized administrator emails"
+    },
+    "imoveis": {
+      "schema": "Property",
+      "description": "Real estate database"
+    },
+    "visitas": {
+      "schema": "Visit",
+      "description": "Property visit requests"
+    },
+    "corretores": {
+      "schema": "Broker",
+      "description": "Broker management"
+    },
+    "gastos": {
+      "schema": "Expense",
+      "description": "Expense tracking"
+    },
+    "receitas": {
+      "schema": "Revenue",
+      "description": "Revenue tracking"
+    }
+  }
+}

@@ -1,0 +1,76 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && 
+             request.auth.token.get('email', '').lower() != '' &&
+             (
+               request.auth.token.get('email', '').lower() == 'luiz.uehara1@gmail.com' ||
+               (exists(/databases/$(database)/documents/administradores/$(request.auth.token.get('email', '').lower())) &&
+                get(/databases/$(database)/documents/administradores/$(request.auth.token.get('email', '').lower())).data.ativo == true)
+             );
+    }
+
+    // Site Settings (Public Read)
+    match /configuracoes/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Property Options (Public Read)
+    match /opcoes_imoveis/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Properties
+    match /imoveis/{propertyId} {
+      // Public can read if published and available
+      allow read: if (resource.data.publicado == true && resource.data.status == "disponivel") || isAdmin();
+      
+      // Admin can manage
+      allow write: if isAdmin();
+
+      // Subcollections/Subdocuments (Proprietário info)
+      match /privado/{details=**} {
+        allow read, write: if isAdmin();
+      }
+    }
+
+    // Visits
+    match /visitas/{visitId} {
+      allow create: if true; 
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Brokers
+    match /corretores/{brokerId} {
+      allow read: if true; // Let's make brokers public for now to avoid issues
+      allow write: if isAdmin();
+    }
+
+    // Admins list
+    match /administradores/{email} {
+       allow read: if isSignedIn() && (request.auth.token.email.lower() == email.lower() || isAdmin());
+       // Allow the initial developer to seed their own record
+       allow create: if isSignedIn() && request.auth.token.email.lower() == email.lower() && email.lower() == 'luiz.uehara1@gmail.com';
+       allow update, delete: if isAdmin(); 
+    }
+
+    // Financial & Forms
+    match /gastos/{id} { allow read, write: if isAdmin(); }
+    match /receitas/{id} { allow read, write: if isAdmin(); }
+    match /fichas_visita/{id} { allow read, write: if isAdmin(); }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

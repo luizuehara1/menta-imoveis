@@ -1,0 +1,84 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && 
+        exists(/databases/$(database)/documents/administradores/$(request.auth.token.email)) &&
+        get(/databases/$(database)/documents/administradores/$(request.auth.token.email)).data.ativo == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-\\.\\@]+$');
+    }
+
+    // Properties
+    match /imoveis/{propertyId} {
+      allow read: if (resource.data.publicado == true && (resource.data.status == 'Disponível' || resource.data.status == 'Reservado')) || isAdmin();
+      
+      allow create: if isAdmin() && isValidProperty(request.resource.data);
+      allow update: if isAdmin() && isValidProperty(request.resource.data);
+      allow delete: if isAdmin();
+
+      match /privado/proprietario {
+        allow read, write: if isAdmin();
+      }
+    }
+
+    function isValidProperty(data) {
+      return data.keys().hasAll(['titulo', 'preco', 'endereco']) && 
+             data.titulo is string && data.titulo.size() <= 200;
+    }
+
+    // Visits
+    match /visitas/{visitId} {
+      allow create: if isValidVisit(request.resource.data); 
+      allow read, update, delete: if isAdmin();
+    }
+
+    function isValidVisit(data) {
+      return data.keys().hasAll(['nome', 'email', 'telefone', 'imovelId']) &&
+             data.nome is string && data.nome.size() <= 100;
+    }
+
+    // Brokers
+    match /corretores/{brokerId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Admins list
+    match /administradores/{email} {
+      // Allow users to read their own status even if not yet fully authorized by other rules
+      allow read: if isSignedIn() && (request.auth.token.email == email || isAdmin());
+      allow write: if false; 
+    }
+
+    // Financial
+    match /gastos/{gastoId} {
+      allow read, write: if isAdmin();
+    }
+    match /receitas/{receitaId} {
+      allow read, write: if isAdmin();
+    }
+    
+    // Visit Forms
+    match /fichas_visita/{fichaId} {
+      allow read, write: if isAdmin();
+    }
+  }
+}

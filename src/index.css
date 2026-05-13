@@ -1,0 +1,88 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+
+  --color-primary-black: #000000;
+  --color-primary-gray: #2B2B2B;
+  --color-primary-gold: #E5BC53;
+  --color-primary-green: #003030;
+  --color-primary-white: #FFFFFF;
+  
+  --color-gold: #E5BC53;
+  --color-dark-green: #003030;
+
+  --shadow-premium: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  --shadow-gold: 0 10px 15px -3px rgba(229, 188, 83, 0.2);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply font-sans bg-white text-primary-gray antialiased selection:bg-gold/30;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display tracking-tight;
+  }
+}
+
+@layer components {
+  .btn-gold {
+    @apply bg-gold text-primary-black font-bold py-4 px-8 rounded-2xl transition-all hover:scale-[1.02] hover:shadow-gold active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  
+  .btn-outline-gold {
+    @apply border-2 border-gold text-gold font-bold py-4 px-8 rounded-2xl transition-all hover:bg-gold hover:text-primary-black active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50;
+  }
+  
+  .btn-green {
+    @apply bg-dark-green text-white font-bold py-4 px-8 rounded-2xl transition-all hover:scale-[1.02] hover:shadow-xl active:scale-95 flex items-center justify-center gap-3;
+  }
+  
+  .input-field {
+    @apply w-full bg-gray-50 border border-transparent rounded-2xl py-4 px-6 focus:bg-white focus:ring-4 focus:ring-gold/10 focus:border-gold/30 outline-none transition-all text-sm font-medium placeholder:text-gray-400;
+  }
+  
+  .glass-card {
+    @apply bg-white/80 backdrop-blur-xl border border-white/20 shadow-premium;
+  }
+  
+  .section-title {
+    @apply font-display text-4xl md:text-5xl font-bold tracking-tighter text-primary-black leading-[1.1];
+  }
+  
+  .admin-card {
+    @apply bg-white p-8 rounded-3xl shadow-sm border border-gray-100 transition-all hover:shadow-premium;
+  }
+
+  .badge {
+    @apply text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-gray-100;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 rounded-full hover:bg-gold transition-colors;
+}
