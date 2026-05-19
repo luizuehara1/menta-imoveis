@@ -34,6 +34,8 @@ const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isAdmin, loading, logout } = useAuth();
   const navigate = useNavigate();
 
+  console.log("[AdminRoute] Check:", { loading, user: user?.email, isAdmin });
+
   if (loading) {
     return (
       <div className="h-screen w-screen flex flex-col items-center justify-center bg-gray-50">

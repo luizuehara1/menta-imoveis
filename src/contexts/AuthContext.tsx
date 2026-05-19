@@ -62,64 +62,82 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   useEffect(() => {
+    // Safety timeout: force clear loading state after 8 seconds
+    const safetyTimeout = setTimeout(() => {
+      if (loading) {
+        console.warn("%c[Auth] Safety Timeout Reached! Forcing loading = false", "color: #ff9800; font-weight: bold;");
+        setLoading(false);
+      }
+    }, 8000);
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      console.log("%c[Auth] State change:", "color: #2196F3; font-weight: bold;", currentUser ? currentUser.email : "NO USER");
       setUser(currentUser);
       
-      if (currentUser?.email) {
-        const email = currentUser.email.toLowerCase();
-        console.log("[Auth] User detected:", email);
-        
-        try {
-          // Check both collections as per user request
-          const adminDocRef = doc(db, 'administradores', email);
-          const adminsLegacyRef = doc(db, 'admins', email);
+      try {
+        if (currentUser?.email) {
+          const email = currentUser.email.toLowerCase();
           
-          const [adminDoc, adminsLegacyDoc] = await Promise.all([
-            getDoc(adminDocRef),
-            getDoc(adminsLegacyRef)
+          console.log("[Auth] Verifying admin status for:", email);
+          
+          // Check both collections as per requirement
+          const adminRef1 = doc(db, 'admins', email);
+          const adminRef2 = doc(db, 'administradores', email);
+          
+          const [snap1, snap2] = await Promise.all([
+            getDoc(adminRef1),
+            getDoc(adminRef2)
           ]);
           
-          let hasAdminAccess = false;
+          const data1 = snap1.exists() ? snap1.data() : null;
+          const data2 = snap2.exists() ? snap2.data() : null;
           
-          if (adminDoc.exists()) {
-            const data = adminDoc.data();
-            hasAdminAccess = data?.ativo === true || data?.role === 'admin';
-          }
-          
-          if (!hasAdminAccess && adminsLegacyDoc.exists()) {
-            const data = adminsLegacyDoc.data();
-            hasAdminAccess = data?.ativo === true || data?.role === 'admin';
-          }
+          console.log("[Auth] admins collection:", snap1.exists() ? "Found" : "Not Found", data1);
+          console.log("[Auth] administradores collection:", snap2.exists() ? "Found" : "Not Found", data2);
 
-          // Auto-seed first admin for the main developer
+          const adminValido = 
+            (data1?.ativo === true || data1?.role === 'admin') ||
+            (data2?.ativo === true || data2?.role === 'admin');
+
+          // Auto-seed for developer if not found
           const devEmail = 'luiz.uehara1@gmail.com';
-          if (!hasAdminAccess && email === devEmail) {
-            console.log("[Auth] Seeding initial admin access for developer.");
-            await setDoc(adminDocRef, {
+          if (!adminValido && email === devEmail) {
+            console.log("[Auth] SEEDING: Creating admin doc for developer.");
+            await setDoc(adminRef2, {
               email: devEmail,
               role: 'admin',
               ativo: true,
-              nome: currentUser.displayName || 'Admin Inicial',
-              criadoEm: new Date().toISOString()
+              nome: currentUser.displayName || 'Luiz Admin',
+              updatedAt: new Date().toISOString()
             }, { merge: true });
-            hasAdminAccess = true;
+            setIsAdmin(true);
+          } else {
+            setIsAdmin(adminValido);
+            
+            if (currentUser && !adminValido) {
+              console.warn("[Auth] USER LOGGED IN BUT NOT AUTHORIZED AS ADMIN.");
+            }
           }
-
-          console.log("[Auth] Admin status:", hasAdminAccess ? "AUTHORIZED" : "NOT AUTHORIZED");
-          setIsAdmin(hasAdminAccess);
-        } catch (error: any) {
-          console.error("[Auth] Error checking admin permissions:", error);
-          const devEmail = 'luiz.uehara1@gmail.com';
-          setIsAdmin(email === devEmail);
+        } else {
+          setIsAdmin(false);
+          console.log("[Auth] No user logged in.");
         }
-      } else {
-        setIsAdmin(false);
+      } catch (error: any) {
+        console.error("[Auth] Permission check failed:", error.code, error.message);
+        // Minimal fallback for developer
+        const devEmail = 'luiz.uehara1@gmail.com';
+        setIsAdmin(currentUser?.email?.toLowerCase() === devEmail);
+      } finally {
+        setLoading(false);
+        clearTimeout(safetyTimeout);
+        console.log("[Auth] Loading complete.");
       }
-      
-      setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      clearTimeout(safetyTimeout);
+    };
   }, []);
 
   const login = async () => {

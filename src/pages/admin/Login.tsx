@@ -31,7 +31,24 @@ export default function AdminLogin() {
     }
   };
 
-  if (loading) return <div className="h-screen w-screen flex items-center justify-center">Verificando sessão...</div>;
+  // Safety timeout for the local component state
+  useEffect(() => {
+    if (loading) {
+      const timer = setTimeout(() => {
+        console.warn("[AdminLogin] Local safety timeout reached.");
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [loading]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-primary-black text-white">
+        <div className="w-12 h-12 border-4 border-gold border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p className="font-display font-medium animate-pulse tracking-widest text-gold text-xs uppercase">Verificando sessão...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-primary-black p-4 relative overflow-hidden">
