@@ -9,7 +9,7 @@ import { staggerContainer, slideUp } from '../../constants/animations';
 import { PremiumHeroBackground } from '../../components/three/PremiumHeroBackground';
 import { LuxuryShapeCanvas } from '../../components/three/AbstractLuxuryShape';
 import { useSettings, useOptions } from '../../hooks/useSettings';
-import { formatCurrency, isValidPublicProperty } from '../../lib/utils';
+import { formatCurrency, isValidPublicProperty, getSafeImageUrl } from '../../lib/utils';
 
 import { SafeImage } from '../../components/ui/SafeImage';
 
@@ -27,7 +27,7 @@ const Hero = ({ settings }: { settings: any }) => {
           className="w-full h-full"
         >
           <SafeImage
-            src={settings.hero.imagemFundoUrl || "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&q=80&w=2000"}
+            src={getSafeImageUrl(settings.hero.imagemFundoUrl, "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&q=80&w=2000")}
             alt="Imóvel de Luxo"
             className="w-full h-full"
           />

@@ -2,11 +2,6 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Safety net
-    match /{document=**} {
-      allow read, write: if false;
-    }
-
     // Helpers
     function isSignedIn() {
       return request.auth != null;
@@ -18,33 +13,49 @@ service cloud.firestore {
              (
                request.auth.token.email.lower() == 'luiz.uehara1@gmail.com' ||
                (exists(/databases/$(database)/documents/administradores/$(request.auth.token.email.lower())) &&
-                get(/databases/$(database)/documents/administradores/$(request.auth.token.email.lower())).data.get('ativo', false) == true)
+                get(/databases/$(database)/documents/administradores/$(request.auth.token.email.lower())).data.get('ativo', false) == true) ||
+               (exists(/databases/$(database)/documents/admins/$(request.auth.token.email.lower())) &&
+                get(/databases/$(database)/documents/admins/$(request.auth.token.email.lower())).data.get('ativo', false) == true)
              );
     }
 
-    // Public Collections
-    match /siteSettings/{id} {
-      allow read: if true;
-      allow write: if isAdmin();
+    // Public Collections - Anyone can read, only Admin can write
+    match /siteSettings/{document=**} { allow read: if true; allow write: if isAdmin(); }
+    match /settings/{document=**} { allow read: if true; allow write: if isAdmin(); }
+    match /configuracoes/{document=**} { allow read: if true; allow write: if isAdmin(); }
+    match /configuracao/{document=**} { allow read: if true; allow write: if isAdmin(); }
+    
+    // Core Options Collection
+    match /opcoes_imoveis/{id} { 
+      allow read: if true; 
+      allow write: if isAdmin(); 
     }
-
-    match /configuracoes/{id} {
-      allow read: if true;
-      allow write: if isAdmin();
+    match /opcoes_imoveis/{document=**} { 
+      allow read: if true; 
+      allow write: if isAdmin(); 
     }
-
-    match /opcoes_imoveis/{id} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    match /corretores/{id} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
+    
+    // Support for top-level collections as requested
+    match /lazer/{document=**} { allow read: if true; allow write: if isAdmin(); }
+    match /instalacoes/{document=**} { allow read: if true; allow write: if isAdmin(); }
+    match /tiposNegocio/{document=**} { allow read: if true; allow write: if isAdmin(); }
+    match /localizacoes/{document=**} { allow read: if true; allow write: if isAdmin(); }
+    match /faixasPreco/{document=**} { allow read: if true; allow write: if isAdmin(); }
+    match /caracteristicas/{document=**} { allow read: if true; allow write: if isAdmin(); }
+    match /statusImovel/{document=**} { allow read: if true; allow write: if isAdmin(); }
+    match /acabamentos/{document=**} { allow read: if true; allow write: if isAdmin(); }
+    match /cidades/{document=**} { allow read: if true; allow write: if isAdmin(); }
+    match /tiposImovel/{document=**} { allow read: if true; allow write: if isAdmin(); }
+    match /bairros/{document=**} { allow read: if true; allow write: if isAdmin(); }
+    
+    match /opcoes/{document=**} { allow read: if true; allow write: if isAdmin(); }
+    match /corretores/{document=**} { allow read: if true; allow write: if isAdmin(); }
 
     match /imoveis/{id} {
-      allow read: if (resource.data.get('publicado', false) == true) || isAdmin();
+      allow read: if (resource.data.get('publicado', false) == true) 
+                  || (resource.data.get('publicadoNoSite', false) == true)
+                  || (resource.data.get('ativo', false) == true)
+                  || isAdmin();
       allow write: if isAdmin();
       
       match /privado/{details=**} {
@@ -52,15 +63,27 @@ service cloud.firestore {
       }
     }
 
+    match /properties/{id} {
+      allow read: if (resource.data.get('publicado', false) == true) 
+                  || (resource.data.get('publicadoNoSite', false) == true)
+                  || (resource.data.get('ativo', false) == true)
+                  || isAdmin();
+      allow write: if isAdmin();
+    }
+
     match /visitas/{id} {
-      allow read, create: if true;
+      allow read: if isAdmin();
+      allow create: if true;
       allow update, delete: if isAdmin();
     }
 
     // Protected Collections
-    match /locacoes/{id} {
-      allow read, write: if isAdmin();
-    }
+    match /locacoes/{id} { allow read, write: if isAdmin(); }
+    match /contratos/{id} { allow read, write: if isAdmin(); }
+    match /financeiro/{id} { allow read, write: if isAdmin(); }
+    match /gastos/{id} { allow read, write: if isAdmin(); }
+    match /receitas/{id} { allow read, write: if isAdmin(); }
+    match /fichas_visita/{id} { allow read, write: if isAdmin(); }
 
     match /administradores/{email} {
       allow read: if isSignedIn() && (request.auth.token.email.lower() == email.lower() || request.auth.token.email.lower() == 'luiz.uehara1@gmail.com');
@@ -68,33 +91,19 @@ service cloud.firestore {
       allow update, delete: if isSignedIn() && request.auth.token.email.lower() == 'luiz.uehara1@gmail.com';
     }
 
-    match /gastos/{id} { allow read, write: if isAdmin(); }
-    match /receitas/{id} { allow read, write: if isAdmin(); }
-    match /fichas_visita/{id} { allow read, write: if isAdmin(); }
-    match /contratos/{id} { allow read, write: if isAdmin(); }
-    
-    match /configLocacaoGarantias/{id} {
-      allow read: if true;
+    match /admins/{email} {
+      allow read: if isSignedIn() && (request.auth.token.email.lower() == email.lower() || request.auth.token.email.lower() == 'luiz.uehara1@gmail.com');
       allow write: if isAdmin();
     }
-    match /configLocacaoStatus/{id} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-    match /configLocacaoContratos/{id} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-    match /configLocacaoRegras/{id} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-    match /bairros/{id} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-    match /locacoes/{id} {
-      allow read, write: if isAdmin();
+
+    match /configLocacaoGarantias/{document=**} { allow read: if true; allow write: if isAdmin(); }
+    match /configLocacaoStatus/{document=**} { allow read: if true; allow write: if isAdmin(); }
+    match /configLocacaoContratos/{document=**} { allow read: if true; allow write: if isAdmin(); }
+    match /configLocacaoRegras/{document=**} { allow read: if true; allow write: if isAdmin(); }
+
+    // Catch-all deny
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

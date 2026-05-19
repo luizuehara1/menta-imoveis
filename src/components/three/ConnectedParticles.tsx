@@ -48,11 +48,11 @@ export const ConnectedParticles: React.FC<ConnectedParticlesProps> = ({
   useFrame((state) => {
     if (!pointsRef.current || !linesRef.current) return;
     
-    const time = state.clock.getElapsedTime();
+    const time = state.clock?.getElapsedTime() || (performance.now() / 1000);
     
     // Smooth movement based on mouse
-    const targetX = mouse.x * 0.4;
-    const targetY = mouse.y * 0.4;
+    const targetX = (mouse?.x || 0) * 0.4;
+    const targetY = (mouse?.y || 0) * 0.4;
     
     pointsRef.current.rotation.x = THREE.MathUtils.lerp(pointsRef.current.rotation.x, targetY * 0.15, 0.05);
     pointsRef.current.rotation.y = THREE.MathUtils.lerp(pointsRef.current.rotation.y, targetX * 0.15, 0.05);

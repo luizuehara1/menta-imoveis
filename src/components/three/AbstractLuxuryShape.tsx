@@ -17,10 +17,10 @@ export const AbstractLuxuryShape: React.FC<AbstractLuxuryShapeProps> = ({
 
   useFrame((state) => {
     if (!mesh.current) return;
-    const time = state.clock.getElapsedTime();
+    const time = state.clock?.getElapsedTime() || (performance.now() / 1000);
     
-    const targetX = mouse.x * 0.5;
-    const targetY = mouse.y * 0.5;
+    const targetX = (mouse?.x || 0) * 0.5;
+    const targetY = (mouse?.y || 0) * 0.5;
 
     mesh.current.rotation.x = THREE.MathUtils.lerp(mesh.current.rotation.x, targetY + time * 0.2, 0.05);
     mesh.current.rotation.y = THREE.MathUtils.lerp(mesh.current.rotation.y, targetX + time * 0.3, 0.05);

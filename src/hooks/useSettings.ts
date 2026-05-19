@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { doc, getDoc, onSnapshot, collection } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { doc, getDoc, onSnapshot, collection, setDoc } from 'firebase/firestore';
+import { db, auth } from '../lib/firebase';
 import { SiteConfig, OptionItem } from '../types';
 import { DEFAULT_SITE_CONFIG, DEFAULT_OPTIONS } from '../constants/defaultSettings';
 
@@ -40,39 +40,73 @@ export function useOptions() {
     ];
 
     const unsubs = categories.map(category => {
-      const path = `opcoes_imoveis/${category}`;
-      return onSnapshot(doc(db, 'opcoes_imoveis', category), (docSnap) => {
+      // 1. First try the document-based approach (opcoes_imoveis/{category})
+      const docRef = doc(db, 'opcoes_imoveis', category);
+      
+      const unsub = onSnapshot(docRef, async (docSnap) => {
         if (docSnap.exists()) {
           const data = docSnap.data();
           const items = data.itens || [];
+          console.log(`[useOptions] SUCCESS (${category}): Found ${items.length} items in document.`);
           setOptions(prev => ({
             ...prev,
             [category]: items.length > 0 ? items : (DEFAULT_OPTIONS[category] || [])
           }));
         } else {
+          console.warn(`[useOptions] MISSING (${category}): Document not found. Using defaults.`);
           setOptions(prev => ({
             ...prev,
             [category]: DEFAULT_OPTIONS[category] || []
           }));
+
+          // AUTO-SEED: If admin is logged in, create the document
+          if (auth.currentUser) {
+            // We check for admin status indirectly via the fact that they are logged in 
+            // and this is usually called from an admin context or when they have some access.
+            // But let's be careful. The rules will block them if they aren't real admins.
+            try {
+              const defaultItems = DEFAULT_OPTIONS[category] || [];
+              if (defaultItems.length > 0) {
+                console.log(`[useOptions] SEEDING (${category}): Creating document with defaults.`);
+                const { serverTimestamp } = await import('firebase/firestore');
+                await setDoc(docRef, {
+                  itens: defaultItems,
+                  updatedAt: serverTimestamp(),
+                  seeding: true
+                }, { merge: true });
+              }
+            } catch (e) {
+              console.log(`[useOptions] SEEDING FAILED (${category}): Probably not an admin.`, e);
+            }
+          }
         }
       }, (error) => {
-        console.error(`Error fetching options for ${category}:`, error);
+        console.error(`[useOptions] PERMISSION ERROR for ${category}:`, error.message);
+        // Fallback to defaults on error
         setOptions(prev => ({
           ...prev,
           [category]: DEFAULT_OPTIONS[category] || []
         }));
       });
+
+      return unsub;
     });
 
     // Also fetch from top-level bairros collection
     const unsubBairros = onSnapshot(collection(db, 'bairros'), (snap) => {
       const b = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter((i: any) => i.ativo);
       setOptions(prev => ({ ...prev, bairros: b as any }));
+    }, (error) => {
+      console.error(`[useOptions] Error fetching bairros:`, error.message);
+      setOptions(prev => ({ ...prev, bairros: [] }));
     });
 
-    setLoading(false);
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 2000);
 
     return () => {
+      clearTimeout(timer);
       unsubs.forEach(unsub => unsub());
       unsubBairros();
     };

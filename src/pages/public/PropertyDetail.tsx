@@ -30,7 +30,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import PageWrapper from '../../components/PageWrapper';
 import { SafeImage } from '../../components/ui/SafeImage';
-import { formatCurrency, isValidPublicProperty, cleanPhoneForWhatsapp } from '../../lib/utils';
+import { formatCurrency, isValidPublicProperty, cleanPhoneForWhatsapp, getSafeImageUrl } from '../../lib/utils';
 
 export default function PropertyDetail() {
   const { id } = useParams();
@@ -51,7 +51,7 @@ export default function PropertyDetail() {
       }
       images.unshift(mainImg);
     }
-    return images.filter(Boolean);
+    return images.filter(Boolean).map(img => getSafeImageUrl(img));
   }, [property]);
 
   useEffect(() => {

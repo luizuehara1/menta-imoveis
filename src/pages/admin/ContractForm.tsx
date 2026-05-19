@@ -267,6 +267,7 @@ export default function AdminContractForm() {
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
+        allowTaint: true,
         windowWidth: printRef.current.scrollWidth,
         windowHeight: printRef.current.scrollHeight,
         onclone: (clonedDoc) => {

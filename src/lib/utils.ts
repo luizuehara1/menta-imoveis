@@ -123,6 +123,22 @@ export function getPropertyImage(p: any): string {
 }
 
 /**
+ * Robust image fallback logic for external URLs (CORS/Broken)
+ */
+export function getSafeImageUrl(url: any, fallback = "/placeholder-imovel.png"): string {
+  if (!url || typeof url !== "string") return fallback;
+  
+  const cleanUrl = url.trim();
+  
+  // Only allow https or local public paths
+  if (!cleanUrl.startsWith("https://") && !cleanUrl.startsWith("/")) {
+    return fallback;
+  }
+  
+  return cleanUrl;
+}
+
+/**
  * Cleans a phone number for WhatsApp links (digits only)
  */
 export function cleanPhoneForWhatsapp(phone: string): string {

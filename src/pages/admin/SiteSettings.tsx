@@ -62,11 +62,27 @@ const SiteSettings = () => {
       ];
 
       const optionsData: Record<string, OptionItem[]> = { ...DEFAULT_OPTIONS };
+      console.log("[Seeding] Checking options categories...");
       
       for (const category of categories) {
-        const optionDoc = await getDoc(doc(db, 'opcoes_imoveis', category));
-        if (optionDoc.exists()) {
-          optionsData[category] = optionDoc.data().itens || [];
+        if (category === 'bairros') continue; // Bairros is a collection, handled differently elsewhere
+        
+        try {
+          const optionDoc = await getDoc(doc(db, 'opcoes_imoveis', category));
+          if (optionDoc.exists()) {
+            optionsData[category] = optionDoc.data().itens || [];
+          } else {
+            // Seed defaults if missing and we are in admin
+            console.log(`[Seeding] Seeding missing category: ${category}`);
+            const defaultItems = DEFAULT_OPTIONS[category] || [];
+            await setDoc(doc(db, 'opcoes_imoveis', category), {
+              itens: defaultItems,
+              updatedAt: serverTimestamp()
+            });
+            optionsData[category] = defaultItems;
+          }
+        } catch (err) {
+          console.error(`[Seeding] Error checking/seeding ${category}:`, err);
         }
       }
 

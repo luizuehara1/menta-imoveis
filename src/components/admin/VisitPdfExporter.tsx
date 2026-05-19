@@ -2,6 +2,7 @@ import React from 'react';
 import { Visit, Property, SiteConfig } from '../../types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { getSafeImageUrl } from '../../lib/utils';
 import { 
   User, 
   Phone, 
@@ -41,7 +42,7 @@ export const VisitPdfTemplate = React.forwardRef<HTMLDivElement, VisitPdfTemplat
   const getMainImage = () => {
     if (!property) return null;
     const p = property as any;
-    return (
+    const url = (
       p.mainImage || 
       p.imagemPrincipal || 
       p.capa || 
@@ -50,6 +51,7 @@ export const VisitPdfTemplate = React.forwardRef<HTMLDivElement, VisitPdfTemplat
       (p.fotos && p.fotos.length > 0 ? p.fotos[0] : null) ||
       (p.galeria && p.galeria.length > 0 ? p.galeria[0] : null)
     );
+    return getSafeImageUrl(url);
   };
 
   // Safe text handling

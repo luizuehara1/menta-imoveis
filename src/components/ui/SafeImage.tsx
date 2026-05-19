@@ -34,7 +34,7 @@ export const SafeImage: React.FC<SafeImageProps> = ({
 
   if (!src || error) {
     return (
-      <div className={cn("flex items-center justify-center bg-gray-100 text-gray-400", className)}>
+      <div className={cn("flex items-center justify-center bg-gray-100 text-gray-400", className)} style={props.style}>
         <div className="text-center p-4">
           <ImageOff size={24} className="mx-auto mb-2 opacity-20" />
           <p className="text-[10px] font-black uppercase tracking-widest opacity-40">Imagem não disponível</p>
@@ -57,7 +57,10 @@ export const SafeImage: React.FC<SafeImageProps> = ({
         className={cn("w-full h-full object-cover transition-opacity duration-300", loading ? "opacity-0" : "opacity-100")}
         referrerPolicy="no-referrer"
         crossOrigin="anonymous"
-        onError={() => setError(true)}
+        onError={(e) => {
+          console.warn("Image load failed, trying fallback:", src);
+          setError(true);
+        }}
         onLoad={() => setLoading(false)}
         loading={priority ? "eager" : props.loading || "lazy"}
         {...props}

@@ -23,7 +23,11 @@ export default function AdminLogin() {
       await login();
     } catch (err: any) {
       console.error("Login component error:", err);
-      setError(err?.message || 'Falha na autenticação. Tente novamente.');
+      if (err?.code === 'auth/unauthorized-domain') {
+        setError('Domínio não autorizado no Firebase Authentication. Adicione o domínio da Vercel (menta-imoveis-9h65.vercel.app) nas configurações do Firebase.');
+      } else {
+        setError(err?.message || 'Falha na autenticação. Tente novamente.');
+      }
     }
   };
 

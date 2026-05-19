@@ -1,6 +1,9 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, Link } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import app from './lib/firebase';
+
+console.log("Firebase projectId:", app?.options?.projectId);
 
 // Layouts
 import PublicLayout from './layouts/PublicLayout';

@@ -650,7 +650,8 @@ export default function AdminPropertyForm() {
   }, [id, setValue, watch]);
 
   const renderTabContent = () => {
-    if (optionsLoading) return <div className="py-20 text-center animate-pulse">Carregando opções dinâmicas...</div>;
+    // Don't block the whole screen
+  // if (optionsLoading) return <div className="py-20 text-center animate-pulse">Carregando opções dinâmicas...</div>;
 
     switch (activeTab) {
       case 'bash':

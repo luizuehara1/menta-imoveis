@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useSettings, useOptions } from '../../hooks/useSettings';
 import PageWrapper from '../../components/PageWrapper';
 import { SafeImage } from '../../components/ui/SafeImage';
-import { formatCurrency, isValidPublicProperty, cleanPhoneForWhatsapp } from '../../lib/utils';
+import { formatCurrency, isValidPublicProperty, cleanPhoneForWhatsapp, getSafeImageUrl } from '../../lib/utils';
 import { staggerContainer, slideUp, fadeIn } from '../../constants/animations';
 import { GoldenParticles } from '../../components/three/GoldenParticles';
 import { Canvas } from '@react-three/fiber';
@@ -28,9 +28,9 @@ const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
       whileHover={{ y: -8 }}
       className="group bg-white rounded-3xl overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-500 border border-gray-100 flex flex-col h-full"
     >
-      <Link to={`/imovel/${property.id}`} className="block relative h-64 overflow-hidden">
+      <Link to={`/imovel/:id`.replace(':id', property.id)} className="block relative h-64 overflow-hidden">
         <SafeImage
-          src={property.mainImage}
+          src={getSafeImageUrl(property.mainImage)}
           alt={property.title}
           className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"
         />

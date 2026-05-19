@@ -8,10 +8,10 @@ const MouseLight = () => {
   const lightRef = useRef<THREE.PointLight>(null);
   const { mouse, viewport } = useThree();
 
-  useFrame(() => {
+  useFrame((state) => {
     if (!lightRef.current) return;
-    const x = (mouse.x * viewport.width) / 2;
-    const y = (mouse.y * viewport.height) / 2;
+    const x = ((mouse?.x || 0) * viewport.width) / 2;
+    const y = ((mouse?.y || 0) * viewport.height) / 2;
     lightRef.current.position.set(x, y, 2);
   });
 
@@ -24,11 +24,11 @@ const LuxuryGlassSphere = () => {
 
   useFrame((state) => {
     if (!meshRef.current) return;
-    const time = state.clock.getElapsedTime();
+    const time = state.clock?.getElapsedTime() || (performance.now() / 1000);
     
     // Smoothly follow mouse with delay
-    const targetX = mouse.x * 2;
-    const targetY = mouse.y * 2;
+    const targetX = (mouse?.x || 0) * 2;
+    const targetY = (mouse?.y || 0) * 2;
     
     meshRef.current.position.x = THREE.MathUtils.lerp(meshRef.current.position.x, targetX, 0.02);
     meshRef.current.position.y = THREE.MathUtils.lerp(meshRef.current.position.y, targetY, 0.02);
@@ -81,8 +81,17 @@ const LightRays = () => {
 };
 
 export const InteractiveLuxuryBackground: React.FC = () => {
+  const [hasError, setHasError] = React.useState(false);
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
   const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  if (hasError) {
+    return (
+      <div className="absolute inset-0 z-0 overflow-hidden bg-primary-black">
+        <div className="absolute inset-0 bg-gradient-to-b from-primary-black/90 via-primary-black/40 to-primary-black" />
+      </div>
+    );
+  }
 
   return (
     <div className="absolute inset-0 z-10 pointer-events-none overflow-hidden select-none">
@@ -93,10 +102,23 @@ export const InteractiveLuxuryBackground: React.FC = () => {
         gl={{ 
           antialias: true, 
           alpha: true,
-          powerPreference: "high-performance"
+          powerPreference: "high-performance",
+          failIfMajorPerformanceCaveat: true
         }}
         dpr={isMobile ? 1 : 1.5}
         style={{ background: 'transparent' }}
+        onCreated={({ gl }) => {
+          const handleContextLost = (event: Event) => {
+            event.preventDefault();
+            console.warn("WebGL Context Lost. Disabling Three.js background.");
+            setHasError(true);
+          };
+          gl.domElement.addEventListener("webglcontextlost", handleContextLost);
+        }}
+        onError={(error) => {
+          console.warn("Three.js error, using fallback background:", error);
+          setHasError(true);
+        }}
       >
         <PerspectiveCamera makeDefault position={[0, 0, 8]} fov={60} />
         <Suspense fallback={null}>
