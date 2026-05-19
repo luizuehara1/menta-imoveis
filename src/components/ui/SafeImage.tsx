@@ -35,7 +35,7 @@ export const SafeImage: React.FC<SafeImageProps> = ({
     if (fallbackSrc) {
       e.currentTarget.src = fallbackSrc;
     } else {
-      e.currentTarget.src = "/placeholder-imovel.png";
+      e.currentTarget.src = "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&q=80&w=1200";
     }
   };
 
@@ -58,7 +58,7 @@ export const SafeImage: React.FC<SafeImageProps> = ({
         </div>
       )}
       <img
-        src={error ? (fallbackSrc || "/placeholder-imovel.png") : safeSrc}
+        src={error ? (fallbackSrc || "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&q=80&w=1200") : safeSrc}
         alt={alt}
         className={cn("w-full h-full object-cover transition-opacity duration-300", loading ? "opacity-0" : "opacity-100")}
         referrerPolicy="no-referrer"

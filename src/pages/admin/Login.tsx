@@ -45,7 +45,7 @@ export default function AdminLogin() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-primary-black text-white">
         <div className="w-12 h-12 border-4 border-gold border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p className="font-display font-medium animate-pulse tracking-widest text-gold text-xs uppercase">Verificando sessão...</p>
+        <p className="font-display font-medium animate-pulse tracking-widest text-gold text-xs uppercase">Verificando acesso administrativo...</p>
       </div>
     );
   }

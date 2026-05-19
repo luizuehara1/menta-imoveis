@@ -62,27 +62,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   useEffect(() => {
-    // Safety timeout: force clear loading state after 8 seconds
+    // Safety timeout: force clear loading state after 5 seconds
     const safetyTimeout = setTimeout(() => {
       if (loading) {
         console.warn("%c[Auth] Safety Timeout Reached! Forcing loading = false", "color: #ff9800; font-weight: bold;");
         setLoading(false);
       }
-    }, 8000);
+    }, 5000);
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      console.log("%c[Auth] Verificando sessão...", "color: #2196F3; font-weight: bold;");
-      console.log("Usuário atual:", currentUser?.email);
+      console.log("%c[Auth] Verificando acesso administrativo...", "color: #2196F3; font-weight: bold;");
+      const startTime = performance.now();
+      
       setUser(currentUser);
       
       try {
         if (currentUser?.email) {
-          const email = currentUser.email.toLowerCase();
+          const email = currentUser.email.toLowerCase().trim();
+          console.log("[Auth] Usuário:", email);
+
+          // Local session cache check for faster UX
+          const cachedAdmin = sessionStorage.getItem("adminVerified");
+          const cachedEmail = sessionStorage.getItem("adminEmail");
           
-          console.log("Buscando admin em admins:", email);
-          console.log("Buscando admin em administradores:", email);
+          if (cachedAdmin === "true" && cachedEmail === email) {
+            console.log("[Auth] Cache de sessão encontrado. Liberando painel antecipadamente.");
+            setIsAdmin(true);
+            setLoading(false); // Fast path
+          }
           
-          // Check both collections as per requirement
+          console.log("[Auth] Buscando administradores e admins...");
+          
+          // Check both collections as per requirement (Optimized with Promise.all)
           const adminRef1 = doc(db, 'admins', email);
           const adminRef2 = doc(db, 'administradores', email);
           
@@ -94,26 +105,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const adminData1 = snap1.exists() ? snap1.data() : null;
           const adminData2 = snap2.exists() ? snap2.data() : null;
           
-          console.log("Admin encontrado em admins:", snap1.exists());
-          console.log("Data admins:", adminData1);
-          console.log("Admin encontrado em administradores:", snap2.exists());
-          console.log("Data administradores:", adminData2);
-
           const adminValido = 
             (adminData1?.ativo === true) || 
             (adminData2?.ativo === true);
 
-          console.log("Admin autorizado:", adminValido);
+          const endTime = performance.now();
+          console.log(`[Auth] Verificação finalizada em ${(endTime - startTime).toFixed(2)}ms`);
+          console.log("[Auth] Admin autorizado:", adminValido);
+          
           setIsAdmin(adminValido);
 
-          if (currentUser && !adminValido) {
+          if (adminValido) {
+            sessionStorage.setItem("adminVerified", "true");
+            sessionStorage.setItem("adminEmail", email);
+          } else {
+            sessionStorage.removeItem("adminVerified");
+            sessionStorage.removeItem("adminEmail");
             console.warn("Acesso negado. Este e-mail não possui permissão administrativa.");
-            // We DON'T sign out immediately here anymore, 
-            // the UI (Login or AdminRoute) will show the Access Denied message
-            // and the user can click a button to log out.
           }
         } else {
           setIsAdmin(false);
+          sessionStorage.removeItem("adminVerified");
+          sessionStorage.removeItem("adminEmail");
           console.log("[Auth] Nenhum usuário logado.");
         }
       } catch (error: any) {
@@ -122,7 +135,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Safety fallback for developer in case of Firestore breakdown
         const devEmail = 'luiz.uehara1@gmail.com';
         if (currentUser?.email?.toLowerCase() === devEmail) {
-          console.log("Fallback especial para desenvolvedor ativo.");
+          console.log("[Auth] Fallback especial para desenvolvedor ativo.");
           setIsAdmin(true);
         } else {
           setIsAdmin(false);
@@ -130,7 +143,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } finally {
         setLoading(false);
         clearTimeout(safetyTimeout);
-        console.log("[Auth] Carregamento finalizado.");
       }
     });
 
@@ -181,6 +193,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     try {
+      sessionStorage.removeItem("adminVerified");
+      sessionStorage.removeItem("adminEmail");
       await signOut(auth);
     } catch (error) {
       console.error("Logout failed:", error);

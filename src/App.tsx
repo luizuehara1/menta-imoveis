@@ -40,7 +40,7 @@ const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return (
       <div className="h-screen w-screen flex flex-col items-center justify-center bg-gray-50">
         <div className="w-12 h-12 border-4 border-gold border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p className="text-gray-500 font-medium animate-pulse">Verificando permissões...</p>
+        <p className="font-display font-medium text-primary-black animate-pulse tracking-widest text-xs uppercase text-center px-4">Verificando acesso administrativo...</p>
       </div>
     );
   }

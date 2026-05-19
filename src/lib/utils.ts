@@ -134,7 +134,7 @@ export function getPropertyImage(p: any): string {
 /**
  * Robust image fallback logic for external URLs (CORS/Broken)
  */
-export function getSafeImageUrl(url: any, fallback = "/placeholder-imovel.png"): string {
+export function getSafeImageUrl(url: any, fallback = "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&q=80&w=1200"): string {
   if (!url || typeof url !== "string") return fallback;
   
   const cleanUrl = url.trim();
