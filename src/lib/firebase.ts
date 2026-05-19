@@ -5,13 +5,22 @@ import { getAnalytics, isSupported } from 'firebase/analytics';
 
 import firebaseConfigLocal from '../../firebase-applet-config.json';
 
-console.log("--------------------------------------------------");
-console.log("FIREBASE INITIALIZATION DEBUG");
-console.log("DOMÍNIO ATUAL:", window.location.hostname);
-console.log("FIREBASE PROJECT ID:", import.meta.env.VITE_FIREBASE_PROJECT_ID);
-console.log("FIREBASE AUTH DOMAIN:", import.meta.env.VITE_FIREBASE_AUTH_DOMAIN);
-console.log("FIREBASE APP ID:", import.meta.env.VITE_FIREBASE_APP_ID);
-console.log("--------------------------------------------------");
+// --------------------------------------------------------------------------
+// FIREBASE DEPLOYMENT DOCTOR
+// This helps verify if Vercel Environment Variables are correctly propagated.
+// --------------------------------------------------------------------------
+if (typeof window !== 'undefined') {
+  console.log("%c[FIREBASE DOCTOR]", "color: #E5BC53; font-weight: bold; font-size: 14px;");
+  console.log("Domain:", window.location.hostname);
+  console.log("Project ID:", import.meta.env.VITE_FIREBASE_PROJECT_ID || "FALLBACK (Config Local)");
+  console.log("Auth Domain:", import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "FALLBACK (Config Local)");
+  console.log("Database ID:", import.meta.env.VITE_FIREBASE_DATABASE_ID || "DEFAULT");
+  
+  if (!import.meta.env.VITE_FIREBASE_PROJECT_ID) {
+    console.warn("%c[WARNING] VITE_FIREBASE_PROJECT_ID is NOT defined in environment. Using fallback from firebase-applet-config.json.", "color: #ff9800; font-weight: bold;");
+  }
+}
+// --------------------------------------------------------------------------
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || firebaseConfigLocal.apiKey,
@@ -22,8 +31,13 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || firebaseConfigLocal.measurementId
 };
 
-if (firebaseConfig.projectId !== 'menta-imobiliaria1') {
-  console.warn(`[Firebase] ATENÇÃO: O Project ID que está sendo usado pelo SDK (${firebaseConfig.projectId}) é diferente de 'menta-imobiliaria1'. Verifique se as variáveis de ambiente no Vercel estão configuradas corretamente.`);
+const EXPECTED_PROJECT_ID = 'menta-imobiliaria1';
+
+if (firebaseConfig.projectId !== EXPECTED_PROJECT_ID) {
+  console.error(`%c[FIREBASE PROJECT MISMATCH]`, "color: #f44336; font-weight: bold; font-size: 16px;");
+  console.error(`O app está rodando no projeto: ${firebaseConfig.projectId}`);
+  console.error(`Deveria estar rodando no projeto: ${EXPECTED_PROJECT_ID}`);
+  console.error("Verifique as variáveis VITE_FIREBASE_* no painel da Vercel.");
 }
 
 // Initialize Firebase

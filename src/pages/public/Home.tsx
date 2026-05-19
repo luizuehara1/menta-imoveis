@@ -36,8 +36,10 @@ const Hero = ({ settings }: { settings: any }) => {
         <div className="absolute inset-0 bg-radial-gradient from-transparent to-primary-black/60" />
       </div>
 
-      {/* Three.js Layer (Overlay) */}
-      {settings.hero.ativarThreeJs && <PremiumHeroBackground />}
+      {/* Three.js Layer (Overlay) - Only on Desktop for performance */}
+      {settings.hero.ativarThreeJs && typeof window !== 'undefined' && window.innerWidth >= 1024 && (
+        <PremiumHeroBackground />
+      )}
 
       <div className="relative z-10 max-w-7xl mx-auto px-6 md:px-12 w-full pt-20">
         <motion.div 
@@ -278,6 +280,7 @@ export default function Home() {
         console.log("[Home] Buscando imóveis em destaque...");
         const q = query(
           collection(db, 'imoveis'), 
+          where('publicado', 'in', [true]), // Rule requirement
           where('destaque', '==', true),
           limit(20) // Fetch more to filter in JS
         );
@@ -307,9 +310,20 @@ export default function Home() {
 
   if (settingsLoading || optionsLoading) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-primary-black">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gold"></div>
-      </div>
+      <PageWrapper>
+        <div className="bg-primary-black min-h-screen">
+          {/* Skeleton Hero */}
+          <div className="h-[80vh] w-full bg-gray-900 animate-pulse flex flex-col items-center justify-center space-y-6 px-4">
+            <div className="h-8 bg-gray-800 rounded-full w-48 mb-4"></div>
+            <div className="h-20 bg-gray-800 rounded-3xl w-full max-w-2xl"></div>
+            <div className="h-12 bg-gray-800 rounded-2xl w-48 mt-8"></div>
+          </div>
+          
+          <div className="max-w-7xl mx-auto px-4 -mt-24 relative z-10">
+            <div className="h-48 bg-white rounded-[2.5rem] shadow-xl animate-pulse"></div>
+          </div>
+        </div>
+      </PageWrapper>
     );
   }
 

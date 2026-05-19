@@ -40,34 +40,31 @@ export function useOptions() {
     ];
 
     const unsubs = categories.map(category => {
-      // 1. First try the document-based approach (opcoes_imoveis/{category})
+      // Fetch from opcoes_imoveis/{category}
       const docRef = doc(db, 'opcoes_imoveis', category);
       
       const unsub = onSnapshot(docRef, async (docSnap) => {
         if (docSnap.exists()) {
           const data = docSnap.data();
           const items = data.itens || [];
-          console.log(`[useOptions] SUCCESS (${category}): Found ${items.length} items in document.`);
           setOptions(prev => ({
             ...prev,
             [category]: items.length > 0 ? items : (DEFAULT_OPTIONS[category] || [])
           }));
         } else {
-          console.warn(`[useOptions] MISSING (${category}): Document not found. Using defaults.`);
+          // If document doesn't exist, use defaults
           setOptions(prev => ({
             ...prev,
             [category]: DEFAULT_OPTIONS[category] || []
           }));
 
           // AUTO-SEED: If admin is logged in, create the document
+          // We check for auth.currentUser directly. Security rules will protect if not a real admin.
           if (auth.currentUser) {
-            // We check for admin status indirectly via the fact that they are logged in 
-            // and this is usually called from an admin context or when they have some access.
-            // But let's be careful. The rules will block them if they aren't real admins.
             try {
               const defaultItems = DEFAULT_OPTIONS[category] || [];
               if (defaultItems.length > 0) {
-                console.log(`[useOptions] SEEDING (${category}): Creating document with defaults.`);
+                console.log(`[useOptions] SEEDING (${category}): Creating missing doc with defaults.`);
                 const { serverTimestamp } = await import('firebase/firestore');
                 await setDoc(docRef, {
                   itens: defaultItems,
@@ -76,13 +73,13 @@ export function useOptions() {
                 }, { merge: true });
               }
             } catch (e) {
-              console.log(`[useOptions] SEEDING FAILED (${category}): Probably not an admin.`, e);
+              // Silently fail if permissions prevent it
             }
           }
         }
       }, (error) => {
-        console.error(`[useOptions] PERMISSION ERROR for ${category}:`, error.message);
-        // Fallback to defaults on error
+        // Fallback silently to defaults on error to avoid console noise for public users
+        console.warn(`[useOptions] Falling back to defaults for ${category}: ${error.message}`);
         setOptions(prev => ({
           ...prev,
           [category]: DEFAULT_OPTIONS[category] || []
@@ -97,16 +94,13 @@ export function useOptions() {
       const b = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter((i: any) => i.ativo);
       setOptions(prev => ({ ...prev, bairros: b as any }));
     }, (error) => {
-      console.error(`[useOptions] Error fetching bairros:`, error.message);
+      console.warn(`[useOptions] Error fetching bairros:`, error.message);
       setOptions(prev => ({ ...prev, bairros: [] }));
     });
 
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 2000);
+    setLoading(false);
 
     return () => {
-      clearTimeout(timer);
       unsubs.forEach(unsub => unsub());
       unsubBairros();
     };

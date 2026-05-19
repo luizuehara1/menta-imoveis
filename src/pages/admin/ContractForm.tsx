@@ -35,6 +35,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../contexts/AuthContext';
+import { useSettings } from '../../hooks/useSettings';
 import { Contract, ContractType, ContractStatus, Property } from '../../types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -52,6 +53,7 @@ export default function AdminContractForm() {
   const isPreviewOnly = searchParams.get('preview') === 'true';
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { settings } = useSettings();
   const printRef = useRef<HTMLDivElement>(null);
 
   const [loading, setLoading] = useState(false);
@@ -68,7 +70,7 @@ export default function AdminContractForm() {
     nomeVendedor: '',
     enderecoImovel: '',
     valor: 0,
-    local: 'São Luís - MA',
+    local: 'Balneário Camboriú - SC',
     data: format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }),
     dados: {
       proponente: { estadoCivil: 'Solteiro(a)' },
@@ -258,9 +260,13 @@ export default function AdminContractForm() {
     if (!printRef.current) return;
     
     setLoading(true);
+    const companyName = settings?.empresa?.nome || 'Menta Negócios Imobiliários';
+    const companyCnpj = settings?.empresa?.cnpj || '63.572.479/0001-50';
+    const companyCreci = settings?.empresa?.creciPj || '11255PJ';
+
     try {
       // Small timeout to ensure all components are fully rendered and styles applied
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await new Promise(resolve => setTimeout(resolve, 1500));
       
       const canvas = await html2canvas(printRef.current, {
         scale: 2,
@@ -268,17 +274,16 @@ export default function AdminContractForm() {
         logging: false,
         backgroundColor: '#ffffff',
         allowTaint: true,
-        windowWidth: printRef.current.scrollWidth,
-        windowHeight: printRef.current.scrollHeight,
         onclone: (clonedDoc) => {
           const elements = clonedDoc.querySelectorAll("*");
           elements.forEach((el) => {
             const htmlEl = el as HTMLElement;
-            const bg = window.getComputedStyle(el).backgroundColor;
+            const style = window.getComputedStyle(el);
+            const bg = style.backgroundColor;
             if (bg.includes("oklab") || bg.includes("oklch") || bg.includes("color-mix") || bg.includes("lab(") || bg.includes("lch(")) {
               htmlEl.style.backgroundColor = "#ffffff";
             }
-            const color = window.getComputedStyle(el).color;
+            const color = style.color;
             if (color.includes("oklab") || color.includes("oklch") || color.includes("color-mix")) {
               htmlEl.style.color = "#111827";
             }
@@ -287,20 +292,51 @@ export default function AdminContractForm() {
       });
       
       const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        format: 'a4',
-        unit: 'mm'
-      });
+      const pdf = new jsPDF('p', 'mm', 'a4');
       
       const imgProps = pdf.getImageProperties(imgData);
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      const pdfHeight = pdf.internal.pageSize.getHeight();
       
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      // Calculate the total height of the image on the PDF while maintaining aspect ratio
+      const imgHeightInPdf = (imgProps.height * pdfWidth) / imgProps.width;
+      
+      let heightLeft = imgHeightInPdf;
+      let position = 0;
+
+      // Function to add footer to each page
+      const addPageDecorations = (pageNum: number, totalPages: number) => {
+        pdf.setFontSize(8);
+        pdf.setTextColor(180, 180, 180);
+        const footerText = `${companyName} • CNPJ: ${companyCnpj} • CRECI PJ: ${companyCreci}`;
+        const pageText = `Página ${pageNum} de ${totalPages}`;
+        
+        pdf.text(footerText, pdfWidth / 2, pdfHeight - 10, { align: 'center' });
+        pdf.text(pageText, pdfWidth - 15, pdfHeight - 10, { align: 'right' });
+      };
+
+      const totalPages = Math.ceil(imgHeightInPdf / (pdfHeight - 20)) || 1; // Subtract margin
+
+      // First page
+      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeightInPdf);
+      addPageDecorations(1, totalPages);
+      heightLeft -= pdfHeight;
+
+      // Add additional pages if needed
+      let currentPage = 2;
+      while (heightLeft > 0 && currentPage <= totalPages) {
+        position = (currentPage - 1) * -pdfHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeightInPdf);
+        addPageDecorations(currentPage, totalPages);
+        heightLeft -= pdfHeight;
+        currentPage++;
+      }
+      
       pdf.save(`Contrato_${contract.nomeCliente}_${format(new Date(), 'dd_MM_yyyy')}.pdf`);
     } catch (error) {
       console.error("Error generating PDF:", error);
-      alert('Erro ao gerar PDF.');
+      alert('Erro ao gerar PDF. Tente novamente.');
     } finally {
       setLoading(false);
     }

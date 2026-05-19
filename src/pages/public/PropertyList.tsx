@@ -141,13 +141,19 @@ const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
 };
 
 const SkeletonCard = () => (
-  <div className="bg-white rounded-[2rem] overflow-hidden border border-gray-100 p-0 flex flex-col h-[500px] animate-pulse">
-    <div className="h-72 bg-gray-100" />
-    <div className="p-8 space-y-4">
-      <div className="h-4 bg-gray-100 rounded w-1/2" />
-      <div className="h-8 bg-gray-100 rounded w-full" />
-      <div className="h-20 bg-gray-50 rounded" />
-      <div className="h-10 bg-gray-100 rounded" />
+  <div className="bg-white rounded-[2rem] overflow-hidden border border-gray-100 flex flex-col h-full animate-pulse shadow-sm">
+    <div className="h-64 bg-gray-100" />
+    <div className="p-8 space-y-4 flex-grow">
+      <div className="flex justify-between">
+        <div className="h-4 bg-gray-100 rounded-lg w-1/3" />
+        <div className="h-3 bg-gray-50 rounded-lg w-1/4" />
+      </div>
+      <div className="h-10 bg-gray-100 rounded-xl w-full" />
+      <div className="h-20 bg-gray-50 rounded-2xl w-full" />
+      <div className="grid grid-cols-4 gap-2">
+        {[1, 2, 3, 4].map(i => <div key={i} className="h-8 bg-gray-50 rounded-lg" />)}
+      </div>
+      <div className="h-12 bg-gray-100 rounded-xl w-full mt-4" />
     </div>
   </div>
 );
@@ -207,9 +213,12 @@ export default function PropertyList() {
 
       // Fetch a broader set of published properties to allow complex filtering in JS
       // This prevents "ghost properties" and ensures refresh consistency
+      // Using a wider status list to catch any variant including lowercase and untyped
+      // Note: "publicado" must be true for the query to pass rules for unauthenticated users
       const q = query(
         collection(db, 'imoveis'), 
-        where('status', 'in', ['disponivel', 'Disponível', 'disponível'])
+        where('publicado', '==', true),
+        where('status', 'in', ['disponivel', 'disponivel_venda', 'disponivel_locacao', 'Disponível', 'disponível', 'DISPONÍVEL'])
       );
 
       const snap = await getDocs(q);
@@ -218,6 +227,15 @@ export default function PropertyList() {
       // Debug as requested by user
       const validData = rawData.filter(isValidPublicProperty);
       const invalidData = rawData.filter(p => !isValidPublicProperty(p));
+
+      // Extra check: if no properties are found but we have raw data, maybe status naming is mismatching
+      if (validData.length === 0 && rawData.length > 0) {
+        console.warn("ALERTA: Imóveis encontrados no DB, mas nenhum passou na validação pública.", {
+          rawCount: rawData.length,
+          statusExemplos: rawData.slice(0, 3).map(p => p.status),
+          publicadoExemplos: rawData.slice(0, 3).map(p => p.publicado)
+        });
+      }
 
       console.group("DEBUG: Carregamento de Imóveis Público");
       console.log("Variáveis de ambiente:", {

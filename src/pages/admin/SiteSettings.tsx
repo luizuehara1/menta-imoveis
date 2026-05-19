@@ -40,12 +40,53 @@ const SiteSettings = () => {
 
   const fetchData = async () => {
     setLoading(true);
+    console.log("DOMÍNIO ATUAL:", window.location.hostname);
+    console.log("FIREBASE PROJECT ID:", db.app.options.projectId);
+    console.log("Carregando configurações de siteSettings/main...");
+
     try {
       // Fetch Site Config from NEW collection siteSettings/main
       const configDoc = await getDoc(doc(db, 'siteSettings', 'main'));
       if (configDoc.exists()) {
-        setSettings({ ...DEFAULT_SITE_CONFIG, ...configDoc.data() } as SiteConfig);
+        const data = configDoc.data();
+        console.log("Configurações carregadas do Firestore:", data);
+        
+        // Handle potential flat data from older versions or external edits
+        // If data has heroTitulo instead of hero.tituloPrincipal
+        if (data.heroTitulo && !data.hero) {
+           console.log("Detectado formato FLAT no Firestore. Mapeando para formato NESTED...");
+           setSettings({
+             ...DEFAULT_SITE_CONFIG,
+             hero: {
+               ...DEFAULT_SITE_CONFIG.hero,
+               tituloPrincipal: data.heroTitulo || DEFAULT_SITE_CONFIG.hero.tituloPrincipal,
+               subtitulo: data.heroSubtitulo || DEFAULT_SITE_CONFIG.hero.subtitulo,
+               heroBadge: data.heroBadge || DEFAULT_SITE_CONFIG.hero.heroBadge,
+               imagemFundoUrl: data.heroImagemUrl || DEFAULT_SITE_CONFIG.hero.imagemFundoUrl,
+               textoBotaoPrincipal: data.heroBotaoPrincipalTexto || DEFAULT_SITE_CONFIG.hero.textoBotaoPrincipal,
+               linkBotaoPrincipal: data.heroBotaoPrincipalLink || DEFAULT_SITE_CONFIG.hero.linkBotaoPrincipal,
+               textoBotaoSecundario: data.heroBotaoSecundarioTexto || DEFAULT_SITE_CONFIG.hero.textoBotaoSecundario,
+               linkBotaoSecundario: data.heroBotaoSecundarioLink || DEFAULT_SITE_CONFIG.hero.linkBotaoSecundario,
+             },
+             empresa: {
+               ...DEFAULT_SITE_CONFIG.empresa,
+               nome: data.empresaNome || DEFAULT_SITE_CONFIG.empresa.nome,
+               razaoSocial: data.empresaRazaoSocial || DEFAULT_SITE_CONFIG.empresa.razaoSocial,
+               cnpj: data.empresaCnpj || DEFAULT_SITE_CONFIG.empresa.cnpj,
+               creciPj: data.empresaCreciPj || DEFAULT_SITE_CONFIG.empresa.creciPj,
+               telefone: data.empresaTelefone || DEFAULT_SITE_CONFIG.empresa.telefone,
+               whatsapp: data.empresaWhatsapp || DEFAULT_SITE_CONFIG.empresa.whatsapp,
+               email: data.empresaEmail || DEFAULT_SITE_CONFIG.empresa.email,
+               endereco: data.empresaEndereco || DEFAULT_SITE_CONFIG.empresa.endereco,
+               logoCabecalhoUrl: data.empresaLogoCabecalhoUrl || DEFAULT_SITE_CONFIG.empresa.logoCabecalhoUrl,
+               marcaDaguaUrl: data.empresaMarcaDaguaUrl || DEFAULT_SITE_CONFIG.empresa.marcaDaguaUrl,
+             }
+           } as SiteConfig);
+        } else {
+           setSettings({ ...DEFAULT_SITE_CONFIG, ...data } as SiteConfig);
+        }
       } else {
+        console.warn("Documento siteSettings/main não encontrado. Usando padrões.");
         // Create initial doc if doesn't exist
         await setDoc(doc(db, 'siteSettings', 'main'), {
           ...DEFAULT_SITE_CONFIG,
@@ -97,11 +138,36 @@ const SiteSettings = () => {
   const saveSettings = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setSaving(true);
+    
+    // Create a data object with both nested and flat fields for maximum compatibility
+    const dados = {
+      ...settings,
+      // Flat redundancy as per user "Expected Fields" for external integrations (Vercel/public site)
+      heroTitulo: settings.hero.tituloPrincipal,
+      heroSubtitulo: settings.hero.subtitulo,
+      heroBadge: settings.hero.heroBadge,
+      heroImagemUrl: settings.hero.imagemFundoUrl,
+      heroBotaoPrincipalTexto: settings.hero.textoBotaoPrincipal,
+      heroBotaoPrincipalLink: settings.hero.linkBotaoPrincipal,
+      heroBotaoSecundarioTexto: settings.hero.textoBotaoSecundario,
+      heroBotaoSecundarioLink: settings.hero.linkBotaoSecundario,
+      empresaNome: settings.empresa.nome,
+      empresaRazaoSocial: settings.empresa.razaoSocial,
+      empresaCnpj: settings.empresa.cnpj,
+      empresaCreciPj: settings.empresa.creciPj,
+      empresaTelefone: settings.empresa.telefone,
+      empresaWhatsapp: settings.empresa.whatsapp,
+      empresaEmail: settings.empresa.email,
+      empresaEndereco: settings.empresa.endereco,
+      empresaLogoCabecalhoUrl: settings.empresa.logoCabecalhoUrl,
+      empresaMarcaDaguaUrl: settings.empresa.marcaDaguaUrl,
+      updatedAt: serverTimestamp()
+    };
+
+    console.log("Salvando configurações em siteSettings/main:", dados);
+
     try {
-      await setDoc(doc(db, 'siteSettings', 'main'), {
-        ...settings,
-        updatedAt: serverTimestamp()
-      }, { merge: true });
+      await setDoc(doc(db, 'siteSettings', 'main'), dados, { merge: true });
       setMessage({ type: 'success', text: 'Configurações salvas com sucesso!' });
       setTimeout(() => setMessage(null), 3000);
     } catch (error) {

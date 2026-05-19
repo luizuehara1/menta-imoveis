@@ -204,11 +204,21 @@ export default function AdminPropertyForm() {
           getDocs(collection(db, 'configLocacaoRegras'))
         ]);
 
+        const optGarantias = garantias.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter((i: any) => i.ativo);
+        const optStatus = status.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter((i: any) => i.ativo);
+        const optContratos = contratos.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter((i: any) => i.ativo);
+        const optRegras = regras.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter((i: any) => i.ativo);
+
+        // Auto-seed if empty (and admin is likely logged in since this is admin panel)
+        if (optGarantias.length === 0 || optStatus.length === 0) {
+           console.log("[PropertyForm] Opções de locação vazias. Sugerindo visita à tela de Configurações de Locação.");
+        }
+
         setLeaseOptions({
-          garantias: garantias.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter((i: any) => i.ativo),
-          status: status.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter((i: any) => i.ativo),
-          contratos: contratos.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter((i: any) => i.ativo),
-          regras: regras.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter((i: any) => i.ativo)
+          garantias: optGarantias,
+          status: optStatus,
+          contratos: optContratos,
+          regras: optRegras
         });
       } catch (error) {
         console.error("Error fetching lease options:", error);

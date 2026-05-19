@@ -124,6 +124,18 @@ function AppRoutes() {
 }
 
 export default function App() {
+  React.useEffect(() => {
+    // DIAGNOSTICS AS REQUESTED BY USER
+    if (typeof window !== 'undefined') {
+      console.group("%c DIAGNÓSTICO DE AMBIENTE", "color: #E5BC53; font-weight: bold;");
+      console.log("DOMÍNIO ATUAL:", window.location.hostname);
+      console.log("FIREBASE PROJECT ID:", import.meta.env.VITE_FIREBASE_PROJECT_ID);
+      console.log("FIREBASE AUTH DOMAIN:", import.meta.env.VITE_FIREBASE_AUTH_DOMAIN);
+      console.log("FIREBASE APP ID:", import.meta.env.VITE_FIREBASE_APP_ID);
+      console.groupEnd();
+    }
+  }, []);
+
   return (
     <AuthProvider>
       <AppRoutes />
