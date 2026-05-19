@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { Instagram, MessageCircle, Phone, Mail } from 'lucide-react';
+import { cleanPhoneForWhatsapp } from '../../lib/utils';
 
 export default function Brokers() {
   const [brokers, setBrokers] = useState<any[]>([]);
@@ -45,10 +46,10 @@ export default function Brokers() {
                  
                  <div className="flex items-center justify-center gap-4 border-t pt-6">
                     <a href={`tel:${broker.phone}`} className="p-2 text-gray-400 hover:text-gold transition-colors"><Phone size={20} /></a>
-                    <a href={`https://wa.me/${broker.whatsapp}`} target="_blank" className="p-2 text-gray-400 hover:text-emerald-500 transition-colors"><MessageCircle size={20} /></a>
+                    <a href={`https://wa.me/55${cleanPhoneForWhatsapp(broker.whatsapp)}`} target="_blank" className="p-2 text-gray-400 hover:text-emerald-500 transition-colors" rel="noopener noreferrer"><MessageCircle size={20} /></a>
                     <a href={`mailto:${broker.email}`} className="p-2 text-gray-400 hover:text-primary-green transition-colors"><Mail size={20} /></a>
                     {broker.instagram && (
-                      <a href={`https://instagram.com/${broker.instagram}`} target="_blank" className="p-2 text-gray-400 hover:text-pink-500 transition-colors"><Instagram size={20} /></a>
+                      <a href={`https://instagram.com/${broker.instagram}`} target="_blank" rel="noopener noreferrer" className="p-2 text-gray-400 hover:text-pink-500 transition-colors"><Instagram size={20} /></a>
                     )}
                  </div>
               </div>

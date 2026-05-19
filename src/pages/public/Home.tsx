@@ -50,7 +50,7 @@ const Hero = ({ settings }: { settings: any }) => {
             variants={slideUp}
             className="inline-block px-5 py-2 rounded-full bg-gold/10 border border-gold/20 text-gold font-bold tracking-[0.3em] uppercase text-[10px] mb-8"
           >
-            Luxo & Exclusividade em Santa Catarina
+            {settings.hero.heroBadge || "Luxo & Exclusividade em Santa Catarina"}
           </motion.span>
           
           <motion.h1 

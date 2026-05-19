@@ -1,0 +1,21 @@
+{
+  "name": "Menta Negócios Imobiliários",
+  "short_name": "Menta",
+  "description": "Premium Real Estate Solutions",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#003030",
+  "theme_color": "#003030",
+  "icons": [
+    {
+      "src": "https://i.postimg.cc/kMZXNdCS/image.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://i.postimg.cc/kMZXNdCS/image.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

@@ -242,7 +242,7 @@ const SiteSettings = () => {
                         value={settings.hero.tituloPrincipal}
                         onChange={(e) => handleNestedChange('hero', 'tituloPrincipal', e.target.value)}
                         className="admin-input focus-visible:ring-gold" 
-                        placeholder="Ex: Menta Imobiliária: Onde o Luxo Encontra a Modernidade"
+                        placeholder="Ex: Menta Negócios Imobiliários"
                       />
                     </div>
                     <div className="space-y-2">
@@ -252,6 +252,16 @@ const SiteSettings = () => {
                         onChange={(e) => handleNestedChange('hero', 'subtitulo', e.target.value)}
                         className="admin-input h-24 py-4 resize-none" 
                         placeholder="Breve descrição que aparece abaixo do título"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Badge (Texto Curto Superior)</label>
+                      <input 
+                        type="text" 
+                        value={settings.hero.heroBadge}
+                        onChange={(e) => handleNestedChange('hero', 'heroBadge', e.target.value)}
+                        className="admin-input" 
+                        placeholder="Ex: LUXO & EXCLUSIVIDADE EM SANTA CATARINA"
                       />
                     </div>
                     <div className="space-y-2">

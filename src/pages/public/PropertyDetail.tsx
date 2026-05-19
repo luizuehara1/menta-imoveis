@@ -30,7 +30,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import PageWrapper from '../../components/PageWrapper';
 import { SafeImage } from '../../components/ui/SafeImage';
-import { formatCurrency, isValidPublicProperty } from '../../lib/utils';
+import { formatCurrency, isValidPublicProperty, cleanPhoneForWhatsapp } from '../../lib/utils';
 
 export default function PropertyDetail() {
   const { id } = useParams();
@@ -118,9 +118,9 @@ export default function PropertyDetail() {
 
   const getWhatsAppUrl = () => {
     const rawPhone = property.brokerWhatsapp || settings.empresa.whatsapp;
-    const cleanPhone = String(rawPhone || "").replace(/\D/g, "");
-    // Ensure 55 if not present and length is 10/11
-    const p = cleanPhone.length <= 11 ? `55${cleanPhone}` : cleanPhone;
+    const cleanNumber = cleanPhoneForWhatsapp(rawPhone);
+    // Use 55 as prefix if not already present
+    const p = cleanNumber.startsWith('55') ? cleanNumber : `55${cleanNumber}`;
     const message = `Olá, tenho interesse neste imóvel: ${property.title || property.titulo || "Imóvel"} - Código: ${property.code || property.codigo || ""}. Pode me passar mais informações?`;
     return `https://wa.me/${p}?text=${encodeURIComponent(message)}`;
   };

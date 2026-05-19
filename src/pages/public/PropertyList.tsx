@@ -7,16 +7,17 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useSettings, useOptions } from '../../hooks/useSettings';
 import PageWrapper from '../../components/PageWrapper';
 import { SafeImage } from '../../components/ui/SafeImage';
-import { formatCurrency, isValidPublicProperty } from '../../lib/utils';
+import { formatCurrency, isValidPublicProperty, cleanPhoneForWhatsapp } from '../../lib/utils';
 import { staggerContainer, slideUp, fadeIn } from '../../constants/animations';
 import { GoldenParticles } from '../../components/three/GoldenParticles';
 import { Canvas } from '@react-three/fiber';
 
 const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
   const getWhatsAppUrl = () => {
-    const rawPhone = property.brokerWhatsapp || agencyWhatsApp || '554188364069';
-    const cleanPhone = String(rawPhone || "").replace(/\D/g, "");
-    const p = cleanPhone.length <= 11 ? `55${cleanPhone}` : cleanPhone;
+    const rawPhone = property.brokerWhatsapp || agencyWhatsApp;
+    const cleanNumber = cleanPhoneForWhatsapp(rawPhone || '554188364069');
+    // Prefix 55 if not already present
+    const p = cleanNumber.startsWith('55') ? cleanNumber : `55${cleanNumber}`;
     const message = `Olá, tenho interesse neste imóvel: ${property.title} - Código: ${property.code}. Pode me passar mais informações?`;
     return `https://wa.me/${p}?text=${encodeURIComponent(message)}`;
   };

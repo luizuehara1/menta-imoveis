@@ -25,7 +25,12 @@ export const SafeImage: React.FC<SafeImageProps> = ({
     if (imgRef.current?.complete && loading) {
       setLoading(false);
     }
-  }, [loading]);
+  }, [loading, src]);
+
+  // Handle case where src changes
+  React.useEffect(() => {
+    setError(false);
+  }, [src]);
 
   if (!src || error) {
     return (
@@ -41,7 +46,7 @@ export const SafeImage: React.FC<SafeImageProps> = ({
   return (
     <div className={cn("relative overflow-hidden", className)}>
       {loading && (
-        <div className="absolute inset-0 bg-gray-100 animate-pulse flex items-center justify-center">
+        <div className="absolute inset-0 bg-gray-100 animate-pulse flex items-center justify-center z-10">
            <div className="w-6 h-6 border-2 border-gold/30 border-t-gold rounded-full animate-spin" />
         </div>
       )}
@@ -51,6 +56,7 @@ export const SafeImage: React.FC<SafeImageProps> = ({
         alt={alt}
         className={cn("w-full h-full object-cover transition-opacity duration-300", loading ? "opacity-0" : "opacity-100")}
         referrerPolicy="no-referrer"
+        crossOrigin="anonymous"
         onError={() => setError(true)}
         onLoad={() => setLoading(false)}
         loading={priority ? "eager" : props.loading || "lazy"}

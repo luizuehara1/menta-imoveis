@@ -268,6 +268,7 @@ export interface SiteConfig {
     linkBotaoPrincipal: string;
     textoBotaoSecundario: string;
     linkBotaoSecundario: string;
+    heroBadge: string;
     imagemFundoUrl: string;
     ativarThreeJs: boolean;
   };

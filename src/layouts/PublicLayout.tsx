@@ -4,6 +4,7 @@ import { Phone, MessageCircle, Menu, X, Instagram, Mail, MapPin as MapPinIcon } 
 import { motion, AnimatePresence } from 'motion/react';
 import { SafeImage } from '../components/ui/SafeImage';
 import { useSettings } from '../hooks/useSettings';
+import { cleanPhoneForWhatsapp } from '../lib/utils';
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = React.useState(false);
@@ -24,8 +25,9 @@ const Navbar = () => {
     { name: 'Corretores', path: '/corretores' },
     { name: 'Contato', path: '/contato' },
   ];
-
-  const whatsappUrl = `https://wa.me/55${settings.empresa.whatsapp}`;
+  
+  const cleanNumber = cleanPhoneForWhatsapp(settings.empresa.whatsapp);
+  const whatsappUrl = `https://wa.me/55${cleanNumber}`;
 
   return (
     <nav className={`fixed top-0 left-0 w-full z-[100] transition-all duration-500 ${
@@ -146,7 +148,8 @@ const Navbar = () => {
 
 const Footer = () => {
   const { settings } = useSettings();
-  const whatsappUrl = `https://wa.me/55${settings.empresa.whatsapp}`;
+  const cleanNumber = cleanPhoneForWhatsapp(settings.empresa.whatsapp);
+  const whatsappUrl = `https://wa.me/55${cleanNumber}`;
 
   return (
     <footer className="bg-primary-black text-white pt-20 pb-10">
@@ -235,7 +238,8 @@ const Footer = () => {
 
 export default function PublicLayout() {
   const { settings } = useSettings();
-  const whatsappUrl = `https://wa.me/55${settings.empresa.whatsapp}`;
+  const cleanNumber = cleanPhoneForWhatsapp(settings.empresa.whatsapp);
+  const whatsappUrl = `https://wa.me/55${cleanNumber}`;
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: settings.aparencia.corFundo, color: settings.aparencia.corTexto }}>

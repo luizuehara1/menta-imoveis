@@ -91,3 +91,45 @@ export function isValidPublicProperty(p: any): boolean {
 
   return hasId && !isGhost && isPublished && !isBlocked;
 }
+
+/**
+ * Ensures a URL is valid and public
+ */
+export function isValidPublicImageUrl(url: any): boolean {
+  if (typeof url !== 'string') return false;
+  const trimmed = url.trim();
+  if (trimmed.startsWith('data:image/')) return true;
+  return trimmed.startsWith('http://') || trimmed.startsWith('https://');
+}
+
+/**
+ * Safely extracts the best image for a property
+ */
+export function getPropertyImage(p: any): string {
+  if (!p) return "";
+  
+  const possible = [
+    p.mainImage,
+    p.imagemPrincipal,
+    p.fotoPrincipal,
+    p.imageUrl,
+    Array.isArray(p.images) ? p.images[0] : null,
+    Array.isArray(p.imagens) ? p.imagens[0] : null,
+    Array.isArray(p.fotos) ? p.fotos[0] : null
+  ];
+
+  const found = possible.find(url => isValidPublicImageUrl(url));
+  return found || ""; // SafeImage will handle the fallback if empty
+}
+
+/**
+ * Cleans a phone number for WhatsApp links (digits only)
+ */
+export function cleanPhoneForWhatsapp(phone: string): string {
+  if (!phone) return "";
+  const cleaned = phone.replace(/\D/g, "");
+  if (cleaned.length === 11 && !cleaned.startsWith("55")) {
+    return cleaned; // Should use without 55 if calling code is already handled or add 55
+  }
+  return cleaned;
+}

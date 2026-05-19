@@ -228,7 +228,7 @@ export default function AdminLayout() {
             <div className="hidden md:flex items-center gap-4 bg-gray-50/50 p-2 pr-6 rounded-2xl border border-gray-100 group cursor-pointer hover:bg-white hover:shadow-xl hover:scale-105 transition-all">
               <div className="relative">
                 {user?.photoURL ? (
-                  <img src={user.photoURL} alt="User" className="w-10 h-10 rounded-xl border border-white shadow-sm object-cover" />
+                  <SafeImage src={user.photoURL} alt="User" className="w-10 h-10 rounded-xl border border-white shadow-sm object-cover" />
                 ) : (
                   <div className="w-10 h-10 rounded-xl bg-primary-black text-gold flex items-center justify-center font-bold shadow-lg">
                     {user?.email?.charAt(0).toUpperCase()}

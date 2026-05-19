@@ -1,0 +1,19 @@
+{
+  "name": "Menta Negócios Imobiliários",
+  "short_name": "Menta",
+  "icons": [
+    {
+      "src": "https://i.postimg.cc/kMZXNdCS/image.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://i.postimg.cc/kMZXNdCS/image.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "theme_color": "#003030",
+  "background_color": "#003030",
+  "display": "standalone"
+}

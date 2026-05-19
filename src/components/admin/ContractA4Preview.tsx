@@ -18,7 +18,13 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
   const renderHeader = () => (
     <div className="flex flex-col items-center text-center border-b-2 border-primary-black pb-4 mb-6 gap-3">
       {empresa.logoCabecalhoUrl && isValidImageUrl(empresa.logoCabecalhoUrl) && (
-        <img src={empresa.logoCabecalhoUrl} alt={empresa.nome} className="h-20 w-auto object-contain mb-1" />
+        <img 
+          src={empresa.logoCabecalhoUrl} 
+          alt={empresa.nome} 
+          className="h-20 w-auto object-contain mb-1" 
+          crossOrigin="anonymous"
+          referrerPolicy="no-referrer"
+        />
       )}
       <div className="flex flex-col items-center">
         <h2 className="text-base font-display font-black text-primary-black uppercase tracking-[0.2em] mb-1">
@@ -68,6 +74,8 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
           src={empresa.marcaDaguaUrl} 
           alt="Watermark" 
           className="w-[80%] h-auto grayscale object-contain"
+          crossOrigin="anonymous"
+          referrerPolicy="no-referrer"
         />
       </div>
     );

@@ -2,13 +2,14 @@ import { SiteConfig, OptionItem } from '../types';
 
 export const DEFAULT_SITE_CONFIG: SiteConfig = {
   hero: {
-    tituloPrincipal: "Menta Imobiliária: Onde o Luxo Encontra a Modernidade",
+    tituloPrincipal: "Menta Negócios Imobiliários",
     subtitulo: "Encontre os melhores imóveis de alto padrão e viva a experiência Menta.",
+    heroBadge: "LUXO & EXCLUSIVIDADE EM SANTA CATARINA",
     textoBotaoPrincipal: "Ver Imóveis",
     linkBotaoPrincipal: "/imoveis",
     textoBotaoSecundario: "Sobre Nós",
     linkBotaoSecundario: "/sobre",
-    imagemFundoUrl: "https://images.unsplash.com/photo-1600607687940-4e5c7ef95c73?auto=format&fit=crop&q=80",
+    imagemFundoUrl: "https://i.postimg.cc/tgwp33z0/luxury-home-bg.jpg",
     ativarThreeJs: true
   },
   secoes: {
