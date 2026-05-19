@@ -2,108 +2,142 @@ import React, { useEffect, useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import { Search, MapPin, Bed, Car, MessageCircle, Filter, X, Sparkles, Layers } from 'lucide-react';
+import { Search, MapPin, Bed, Car, MessageCircle, Filter, X, Sparkles, Layers, Bath, Maximize, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSettings, useOptions } from '../../hooks/useSettings';
 import PageWrapper from '../../components/PageWrapper';
+import { SafeImage } from '../../components/ui/SafeImage';
+import { formatCurrency, isValidPublicProperty } from '../../lib/utils';
 import { staggerContainer, slideUp, fadeIn } from '../../constants/animations';
 import { GoldenParticles } from '../../components/three/GoldenParticles';
 import { Canvas } from '@react-three/fiber';
 
-const PropertyCard = ({ property, index }: any) => (
-  <motion.div
-    variants={slideUp}
-    whileHover={{ y: -12 }}
-    className="group bg-white rounded-[2rem] overflow-hidden border border-gray-100 shadow-sm transition-all duration-500 hover:shadow-[0_40px_80px_-15px_rgba(0,0,0,0.1)] flex flex-col"
-  >
-    <Link to={`/imovel/${property.id}`} className="block relative h-72 overflow-hidden">
-      <motion.img
-        whileHover={{ scale: 1.1 }}
-        transition={{ duration: 1 }}
-        src={property.mainImage || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&q=80&w=800'}
-        alt={property.title}
-        className="w-full h-full object-cover"
-      />
-      <div className="absolute top-6 left-6 flex flex-col gap-2">
-        <span className="bg-primary-black/80 backdrop-blur-md text-white text-[9px] font-black uppercase tracking-[0.2em] px-4 py-1.5 rounded-full border border-white/10">
-          {property.businessType}
-        </span>
-        {property.destaque && (
-          <motion.span 
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.5 }}
-            className="bg-gold text-primary-black text-[9px] font-black uppercase tracking-[0.2em] px-4 py-1.5 rounded-full border border-gold/20 shadow-lg"
-          >
-            Destaque
-          </motion.span>
-        )}
-      </div>
-      <div className="absolute bottom-6 left-6 right-6">
-        <div className="bg-white/95 backdrop-blur-md p-4 rounded-2xl shadow-2xl border border-gold/10 transform translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500">
-           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Valor de {property.businessType === 'Venda' ? 'Venda' : 'Locação'}</p>
-           <p className="text-xl font-display font-bold text-primary-green">
-             R$ {(property.businessType === 'Venda' ? property.priceVenda : property.priceLocacao)?.toLocaleString('pt-BR')}
-           </p>
+const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
+  const getWhatsAppUrl = () => {
+    const rawPhone = property.brokerWhatsapp || agencyWhatsApp || '554188364069';
+    const cleanPhone = String(rawPhone || "").replace(/\D/g, "");
+    const p = cleanPhone.length <= 11 ? `55${cleanPhone}` : cleanPhone;
+    const message = `Olá, tenho interesse neste imóvel: ${property.title} - Código: ${property.code}. Pode me passar mais informações?`;
+    return `https://wa.me/${p}?text=${encodeURIComponent(message)}`;
+  };
+
+  return (
+    <motion.div
+      variants={fadeIn}
+      whileHover={{ y: -8 }}
+      className="group bg-white rounded-3xl overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-500 border border-gray-100 flex flex-col h-full"
+    >
+      <Link to={`/imovel/${property.id}`} className="block relative h-64 overflow-hidden">
+        <SafeImage
+          src={property.mainImage}
+          alt={property.title}
+          className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"
+        />
+        
+        {/* Badges */}
+        <div className="absolute top-4 left-4 flex flex-col gap-2 z-10">
+          <div className="flex flex-wrap gap-2">
+            <span className="bg-primary-black/90 backdrop-blur-md text-white text-[9px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg border border-white/10 shadow-lg">
+              {property.businessType}
+            </span>
+            {property.destaque && (
+              <span className="bg-gold text-primary-black text-[9px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg shadow-lg border border-gold/20">
+                Destaque
+              </span>
+            )}
+          </div>
         </div>
-      </div>
-    </Link>
-    
-    <div className="p-8 flex-grow flex flex-col">
-      <div className="flex items-center gap-2 text-[10px] font-bold text-gold uppercase tracking-[0.1em] mb-3">
-        <MapPin size={14} className="shrink-0" />
-        <span className="truncate">{property.neighborhood} • {property.city}</span>
-      </div>
+
+        {/* Property Type Badge */}
+        <div className="absolute bottom-4 right-4 z-10">
+          <span className="bg-white/90 backdrop-blur-md text-primary-black text-[9px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg shadow-sm border border-gray-100">
+            {property.propertyType}
+          </span>
+        </div>
+      </Link>
       
-      <div className="mb-6">
-        <div className="text-[10px] font-bold text-gray-400 tracking-widest uppercase mb-1">{property.code}</div>
-        <h3 className="font-display text-2xl font-bold text-primary-black group-hover:text-gold transition-colors leading-tight line-clamp-2">
-          {property.title}
-        </h3>
-      </div>
-      
-      <div className="grid grid-cols-4 gap-4 py-6 border-y border-gray-50 mb-8">
-        <div className="flex flex-col items-center gap-1 group/icon">
-          <Bed size={18} className="text-primary-black group-hover:text-gold transition-colors group-hover/icon:scale-110 duration-300" />
-          <span className="text-[10px] font-black text-gray-400 uppercase">{property.bedrooms}</span>
+      <div className="p-6 flex-grow flex flex-col">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-1.5 text-gold">
+            <MapPin size={14} className="shrink-0" />
+            <span className="text-[10px] font-black uppercase tracking-wider truncate max-w-[180px]">
+              {property.neighborhood}, {property.city}
+            </span>
+          </div>
+          <span className="text-[9px] font-bold text-gray-300 tracking-widest uppercase">
+            CÓD: {property.code}
+          </span>
         </div>
-        <div className="flex flex-col items-center gap-1 group/icon">
-          <Sparkles size={18} className="text-primary-black group-hover:text-gold transition-colors group-hover/icon:scale-110 duration-300" />
-          <span className="text-[10px] font-black text-gray-400 uppercase">{property.suites}</span>
+        
+        <Link to={`/imovel/${property.id}`}>
+          <h3 className="font-display text-xl font-bold text-primary-black group-hover:text-gold transition-colors leading-tight line-clamp-2 mb-4 h-12">
+            {property.title}
+          </h3>
+        </Link>
+        
+        <div className="mb-6 bg-gray-50/50 rounded-2xl p-4 border border-gray-50">
+          <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">
+             Valor de {property.businessType === 'Locação' ? 'Locação' : 'Investimento'}
+          </p>
+          <div className="flex items-baseline gap-1">
+            <span className="text-2xl font-display font-black text-primary-green">
+              {formatCurrency(property.businessType === 'Locação' ? property.priceLocacao : property.priceVenda)}
+            </span>
+            {property.businessType === 'Locação' && (
+              <span className="text-xs font-bold text-gray-400">/mês</span>
+            )}
+          </div>
+          {(property.condoFee > 0 || property.iptu > 0) && (
+            <div className="flex gap-3 mt-2 pt-2 border-t border-gray-100">
+               {property.condoFee > 0 && (
+                 <p className="text-[9px] font-bold text-gray-400">Cond: {formatCurrency(property.condoFee)}</p>
+               )}
+               {property.iptu > 0 && (
+                 <p className="text-[9px] font-bold text-gray-400">IPTU: {formatCurrency(property.iptu)}</p>
+               )}
+            </div>
+          )}
         </div>
-        <div className="flex flex-col items-center gap-1 group/icon">
-          <Car size={18} className="text-primary-black group-hover:text-gold transition-colors group-hover/icon:scale-110 duration-300" />
-          <span className="text-[10px] font-black text-gray-400 uppercase">{property.garageSpaces}</span>
+
+        <div className="grid grid-cols-4 gap-2 mb-6 h-12">
+          <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-gray-50/50 border border-transparent hover:border-gold/20 transition-all">
+            <Bed size={14} className="text-primary-black mb-1" />
+            <span className="text-[10px] font-black text-primary-black">{property.bedrooms || 0}</span>
+          </div>
+          <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-gray-50/50 border border-transparent hover:border-gold/20 transition-all">
+            <Bath size={14} className="text-primary-black mb-1" />
+            <span className="text-[10px] font-black text-primary-black">{property.bathrooms || 0}</span>
+          </div>
+          <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-gray-50/50 border border-transparent hover:border-gold/20 transition-all">
+            <Car size={14} className="text-primary-black mb-1" />
+            <span className="text-[10px] font-black text-primary-black">{property.garageSpaces || 0}</span>
+          </div>
+          <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-gray-50/50 border border-transparent hover:border-gold/20 transition-all">
+            <Maximize size={14} className="text-primary-black mb-1" />
+            <span className="text-[10px] font-black text-primary-black">{property.usefulArea || 0}m²</span>
+          </div>
         </div>
-        <div className="flex flex-col items-center gap-1 group/icon">
-          <Layers size={18} className="text-primary-black group-hover:text-gold transition-colors group-hover/icon:scale-110 duration-300" />
-          <span className="text-[10px] font-black text-gray-400 uppercase">{property.totalArea || property.usefulArea || property.area}m²</span>
-        </div>
-      </div>
-      
-      <div className="flex items-center gap-3 mt-auto">
-        <motion.div whileTap={{ scale: 0.95 }} className="flex-grow">
+        
+        <div className="flex items-center gap-3">
           <Link 
             to={`/imovel/${property.id}`} 
-            className="w-full flex items-center justify-center btn-gold !rounded-xl !py-3 !text-xs !px-4 shadow-lg shadow-gold/10"
+            className="flex-grow py-3 px-4 bg-primary-black text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-gold hover:text-primary-black transition-all text-center shadow-lg shadow-black/5"
           >
-            Detalhes
+            Ver Detalhes
           </Link>
-        </motion.div>
-        <motion.a
-          whileHover={{ scale: 1.1, rotate: 5 }}
-          whileTap={{ scale: 0.9 }}
-          href={`https://wa.me/${import.meta.env.VITE_WHATSAPP_NUMBER || '5547992914069'}?text=Olá, tenho interesse no imóvel código ${property.code}. Gostaria de mais informações.`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="p-3 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-600 hover:text-white transition-all shadow-sm flex items-center justify-center"
-        >
-          <MessageCircle size={20} />
-        </motion.a>
+          <a
+            href={getWhatsAppUrl()}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-3 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-600 hover:text-white transition-all shadow-sm flex items-center justify-center group/wa"
+          >
+            <MessageCircle size={18} className="group-hover/wa:scale-110 transition-transform" />
+          </a>
+        </div>
       </div>
-    </div>
-  </motion.div>
-);
+    </motion.div>
+  );
+};
 
 const SkeletonCard = () => (
   <div className="bg-white rounded-[2rem] overflow-hidden border border-gray-100 p-0 flex flex-col h-[500px] animate-pulse">
@@ -124,15 +158,22 @@ export default function PropertyList() {
   const [properties, setProperties] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
+  const [sortBy, setSortBy] = useState('recentes');
 
   // Search Filters
   const [searchFilters, setSearchFilters] = useState<any>({
     businessType: 'Venda',
     propertyType: '',
     city: '',
+    neighborhood: '',
     minPrice: '',
     maxPrice: '',
     bedrooms: '',
+    bathrooms: '',
+    garageSpaces: '',
+    minArea: '',
+    maxArea: '',
+    destaque: false
   });
 
   useEffect(() => {
@@ -142,9 +183,15 @@ export default function PropertyList() {
       businessType: params.get('businessType') || 'Venda',
       propertyType: params.get('propertyType') || '',
       city: params.get('city') || '',
+      neighborhood: params.get('neighborhood') || '',
       minPrice: params.get('minPrice') || '',
       maxPrice: params.get('maxPrice') || '',
       bedrooms: params.get('bedrooms') || '',
+      bathrooms: params.get('bathrooms') || '',
+      garageSpaces: params.get('garageSpaces') || '',
+      minArea: params.get('minArea') || '',
+      maxArea: params.get('maxArea') || '',
+      destaque: params.get('destaque') === 'true'
     };
     setSearchFilters(initialFilters);
     fetchProperties(initialFilters);
@@ -153,33 +200,77 @@ export default function PropertyList() {
   const fetchProperties = async (filters: any) => {
     setLoading(true);
     try {
-      let q = query(
+      // Normalization as requested
+      const normalize = (v: string) => v?.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim() || "";
+      const normalizedBType = normalize(filters.businessType);
+
+      // Fetch a broader set of published properties to allow complex filtering in JS
+      // This prevents "ghost properties" and ensures refresh consistency
+      const q = query(
         collection(db, 'imoveis'), 
-        where('publicado', '==', true),
-        where('status', '==', 'disponivel'),
-        where('businessType', '==', filters.businessType)
+        where('status', 'in', ['disponivel', 'Disponível', 'disponível'])
       );
 
-      // Filtering in JS because we can't easily do many inequality filters in Firestore without index explosion
       const snap = await getDocs(q);
-      let data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+      const rawData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
 
+      // Debug as requested by user
+      const validData = rawData.filter(isValidPublicProperty);
+      const invalidData = rawData.filter(p => !isValidPublicProperty(p));
+
+      console.group("DEBUG: Carregamento de Imóveis Público");
+      console.log("Recebidos do Firestore (Total):", rawData.length);
+      console.log("Válidos (Exibindo):", validData.length, validData);
+      console.log("Inválidos (Removidos):", invalidData.length, invalidData);
+      console.groupEnd();
+
+      let data = validData;
+
+      // 2. Business Type Filter
+      if (normalizedBType === 'venda' || normalizedBType === 'comprar') {
+        data = data.filter((p: any) => p.businessType === 'Venda' || p.businessType === 'Venda e Locação');
+      } else if (normalizedBType === 'locacao' || normalizedBType === 'alugar' || normalizedBType === 'aluguel') {
+        data = data.filter((p: any) => p.businessType === 'Locação' || p.businessType === 'Venda e Locação');
+      } else if (normalizedBType === 'venda_locacao' || normalizedBType === 'venda e locacao') {
+        data = data.filter((p: any) => p.businessType === 'Venda e Locação');
+      }
+
+      // 3. Other Filters
       if (filters.propertyType) {
         data = data.filter((p: any) => p.propertyType === filters.propertyType);
       }
       if (filters.city) {
         data = data.filter((p: any) => p.city?.toLowerCase().includes(filters.city.toLowerCase()));
       }
+      if (filters.neighborhood) {
+        data = data.filter((p: any) => p.neighborhood?.toLowerCase() === filters.neighborhood.toLowerCase());
+      }
+      
+      const priceField = (normalizedBType === 'locacao' || normalizedBType === 'alugar' || normalizedBType === 'aluguel') ? 'priceLocacao' : 'priceVenda';
+      
       if (filters.minPrice) {
-        const field = filters.businessType === 'Venda' ? 'priceVenda' : 'priceLocacao';
-        data = data.filter((p: any) => (p[field] || 0) >= parseFloat(filters.minPrice));
+        data = data.filter((p: any) => (p[priceField] || 0) >= parseFloat(filters.minPrice));
       }
       if (filters.maxPrice) {
-        const field = filters.businessType === 'Venda' ? 'priceVenda' : 'priceLocacao';
-        data = data.filter((p: any) => (p[field] || 0) <= parseFloat(filters.maxPrice));
+        data = data.filter((p: any) => (p[priceField] || 0) <= parseFloat(filters.maxPrice));
       }
       if (filters.bedrooms) {
         data = data.filter((p: any) => (p.bedrooms || 0) >= parseInt(filters.bedrooms));
+      }
+      if (filters.bathrooms) {
+        data = data.filter((p: any) => (p.bathrooms || 0) >= parseInt(filters.bathrooms));
+      }
+      if (filters.garageSpaces) {
+        data = data.filter((p: any) => (p.garageSpaces || 0) >= parseInt(filters.garageSpaces));
+      }
+      if (filters.minArea) {
+        data = data.filter((p: any) => (p.usefulArea || p.totalArea || 0) >= parseFloat(filters.minArea));
+      }
+      if (filters.maxArea) {
+        data = data.filter((p: any) => (p.usefulArea || p.totalArea || 0) <= parseFloat(filters.maxArea));
+      }
+      if (filters.destaque === true) {
+        data = data.filter((p: any) => p.destaque === true);
       }
 
       setProperties(data);
@@ -189,6 +280,22 @@ export default function PropertyList() {
       setLoading(false);
     }
   };
+
+  const sortedProperties = [...properties].sort((a, b) => {
+    if (sortBy === 'recentes') return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
+    if (sortBy === 'antigos') return (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0);
+    
+    // Choose price field based on current business type search
+    const isLocacao = searchFilters.businessType === 'Locação' || searchFilters.businessType === 'Alugar';
+    const priceA = isLocacao ? (a.priceLocacao || 0) : (a.priceVenda || 0);
+    const priceB = isLocacao ? (b.priceLocacao || 0) : (b.priceVenda || 0);
+    
+    if (sortBy === 'menor-preco') return priceA - priceB;
+    if (sortBy === 'maior-preco') return priceB - priceA;
+    if (sortBy === 'destaque') return (b.destaque ? 1 : 0) - (a.destaque ? 1 : 0);
+    
+    return 0;
+  });
 
   return (
     <PageWrapper>
@@ -207,13 +314,14 @@ export default function PropertyList() {
             transition={{ duration: 2 }}
             className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&q=80&w=2000')] bg-cover bg-center"
           />
-          <div className="max-w-7xl mx-auto px-4 md:px-8 relative z-10">
+          <div className="max-w-7xl mx-auto px-4 md:px-8 relative z-10 text-center md:text-left">
             <motion.div variants={staggerContainer} initial="initial" animate="animate">
-              <motion.h1 variants={slideUp} className="font-display text-4xl md:text-5xl font-bold mb-4">
-                {settings.secoes.tituloDestaques.split(' ')[0]} <span className="text-gold">{settings.secoes.tituloDestaques.split(' ').slice(1).join(' ')}</span>
+              <span className="text-gold font-black uppercase text-[10px] tracking-[0.4em] mb-4 block">Nossas Oportunidades</span>
+              <motion.h1 variants={slideUp} className="font-display text-4xl md:text-6xl font-black mb-6 leading-tight">
+                {settings.secoes.imoveisDestaque.titulo?.split(' ')[0]} <span className="text-gold">{settings.secoes.imoveisDestaque.titulo?.split(' ').slice(1).join(' ')}</span>
               </motion.h1>
-              <motion.p variants={slideUp} className="text-emerald-100 font-medium opacity-80">
-                {settings.secoes.subtituloDestaques}
+              <motion.p variants={slideUp} className="text-emerald-100 font-medium opacity-80 text-lg max-w-2xl mx-auto md:mx-0">
+                {settings.secoes.imoveisDestaque.subtitulo}
               </motion.p>
             </motion.div>
           </div>
@@ -225,82 +333,130 @@ export default function PropertyList() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="bg-white p-6 rounded-3xl shadow-2xl border border-gray-100 mb-12 flex flex-wrap items-center gap-6"
+            className="bg-white p-4 md:p-8 rounded-[2.5rem] shadow-2xl border border-gray-100 mb-12"
           >
-            <div className="flex-grow flex items-center gap-4 bg-gray-50 rounded-2xl px-5 py-4 border border-gray-100 group focus-within:border-gold/50 transition-colors">
-              <Search size={20} className="text-gray-400 group-focus-within:text-gold" />
-              <input 
-                type="text" 
-                placeholder="Digite a cidade ou bairro..." 
-                className="bg-transparent border-none outline-none w-full text-sm font-medium"
-                value={searchFilters.city}
-                onChange={(e) => setSearchFilters({...searchFilters, city: e.target.value})}
-              />
-            </div>
-            
-            <div className="hidden lg:flex items-center gap-4">
-               <select 
-                 className="bg-gray-50 border-none rounded-2xl px-5 py-4 text-sm font-bold outline-none cursor-pointer hover:bg-gray-100 transition-colors"
-                 value={searchFilters.businessType}
-                 onChange={(e) => setSearchFilters({...searchFilters, businessType: e.target.value})}
-               >
-                 {(options.tiposNegocio || []).filter(o => o.ativo).sort((a,b) => (a.ordem || 0) - (b.ordem || 0)).map(o => (
-                   <option key={o.id} value={o.nome}>{o.nome}</option>
-                 ))}
-               </select>
-               <select 
-                 className="bg-gray-50 border-none rounded-2xl px-5 py-4 text-sm font-bold outline-none cursor-pointer hover:bg-gray-100 transition-colors"
-                 value={searchFilters.propertyType}
-                 onChange={(e) => setSearchFilters({...searchFilters, propertyType: e.target.value})}
-               >
-                 <option value="">Tipo de Imóvel</option>
-                 {(options.tiposImovel || []).filter(o => o.ativo).sort((a,b) => (a.ordem || 0) - (b.ordem || 0)).map(o => (
-                   <option key={o.id} value={o.nome}>{o.nome}</option>
-                 ))}
-               </select>
-            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+              {/* City & Neighborhood */}
+              <div className="lg:col-span-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-center gap-3 bg-gray-50 rounded-2xl px-5 py-4 border border-gray-100 group focus-within:border-gold/50 transition-colors">
+                  <Search size={18} className="text-gray-400 group-focus-within:text-gold" />
+                  <input 
+                    type="text" 
+                    placeholder="Cidade..." 
+                    className="bg-transparent border-none outline-none w-full text-sm font-bold placeholder:text-gray-400"
+                    value={searchFilters.city}
+                    onChange={(e) => setSearchFilters({...searchFilters, city: e.target.value})}
+                  />
+                </div>
+                <div className="flex items-center gap-3 bg-gray-50 rounded-2xl px-5 py-4 border border-gray-100 group focus-within:border-gold/50 transition-colors">
+                  <MapPin size={18} className="text-gray-400 group-focus-within:text-gold" />
+                  <select 
+                    className="bg-transparent border-none outline-none w-full text-sm font-bold cursor-pointer"
+                    value={searchFilters.neighborhood}
+                    onChange={(e) => setSearchFilters({...searchFilters, neighborhood: e.target.value})}
+                  >
+                    <option value="">Todos os Bairros</option>
+                    {(options.bairros || [])
+                      .filter((o: any) => !searchFilters.city || o.cidade?.toLowerCase() === searchFilters.city.toLowerCase())
+                      .map((o: any) => (
+                        <option key={o.id} value={o.nome}>{o.nome}</option>
+                      ))
+                    }
+                  </select>
+                </div>
+              </div>
 
-            <motion.button 
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => fetchProperties(searchFilters)}
-              className="btn-gold !py-4 !px-10 shadow-xl shadow-gold/20 !rounded-2xl"
-            >
-              Buscar
-            </motion.button>
-            
-            <motion.button 
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={() => setShowFilters(true)}
-              className="w-14 h-14 flex items-center justify-center bg-gray-50 rounded-2xl text-primary-black hover:bg-primary-black hover:text-white transition-all shadow-sm"
-            >
-              <Filter size={20} />
-            </motion.button>
+              {/* Business & Property type - visible on tablets/desktops */}
+              <div className="lg:col-span-4 grid grid-cols-2 gap-4">
+                <select 
+                  className="bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 text-xs font-black uppercase tracking-widest outline-none cursor-pointer hover:bg-gray-100 transition-colors"
+                  value={searchFilters.businessType}
+                  onChange={(e) => setSearchFilters({...searchFilters, businessType: e.target.value})}
+                >
+                   <option value="Venda">Comprar</option>
+                   <option value="Locação">Locação</option>
+                   <option value="Venda e Locação">Ambos</option>
+                </select>
+                <select 
+                  className="bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 text-xs font-black uppercase tracking-widest outline-none cursor-pointer hover:bg-gray-100 transition-colors"
+                  value={searchFilters.propertyType}
+                  onChange={(e) => setSearchFilters({...searchFilters, propertyType: e.target.value})}
+                >
+                  <option value="">Tipo</option>
+                  {(options.tiposImovel || []).filter(o => o.ativo).sort((a,b) => (a.ordem || 0) - (b.ordem || 0)).map(o => (
+                    <option key={o.id} value={o.nome}>{o.nome}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Price & Search Button */}
+              <div className="lg:col-span-3 flex items-center gap-4">
+                <div className="flex-grow hidden sm:flex items-center gap-2 bg-gray-50 rounded-2xl px-4 py-4 border border-gray-100 group focus-within:border-gold/50 transition-colors">
+                  <span className="text-[10px] font-black text-gold">R$</span>
+                  <input 
+                    type="number" 
+                    placeholder="Até..." 
+                    className="bg-transparent border-none outline-none w-full text-sm font-bold placeholder:text-gray-400"
+                    value={searchFilters.maxPrice}
+                    onChange={(e) => setSearchFilters({...searchFilters, maxPrice: e.target.value})}
+                  />
+                </div>
+                
+                <motion.button 
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => fetchProperties(searchFilters)}
+                  className="bg-primary-black text-white p-4 rounded-2xl shadow-xl hover:bg-gold hover:text-primary-black transition-all flex items-center justify-center min-w-[60px]"
+                >
+                  <Search size={22} strokeWidth={3} />
+                </motion.button>
+                
+                <motion.button 
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => setShowFilters(true)}
+                  className="w-14 h-14 flex items-center justify-center bg-gold/10 text-gold rounded-2xl hover:bg-gold hover:text-primary-black transition-all"
+                >
+                  <Filter size={20} />
+                </motion.button>
+              </div>
+            </div>
           </motion.div>
 
           {/* Results Info */}
-          <div className="mb-8 flex items-center justify-between">
-             <p className="text-gray-400 font-bold text-[10px] uppercase tracking-widest leading-none">
-               Mostrando <span className="text-primary-black text-base ml-1">{properties.length}</span> resultados
-             </p>
+          <div className="mb-10 flex flex-col md:flex-row items-center justify-between gap-6">
              <div className="flex items-center gap-3">
-               <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Ordernar:</span>
-               <select className="bg-transparent border-none text-[11px] font-black uppercase tracking-widest outline-none cursor-pointer text-primary-black">
-                 <option>Mais recentes</option>
-                 <option>Menor preço</option>
-                 <option>Maior preço</option>
+               <div className="w-10 h-10 rounded-full bg-gold/10 flex items-center justify-center">
+                  <Sparkles size={16} className="text-gold" />
+               </div>
+               <p className="text-gray-400 font-bold text-[10px] uppercase tracking-[0.2em] leading-none">
+                 Mostrando <span className="text-primary-black text-lg ml-1 font-black">{sortedProperties.length}</span> imóveis ativos
+               </p>
+             </div>
+             
+             <div className="flex items-center gap-4 bg-white px-5 py-3 rounded-2xl border border-gray-100 shadow-sm">
+               <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Ordenar:</span>
+               <select 
+                 className="bg-transparent border-none text-[11px] font-black uppercase tracking-widest outline-none cursor-pointer text-primary-black"
+                 value={sortBy}
+                 onChange={(e) => setSortBy(e.target.value)}
+               >
+                 <option value="recentes">Mais recentes</option>
+                 <option value="menor-preco">Menor preço</option>
+                 <option value="maior-preco">Maior preço</option>
+                 <option value="destaque">Destaques primeiro</option>
+                 <option value="antigos">Mais antigos</option>
                </select>
              </div>
           </div>
 
           {loading ? (
-            <div className="py-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div className="py-10 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-10">
               {[1, 2, 3, 4, 5, 6].map(n => (
                 <SkeletonCard key={n} />
               ))}
             </div>
-          ) : properties.length === 0 ? (
+          ) : sortedProperties.length === 0 ? (
             <motion.div 
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -309,11 +465,14 @@ export default function PropertyList() {
                <div className="w-24 h-24 bg-white rounded-[2rem] shadow-xl border border-gray-100 flex items-center justify-center mx-auto mb-8 animate-bounce">
                   <Search size={40} className="text-gold" />
                </div>
-               <h3 className="text-3xl font-display font-bold text-primary-black mb-3 tracking-tight">Nenhum imóvel encontrado</h3>
-               <p className="text-gray-400 font-medium mb-10 leading-relaxed text-sm">Tente ajustar seus filtros para encontrar o que procura ou fale com um de nossos especialistas.</p>
+               <h3 className="text-3xl font-display font-bold text-primary-black mb-3 tracking-tight">Nenhum imóvel disponível no momento</h3>
+               <p className="text-gray-400 font-medium mb-10 leading-relaxed text-sm">Não encontramos nenhum imóvel publicado que atenda aos critérios. Tente ajustar sua busca ou volte mais tarde.</p>
                <button 
-                  onClick={() => fetchProperties({ businessType: 'Venda', propertyType: '', city: '', minPrice: '', maxPrice: '', bedrooms: '' })} 
-                  className="btn-outline-gold !rounded-2xl !py-4 !px-8 hover:!bg-gold hover:!text-primary-black transition-all"
+                  onClick={() => {
+                    setSearchFilters({ businessType: 'Venda', propertyType: '', city: '', neighborhood: '', minPrice: '', maxPrice: '', bedrooms: '', bathrooms: '', garageSpaces: '', minArea: '', maxArea: '', destaque: false });
+                    fetchProperties({ businessType: 'Venda', propertyType: '', city: '', neighborhood: '', minPrice: '', maxPrice: '', bedrooms: '', bathrooms: '', garageSpaces: '', minArea: '', maxArea: '', destaque: false });
+                  }} 
+                  className="btn-gold !rounded-2xl !py-4 !px-8 shadow-xl shadow-gold/20"
                 >
                   Limpar Todos os Filtros
                 </button>
@@ -323,11 +482,16 @@ export default function PropertyList() {
               variants={staggerContainer}
               initial="initial"
               animate="animate"
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10 pb-24"
+              className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-10 pb-24"
             >
               <AnimatePresence mode="popLayout">
-                {properties.map((property, idx) => (
-                  <PropertyCard key={property.id} property={property} index={idx} />
+                {sortedProperties.map((property, idx) => (
+                  <PropertyCard 
+                    key={property.id} 
+                    property={property} 
+                    index={idx} 
+                    agencyWhatsApp={settings.empresa.whatsapp}
+                  />
                 ))}
               </AnimatePresence>
             </motion.div>
@@ -366,16 +530,22 @@ export default function PropertyList() {
                 <div className="flex-grow overflow-y-auto p-10 space-y-12">
                   <div className="space-y-5">
                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Tipo de Negócio</label>
-                     <div className="grid grid-cols-2 gap-4 bg-gray-50 p-2 rounded-2xl border border-gray-100">
-                       {(options.tiposNegocio || []).filter(o => o.ativo).sort((a,b) => (a.ordem || 0) - (b.ordem || 0)).slice(0, 2).map(o => (
-                         <button 
-                           key={o.id}
-                           onClick={() => setSearchFilters({...searchFilters, businessType: o.nome})}
-                           className={`py-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${searchFilters.businessType === o.nome ? 'bg-white text-primary-black shadow-xl' : 'text-gray-400 hover:text-primary-black'}`}
-                         >
-                           {o.nome === 'Venda' ? 'Comprar' : o.nome === 'Locação' ? 'Alugar' : o.nome}
-                         </button>
-                       ))}
+                    <div className="grid grid-cols-2 gap-4 bg-gray-50 p-2 rounded-2xl border border-gray-100">
+                       {[
+                         { id: 'venda', nome: 'Venda', label: 'Comprar' },
+                         { id: 'locacao', nome: 'Locação', label: 'Locação' },
+                         { id: 'venda_locacao', nome: 'Venda e Locação', label: 'Venda e Locação' }
+                       ].map((o) => {
+                         return (
+                           <button 
+                             key={o.id}
+                             onClick={() => setSearchFilters({...searchFilters, businessType: o.nome})}
+                             className={`py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${searchFilters.businessType === o.nome ? 'bg-white text-primary-black shadow-xl' : 'text-gray-400 hover:text-primary-black font-bold'}`}
+                           >
+                             {o.label}
+                           </button>
+                         );
+                       })}
                      </div>
                   </div>
 
@@ -402,25 +572,101 @@ export default function PropertyList() {
                   </div>
 
                   <div className="space-y-5">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Dormitórios (Mínimo)</label>
-                    <div className="flex gap-3">
-                      {[1, 2, 3, 4, 5].map(n => (
-                        <button 
-                          key={n}
-                          onClick={() => setSearchFilters({...searchFilters, bedrooms: n.toString()})}
-                          className={`w-14 h-14 flex items-center justify-center rounded-2xl text-[11px] font-black transition-all border ${searchFilters.bedrooms === n.toString() ? 'bg-primary-black text-white border-primary-black shadow-xl ring-4 ring-primary-black/10' : 'bg-white border-gray-100 text-gray-400 hover:border-gold/50'}`}
-                        >
-                          {n}+
-                        </button>
-                      ))}
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Estrutura do Imóvel</label>
+                    <div className="grid grid-cols-3 gap-3">
+                       <div className="space-y-2">
+                         <span className="text-[8px] font-bold text-gray-300 uppercase ml-1">Quartos</span>
+                         <select 
+                           className="w-full bg-gray-50 border-none rounded-xl py-4 px-4 text-xs font-bold outline-none"
+                           value={searchFilters.bedrooms}
+                           onChange={(e) => setSearchFilters({...searchFilters, bedrooms: e.target.value})}
+                         >
+                           <option value="">Qualquer</option>
+                           <option value="1">1+</option>
+                           <option value="2">2+</option>
+                           <option value="3">3+</option>
+                           <option value="4">4+</option>
+                         </select>
+                       </div>
+                       <div className="space-y-2">
+                         <span className="text-[8px] font-bold text-gray-300 uppercase ml-1">Banheiros</span>
+                         <select 
+                           className="w-full bg-gray-50 border-none rounded-xl py-4 px-4 text-xs font-bold outline-none"
+                           value={searchFilters.bathrooms}
+                           onChange={(e) => setSearchFilters({...searchFilters, bathrooms: e.target.value})}
+                         >
+                           <option value="">Qualquer</option>
+                           <option value="1">1+</option>
+                           <option value="2">2+</option>
+                           <option value="3">3+</option>
+                         </select>
+                       </div>
+                       <div className="space-y-2">
+                         <span className="text-[8px] font-bold text-gray-300 uppercase ml-1">Vagas</span>
+                         <select 
+                           className="w-full bg-gray-50 border-none rounded-xl py-4 px-4 text-xs font-bold outline-none"
+                           value={searchFilters.garageSpaces}
+                           onChange={(e) => setSearchFilters({...searchFilters, garageSpaces: e.target.value})}
+                         >
+                           <option value="">Qualquer</option>
+                           <option value="1">1+</option>
+                           <option value="2">2+</option>
+                           <option value="3">3+</option>
+                         </select>
+                       </div>
                     </div>
+                  </div>
+
+                  <div className="space-y-5">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Área Útil (m²)</label>
+                    <div className="grid grid-cols-2 gap-4">
+                        <input 
+                          type="number" placeholder="Mínimo" className="w-full bg-gray-50 border-none rounded-2xl py-5 px-6 text-sm font-bold focus:ring-2 focus:ring-gold/20 outline-none transition-all placeholder:text-gray-300"
+                          value={searchFilters.minArea}
+                          onChange={(e) => setSearchFilters({...searchFilters, minArea: e.target.value})}
+                        />
+                        <input 
+                          type="number" placeholder="Máximo" className="w-full bg-gray-50 border-none rounded-2xl py-5 px-6 text-sm font-bold focus:ring-2 focus:ring-gold/20 outline-none transition-all placeholder:text-gray-300"
+                          value={searchFilters.maxArea}
+                          onChange={(e) => setSearchFilters({...searchFilters, maxArea: e.target.value})}
+                        />
+                    </div>
+                  </div>
+
+                  <div className="space-y-5">
+                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Destaques</label>
+                     <button 
+                       onClick={() => setSearchFilters({...searchFilters, destaque: !searchFilters.destaque})}
+                       className={`w-full flex items-center justify-between p-5 rounded-2xl border transition-all ${searchFilters.destaque ? 'bg-gold/10 border-gold text-primary-black' : 'bg-white border-gray-100 text-gray-400'}`}
+                     >
+                        <div className="flex items-center gap-3">
+                           <Sparkles size={18} className={searchFilters.destaque ? 'text-gold' : 'text-gray-300'} />
+                           <span className="text-xs font-bold uppercase tracking-widest font-black">Apenas Imóveis em Destaque</span>
+                        </div>
+                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${searchFilters.destaque ? 'border-primary-black bg-primary-black' : 'border-gray-200'}`}>
+                           {searchFilters.destaque && <Check size={14} className="text-white" />}
+                        </div>
+                     </button>
                   </div>
                 </div>
 
                 <div className="p-10 bg-gray-50 border-t border-gray-100 space-y-4">
                   <button 
                     onClick={() => {
-                      setSearchFilters({ businessType: 'Venda', propertyType: '', city: '', minPrice: '', maxPrice: '', bedrooms: '' });
+                      setSearchFilters({ 
+                        businessType: 'Venda', 
+                        propertyType: '', 
+                        city: '', 
+                        neighborhood: '',
+                        minPrice: '', 
+                        maxPrice: '', 
+                        bedrooms: '',
+                        bathrooms: '',
+                        garageSpaces: '',
+                        minArea: '',
+                        maxArea: '',
+                        destaque: false
+                      });
                     }}
                     className="w-full text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 hover:text-red-500 transition-colors"
                   >

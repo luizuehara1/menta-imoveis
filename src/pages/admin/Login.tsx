@@ -2,10 +2,13 @@ import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LogIn, ShieldAlert } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { SafeImage } from '../../components/ui/SafeImage';
+import { useSettings } from '../../hooks/useSettings';
 
 export default function AdminLogin() {
   const { login, logout, user, isAdmin, loading } = useAuth();
   const navigate = useNavigate();
+  const { settings } = useSettings();
   const [error, setError] = React.useState<string | null>(null);
 
   useEffect(() => {
@@ -35,12 +38,17 @@ export default function AdminLogin() {
       <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl overflow-hidden relative z-10 p-8 md:p-12">
         <div className="flex flex-col items-center mb-10">
           <div className="flex flex-col items-center mb-8">
-            <img src="https://i.postimg.cc/ZRkx8Py6/image.png" alt="Menta Negócios Imobiliários" className="h-20 w-auto object-contain mb-4" />
+            <SafeImage 
+              src={settings.aparencia.logoUrl || "https://i.postimg.cc/kMZXNdCS/image.png"} 
+              alt={settings.empresa.nome} 
+              priority
+              className="w-24 h-24 object-contain mb-4" 
+            />
             <span className="font-display text-4xl font-bold tracking-tighter text-primary-black leading-tight">
-              MENTA
+              {settings.empresa.nome.split(' ')[0].toUpperCase()}
             </span>
             <span className="text-xs font-medium tracking-[0.3em] text-gold -mt-1 uppercase">
-              Negócios Imobiliários
+              {settings.empresa.nome.split(' ').slice(1).join(' ').toUpperCase() || 'Negócios Imobiliários'}
             </span>
           </div>
           

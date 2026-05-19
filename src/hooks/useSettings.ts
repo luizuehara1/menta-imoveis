@@ -9,7 +9,7 @@ export function useSettings() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsub = onSnapshot(doc(db, 'configuracoes', 'site'), (docSnap) => {
+    const unsub = onSnapshot(doc(db, 'siteSettings', 'main'), (docSnap) => {
       if (docSnap.exists()) {
         setSettings({ ...DEFAULT_SITE_CONFIG, ...docSnap.data() } as SiteConfig);
       } else {
@@ -34,7 +34,7 @@ export function useOptions() {
 
   useEffect(() => {
     const categories = [
-      'tiposImovel', 'tiposNegocio', 'statusImovel', 'cidades', 'bairros', 
+      'tiposImovel', 'tiposNegocio', 'statusImovel', 'cidades', 
       'faixasPreco', 'caracteristicas', 'instalacoes', 'acabamentos', 
       'lazer', 'localizacoes'
     ];
@@ -50,7 +50,6 @@ export function useOptions() {
             [category]: items.length > 0 ? items : (DEFAULT_OPTIONS[category] || [])
           }));
         } else {
-          // If doc doesn't exist, use default for this category
           setOptions(prev => ({
             ...prev,
             [category]: DEFAULT_OPTIONS[category] || []
@@ -58,7 +57,6 @@ export function useOptions() {
         }
       }, (error) => {
         console.error(`Error fetching options for ${category}:`, error);
-        // On error, ensure we have the default for this category at least
         setOptions(prev => ({
           ...prev,
           [category]: DEFAULT_OPTIONS[category] || []
@@ -66,9 +64,18 @@ export function useOptions() {
       });
     });
 
+    // Also fetch from top-level bairros collection
+    const unsubBairros = onSnapshot(collection(db, 'bairros'), (snap) => {
+      const b = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter((i: any) => i.ativo);
+      setOptions(prev => ({ ...prev, bairros: b as any }));
+    });
+
     setLoading(false);
 
-    return () => unsubs.forEach(unsub => unsub());
+    return () => {
+      unsubs.forEach(unsub => unsub());
+      unsubBairros();
+    };
   }, []);
 
   return { options, loading };

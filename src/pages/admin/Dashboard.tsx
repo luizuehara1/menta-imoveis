@@ -42,22 +42,9 @@ export default function AdminDashboard() {
     gastosMes: 0,
   });
 
+  const [dataCharts, setDataCharts] = useState<any[]>([]);
+  const [categoryData, setCategoryData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-
-  const dataCharts = [
-    { name: 'Jan', receita: 4000, gastos: 2400 },
-    { name: 'Fev', receita: 3000, gastos: 1398 },
-    { name: 'Mar', receita: 2000, gastos: 9800 },
-    { name: 'Abr', receita: 2780, gastos: 3908 },
-    { name: 'Mai', receita: 1890, gastos: 4800 },
-  ];
-
-  const categoryData = [
-    { name: 'Anúncios', value: 400 },
-    { name: 'Sistemas', value: 300 },
-    { name: 'Marketing', value: 300 },
-    { name: 'Escritório', value: 200 },
-  ];
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -73,18 +60,92 @@ export default function AdminDashboard() {
 
         const imoveisSnap = await safeGetDocs('imoveis');
         const visitasSnap = await safeGetDocs('visitas', query(collection(db, 'visitas'), where('status', '==', 'Pendente')));
-        const gastosSnap = await safeGetDocs('gastos');
-        const receitasSnap = await safeGetDocs('receitas');
+        const financeiroSnap = await safeGetDocs('financeiro');
+        const legacyGastosSnap = await safeGetDocs('gastos');
+        const legacyReceitasSnap = await safeGetDocs('receitas');
 
         const imoveis = imoveisSnap.docs.map((doc: any) => doc.data());
         
+        // Aggregate finance data
+        const allFinance: any[] = [];
+        
+        financeiroSnap.docs.forEach((doc: any) => {
+          const d = doc.data();
+          allFinance.push({
+            tipo: d.tipo,
+            valor: d.valor || 0,
+            data: d.data || '',
+            categoria: d.categoria || 'Outros'
+          });
+        });
+
+        legacyGastosSnap.docs.forEach((doc: any) => {
+          const d = doc.data();
+          allFinance.push({
+            tipo: 'saida',
+            valor: d.value || 0,
+            data: d.date || '',
+            categoria: d.category || 'Outros'
+          });
+        });
+
+        legacyReceitasSnap.docs.forEach((doc: any) => {
+          const d = doc.data();
+          allFinance.push({
+            tipo: 'entrada',
+            valor: d.value || 0,
+            data: d.date || '',
+            categoria: 'Vendas'
+          });
+        });
+
+        // Group by month for chart
+        const monthsMap: Record<string, { name: string, receita: number, gastos: number }> = {};
+        const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+        
+        // Initialize last 5 months
+        const today = new Date();
+        for (let i = 4; i >= 0; i--) {
+          const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+          const key = d.toISOString().slice(0, 7);
+          monthsMap[key] = { name: monthNames[d.getMonth()], receita: 0, gastos: 0 };
+        }
+
+        allFinance.forEach(f => {
+          if (!f.data) return;
+          const monthKey = f.data.slice(0, 7);
+          if (monthsMap[monthKey]) {
+            if (f.tipo === 'entrada') monthsMap[monthKey].receita += f.valor;
+            else monthsMap[monthKey].gastos += f.valor;
+          }
+        });
+
+        setDataCharts(Object.values(monthsMap));
+
+        // Category data
+        const catMap: Record<string, number> = {};
+        allFinance.filter(f => f.tipo === 'saida').forEach(f => {
+          catMap[f.categoria] = (catMap[f.categoria] || 0) + f.valor;
+        });
+
+        const catArray = Object.entries(catMap)
+          .map(([name, value]) => ({ name, value }))
+          .sort((a, b) => b.value - a.value)
+          .slice(0, 5);
+
+        setCategoryData(catArray.length > 0 ? catArray : [{ name: 'Sem gastos', value: 0 }]);
+
+        const currentMonthStr = today.toISOString().slice(0, 7);
+        const monthInflow = allFinance.filter(r => r.tipo === 'entrada' && r.data.startsWith(currentMonthStr)).reduce((acc, curr) => acc + curr.valor, 0);
+        const monthOutflow = allFinance.filter(r => r.tipo === 'saida' && r.data.startsWith(currentMonthStr)).reduce((acc, curr) => acc + curr.valor, 0);
+
         setStats({
           totalImoveis: imoveisSnap.size,
           aVenda: imoveis.filter((i: any) => i.businessType === 'Venda').length,
           locacao: imoveis.filter((i: any) => i.businessType === 'Locação').length,
           visitasPendentes: visitasSnap.size,
-          receitaMes: receitasSnap.docs.reduce((acc: number, doc: any) => acc + (doc.data().value || 0), 0),
-          gastosMes: gastosSnap.docs.reduce((acc: number, doc: any) => acc + (doc.data().value || 0), 0),
+          receitaMes: monthInflow,
+          gastosMes: monthOutflow,
         });
       } catch (error) {
         console.error("Error in fetchStats:", error);

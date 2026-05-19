@@ -2,45 +2,68 @@ import { SiteConfig, OptionItem } from '../types';
 
 export const DEFAULT_SITE_CONFIG: SiteConfig = {
   hero: {
-    titulo: "Menta Imobiliária: Onde o Luxo Encontra a Modernidade",
+    tituloPrincipal: "Menta Imobiliária: Onde o Luxo Encontra a Modernidade",
     subtitulo: "Encontre os melhores imóveis de alto padrão e viva a experiência Menta.",
-    botaoPrincipalTexto: "Ver Imóveis",
-    botaoPrincipalLink: "/imoveis",
-    botaoSecundarioTexto: "Sobre Nós",
-    botaoSecundarioLink: "/sobre",
+    textoBotaoPrincipal: "Ver Imóveis",
+    linkBotaoPrincipal: "/imoveis",
+    textoBotaoSecundario: "Sobre Nós",
+    linkBotaoSecundario: "/sobre",
     imagemFundoUrl: "https://images.unsplash.com/photo-1600607687940-4e5c7ef95c73?auto=format&fit=crop&q=80",
-    threeJsAtivo: true
+    ativarThreeJs: true
   },
   secoes: {
-    tituloDestaques: "Imóveis em Destaque",
-    subtituloDestaques: "Uma seleção exclusiva das melhores oportunidades no mercado.",
-    tituloSobre: "Sobre a Menta",
-    textoSobre: "A Menta é uma boutique imobiliária focada na excelência, transparência e exclusividade. Localizada em Balneário Camboriú, atendemos clientes que buscam o melhor do mercado de luxo catarinense.",
-    tituloCorretores: "Nossos Especialistas",
-    subtituloCorretores: "Profissionais qualificados para entregar a melhor experiência.",
-    tituloContato: "Fale Conosco",
-    textoContato: "Estamos prontos para atender você e realizar o melhor negócio."
+    imoveisDestaque: {
+      titulo: "Imóveis em Destaque",
+      subtitulo: "Uma seleção exclusiva das melhores oportunidades no mercado."
+    },
+    sobre: {
+      titulo: "Sobre a Menta",
+      texto: "A Menta é uma boutique imobiliária focada na excelência, transparência e exclusividade. Localizada em Balneário Camboriú, atendemos clientes que buscam o melhor do mercado de luxo catarinense.",
+      imagemUrl: ""
+    },
+    corretores: {
+      titulo: "Nossos Especialistas",
+      subtitulo: "Profissionais qualificados para entregar a melhor experiência."
+    },
+    contato: {
+      titulo: "Fale Conosco",
+      texto: "Estamos prontos para atender você e realizar o melhor negócio."
+    }
   },
   empresa: {
-    nome: "Menta Imobiliária",
-    creci: "123456-J",
-    endereco: "Av. Atlântica, 1000 - Centro, Balneário Camboriú - SC",
-    telefone1: "(47) 99999-9999",
-    telefone2: "(47) 3333-3333",
-    whatsapp: "47999999999",
-    instagram: "@mentaimobiliaria",
-    email: "contato@mentaimobiliaria.com.br",
-    googleMapsUrl: "https://goo.gl/maps/...",
-    logoUrl: "https://i.postimg.cc/ZRkx8Py6/image.png"
+    nome: "Menta Negócios Imobiliários",
+    razaoSocial: "A & E Negócios Imobiliários Ltda",
+    cnpj: "63.572.479/0001-50",
+    creciPj: "11255PJ",
+    creciResponsavel: "11255PJ",
+    telefone: "(47) 99291-4069",
+    whatsapp: "(47) 99291-4069",
+    email: "contato@mentaimoveis.com.br",
+    site: "www.mentaimoveis.com.br",
+    endereco: "Av. Brasil, 2636",
+    bairro: "Centro",
+    cidade: "Balneário Camboriú",
+    estado: "SC",
+    cep: "88330-000",
+    logoCabecalhoUrl: "https://i.postimg.cc/kMZXNdCS/image.png",
+    marcaDaguaUrl: "https://i.postimg.cc/kMZXNdCS/image.png",
+    rodapeContratos: "Menta Negócios Imobiliários - Transparência e Exclusividade",
+    responsavelLegal: "Responsável Menta",
+    responsavelCpf: "000.000.000-00",
+    responsavelCargo: "Diretor Comercial",
+    slogan: "Exclusividade em cada detalhe",
+    creci: "11255PJ",
+    cidadeEstado: "Balneário Camboriú - SC",
+    googleMapsUrl: ""
   },
   aparencia: {
-    corPrimaria: "#003030",
+    corPrincipal: "#003030",
     corSecundaria: "#E5BC53",
     corFundo: "#FFFFFF",
-    corBotoes: "#003030",
-    animacoesAtivas: true,
-    threeJsAtivo: true,
-    logoUrl: "https://i.postimg.cc/ZRkx8Py6/image.png",
+    corTexto: "#111111",
+    logoUrl: "https://i.postimg.cc/kMZXNdCS/image.png",
+    logoNavbarUrl: "https://i.postimg.cc/kMZXNdCS/image.png",
+    logoFooterUrl: "https://i.postimg.cc/kMZXNdCS/image.png",
     faviconUrl: ""
   }
 };
@@ -48,7 +71,7 @@ export const DEFAULT_SITE_CONFIG: SiteConfig = {
 export const DEFAULT_OPTIONS: Record<string, OptionItem[]> = {
   tiposNegocio: [
     { id: "venda", nome: "Comprar", valor: "venda", ativo: true, ordem: 1 },
-    { id: "locacao", nome: "Alugar", valor: "locacao", ativo: true, ordem: 2 },
+    { id: "locacao", nome: "Locação", valor: "locacao", ativo: true, ordem: 2 },
     { id: "venda_locacao", nome: "Venda e Locação", valor: "venda_locacao", ativo: true, ordem: 3 }
   ],
   tiposImovel: [
@@ -83,11 +106,19 @@ export const DEFAULT_OPTIONS: Record<string, OptionItem[]> = {
   ],
   faixasPreco: [
     { id: "sem-limite", nome: "Sem limite", valor: 0, ativo: true, ordem: 0 },
-    { id: "ate-300k", nome: "Até R$ 300 mil", valor: 300000, ativo: true, ordem: 1 },
-    { id: "ate-500k", nome: "Até R$ 500 mil", valor: 500000, ativo: true, ordem: 2 },
-    { id: "ate-1m", nome: "Até R$ 1 milhão", valor: 1000000, ativo: true, ordem: 3 },
-    { id: "ate-2m", nome: "Até R$ 2 milhões", valor: 2000000, ativo: true, ordem: 4 },
-    { id: "ate-5m", nome: "Até R$ 5 milhões", valor: 5000000, ativo: true, ordem: 5 }
+    // Venda
+    { id: "venda-300k", nome: "Venda: Até R$ 300 mil", valor: 300000, ativo: true, ordem: 1, tipo: 'venda' },
+    { id: "venda-500k", nome: "Venda: Até R$ 500 mil", valor: 500000, ativo: true, ordem: 2, tipo: 'venda' },
+    { id: "venda-1m", nome: "Venda: Até R$ 1 milhão", valor: 1000000, ativo: true, ordem: 3, tipo: 'venda' },
+    { id: "venda-2m", nome: "Venda: Até R$ 2 milhões", valor: 2000000, ativo: true, ordem: 4, tipo: 'venda' },
+    { id: "venda-5m", nome: "Venda: Até R$ 5 milhões", valor: 5000000, ativo: true, ordem: 5, tipo: 'venda' },
+    { id: "venda-10m", nome: "Venda: Até R$ 10 milhões", valor: 10000000, ativo: true, ordem: 6, tipo: 'venda' },
+    // Locação
+    { id: "loc-2k", nome: "Locação: Até R$ 2.000", valor: 2000, ativo: true, ordem: 7, tipo: 'locacao' },
+    { id: "loc-3k", nome: "Locação: Até R$ 3.000", valor: 3000, ativo: true, ordem: 8, tipo: 'locacao' },
+    { id: "loc-5k", nome: "Locação: Até R$ 5.000", valor: 5000, ativo: true, ordem: 9, tipo: 'locacao' },
+    { id: "loc-10k", nome: "Locação: Até R$ 10.000", valor: 10000, ativo: true, ordem: 10, tipo: 'locacao' },
+    { id: "loc-20k", nome: "Locação: Até R$ 20.000", valor: 20000, ativo: true, ordem: 11, tipo: 'locacao' }
   ],
   caracteristicas: [
     "Área de Luz", "Box no banheiro", "Churrasqueira", "Copa", "Dependência de empregados", "Entrada lateral",

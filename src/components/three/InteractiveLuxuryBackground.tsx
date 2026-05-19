@@ -85,8 +85,9 @@ export const InteractiveLuxuryBackground: React.FC = () => {
   const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   return (
-    <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden select-none">
-      <div className="absolute inset-0 bg-gradient-to-br from-primary-black via-primary-black to-[#001a1a] opacity-95" />
+    <div className="absolute inset-0 z-10 pointer-events-none overflow-hidden select-none">
+      {/* Background layer can stay but MUST be semi-transparent if the user wants an overlay effect */}
+      <div className="absolute inset-0 bg-primary-black/10 backdrop-blur-[2px]" />
       
       <Canvas
         gl={{ 

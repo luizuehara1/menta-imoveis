@@ -1,5 +1,6 @@
 import React from 'react';
 import { Mail, Phone, MapPin, MessageCircle } from 'lucide-react';
+import { SafeImage } from '../../components/ui/SafeImage';
 
 export default function Contact() {
   return (
@@ -22,7 +23,7 @@ export default function Contact() {
                      </div>
                      <div>
                         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Atendimento Comercial</p>
-                        <p className="text-lg font-bold text-primary-black">{import.meta.env.VITE_WHATSAPP_NUMBER || '(47) 99291-4069'}</p>
+                        <p className="text-lg font-bold text-primary-black">{import.meta.env.VITE_WHATSAPP_NUMBER || '(41) 8836-4069'}</p>
                      </div>
                   </div>
 
@@ -32,7 +33,7 @@ export default function Contact() {
                      </div>
                      <div>
                         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Plantão WhatsApp</p>
-                        <p className="text-lg font-bold text-primary-black">{import.meta.env.VITE_WHATSAPP_NUMBER || '(41) 98818-711'}</p>
+                        <p className="text-lg font-bold text-primary-black">{import.meta.env.VITE_WHATSAPP_NUMBER || '(41) 8836-4069'}</p>
                      </div>
                   </div>
 
@@ -86,7 +87,11 @@ export default function Contact() {
       
       {/* Map Placeholder */}
       <div className="h-96 w-full bg-gray-100">
-         <img src="https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?auto=format&fit=crop&q=80&w=2000" className="w-full h-full object-cover grayscale opacity-50" alt="Mapa" />
+         <SafeImage 
+           src="https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?auto=format&fit=crop&q=80&w=2000" 
+           className="w-full h-full grayscale opacity-50" 
+           alt="Mapa" 
+         />
       </div>
     </div>
   );

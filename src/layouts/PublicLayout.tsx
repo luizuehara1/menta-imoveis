@@ -1,12 +1,15 @@
 import React from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Phone, MessageCircle, Menu, X } from 'lucide-react';
+import { Phone, MessageCircle, Menu, X, Instagram, Mail, MapPin as MapPinIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { SafeImage } from '../components/ui/SafeImage';
+import { useSettings } from '../hooks/useSettings';
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = React.useState(false);
   const [scrolled, setScrolled] = React.useState(false);
   const location = useLocation();
+  const { settings } = useSettings();
 
   React.useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -22,21 +25,28 @@ const Navbar = () => {
     { name: 'Contato', path: '/contato' },
   ];
 
+  const whatsappUrl = `https://wa.me/55${settings.empresa.whatsapp}`;
+
   return (
     <nav className={`fixed top-0 left-0 w-full z-[100] transition-all duration-500 ${
       scrolled ? 'bg-white/80 backdrop-blur-lg shadow-xl py-3' : 'bg-transparent py-5'
     }`}>
       <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-4 group">
-          <div className={`p-2 transition-transform duration-500 group-hover:scale-110 ${scrolled ? 'bg-primary-black rounded-xl' : 'bg-white/10 backdrop-blur-md rounded-xl'}`}>
-            <img src="https://i.postimg.cc/ZRkx8Py6/image.png" alt="Menta" className={`h-10 w-auto object-contain transition-all ${scrolled ? 'brightness-0 invert' : 'brightness-0 invert'}`} />
+          <div className={`w-14 h-14 flex items-center justify-center transition-transform duration-500 group-hover:scale-110 ${scrolled ? 'bg-primary-black rounded-xl border border-gold/10' : 'bg-primary-black rounded-xl shadow-2xl border border-gold/10'}`}>
+            <SafeImage 
+              src={settings.aparencia.logoNavbarUrl || settings.aparencia.logoUrl || "https://i.postimg.cc/kMZXNdCS/image.png"} 
+              alt={settings.empresa.nome} 
+              priority
+              className="h-10 w-10 object-contain" 
+            />
           </div>
           <div className="flex flex-col items-start border-l border-white/20 pl-4">
             <span className={`font-display text-2xl font-bold tracking-tighter leading-tight transition-colors ${scrolled ? 'text-primary-black' : 'text-white'}`}>
-              MENTA
+              {settings.empresa.nome.split(' ')[0].toUpperCase()}
             </span>
             <span className={`text-[9px] font-bold tracking-[0.3em] -mt-1 uppercase transition-colors ${scrolled ? 'text-gold' : 'text-gold/80'}`}>
-              Negócios Imobiliários
+              {settings.empresa.nome.split(' ').slice(1).join(' ').toUpperCase() || 'Negócios Imobiliários'}
             </span>
           </div>
         </Link>
@@ -56,7 +66,7 @@ const Navbar = () => {
             </Link>
           ))}
           <a
-            href="https://wa.me/5547992914069"
+            href={whatsappUrl}
             target="_blank"
             rel="noopener noreferrer"
             className={`flex items-center gap-2 font-bold px-6 py-3 rounded-full transition-all active:scale-95 ${
@@ -88,8 +98,15 @@ const Navbar = () => {
           >
             <div className="flex items-center justify-between p-8 border-b border-white/5">
               <div className="flex items-center gap-3">
-                <img src="https://i.postimg.cc/ZRkx8Py6/image.png" alt="Menta" className="h-8 w-auto brightness-0 invert" />
-                <span className="font-display text-xl font-bold text-white">MENTA</span>
+                <div className="bg-primary-black w-12 h-12 flex items-center justify-center rounded-xl shadow-lg border border-gold/10">
+                  <SafeImage 
+                    src={settings.aparencia.logoNavbarUrl || settings.aparencia.logoUrl || "https://i.postimg.cc/kMZXNdCS/image.png"} 
+                    alt={settings.empresa.nome} 
+                    priority
+                    className="h-8 w-8 object-contain" 
+                  />
+                </div>
+                <span className="font-display text-xl font-bold text-white">{settings.empresa.nome.split(' ')[0].toUpperCase()}</span>
               </div>
               <button onClick={() => setIsOpen(false)} className="text-white p-2">
                 <X size={32} />
@@ -111,7 +128,7 @@ const Navbar = () => {
             </div>
             <div className="mt-auto p-10 border-t border-white/5">
               <a
-                href="https://wa.me/5547992914069"
+                href={whatsappUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn-gold w-full !rounded-2xl"
@@ -128,25 +145,35 @@ const Navbar = () => {
 };
 
 const Footer = () => {
+  const { settings } = useSettings();
+  const whatsappUrl = `https://wa.me/55${settings.empresa.whatsapp}`;
+
   return (
     <footer className="bg-primary-black text-white pt-20 pb-10">
       <div className="max-w-7xl mx-auto px-4 md:px-8 grid grid-cols-1 md:grid-cols-4 gap-12 border-b border-white/10 pb-16">
         <div className="col-span-1 md:col-span-1">
-          <Link to="/" className="flex items-center gap-3 mb-8 group">
-            <img src="https://i.postimg.cc/ZRkx8Py6/image.png" alt="Menta Negócios Imobiliários" className="h-14 w-auto object-contain brightness-0 invert opacity-90 transition-opacity group-hover:opacity-100" />
+          <Link to="/" className="flex items-center gap-4 mb-8 group">
+            <div className="bg-primary-black w-24 h-24 flex items-center justify-center rounded-[2rem] shadow-xl shadow-black/40 group-hover:scale-105 transition-all overflow-hidden p-4 border border-gold/10">
+              <SafeImage 
+                src={settings.aparencia.logoFooterUrl || settings.aparencia.logoUrl || "https://i.postimg.cc/kMZXNdCS/image.png"} 
+                alt={settings.empresa.nome} 
+                priority
+                className="w-full h-full object-contain" 
+              />
+            </div>
             <div className="flex flex-col items-start text-white border-l border-white/10 pl-3">
               <span className="font-display text-xl font-bold tracking-tighter leading-tight">
-                MENTA
+                {settings.empresa.nome.split(' ')[0].toUpperCase()}
               </span>
               <span className="text-[9px] font-medium tracking-[0.2em] text-gold -mt-1 uppercase opacity-80">
-                Negócios Imobiliários
+                {settings.empresa.nome.split(' ').slice(1).join(' ').toUpperCase() || 'Negócios Imobiliários'}
               </span>
             </div>
           </Link>
           <p className="text-gray-400 text-sm leading-relaxed mb-6">
-            Especialistas em Balneário Camboriú e região. Oferecemos um atendimento exclusivo para quem busca o melhor no mercado imobiliário de luxo.
+            {settings.secoes.sobre.texto.substring(0, 150)}...
           </p>
-          <p className="text-xs text-gray-500">CRECI: 11255 PJ</p>
+          <p className="text-xs text-gray-500">CRECI: {settings.empresa.creci}</p>
         </div>
 
         <div>
@@ -164,15 +191,15 @@ const Footer = () => {
           <ul className="space-y-4 text-sm text-gray-400">
             <li className="flex items-start gap-3">
               <Phone size={18} className="text-gold shrink-0" />
-              <span>(47) 99291-4069</span>
+              <span>{settings.empresa.whatsapp}</span>
             </li>
             <li className="flex items-start gap-3">
-              <MessageCircle size={18} className="text-gold shrink-0" />
-              <span>(41) 98818-711</span>
+              <Mail size={18} className="text-gold shrink-0" />
+              <span>{settings.empresa.email}</span>
             </li>
             <li className="flex items-start gap-3">
-              <span className="text-gray-500 italic">Endereço:</span>
-              <span>Av Brasil 2636 - Centro, Balneário Camboriú - SC</span>
+              <MapPinIcon size={18} className="text-gold shrink-0" />
+              <span>{settings.empresa.endereco}, {settings.empresa.cidadeEstado}</span>
             </li>
           </ul>
         </div>
@@ -192,8 +219,13 @@ const Footer = () => {
       </div>
       <div className="max-w-7xl mx-auto px-4 md:px-8 mt-10 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-gray-500">
         <div className="flex items-center gap-3">
-          <img src="https://i.postimg.cc/ZRkx8Py6/image.png" alt="Menta" className="h-6 w-auto object-contain opacity-20 grayscale brightness-0 invert" />
-          <p>© {new Date().getFullYear()} Menta Negócios Imobiliários. Todos os direitos reservados.</p>
+          <SafeImage 
+            src={settings.aparencia.logoFooterUrl || settings.aparencia.logoUrl || "https://i.postimg.cc/kMZXNdCS/image.png"} 
+            alt="Menta" 
+            priority
+            className="h-6 w-auto object-contain opacity-40 grayscale" 
+          />
+          <p>© {new Date().getFullYear()} {settings.empresa.nome}. Todos os direitos reservados.</p>
         </div>
         <Link to="/admin/login" className="hover:text-gold transition-colors">Acesso Restrito</Link>
       </div>
@@ -202,8 +234,11 @@ const Footer = () => {
 };
 
 export default function PublicLayout() {
+  const { settings } = useSettings();
+  const whatsappUrl = `https://wa.me/55${settings.empresa.whatsapp}`;
+
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col" style={{ backgroundColor: settings.aparencia.corFundo, color: settings.aparencia.corTexto }}>
       <Navbar />
       <main className="flex-grow">
         <Outlet />
@@ -212,7 +247,7 @@ export default function PublicLayout() {
       
       {/* Floating WhatsApp Button */}
       <a
-        href="https://wa.me/5547992914069"
+        href={whatsappUrl}
         target="_blank"
         rel="noopener noreferrer"
         className="fixed bottom-8 right-8 bg-[#25D366] text-white p-4 rounded-full shadow-lg z-50 hover:scale-110 transition-transform active:scale-95"

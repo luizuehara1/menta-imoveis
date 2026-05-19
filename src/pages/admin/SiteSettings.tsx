@@ -14,14 +14,17 @@ import {
   Palette,
   ArrowUp,
   ArrowDown,
-  Info
+  Info,
+  Sparkles,
+  MessageCircle
 } from 'lucide-react';
 import { db } from '../../lib/firebase';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { SiteConfig, OptionItem } from '../../types';
 import { DEFAULT_SITE_CONFIG, DEFAULT_OPTIONS } from '../../constants/defaultSettings';
 import { motion, AnimatePresence } from 'motion/react';
-import { slideUp, staggerContainer } from '../../constants/animations';
+import { SafeImage } from '../../components/ui/SafeImage';
+import { isValidImageUrl } from '../../lib/utils';
 
 const SiteSettings = () => {
   const [activeTab, setActiveTab] = useState('home');
@@ -38,13 +41,20 @@ const SiteSettings = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Fetch Site Config
-      const configDoc = await getDoc(doc(db, 'configuracoes', 'site'));
+      // Fetch Site Config from NEW collection siteSettings/main
+      const configDoc = await getDoc(doc(db, 'siteSettings', 'main'));
       if (configDoc.exists()) {
         setSettings({ ...DEFAULT_SITE_CONFIG, ...configDoc.data() } as SiteConfig);
+      } else {
+        // Create initial doc if doesn't exist
+        await setDoc(doc(db, 'siteSettings', 'main'), {
+          ...DEFAULT_SITE_CONFIG,
+          updatedAt: serverTimestamp()
+        });
+        setSettings(DEFAULT_SITE_CONFIG);
       }
 
-      // Fetch Options
+      // Fetch Options (keep existing logic)
       const categories = [
         'tiposImovel', 'tiposNegocio', 'statusImovel', 'cidades', 'bairros', 
         'faixasPreco', 'caracteristicas', 'instalacoes', 'acabamentos', 
@@ -72,18 +82,43 @@ const SiteSettings = () => {
     if (e) e.preventDefault();
     setSaving(true);
     try {
-      await setDoc(doc(db, 'configuracoes', 'site'), {
+      await setDoc(doc(db, 'siteSettings', 'main'), {
         ...settings,
         updatedAt: serverTimestamp()
-      });
+      }, { merge: true });
       setMessage({ type: 'success', text: 'Configurações salvas com sucesso!' });
       setTimeout(() => setMessage(null), 3000);
     } catch (error) {
       console.error("Error saving settings:", error);
-      setMessage({ type: 'error', text: 'Erro ao salvar configurações.' });
+      setMessage({ type: 'error', text: 'Erro ao salvar configurações. Verifique o Firebase.' });
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleNestedChange = (category: keyof SiteConfig, field: string, value: any, subfield?: string) => {
+    setSettings(prev => {
+      const catData = prev[category] as any;
+      if (subfield) {
+        return {
+          ...prev,
+          [category]: {
+            ...catData,
+            [field]: {
+              ...catData[field],
+              [subfield]: value
+            }
+          }
+        };
+      }
+      return {
+        ...prev,
+        [category]: {
+          ...catData,
+          [field]: value
+        }
+      };
+    });
   };
 
   const saveOptions = async (category: string, items: OptionItem[]) => {
@@ -114,6 +149,7 @@ const SiteSettings = () => {
 
   const tabs = [
     { id: 'home', label: 'Página Inicial', icon: Home },
+    { id: 'secoes', label: 'Seções do Site', icon: List },
     { id: 'empresa', label: 'Dados da Empresa', icon: Building },
     { id: 'opcoes', label: 'Opções de Imóveis', icon: List },
     { id: 'localizacao', label: 'Cidades e Bairros', icon: MapPin },
@@ -122,18 +158,18 @@ const SiteSettings = () => {
   ];
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-700">
+    <div className="space-y-8 animate-in fade-in duration-700 pb-20">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-4xl font-display font-bold text-primary-black tracking-tight">
             Configurações do Site
           </h1>
-          <p className="text-gray-500 font-medium">Gerencie o conteúdo e a aparência do seu portal imobiliário.</p>
+          <p className="text-gray-500 font-medium">Personalize cada detalhe do seu portal de luxo.</p>
         </div>
         <button
           onClick={() => saveSettings()}
           disabled={saving}
-          className="btn-gold flex items-center justify-center gap-2 !px-8 shadow-xl shadow-gold/20"
+          className="btn-gold flex items-center justify-center gap-2 !px-8 shadow-xl shadow-gold/20 sticky top-4 z-50 transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
         >
           {saving ? <div className="animate-spin h-5 w-5 border-2 border-primary-black border-t-transparent rounded-full" /> : <Save size={20} />}
           {saving ? 'Salvando...' : 'Salvar Alterações'}
@@ -190,40 +226,40 @@ const SiteSettings = () => {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.4 }}
-            className="bg-white rounded-[32px] border border-gray-100 p-8 md:p-12 shadow-sm"
+            className="space-y-8"
           >
             {activeTab === 'home' && (
-              <div className="space-y-12">
+              <div className="bg-white rounded-[32px] border border-gray-100 p-8 md:p-12 shadow-sm space-y-10">
                 <div>
-                  <h3 className="text-2xl font-display font-bold text-primary-black mb-2 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gold/10 flex items-center justify-center text-gold"><Home size={20} /></div>
-                    Hero da Home
+                  <h3 className="text-2xl font-display font-bold text-primary-black mb-8 flex items-center gap-3 underline decoration-gold/30 underline-offset-8 decoration-4">
+                    Página Inicial / Hero da Home
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8">
                     <div className="space-y-2">
                       <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Título Principal</label>
                       <input 
                         type="text" 
-                        value={settings.hero.titulo}
-                        onChange={(e) => setSettings({ ...settings, hero: { ...settings.hero, titulo: e.target.value } })}
-                        className="admin-input" 
+                        value={settings.hero.tituloPrincipal}
+                        onChange={(e) => handleNestedChange('hero', 'tituloPrincipal', e.target.value)}
+                        className="admin-input focus-visible:ring-gold" 
+                        placeholder="Ex: Menta Imobiliária: Onde o Luxo Encontra a Modernidade"
                       />
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Subtítulo</label>
-                      <input 
-                        type="text" 
+                      <textarea 
                         value={settings.hero.subtitulo}
-                        onChange={(e) => setSettings({ ...settings, hero: { ...settings.hero, subtitulo: e.target.value } })}
-                        className="admin-input" 
+                        onChange={(e) => handleNestedChange('hero', 'subtitulo', e.target.value)}
+                        className="admin-input h-24 py-4 resize-none" 
+                        placeholder="Breve descrição que aparece abaixo do título"
                       />
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Texto Botão Principal</label>
                       <input 
                         type="text" 
-                        value={settings.hero.botaoPrincipalTexto}
-                        onChange={(e) => setSettings({ ...settings, hero: { ...settings.hero, botaoPrincipalTexto: e.target.value } })}
+                        value={settings.hero.textoBotaoPrincipal}
+                        onChange={(e) => handleNestedChange('hero', 'textoBotaoPrincipal', e.target.value)}
                         className="admin-input" 
                       />
                     </div>
@@ -231,8 +267,8 @@ const SiteSettings = () => {
                       <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Link Botão Principal</label>
                       <input 
                         type="text" 
-                        value={settings.hero.botaoPrincipalLink}
-                        onChange={(e) => setSettings({ ...settings, hero: { ...settings.hero, botaoPrincipalLink: e.target.value } })}
+                        value={settings.hero.linkBotaoPrincipal}
+                        onChange={(e) => handleNestedChange('hero', 'linkBotaoPrincipal', e.target.value)}
                         className="admin-input" 
                       />
                     </div>
@@ -240,8 +276,8 @@ const SiteSettings = () => {
                       <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Texto Botão Secundário</label>
                       <input 
                         type="text" 
-                        value={settings.hero.botaoSecundarioTexto}
-                        onChange={(e) => setSettings({ ...settings, hero: { ...settings.hero, botaoSecundarioTexto: e.target.value } })}
+                        value={settings.hero.textoBotaoSecundario}
+                        onChange={(e) => handleNestedChange('hero', 'textoBotaoSecundario', e.target.value)}
                         className="admin-input" 
                       />
                     </div>
@@ -249,125 +285,186 @@ const SiteSettings = () => {
                       <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Link Botão Secundário</label>
                       <input 
                         type="text" 
-                        value={settings.hero.botaoSecundarioLink}
-                        onChange={(e) => setSettings({ ...settings, hero: { ...settings.hero, botaoSecundarioLink: e.target.value } })}
+                        value={settings.hero.linkBotaoSecundario}
+                        onChange={(e) => handleNestedChange('hero', 'linkBotaoSecundario', e.target.value)}
                         className="admin-input" 
                       />
                     </div>
-                    <div className="md:col-span-2 space-y-2">
-                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">URL da Imagem de Fundo</label>
-                      <input 
-                        type="text" 
-                        value={settings.hero.imagemFundoUrl}
-                        onChange={(e) => setSettings({ ...settings, hero: { ...settings.hero, imagemFundoUrl: e.target.value } })}
-                        className="admin-input" 
-                      />
+                    <div className="md:col-span-2 space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">URL da Imagem de Fundo</label>
+                        <input 
+                          type="url" 
+                          value={settings.hero.imagemFundoUrl}
+                          onChange={(e) => handleNestedChange('hero', 'imagemFundoUrl', e.target.value)}
+                          className={`admin-input ${settings.hero.imagemFundoUrl && !isValidImageUrl(settings.hero.imagemFundoUrl) ? 'border-red-300' : ''}`} 
+                          placeholder="https://exemplo.com/imagem.jpg"
+                        />
+                        {settings.hero.imagemFundoUrl && !isValidImageUrl(settings.hero.imagemFundoUrl) && (
+                          <p className="text-[10px] text-red-500 font-bold ml-1">URL inválida. Deve começar com https://</p>
+                        )}
+                      </div>
+                      
+                      {settings.hero.imagemFundoUrl && (
+                        <div className="relative group rounded-2xl overflow-hidden border border-gray-200 aspect-video max-w-md">
+                          <SafeImage 
+                            src={settings.hero.imagemFundoUrl} 
+                            alt="Preview Hero" 
+                            className="w-full h-full"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <span className="text-white text-xs font-bold px-3 py-1 bg-black/50 rounded-full backdrop-blur-sm">Preview do Hero</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <div className="flex items-center gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                    <div className="flex items-center gap-4 bg-gray-50 p-6 rounded-2xl border border-gray-100 hover:border-gold/30 transition-all cursor-pointer group" onClick={() => handleNestedChange('hero', 'ativarThreeJs', !settings.hero.ativarThreeJs)}>
                       <input 
                         type="checkbox" 
                         id="threejs"
-                        checked={settings.hero.threeJsAtivo}
-                        onChange={(e) => setSettings({ ...settings, hero: { ...settings.hero, threeJsAtivo: e.target.checked } })}
-                        className="w-5 h-5 accent-gold cursor-pointer"
+                        checked={settings.hero.ativarThreeJs}
+                        onChange={(e) => handleNestedChange('hero', 'ativarThreeJs', e.target.checked)}
+                        className="w-6 h-6 accent-gold cursor-pointer"
+                        onClick={(e) => e.stopPropagation()}
                       />
-                      <label htmlFor="threejs" className="text-sm font-bold text-primary-black cursor-pointer">Ativar efeito Three.js no Hero</label>
+                      <div>
+                        <label htmlFor="threejs" className="text-sm font-bold text-primary-black cursor-pointer">Ativar efeito Three.js no Hero</label>
+                        <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest">Efeitos visuais 3D luxuosos</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'secoes' && (
+              <div className="space-y-8">
+                {/* Imóveis Destaque */}
+                <div className="bg-white rounded-[32px] border border-gray-100 p-8 md:p-12 shadow-sm">
+                  <h3 className="text-xl font-bold text-primary-black mb-8 flex items-center gap-3">
+                    <Sparkles className="text-gold" size={24} />
+                    Seção: Imóveis em Destaque
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-2">
+                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Título</label>
+                      <input 
+                        type="text" 
+                        value={settings.secoes.imoveisDestaque.titulo}
+                        onChange={(e) => handleNestedChange('secoes', 'imoveisDestaque', e.target.value, 'titulo')}
+                        className="admin-input" 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Subtítulo</label>
+                      <input 
+                        type="text" 
+                        value={settings.secoes.imoveisDestaque.subtitulo}
+                        onChange={(e) => handleNestedChange('secoes', 'imoveisDestaque', e.target.value, 'subtitulo')}
+                        className="admin-input" 
+                      />
                     </div>
                   </div>
                 </div>
 
-                <div className="border-t border-gray-100 pt-12">
-                  <h3 className="text-2xl font-display font-bold text-primary-black mb-2 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gold/10 flex items-center justify-center text-gold"><List size={20} /></div>
-                    Seções da Home
+                {/* Institucional / Sobre */}
+                <div className="bg-white rounded-[32px] border border-gray-100 p-8 md:p-12 shadow-sm">
+                  <h3 className="text-xl font-bold text-primary-black mb-8 flex items-center gap-3">
+                    <Building className="text-gold" size={24} />
+                    Seção: Institucional / Sobre
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8">
-                    <div className="space-y-4">
-                      <h4 className="font-bold text-primary-black">Imóveis em Destaque</h4>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Título</label>
-                        <input 
-                          type="text" 
-                          value={settings.secoes.tituloDestaques}
-                          onChange={(e) => setSettings({ ...settings, secoes: { ...settings.secoes, tituloDestaques: e.target.value } })}
-                          className="admin-input" 
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Subtítulo</label>
-                        <input 
-                          type="text" 
-                          value={settings.secoes.subtituloDestaques}
-                          onChange={(e) => setSettings({ ...settings, secoes: { ...settings.secoes, subtituloDestaques: e.target.value } })}
-                          className="admin-input" 
-                        />
-                      </div>
+                  <div className="grid grid-cols-1 gap-8">
+                    <div className="space-y-2">
+                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Título</label>
+                      <input 
+                        type="text" 
+                        value={settings.secoes.sobre.titulo}
+                        onChange={(e) => handleNestedChange('secoes', 'sobre', e.target.value, 'titulo')}
+                        className="admin-input" 
+                      />
                     </div>
-
-                    <div className="space-y-4">
-                      <h4 className="font-bold text-primary-black">Institucional (Sobre)</h4>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Título</label>
-                        <input 
-                          type="text" 
-                          value={settings.secoes.tituloSobre}
-                          onChange={(e) => setSettings({ ...settings, secoes: { ...settings.secoes, tituloSobre: e.target.value } })}
-                          className="admin-input" 
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Texto</label>
-                        <textarea 
-                          rows={4}
-                          value={settings.secoes.textoSobre}
-                          onChange={(e) => setSettings({ ...settings, secoes: { ...settings.secoes, textoSobre: e.target.value } })}
-                          className="admin-input py-4 min-h-[120px]" 
-                        />
-                      </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Texto</label>
+                      <textarea 
+                        value={settings.secoes.sobre.texto}
+                        onChange={(e) => handleNestedChange('secoes', 'sobre', e.target.value, 'texto')}
+                        className="admin-input h-40 py-4 resize-none" 
+                      />
                     </div>
-
                     <div className="space-y-4">
-                      <h4 className="font-bold text-primary-black">Corretores</h4>
                       <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Título</label>
+                        <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Imagem URL (Opcional)</label>
                         <input 
-                          type="text" 
-                          value={settings.secoes.tituloCorretores}
-                          onChange={(e) => setSettings({ ...settings, secoes: { ...settings.secoes, tituloCorretores: e.target.value } })}
+                          type="url" 
+                          value={settings.secoes.sobre.imagemUrl}
+                          onChange={(e) => handleNestedChange('secoes', 'sobre', e.target.value, 'imagemUrl')}
                           className="admin-input" 
                         />
                       </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Subtítulo</label>
-                        <input 
-                          type="text" 
-                          value={settings.secoes.subtituloCorretores}
-                          onChange={(e) => setSettings({ ...settings, secoes: { ...settings.secoes, subtituloCorretores: e.target.value } })}
-                          className="admin-input" 
-                        />
-                      </div>
+                      {settings.secoes.sobre.imagemUrl && (
+                        <div className="relative rounded-2xl overflow-hidden border border-gray-200 h-40 max-w-xs">
+                          <SafeImage 
+                            src={settings.secoes.sobre.imagemUrl} 
+                            alt="Preview Sobre" 
+                            className="w-full h-full"
+                          />
+                        </div>
+                      )}
                     </div>
+                  </div>
+                </div>
 
-                    <div className="space-y-4">
-                      <h4 className="font-bold text-primary-black">Contato</h4>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Título</label>
-                        <input 
-                          type="text" 
-                          value={settings.secoes.tituloContato}
-                          onChange={(e) => setSettings({ ...settings, secoes: { ...settings.secoes, tituloContato: e.target.value } })}
-                          className="admin-input" 
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Texto</label>
-                        <textarea 
-                          rows={2}
-                          value={settings.secoes.textoContato}
-                          onChange={(e) => setSettings({ ...settings, secoes: { ...settings.secoes, textoContato: e.target.value } })}
-                          className="admin-input py-4" 
-                        />
-                      </div>
+                {/* Corretores */}
+                <div className="bg-white rounded-[32px] border border-gray-100 p-8 md:p-12 shadow-sm">
+                  <h3 className="text-xl font-bold text-primary-black mb-8 flex items-center gap-3">
+                    <Globe className="text-gold" size={24} />
+                    Seção: Corretores
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-2">
+                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Título</label>
+                      <input 
+                        type="text" 
+                        value={settings.secoes.corretores.titulo}
+                        onChange={(e) => handleNestedChange('secoes', 'corretores', e.target.value, 'titulo')}
+                        className="admin-input" 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Subtítulo</label>
+                      <input 
+                        type="text" 
+                        value={settings.secoes.corretores.subtitulo}
+                        onChange={(e) => handleNestedChange('secoes', 'corretores', e.target.value, 'subtitulo')}
+                        className="admin-input" 
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Contato */}
+                <div className="bg-white rounded-[32px] border border-gray-100 p-8 md:p-12 shadow-sm">
+                  <h3 className="text-xl font-bold text-primary-black mb-8 flex items-center gap-3">
+                    <MessageCircle className="text-gold" size={24} />
+                    Seção: Contato
+                  </h3>
+                  <div className="grid grid-cols-1 gap-8">
+                    <div className="space-y-2">
+                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Título</label>
+                      <input 
+                        type="text" 
+                        value={settings.secoes.contato.titulo}
+                        onChange={(e) => handleNestedChange('secoes', 'contato', e.target.value, 'titulo')}
+                        className="admin-input" 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Texto de Apoio</label>
+                      <textarea 
+                        value={settings.secoes.contato.texto}
+                        onChange={(e) => handleNestedChange('secoes', 'contato', e.target.value, 'texto')}
+                        className="admin-input h-24 py-4 resize-none" 
+                      />
                     </div>
                   </div>
                 </div>
@@ -375,92 +472,209 @@ const SiteSettings = () => {
             )}
 
             {activeTab === 'empresa' && (
-              <div className="space-y-12">
+              <div className="bg-white rounded-[32px] border border-gray-100 p-8 md:p-12 shadow-sm space-y-12">
                 <div>
-                  <h3 className="text-2xl font-display font-bold text-primary-black mb-2 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gold/10 flex items-center justify-center text-gold"><Building size={20} /></div>
-                    Dados da Imobiliária
+                  <h3 className="text-2xl font-display font-bold text-primary-black mb-10 flex items-center gap-3 underline decoration-gold/30 underline-offset-8 decoration-4">
+                    Dados da Empresa para Contratos
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Nome da Empresa</label>
+                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Nome Fantasia</label>
                       <input 
                         type="text" 
                         value={settings.empresa.nome}
-                        onChange={(e) => setSettings({ ...settings, empresa: { ...settings.empresa, nome: e.target.value } })}
+                        onChange={(e) => handleNestedChange('empresa', 'nome', e.target.value)}
                         className="admin-input" 
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">CRECI</label>
+                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Razão Social</label>
                       <input 
                         type="text" 
-                        value={settings.empresa.creci}
-                        onChange={(e) => setSettings({ ...settings, empresa: { ...settings.empresa, creci: e.target.value } })}
-                        className="admin-input" 
-                      />
-                    </div>
-                    <div className="md:col-span-2 space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Endereço Completo</label>
-                      <input 
-                        type="text" 
-                        value={settings.empresa.endereco}
-                        onChange={(e) => setSettings({ ...settings, empresa: { ...settings.empresa, endereco: e.target.value } })}
+                        value={settings.empresa.razaoSocial}
+                        onChange={(e) => handleNestedChange('empresa', 'razaoSocial', e.target.value)}
                         className="admin-input" 
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Telefone Principal</label>
+                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">CNPJ</label>
                       <input 
                         type="text" 
-                        value={settings.empresa.telefone1}
-                        onChange={(e) => setSettings({ ...settings, empresa: { ...settings.empresa, telefone1: e.target.value } })}
+                        value={settings.empresa.cnpj}
+                        onChange={(e) => handleNestedChange('empresa', 'cnpj', e.target.value)}
                         className="admin-input" 
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">WhatsApp Principal (Somente Números)</label>
+                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">CRECI PJ</label>
+                      <input 
+                        type="text" 
+                        value={settings.empresa.creciPj}
+                        onChange={(e) => handleNestedChange('empresa', 'creciPj', e.target.value)}
+                        className="admin-input" 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">CRECI Responsável</label>
+                      <input 
+                        type="text" 
+                        value={settings.empresa.creciResponsavel}
+                        onChange={(e) => handleNestedChange('empresa', 'creciResponsavel', e.target.value)}
+                        className="admin-input" 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Telefone</label>
+                      <input 
+                        type="text" 
+                        value={settings.empresa.telefone}
+                        onChange={(e) => handleNestedChange('empresa', 'telefone', e.target.value)}
+                        className="admin-input" 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">WhatsApp</label>
                       <input 
                         type="text" 
                         value={settings.empresa.whatsapp}
-                        onChange={(e) => setSettings({ ...settings, empresa: { ...settings.empresa, whatsapp: e.target.value.replace(/\D/g,'') } })}
+                        onChange={(e) => handleNestedChange('empresa', 'whatsapp', e.target.value)}
                         className="admin-input" 
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">E-mail</label>
+                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">E-mail</label>
                       <input 
                         type="email" 
                         value={settings.empresa.email}
-                        onChange={(e) => setSettings({ ...settings, empresa: { ...settings.empresa, email: e.target.value } })}
+                        onChange={(e) => handleNestedChange('empresa', 'email', e.target.value)}
                         className="admin-input" 
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Instagram (@usuario)</label>
+                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Site</label>
                       <input 
                         type="text" 
-                        value={settings.empresa.instagram}
-                        onChange={(e) => setSettings({ ...settings, empresa: { ...settings.empresa, instagram: e.target.value } })}
+                        value={settings.empresa.site}
+                        onChange={(e) => handleNestedChange('empresa', 'site', e.target.value)}
                         className="admin-input" 
                       />
                     </div>
-                    <div className="md:col-span-2 space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Google Maps Link</label>
+
+                    <div className="md:col-span-2 lg:col-span-3 space-y-2">
+                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Endereço Completo</label>
                       <input 
                         type="text" 
-                        value={settings.empresa.googleMapsUrl}
-                        onChange={(e) => setSettings({ ...settings, empresa: { ...settings.empresa, googleMapsUrl: e.target.value } })}
+                        value={settings.empresa.endereco}
+                        onChange={(e) => handleNestedChange('empresa', 'endereco', e.target.value)}
                         className="admin-input" 
                       />
                     </div>
-                    <div className="md:col-span-2 space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">URL da Logo</label>
+
+                    <div className="space-y-2">
+                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Bairro</label>
                       <input 
                         type="text" 
-                        value={settings.empresa.logoUrl}
-                        onChange={(e) => setSettings({ ...settings, empresa: { ...settings.empresa, logoUrl: e.target.value } })}
+                        value={settings.empresa.bairro}
+                        onChange={(e) => handleNestedChange('empresa', 'bairro', e.target.value)}
                         className="admin-input" 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Cidade</label>
+                      <input 
+                        type="text" 
+                        value={settings.empresa.cidade}
+                        onChange={(e) => handleNestedChange('empresa', 'cidade', e.target.value)}
+                        className="admin-input" 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Estado</label>
+                      <input 
+                        type="text" 
+                        value={settings.empresa.estado}
+                        onChange={(e) => handleNestedChange('empresa', 'estado', e.target.value)}
+                        className="admin-input" 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">CEP</label>
+                      <input 
+                        type="text" 
+                        value={settings.empresa.cep}
+                        onChange={(e) => handleNestedChange('empresa', 'cep', e.target.value)}
+                        className="admin-input" 
+                      />
+                    </div>
+
+                    <div className="md:col-span-1 space-y-2">
+                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Responsável Legal</label>
+                      <input 
+                        type="text" 
+                        value={settings.empresa.responsavelLegal}
+                        onChange={(e) => handleNestedChange('empresa', 'responsavelLegal', e.target.value)}
+                        className="admin-input" 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">CPF Responsável</label>
+                      <input 
+                        type="text" 
+                        value={settings.empresa.responsavelCpf}
+                        onChange={(e) => handleNestedChange('empresa', 'responsavelCpf', e.target.value)}
+                        className="admin-input" 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Cargo</label>
+                      <input 
+                        type="text" 
+                        value={settings.empresa.responsavelCargo}
+                        onChange={(e) => handleNestedChange('empresa', 'responsavelCargo', e.target.value)}
+                        className="admin-input" 
+                      />
+                    </div>
+
+                    <div className="md:col-span-2 lg:col-span-3 space-y-4 pt-6 border-t border-gray-100">
+                      <h4 className="text-sm font-bold text-gold uppercase tracking-widest">Identidade Visual no Contrato</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="space-y-2">
+                          <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">URL da Logo do Cabeçalho</label>
+                          <input 
+                            type="text" 
+                            value={settings.empresa.logoCabecalhoUrl}
+                            onChange={(e) => handleNestedChange('empresa', 'logoCabecalhoUrl', e.target.value)}
+                            className="admin-input" 
+                          />
+                          {settings.empresa.logoCabecalhoUrl && (
+                            <div className="mt-2 h-20 w-fit p-2 bg-gray-100 rounded-lg flex items-center justify-center">
+                              <img src={settings.empresa.logoCabecalhoUrl} alt="Logo Cabeçalho" className="h-full w-auto object-contain" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">URL da Marca d'água</label>
+                          <input 
+                            type="text" 
+                            value={settings.empresa.marcaDaguaUrl}
+                            onChange={(e) => handleNestedChange('empresa', 'marcaDaguaUrl', e.target.value)}
+                            className="admin-input" 
+                          />
+                          {settings.empresa.marcaDaguaUrl && (
+                            <div className="mt-2 h-20 w-fit p-2 bg-gray-100 rounded-lg flex items-center justify-center relative overflow-hidden">
+                              <img src={settings.empresa.marcaDaguaUrl} alt="Marca D'água" className="h-full w-auto object-contain opacity-20" />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="md:col-span-2 lg:col-span-3 space-y-2">
+                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Texto de Rodapé dos Contratos</label>
+                      <textarea 
+                        value={settings.empresa.rodapeContratos}
+                        onChange={(e) => handleNestedChange('empresa', 'rodapeContratos', e.target.value)}
+                        className="admin-input h-24 py-4 resize-none" 
                       />
                     </div>
                   </div>
@@ -468,106 +682,183 @@ const SiteSettings = () => {
               </div>
             )}
 
-            {(activeTab === 'opcoes' || activeTab === 'localizacao' || activeTab === 'filtros') && (
-              <OptionsManager 
-                type={activeTab} 
-                options={options} 
-                onSave={saveOptions} 
-                saving={saving}
-              />
-            )}
-
             {activeTab === 'aparencia' && (
-              <div className="space-y-12">
+              <div className="bg-white rounded-[32px] border border-gray-100 p-8 md:p-12 shadow-sm space-y-12">
                 <div>
-                  <h3 className="text-2xl font-display font-bold text-primary-black mb-2 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gold/10 flex items-center justify-center text-gold"><Palette size={20} /></div>
+                  <h3 className="text-2xl font-display font-bold text-primary-black mb-10 flex items-center gap-3 underline decoration-gold/30 underline-offset-8 decoration-4">
                     Aparência do Site
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mt-8">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10 mt-8">
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Cor Primária</label>
-                      <div className="flex gap-3">
+                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Cor Principal</label>
+                      <div className="flex gap-4">
                         <input 
                           type="color" 
-                          value={settings.aparencia.corPrimaria}
-                          onChange={(e) => setSettings({ ...settings, aparencia: { ...settings.aparencia, corPrimaria: e.target.value } })}
-                          className="w-12 h-12 rounded-xl cursor-pointer border-0 p-0 overflow-hidden" 
+                          value={settings.aparencia.corPrincipal}
+                          onChange={(e) => handleNestedChange('aparencia', 'corPrincipal', e.target.value)}
+                          className="w-14 h-14 rounded-2xl cursor-pointer border-4 border-white shadow-lg overflow-hidden shrink-0" 
                         />
                         <input 
                           type="text" 
-                          value={settings.aparencia.corPrimaria}
-                          onChange={(e) => setSettings({ ...settings, aparencia: { ...settings.aparencia, corPrimaria: e.target.value } })}
-                          className="admin-input flex-grow" 
+                          value={settings.aparencia.corPrincipal}
+                          onChange={(e) => handleNestedChange('aparencia', 'corPrincipal', e.target.value)}
+                          className="admin-input flex-grow text-center font-mono" 
                         />
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Cor Secundária (Dourado)</label>
-                      <div className="flex gap-3">
+                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Cor Secundária (Dourado)</label>
+                      <div className="flex gap-4">
                         <input 
                           type="color" 
                           value={settings.aparencia.corSecundaria}
-                          onChange={(e) => setSettings({ ...settings, aparencia: { ...settings.aparencia, corSecundaria: e.target.value } })}
-                          className="w-12 h-12 rounded-xl cursor-pointer border-0 p-0 overflow-hidden" 
+                          onChange={(e) => handleNestedChange('aparencia', 'corSecundaria', e.target.value)}
+                          className="w-14 h-14 rounded-2xl cursor-pointer border-4 border-white shadow-lg overflow-hidden shrink-0" 
                         />
                         <input 
                           type="text" 
                           value={settings.aparencia.corSecundaria}
-                          onChange={(e) => setSettings({ ...settings, aparencia: { ...settings.aparencia, corSecundaria: e.target.value } })}
-                          className="admin-input flex-grow" 
+                          onChange={(e) => handleNestedChange('aparencia', 'corSecundaria', e.target.value)}
+                          className="admin-input flex-grow text-center font-mono" 
                         />
                       </div>
                     </div>
                     <div className="space-y-2">
-                       <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Cor dos Botões</label>
-                       <div className="flex gap-3">
+                       <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Cor de Fundo</label>
+                       <div className="flex gap-4">
                         <input 
                           type="color" 
-                          value={settings.aparencia.corBotoes}
-                          onChange={(e) => setSettings({ ...settings, aparencia: { ...settings.aparencia, corBotoes: e.target.value } })}
-                          className="w-12 h-12 rounded-xl cursor-pointer border-0 p-0 overflow-hidden" 
+                          value={settings.aparencia.corFundo}
+                          onChange={(e) => handleNestedChange('aparencia', 'corFundo', e.target.value)}
+                          className="w-14 h-14 rounded-2xl cursor-pointer border-4 border-white shadow-lg overflow-hidden shrink-0" 
                         />
                         <input 
                           type="text" 
-                          value={settings.aparencia.corBotoes}
-                          onChange={(e) => setSettings({ ...settings, aparencia: { ...settings.aparencia, corBotoes: e.target.value } })}
-                          className="admin-input flex-grow" 
+                          value={settings.aparencia.corFundo}
+                          onChange={(e) => handleNestedChange('aparencia', 'corFundo', e.target.value)}
+                          className="admin-input flex-grow text-center font-mono" 
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                       <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Cor dos Textos</label>
+                       <div className="flex gap-4">
+                        <input 
+                          type="color" 
+                          value={settings.aparencia.corTexto}
+                          onChange={(e) => handleNestedChange('aparencia', 'corTexto', e.target.value)}
+                          className="w-14 h-14 rounded-2xl cursor-pointer border-4 border-white shadow-lg overflow-hidden shrink-0" 
+                        />
+                        <input 
+                          type="text" 
+                          value={settings.aparencia.corTexto}
+                          onChange={(e) => handleNestedChange('aparencia', 'corTexto', e.target.value)}
+                          className="admin-input flex-grow text-center font-mono" 
                         />
                       </div>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-12 pt-12 border-t border-gray-100">
-                    <div className="flex items-center gap-4 bg-gray-50 p-6 rounded-[24px] border border-gray-100 hover:border-gold/30 transition-all group">
-                       <input 
-                        type="checkbox" 
-                        id="animations"
-                        checked={settings.aparencia.animacoesAtivas}
-                        onChange={(e) => setSettings({ ...settings, aparencia: { ...settings.aparencia, animacoesAtivas: e.target.checked } })}
-                        className="w-6 h-6 accent-gold cursor-pointer"
-                      />
-                      <div className="flex flex-col">
-                        <label htmlFor="animations" className="font-bold text-primary-black cursor-pointer">Animações Ativas</label>
-                        <span className="text-xs text-gray-400">Ativa efeitos de scroll e transição no site todo.</span>
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Logo URL</label>
+                        <input 
+                          type="url" 
+                          value={settings.aparencia.logoUrl}
+                          onChange={(e) => handleNestedChange('aparencia', 'logoUrl', e.target.value)}
+                          className="admin-input" 
+                          placeholder="https://exemplo.com/logo.png"
+                        />
                       </div>
+                      {settings.aparencia.logoUrl && (
+                        <div className="p-4 bg-primary-black rounded-2xl border border-gray-800 flex items-center justify-center h-24">
+                          <SafeImage 
+                            src={settings.aparencia.logoUrl} 
+                            alt="Logo Preview" 
+                            className="h-full w-auto object-contain brightness-0 invert"
+                          />
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Logo Navbar (Caixa Branca)</label>
+                        <input 
+                          type="url" 
+                          value={settings.aparencia.logoNavbarUrl}
+                          onChange={(e) => handleNestedChange('aparencia', 'logoNavbarUrl', e.target.value)}
+                          className="admin-input" 
+                          placeholder="https://exemplo.com/logo-navbar.png"
+                        />
+                      </div>
+                      {settings.aparencia.logoNavbarUrl && (
+                        <div className="p-4 bg-white rounded-2xl border border-gray-100 flex items-center justify-center h-24">
+                          <SafeImage 
+                            src={settings.aparencia.logoNavbarUrl} 
+                            alt="Navbar Logo Preview" 
+                            className="h-full w-auto object-contain"
+                          />
+                        </div>
+                      )}
                     </div>
 
-                    <div className="flex items-center gap-4 bg-gray-50 p-6 rounded-[24px] border border-gray-100 hover:border-gold/30 transition-all group">
-                       <input 
-                        type="checkbox" 
-                        id="globalThree"
-                        checked={settings.aparencia.threeJsAtivo}
-                        onChange={(e) => setSettings({ ...settings, aparencia: { ...settings.aparencia, threeJsAtivo: e.target.checked } })}
-                        className="w-6 h-6 accent-gold cursor-pointer"
-                      />
-                      <div className="flex flex-col">
-                        <label htmlFor="globalThree" className="font-bold text-primary-black cursor-pointer">Efeito Three.js Global</label>
-                        <span className="text-xs text-gray-400">Controla os efeitos 3D nas páginas públicas.</span>
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Logo Footer (Caixa Branca)</label>
+                        <input 
+                          type="url" 
+                          value={settings.aparencia.logoFooterUrl}
+                          onChange={(e) => handleNestedChange('aparencia', 'logoFooterUrl', e.target.value)}
+                          className="admin-input" 
+                          placeholder="https://exemplo.com/logo-footer.png"
+                        />
                       </div>
+                      {settings.aparencia.logoFooterUrl && (
+                        <div className="p-4 bg-white rounded-2xl border border-gray-100 flex items-center justify-center h-24">
+                          <SafeImage 
+                            src={settings.aparencia.logoFooterUrl} 
+                            alt="Footer Logo Preview" 
+                            className="h-full w-auto object-contain"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Logo Favicon URL</label>
+                        <input 
+                          type="url" 
+                          value={settings.aparencia.faviconUrl}
+                          onChange={(e) => handleNestedChange('aparencia', 'faviconUrl', e.target.value)}
+                          className="admin-input" 
+                          placeholder="https://exemplo.com/favicon.ico"
+                        />
+                      </div>
+                      {settings.aparencia.faviconUrl && (
+                        <div className="p-4 bg-white rounded-2xl border border-gray-100 flex items-center justify-center h-24">
+                          <SafeImage 
+                            src={settings.aparencia.faviconUrl} 
+                            alt="Favicon Preview" 
+                            className="w-8 h-8 object-contain"
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {(activeTab === 'opcoes' || activeTab === 'localizacao' || activeTab === 'filtros') && (
+              <div className="bg-white rounded-[32px] border border-gray-100 p-8 md:p-12 shadow-sm">
+                <OptionsManager 
+                  type={activeTab} 
+                  options={options} 
+                  onSave={saveOptions} 
+                  saving={saving}
+                />
               </div>
             )}
           </motion.div>
@@ -589,6 +880,7 @@ const OptionsManager = ({ type, options, onSave, saving }: {
   const [newItemName, setNewItemName] = useState('');
   const [newItemValue, setNewItemValue] = useState('');
   const [newItemCity, setNewItemCity] = useState('');
+  const [newItemTipo, setNewItemTipo] = useState('');
 
   const categoriesMap: Record<string, { label: string, key: string, items: OptionItem[] }[]> = {
     opcoes: [
@@ -627,7 +919,8 @@ const OptionsManager = ({ type, options, onSave, saving }: {
       valor: selectedCategory === 'faixasPreco' ? Number(newItemValue) : newItemValue || newItemName.toLowerCase().replace(/\s/g, '-'),
       ativo: true,
       ordem: activeItems.length + 1,
-      cidade: selectedCategory === 'bairros' ? newItemCity : undefined
+      cidade: selectedCategory === 'bairros' ? newItemCity : undefined,
+      tipo: selectedCategory === 'faixasPreco' ? newItemTipo : undefined
     };
 
     const updated = [...activeItems, newItem];
@@ -640,6 +933,7 @@ const OptionsManager = ({ type, options, onSave, saving }: {
     setNewItemName(item.nome);
     setNewItemValue(item.valor.toString());
     setNewItemCity(item.cidade || '');
+    setNewItemTipo(item.tipo || '');
     setIsModalOpen(true);
   };
 
@@ -651,7 +945,8 @@ const OptionsManager = ({ type, options, onSave, saving }: {
             ...item, 
             nome: newItemName, 
             valor: selectedCategory === 'faixasPreco' ? Number(newItemValue) : newItemValue,
-            cidade: selectedCategory === 'bairros' ? newItemCity : undefined
+            cidade: selectedCategory === 'bairros' ? newItemCity : undefined,
+            tipo: selectedCategory === 'faixasPreco' ? newItemTipo : undefined
           } 
         : item
     );
@@ -689,6 +984,7 @@ const OptionsManager = ({ type, options, onSave, saving }: {
     setNewItemName('');
     setNewItemValue('');
     setNewItemCity('');
+    setNewItemTipo('');
     setEditingItem(null);
     setIsModalOpen(false);
   };
@@ -763,6 +1059,7 @@ const OptionsManager = ({ type, options, onSave, saving }: {
                 <div className="flex items-center gap-3 mt-1">
                   <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Valor: {item.valor}</p>
                   {item.cidade && <p className="text-[10px] text-gold font-black uppercase tracking-widest">• {item.cidade}</p>}
+                  {item.tipo && <p className="text-[10px] text-emerald-500 font-black uppercase tracking-widest">• Tipo: {item.tipo}</p>}
                 </div>
               </div>
             </div>
@@ -867,6 +1164,22 @@ const OptionsManager = ({ type, options, onSave, saving }: {
                           <option key={c.id} value={c.nome}>{c.nome}</option>
                         ))}
                       </select>
+                    </div>
+                  )}
+
+                  {selectedCategory === 'faixasPreco' && (
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Tipo de Valor</label>
+                      <select 
+                        value={newItemTipo}
+                        onChange={(e) => setNewItemTipo(e.target.value)}
+                        className="admin-input"
+                      >
+                        <option value="">Selecione o tipo (opcional)</option>
+                        <option value="venda">Venda</option>
+                        <option value="locacao">Locação</option>
+                      </select>
+                      <p className="text-[10px] text-gray-400 mt-1 italic">* Ajuda a filtrar opções na busca da home.</p>
                     </div>
                   )}
 

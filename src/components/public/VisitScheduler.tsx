@@ -46,7 +46,11 @@ interface VisitSchedulerProps {
     title: string;
     city: string;
     neighborhood: string;
+    state?: string;
+    businessType?: string;
     address?: string;
+    brokerWhatsapp?: string;
+    slug?: string;
   };
 }
 
@@ -97,11 +101,12 @@ export default function VisitScheduler({ property }: VisitSchedulerProps) {
       const q = query(
         collection(db, 'visitas'),
         where('imovelId', '==', property.id),
-        where('data', '==', dateStr),
-        where('status', '!=', 'cancelada')
+        where('data', '==', dateStr)
       );
       const snap = await getDocs(q);
-      const booked = snap.docs.map(doc => doc.data().horario);
+      const booked = snap.docs
+        .filter(doc => doc.data().status !== 'cancelada')
+        .map(doc => doc.data().horario);
       setBookedHours(booked);
     } catch (err) {
       console.error("Error fetching booked hours:", err);
@@ -150,45 +155,61 @@ export default function VisitScheduler({ property }: VisitSchedulerProps) {
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
 
     try {
-      await runTransaction(db, async (transaction) => {
-        const q = query(
-          collection(db, 'visitas'),
-          where('imovelId', '==', property.id),
-          where('data', '==', dateStr),
-          where('horario', '==', selectedHour),
-          where('status', '!=', 'cancelada')
-        );
-        
-        const existingDocs = await getDocs(q);
-        if (!existingDocs.empty) {
-          throw new Error("Esse horário acabou de ser reservado. Escolha outro horário.");
-        }
+      // Check if already booked (simple check, no transaction on query)
+      const q = query(
+        collection(db, 'visitas'),
+        where('imovelId', '==', property.id),
+        where('data', '==', dateStr),
+        where('horario', '==', selectedHour)
+      );
+      
+      const existingDocs = await getDocs(q);
+      const isAlreadyBooked = existingDocs.docs.some(doc => doc.data().status !== 'cancelada');
+      
+      if (isAlreadyBooked) {
+        throw new Error("Esse horário acabou de ser reservado. Escolha outro horário.");
+      }
 
-        const visitData: any = {
-          nomeCliente: formData.nomeCliente,
-          telefone: formData.telefone,
-          email: formData.email,
-          imovelId: property.id,
-          codigoImovel: property.code,
-          tituloImovel: property.title,
-          cidade: property.city,
-          bairro: property.neighborhood,
-          data: dateStr,
-          horario: selectedHour,
-          mensagem: formData.mensagem,
-          status: "pendente",
-          createdAt: serverTimestamp()
-        };
+      const visitData: any = {
+        nomeCliente: formData.nomeCliente,
+        telefone: formData.telefone,
+        email: formData.email,
+        imovelId: property.id,
+        codigoImovel: property.code,
+        tituloImovel: property.title,
+        cidade: property.city,
+        bairro: property.neighborhood,
+        data: dateStr,
+        horario: selectedHour,
+        mensagem: formData.mensagem,
+        status: "pendente",
+        createdAt: serverTimestamp()
+      };
 
-        if (property.address) {
-          visitData.endereco = property.address;
-        }
+      if (property.address) {
+        visitData.endereco = property.address;
+      }
 
-        const newDocRef = doc(collection(db, 'visitas'));
-        transaction.set(newDocRef, visitData);
-      });
+      await addDoc(collection(db, 'visitas'), visitData);
 
       setSuccess(true);
+      
+      // Redirect to WhatsApp
+      const brokerPhone = property.brokerWhatsapp || "";
+      const cleanPhone = brokerPhone.replace(/\D/g, "");
+      const p = cleanPhone.length <= 11 ? `55${cleanPhone}` : cleanPhone;
+      
+      if (p.length >= 10) {
+        const propertyUrl = `${window.location.origin}/imovel/${property.slug || property.id || property.code}`;
+        const message = `Olá! Acabei de solicitar uma visita pelo site para o imóvel ${property.code} - ${property.title}${property.businessType ? ` para ${property.businessType}` : ""}${property.city ? `, ${property.city}` : ""}${property.state ? ` / ${property.state}` : ""}.\n\n*Detalhes da Solicitação:*\n📅 Data: ${dateStr}\n🕒 Horário: ${selectedHour}\n👤 Nome: ${formData.nomeCliente}\n📞 Contato: ${formData.telefone}\n\n*Link do imóvel:*\n${propertyUrl}\n\nAguardo confirmação!`;
+        const whatsappUrl = `https://wa.me/${p}?text=${encodeURIComponent(message)}`;
+        
+        // Brief delay to show success state before redirecting
+        setTimeout(() => {
+          window.open(whatsappUrl, '_blank');
+        }, 1500);
+      }
+
       setFormData({ nomeCliente: '', telefone: '', email: '', mensagem: '' });
       setSelectedDate(null);
       setSelectedHour(null);

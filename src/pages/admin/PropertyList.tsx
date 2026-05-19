@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { collection, query, getDocs, deleteDoc, doc, orderBy } from 'firebase/firestore';
+import { collection, query, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { 
   Plus, 
@@ -14,11 +14,15 @@ import {
   MapPin,
   ExternalLink,
   Home,
-  RefreshCcw
+  RefreshCcw,
+  MessageSquare,
+  ClipboardList,
+  EyeOff
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { staggerContainer, slideUp, fadeIn } from '../../constants/animations';
+import { isValidPublicProperty } from '../../lib/utils';
 
 const SkeletonRow = () => (
   <tr className="animate-pulse border-b border-gray-50">
@@ -51,9 +55,25 @@ export default function AdminPropertyList() {
   const fetchProperties = async () => {
     setLoading(true);
     try {
-      const q = query(collection(db, 'imoveis'), orderBy('updatedAt', 'desc'));
+      // Don't use orderBy here to ensure ALL docs (even ghosts missing updatedAt) are fetched
+      const q = query(collection(db, 'imoveis'));
       const snap = await getDocs(q);
-      setProperties(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+      
+      // Sort in memory safely: Incomplete properties first, then by date
+      data.sort((a, b) => {
+        const aValid = isValidPublicProperty(a);
+        const bValid = isValidPublicProperty(b);
+        
+        if (!aValid && bValid) return -1;
+        if (aValid && !bValid) return 1;
+
+        const dateA = a.updatedAt?.seconds || a.createdAt?.seconds || 0;
+        const dateB = b.updatedAt?.seconds || b.createdAt?.seconds || 0;
+        return dateB - dateA;
+      });
+
+      setProperties(data);
     } catch (error) {
       console.error("Error fetching properties:", error);
       setProperties([]);
@@ -63,7 +83,7 @@ export default function AdminPropertyList() {
   };
 
   const handleDelete = async (id: string, code: string) => {
-    if (confirm(`Tem certeza que deseja excluir o imóvel ${code}?`)) {
+    if (confirm(`Tem certeza que deseja excluir o imóvel ${code || 'sem código'}?`)) {
       try {
         await deleteDoc(doc(db, 'imoveis', id));
         setProperties(properties.filter(p => p.id !== id));
@@ -73,11 +93,37 @@ export default function AdminPropertyList() {
     }
   };
 
+  const toggleVisibility = async (property: any) => {
+    try {
+      const newVal = !property.publicado;
+      await updateDoc(doc(db, 'imoveis', property.id), { 
+        publicado: newVal,
+        ativo: newVal,
+        publicadoNoSite: newVal,
+        updatedAt: new Date()
+      });
+      setProperties(properties.map(p => p.id === property.id ? { ...p, publicado: newVal, ativo: newVal, publicadoNoSite: newVal } : p));
+    } catch (error) {
+      console.error("Error toggling visibility:", error);
+    }
+  };
+
   const filtered = properties.filter(p => 
     p.code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.city?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    alert("Link do imóvel copiado!");
+  };
+
+  const shareWhatsApp = (property: any) => {
+    const link = `${window.location.origin}/imovel/${property.id}`;
+    const message = `Olá! Segue o link deste imóvel incrível:\n\n*${property.title}*\n\n🏡 Confira os detalhes completos aqui:\n${link}\n\nCódigo: *${property.code}*`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+  };
 
   return (
     <motion.div 
@@ -199,7 +245,7 @@ export default function AdminPropertyList() {
                             className="w-20 h-20 rounded-[1.75rem] bg-gray-100 overflow-hidden shrink-0 border-4 border-white shadow-xl relative transition-all duration-700"
                           >
                             {property.mainImage ? (
-                              <img src={property.mainImage} alt={property.code} className="w-full h-full object-cover" />
+                              <img src={property.mainImage} alt={property.code} referrerPolicy="no-referrer" className="w-full h-full object-cover" />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center text-gray-300">
                                 <Home size={28} />
@@ -210,7 +256,7 @@ export default function AdminPropertyList() {
                           <div>
                             <div className="flex items-center gap-3 mb-1.5">
                                <p className="text-lg font-display font-bold text-primary-black leading-none tracking-tight">{property.code}</p>
-                               {property.isFeatured && (
+                               {property.destaque && (
                                  <motion.span 
                                    initial={{ opacity: 0, scale: 0.5 }}
                                    animate={{ opacity: 1, scale: 1 }}
@@ -250,40 +296,64 @@ export default function AdminPropertyList() {
                         </span>
                       </td>
                       <td className="p-8">
-                        {property.publicado ? (
-                          <div className="flex items-center gap-3 text-emerald-600 font-black text-[10px] uppercase tracking-[0.2em] bg-emerald-50/50 w-fit px-4 py-2 rounded-full border border-emerald-100/50 shadow-sm shadow-emerald-100/20">
-                            <CheckCircle size={14} className="text-emerald-500 animate-pulse" /> Público
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-3 text-gray-400 font-bold text-[10px] uppercase tracking-[0.2em] bg-gray-50/50 w-fit px-4 py-2 rounded-full border border-gray-100/50">
-                            <XCircle size={14} className="text-gray-300" /> Rascunho
+                        <button 
+                          onClick={() => toggleVisibility(property)}
+                          className="group/toggle"
+                        >
+                          {property.publicado ? (
+                            <div className="flex items-center gap-3 text-emerald-600 font-black text-[10px] uppercase tracking-[0.2em] bg-emerald-50/50 w-fit px-4 py-2 rounded-full border border-emerald-100/50 shadow-sm shadow-emerald-100/20 group-hover/toggle:bg-emerald-100 transition-colors">
+                              <CheckCircle size={14} className="text-emerald-500 animate-pulse" /> Público
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-3 text-gray-400 font-bold text-[10px] uppercase tracking-[0.2em] bg-gray-50/50 w-fit px-4 py-2 rounded-full border border-gray-100/50 group-hover/toggle:bg-gray-100 transition-colors">
+                              <XCircle size={14} className="text-gray-300" /> Rascunho
+                            </div>
+                          )}
+                        </button>
+                        {!isValidPublicProperty(property) && (
+                          <div className="mt-2 flex items-center gap-2 text-red-500 font-black text-[9px] uppercase tracking-widest bg-red-50 px-3 py-1 rounded-lg border border-red-100 animate-pulse">
+                             DADOS INCOMPLETOS
                           </div>
                         )}
                       </td>
                       <td className="p-8 pr-12 text-right">
-                        <div className="flex items-center justify-end gap-3 opacity-40 group-hover:opacity-100 transition-opacity translate-x-2 group-hover:translate-x-0">
+                        <div className="flex items-center justify-end gap-2 opacity-40 group-hover:opacity-100 transition-opacity translate-x-2 group-hover:translate-x-0">
+                          <button 
+                            onClick={() => copyToClipboard(`${window.location.origin}/imovel/${property.id}`)}
+                            className="p-3 bg-white text-gray-400 hover:text-gold hover:bg-white hover:shadow-2xl hover:scale-110 rounded-xl border border-transparent hover:border-gray-100 transition-all cursor-pointer"
+                            title="Copiar Link"
+                          >
+                            <ClipboardList size={18} />
+                          </button>
+                          <button 
+                            onClick={() => shareWhatsApp(property)}
+                            className="p-3 bg-white text-gray-400 hover:text-emerald-500 hover:bg-white hover:shadow-2xl hover:scale-110 rounded-xl border border-transparent hover:border-gray-100 transition-all cursor-pointer"
+                            title="Enviar WhatsApp"
+                          >
+                            <MessageSquare size={18} />
+                          </button>
                           <Link 
                             to={`/imovel/${property.id}`} 
                             target="_blank"
-                            className="p-3.5 bg-white text-gray-400 hover:text-primary-black hover:bg-white hover:shadow-2xl hover:scale-110 rounded-2xl border border-transparent hover:border-gray-100 transition-all cursor-pointer"
+                            className="p-3 bg-white text-gray-400 hover:text-primary-black hover:bg-white hover:shadow-2xl hover:scale-110 rounded-xl border border-transparent hover:border-gray-100 transition-all cursor-pointer"
                             title="Ver no site"
                           >
-                            <ExternalLink size={20} />
+                            <ExternalLink size={18} />
                           </Link>
                           <Link 
                             to={`/admin/imoveis/editar/${property.id}`} 
-                            className="p-3.5 bg-white text-gray-400 hover:text-gold hover:bg-white hover:shadow-2xl hover:scale-110 rounded-2xl border border-transparent hover:border-gray-100 transition-all cursor-pointer"
+                            className="p-3 bg-white text-gray-400 hover:text-gold hover:bg-white hover:shadow-2xl hover:scale-110 rounded-xl border border-transparent hover:border-gray-100 transition-all cursor-pointer"
                             title="Editar"
                           >
-                            <Edit2 size={20} />
+                            <Edit2 size={18} />
                           </Link>
                           <motion.button 
                             whileHover={{ color: '#ef4444' }}
                             onClick={() => handleDelete(property.id, property.code)}
-                            className="p-3.5 bg-white text-gray-400 hover:bg-white hover:shadow-2xl hover:scale-110 rounded-2xl border border-transparent hover:border-gray-100 transition-all cursor-pointer"
+                            className="p-3 bg-white text-gray-400 hover:bg-white hover:shadow-2xl hover:scale-110 rounded-xl border border-transparent hover:border-gray-100 transition-all cursor-pointer"
                             title="Excluir"
                           >
-                            <Trash2 size={20} />
+                            <Trash2 size={18} />
                           </motion.button>
                         </div>
                       </td>

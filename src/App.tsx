@@ -21,7 +21,12 @@ import AdminPropertyForm from './pages/admin/PropertyForm';
 import AdminVisits from './pages/admin/Visits';
 import AdminBrokers from './pages/admin/Brokers';
 import AdminFinance from './pages/admin/Finance';
+import AdminRents from './pages/admin/Rents';
+import AdminContracts from './pages/admin/Contracts';
+import AdminContractForm from './pages/admin/ContractForm';
 import AdminSiteSettings from './pages/admin/SiteSettings';
+import AdminLeaseSettings from './pages/admin/LeaseSettings';
+import AdminNeighborhoods from './pages/admin/Neighborhoods';
 import AdminLogin from './pages/admin/Login';
 
 const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -103,7 +108,13 @@ function AppRoutes() {
           <Route path="imoveis/editar/:id" element={<AdminPropertyForm />} />
           <Route path="visitas" element={<AdminVisits />} />
           <Route path="corretores" element={<AdminBrokers />} />
+          <Route path="locacoes" element={<AdminRents />} />
           <Route path="financeiro" element={<AdminFinance />} />
+          <Route path="contratos" element={<AdminContracts />} />
+          <Route path="contratos/novo" element={<AdminContractForm />} />
+          <Route path="contratos/editar/:id" element={<AdminContractForm />} />
+          <Route path="configuracoes-locacao" element={<AdminLeaseSettings />} />
+          <Route path="bairros" element={<AdminNeighborhoods />} />
           <Route path="configuracoes-site" element={<AdminSiteSettings />} />
         </Route>
       </Routes>

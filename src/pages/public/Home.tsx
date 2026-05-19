@@ -9,29 +9,35 @@ import { staggerContainer, slideUp } from '../../constants/animations';
 import { PremiumHeroBackground } from '../../components/three/PremiumHeroBackground';
 import { LuxuryShapeCanvas } from '../../components/three/AbstractLuxuryShape';
 import { useSettings, useOptions } from '../../hooks/useSettings';
-import { formatCurrency } from '../../lib/utils';
+import { formatCurrency, isValidPublicProperty } from '../../lib/utils';
+
+import { SafeImage } from '../../components/ui/SafeImage';
 
 const Hero = ({ settings }: { settings: any }) => {
   const navigate = useNavigate();
 
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
-      {/* Three.js Layer */}
-      {settings.hero.threeJsAtivo && <PremiumHeroBackground />}
-
       {/* Background Image with Overlay */}
       <div className="absolute inset-0 z-0">
-        <motion.img
+        <motion.div
           initial={{ scale: 1.1 }}
           animate={{ scale: 1 }}
           transition={{ duration: 1.5, ease: "easeOut" }}
-          src={settings.hero.imagemFundoUrl || "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&q=80&w=2000"}
-          alt="Imóvel de Luxo"
-          className="w-full h-full object-cover"
-        />
+          className="w-full h-full"
+        >
+          <SafeImage
+            src={settings.hero.imagemFundoUrl || "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&q=80&w=2000"}
+            alt="Imóvel de Luxo"
+            className="w-full h-full"
+          />
+        </motion.div>
         <div className="absolute inset-0 bg-gradient-to-b from-primary-black/90 via-primary-black/40 to-primary-black" />
         <div className="absolute inset-0 bg-radial-gradient from-transparent to-primary-black/60" />
       </div>
+
+      {/* Three.js Layer (Overlay) */}
+      {settings.hero.ativarThreeJs && <PremiumHeroBackground />}
 
       <div className="relative z-10 max-w-7xl mx-auto px-6 md:px-12 w-full pt-20">
         <motion.div 
@@ -51,7 +57,7 @@ const Hero = ({ settings }: { settings: any }) => {
             variants={slideUp}
             className="font-display text-6xl md:text-8xl font-bold text-white mb-8 leading-[0.9] tracking-tighter"
           >
-            {settings.hero.titulo}
+            {settings.hero.tituloPrincipal}
           </motion.h1>
           
           <motion.p 
@@ -68,19 +74,19 @@ const Hero = ({ settings }: { settings: any }) => {
             <motion.button 
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.98 }}
-              onClick={() => navigate(settings.hero.botaoPrincipalLink)}
+              onClick={() => navigate(settings.hero.linkBotaoPrincipal)}
               className="btn-gold !px-10 !py-5 text-base group shadow-[0_20px_50px_rgba(229,188,83,0.3)]"
             >
-              {settings.hero.botaoPrincipalTexto}
+              {settings.hero.textoBotaoPrincipal}
               <Search size={20} className="transition-transform group-hover:rotate-12" />
             </motion.button>
             <motion.button 
               whileHover={{ scale: 1.05, backgroundColor: "rgba(255,255,255,1)", color: "#000" }}
               whileTap={{ scale: 0.98 }}
-              onClick={() => navigate(settings.hero.botaoSecundarioLink)}
+              onClick={() => navigate(settings.hero.linkBotaoSecundario)}
               className="btn-outline-gold !border-white/20 !text-white !px-10 !py-5 text-base"
             >
-              {settings.hero.botaoSecundarioTexto}
+              {settings.hero.textoBotaoSecundario}
             </motion.button>
           </motion.div>
         </motion.div>
@@ -114,9 +120,31 @@ const SearchSection = ({ options }: { options: any }) => {
     maxPrice: '',
   });
 
+  const normalizeText = (value: any) => {
+    return value
+      ?.toString()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim();
+  };
+
   const handleSearch = () => {
     const queryParams = new URLSearchParams();
-    if (filters.businessType) queryParams.set('businessType', filters.businessType);
+    
+    // Use normalization for businessType
+    let bType = filters.businessType;
+    const normalized = normalizeText(bType);
+    
+    if (normalized === 'alugar' || normalized === 'locacao' || normalized === 'aluguel') {
+      bType = 'Locação';
+    } else if (normalized === 'venda' || normalized === 'comprar') {
+      bType = 'Venda';
+    } else if (normalized === 'venda_locacao' || normalized === 'venda e locacao') {
+      bType = 'Venda e Locação';
+    }
+
+    if (bType) queryParams.set('businessType', bType);
     if (filters.propertyType) queryParams.set('propertyType', filters.propertyType);
     if (filters.city) queryParams.set('city', filters.city);
     if (filters.neighborhood) queryParams.set('neighborhood', filters.neighborhood);
@@ -129,25 +157,43 @@ const SearchSection = ({ options }: { options: any }) => {
   const propertyTypes = (options.tiposImovel || []).filter((o: any) => o.ativo);
   const cities = (options.cidades || []).filter((o: any) => o.ativo);
   const neighborhoods = (options.bairros || []).filter((o: any) => o.ativo);
-  const priceRanges = (options.faixasPreco || []).filter((o: any) => o.ativo);
+  
+  // Filter price ranges based on selected business type
+  const priceRanges = (options.faixasPreco || [])
+    .filter((o: any) => o.ativo)
+    .filter((o: any) => {
+      if (o.valor === 0) return true; // Sem limite
+      const normalizedBType = normalizeText(filters.businessType);
+      if (normalizedBType === 'locacao' || normalizedBType === 'alugar') {
+        return o.tipo === 'locacao';
+      }
+      return o.tipo === 'venda' || !o.tipo; // Default to venda if no type specified
+    });
 
   return (
     <section className="relative z-30 -mt-24 max-w-6xl mx-auto px-6">
       <div className="bg-white/95 backdrop-blur-2xl rounded-[2.5rem] shadow-[0_30px_60px_-12px_rgba(0,0,0,0.3)] p-10 border border-white/20">
         <div className="flex flex-wrap items-center justify-center gap-4 mb-8">
-           {businessTypes.map((type: any) => (
-             <button
-               key={type.id}
-               onClick={() => setFilters({...filters, businessType: type.valor})}
-               className={`px-8 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
-                 filters.businessType === type.valor 
-                 ? 'bg-primary-black text-white shadow-xl scale-105' 
-                 : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
-               }`}
-             >
-               {type.nome}
-             </button>
-           ))}
+           {['venda', 'locacao', 'venda_locacao'].map((val) => {
+             const label = val === 'locacao' ? 'Locação' : 
+                          val === 'venda' ? 'Comprar' : 
+                          'Venda e Locação';
+             
+             // Check if this type exists in options or just use common ones
+             return (
+               <button
+                 key={val}
+                 onClick={() => setFilters({...filters, businessType: val, maxPrice: ''})}
+                 className={`px-4 sm:px-8 py-3 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all ${
+                   filters.businessType === val 
+                   ? 'bg-primary-black text-white shadow-xl scale-105' 
+                   : 'bg-gray-50 text-gray-400 hover:bg-gray-100 font-bold'
+                 }`}
+               >
+                 {label}
+               </button>
+             );
+           })}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
@@ -232,12 +278,16 @@ export default function Home() {
         const q = query(
           collection(db, 'imoveis'), 
           where('destaque', '==', true),
-          where('publicado', '==', true),
-          where('status', '==', 'disponivel'),
-          limit(3)
+          where('status', 'in', ['disponivel', 'Disponível', 'disponível']),
+          limit(10) // Fetch a bit more to filter in JS
         );
         const snap = await getDocs(q);
-        setFeaturedProperties(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+        
+        // Strict Validation Filter
+        const filtered = data.filter(isValidPublicProperty).slice(0, 3); // Keep only top 3
+
+        setFeaturedProperties(filtered);
       } catch (error) {
         console.error("Error fetching featured properties:", error);
         setFeaturedProperties([]); // Fallback to empty list
@@ -282,9 +332,9 @@ export default function Home() {
             <div>
               <span className="text-gold font-bold uppercase tracking-widest text-xs mb-2 block">Destaques da semana</span>
               <h2 className="section-title">
-                {settings.secoes.tituloDestaques.split(' ')[0]} <span className="text-gold">{settings.secoes.tituloDestaques.split(' ').slice(1).join(' ')}</span>
+                {settings.secoes.imoveisDestaque.titulo.split(' ')[0]} <span className="text-gold">{settings.secoes.imoveisDestaque.titulo.split(' ').slice(1).join(' ')}</span>
               </h2>
-              <p className="text-gray-500 max-w-lg mt-2">{settings.secoes.subtituloDestaques}</p>
+              <p className="text-gray-500 max-w-lg mt-2">{settings.secoes.imoveisDestaque.subtitulo}</p>
             </div>
             <button onClick={() => navigate('/imoveis')} className="text-primary-gray font-bold border-b-2 border-gold pb-1 hover:text-gold transition-colors">
               Ver catálogo completo
@@ -308,16 +358,27 @@ export default function Home() {
                   className="group bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-[0_40px_80px_-15px_rgba(0,0,0,0.1)] transition-all duration-500"
                 >
                   <Link to={`/imovel/${property.id}`} className="block relative h-64 overflow-hidden">
-                    <img
-                      src={property.mainImage || 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&q=80&w=800'}
+                    <SafeImage
+                      src={property.mainImage}
                       alt={property.title}
-                      className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
+                      className="w-full h-full transition-transform duration-1000 group-hover:scale-110"
                     />
-                    <div className="absolute top-4 left-4 bg-primary-black/80 text-white text-[10px] font-bold uppercase px-3 py-1 rounded-full backdrop-blur-md">
-                      {property.businessType}
+                    <div className="absolute top-4 left-4 flex flex-col gap-2">
+                      <div className="bg-primary-black/80 text-white text-[10px] font-bold uppercase px-3 py-1 rounded-full backdrop-blur-md">
+                        {property.businessType}
+                      </div>
+                      {(property.valorMetroQuadrado > 0 || property.valorMetroQuadradoLocacao > 0) && (
+                        <div className="bg-gold text-primary-black text-[9px] font-black uppercase px-3 py-1 rounded-full backdrop-blur-md shadow-lg border border-gold/20 self-start">
+                          {property.businessType === 'Locação' 
+                            ? `${formatCurrency(property.valorMetroQuadradoLocacao)}/m²`
+                            : `${formatCurrency(property.valorMetroQuadrado)}/m²`
+                          }
+                        </div>
+                      )}
                     </div>
                     <div className="absolute bottom-4 left-4 bg-white/95 text-primary-black text-lg font-bold px-4 py-1 rounded-lg backdrop-blur-md shadow-lg border border-gold/20">
-                      {formatCurrency(property.businessType === 'Venda' ? property.priceVenda : property.priceLocacao)}
+                      {formatCurrency(property.businessType === 'Locação' ? property.priceLocacao : property.priceVenda)}
+                      {property.businessType === 'Locação' && ' / mês'}
                     </div>
                   </Link>
                   <div className="p-6">
@@ -372,10 +433,10 @@ export default function Home() {
               </div>
               <span className="text-gold font-black uppercase tracking-[0.3em] text-[10px] mb-4 block">Institucional</span>
               <h2 className="font-display text-4xl md:text-5xl font-bold mb-8 leading-[1.1] tracking-tighter">
-                {settings.secoes.tituloSobre.split(' ').slice(0, -1).join(' ')} <span className="text-gold font-light italic">{settings.secoes.tituloSobre.split(' ').slice(-1)}</span>
+                {settings.secoes.sobre.titulo.split(' ').slice(0, -1).join(' ')} <span className="text-gold font-light italic">{settings.secoes.sobre.titulo.split(' ').slice(-1)}</span>
               </h2>
               <p className="text-gray-400 text-lg mb-8 leading-relaxed font-light">
-                {settings.secoes.textoSobre}
+                {settings.secoes.sobre.texto}
               </p>
               <div className="space-y-5">
                 {[
@@ -415,12 +476,10 @@ export default function Home() {
                 viewport={{ once: true }}
                 className="space-y-6 pt-12"
               >
-                <div className="overflow-hidden rounded-[2rem] border border-white/10">
-                   <motion.img 
-                    whileHover={{ scale: 1.1 }}
-                    transition={{ duration: 1 }}
+                <div className="overflow-hidden rounded-[2rem] border border-white/10 h-80">
+                   <SafeImage 
                     src="https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&q=80&w=600" 
-                    className="w-full h-80 object-cover" 
+                    className="w-full h-full" 
                     alt="Luxo" 
                   />
                 </div>
@@ -439,12 +498,10 @@ export default function Home() {
                   <h3 className="font-display text-5xl font-bold text-gold mb-2 tracking-tighter">15</h3>
                   <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest">Anos de Experiência</p>
                 </div>
-                <div className="overflow-hidden rounded-[2rem] border border-white/10">
-                   <motion.img 
-                    whileHover={{ scale: 1.1 }}
-                    transition={{ duration: 1 }}
+                <div className="overflow-hidden rounded-[2rem] border border-white/10 h-80">
+                   <SafeImage 
                     src="https://images.unsplash.com/photo-1582407947304-fd86f028f716?auto=format&fit=crop&q=80&w=600" 
-                    className="w-full h-80 object-cover" 
+                    className="w-full h-full" 
                     alt="Luxo" 
                   />
                 </div>

@@ -6,7 +6,9 @@
       "type": "object",
       "properties": {
         "email": { "type": "string" },
-        "role": { "type": "string", "enum": ["admin"] }
+        "role": { "type": "string", "enum": ["admin"] },
+        "ativo": { "type": "boolean" },
+        "nome": { "type": "string" }
       },
       "required": ["email", "role"]
     },
@@ -66,8 +68,26 @@
         "finishes": { "type": "array", "items": { "type": "string" } },
         "leisure": { "type": "array", "items": { "type": "string" } },
         "locationTags": { "type": "array", "items": { "type": "string" } },
-        " destaca": { "type": "boolean" },
+        "proximities": { "type": "array", "items": { "type": "string" } },
+        "destaque": { "type": "boolean" },
         "publicado": { "type": "boolean" },
+        "rented": { "type": "boolean" },
+        "iptu": { "type": "number" },
+        "condoFee": { "type": "number" },
+        "taxes": { "type": "number" },
+        "buildingName": { "type": "string" },
+        "condoName": { "type": "string" },
+        "isBuilding": { "type": "boolean" },
+        "isCondo": { "type": "boolean" },
+        "fireInsurance": { "type": "number" },
+        "totalMonthlyPrice": { "type": "number" },
+        "leaseWarrantyType": { "type": "string" },
+        "allowsPet": { "type": "string", "enum": ["Sim", "Não"] },
+        "furnishingStatus": { "type": "string", "enum": ["Mobiliado", "Parcialmente", "Não Mobiliado"] },
+        "minLeaseTerm": { "type": "string" },
+        "availableForVisit": { "type": "string", "enum": ["Sim", "Não"] },
+        "leaseStatus": { "type": "string" },
+        "leaseNotes": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" },
         "createdBy": { "type": "string" }
@@ -136,9 +156,214 @@
         "propertyId": { "type": "string" },
         "notes": { "type": "string" }
       }
+    },
+    "FinanceRecord": {
+      "title": "Finance Record",
+      "description": "Unified financial transaction record (inflow/outflow)",
+      "type": "object",
+      "properties": {
+        "tipo": { "type": "string", "enum": ["entrada", "saida"] },
+        "data": { "type": "string" },
+        "valor": { "type": "number" },
+        "descricao": { "type": "string" },
+        "categoria": { "type": "string" },
+        "clienteOrigem": { "type": "string" },
+        "responsavel": { "type": "string" },
+        "formaPagamento": { "type": "string" },
+        "formaRecebimento": { "type": "string" },
+        "observacoes": { "type": "string" },
+        "imovelId": { "type": "string" },
+        "codigoImovel": { "type": "string" },
+        "locacaoId": { "type": "string" },
+        "status": { "type": "string", "enum": ["confirmado", "pendente"] },
+        "criadoEm": { "type": "string", "format": "date-time" },
+        "atualizadoEm": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Option": {
+      "title": "Property Option List",
+      "description": "Document containing an array of options for property fields",
+      "type": "object",
+      "properties": {
+        "itens": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "nome": { "type": "string" },
+              "valor": { "type": "string" },
+              "ativo": { "type": "boolean" },
+              "ordem": { "type": "number" },
+              "cidade": { "type": "string" }
+            }
+          }
+        },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "SiteConfig": {
+      "title": "Site Configuration",
+      "description": "General settings for the website's content and appearance",
+      "type": "object",
+      "properties": {
+        "hero": {
+          "type": "object",
+          "properties": {
+            "tituloPrincipal": { "type": "string" },
+            "subtitulo": { "type": "string" },
+            "textoBotaoPrincipal": { "type": "string" },
+            "linkBotaoPrincipal": { "type": "string" },
+            "textoBotaoSecundario": { "type": "string" },
+            "linkBotaoSecundario": { "type": "string" },
+            "imagemFundoUrl": { "type": "string" },
+            "ativarThreeJs": { "type": "boolean" }
+          }
+        },
+        "secoes": {
+          "type": "object",
+          "properties": {
+            "imoveisDestaque": {
+              "type": "object",
+              "properties": {
+                "titulo": { "type": "string" },
+                "subtitulo": { "type": "string" }
+              }
+            },
+            "sobre": {
+              "type": "object",
+              "properties": {
+                "titulo": { "type": "string" },
+                "texto": { "type": "string" },
+                "imagemUrl": { "type": "string" }
+              }
+            },
+            "corretores": {
+              "type": "object",
+              "properties": {
+                "titulo": { "type": "string" },
+                "subtitulo": { "type": "string" }
+              }
+            },
+            "contato": {
+              "type": "object",
+              "properties": {
+                "titulo": { "type": "string" },
+                "texto": { "type": "string" }
+              }
+            }
+          }
+        },
+        "empresa": {
+          "type": "object",
+          "properties": {
+            "nome": { "type": "string" },
+            "slogan": { "type": "string" },
+            "creci": { "type": "string" },
+            "whatsapp": { "type": "string" },
+            "instagram": { "type": "string" },
+            "email": { "type": "string" },
+            "endereco": { "type": "string" },
+            "cidadeEstado": { "type": "string" },
+            "googleMapsUrl": { "type": "string" }
+          }
+        },
+        "aparencia": {
+          "type": "object",
+          "properties": {
+            "corPrincipal": { "type": "string" },
+            "corSecundaria": { "type": "string" },
+            "corFundo": { "type": "string" },
+            "corTexto": { "type": "string" },
+            "logoUrl": { "type": "string" },
+            "faviconUrl": { "type": "string" }
+          }
+        },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Contract": {
+      "title": "Contract",
+      "description": "Purchase proposals, counter-proposals and acceptances",
+      "type": "object",
+      "properties": {
+        "tipoContrato": { "type": "string", "enum": ["proposta", "contraproposta", "aceite"] },
+        "status": { "type": "string", "enum": ["rascunho", "enviado", "assinado", "cancelado"] },
+        "nomeCliente": { "type": "string" },
+        "nomeVendedor": { "type": "string" },
+        "enderecoImovel": { "type": "string" },
+        "valor": { "type": "number" },
+        "dados": { "type": "object" },
+        "criadoEm": { "type": "string", "format": "date-time" },
+        "atualizadoEm": { "type": "string", "format": "date-time" },
+        "criadoPor": { "type": "string" },
+        "imovelId": { "type": "string" },
+        "observacoes": { "type": "string" }
+      }
+    },
+    "LeaseConfig": {
+      "title": "Lease Configuration Item",
+      "description": "Item used in lease dropdowns/options",
+      "type": "object",
+      "properties": {
+        "nome": { "type": "string" },
+        "ativo": { "type": "boolean" },
+        "criadoEm": { "type": "string", "format": "date-time" },
+        "atualizadoEm": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Neighborhood": {
+      "title": "Neighborhood",
+      "description": "Neighborhood record",
+      "type": "object",
+      "properties": {
+        "nome": { "type": "string" },
+        "cidade": { "type": "string" },
+        "estado": { "type": "string" },
+        "ativo": { "type": "boolean" },
+        "criadoEm": { "type": "string", "format": "date-time" },
+        "atualizadoEm": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Lease": {
+      "title": "Lease Agreement",
+      "description": "Active rental contract",
+      "type": "object",
+      "properties": {
+        "propertyId": { "type": "string" },
+        "propertyCode": { "type": "string" },
+        "propertyTitle": { "type": "string" },
+        "propertyAddress": { "type": "string" },
+        "propertyNeighborhood": { "type": "string" },
+        "propertyCity": { "type": "string" },
+        "tenantName": { "type": "string" },
+        "tenantPhone": { "type": "string" },
+        "tenantCpf": { "type": "string" },
+        "startDate": { "type": "string", "format": "date" },
+        "dueDay": { "type": "number" },
+        "valorAluguel": { "type": "number" },
+        "valorIptu": { "type": "number" },
+        "valorTaxaLixo": { "type": "number" },
+        "valorCondominio": { "type": "number" },
+        "valorOutros": { "type": "number" },
+        "valorDesconto": { "type": "number" },
+        "valorTotalPagar": { "type": "number" },
+        "statusPagamento": { "type": "string", "enum": ["Pendente", "Pago", "Atrasado", "Cancelado"] },
+        "statusLocacao": { "type": "string", "enum": ["Ativa", "Encerrada", "Cancelada"] },
+        "lastPaymentDate": { "type": "string", "format": "date" },
+        "lastPaymentMonth": { "type": "string" },
+        "observacoes": { "type": "string" },
+        "active": { "type": "boolean" },
+        "criadoEm": { "type": "string", "format": "date-time" },
+        "atualizadoEm": { "type": "string", "format": "date-time" }
+      }
     }
   },
   "firestore": {
+    "siteSettings": {
+      "schema": "SiteConfig",
+      "description": "Public site content and design settings"
+    },
     "administradores": {
       "schema": "Admin",
       "description": "List of authorized administrator emails"
@@ -162,6 +387,46 @@
     "receitas": {
       "schema": "Revenue",
       "description": "Revenue tracking"
+    },
+    "financeiro": {
+      "schema": "FinanceRecord",
+      "description": "Unified financial transactions"
+    },
+    "opcoes_imoveis": {
+      "schema": "Option",
+      "description": "Collections of property options (tipos, cidades, etc)"
+    },
+    "configuracoes": {
+      "schema": "object",
+      "description": "Site configurations"
+    },
+    "contratos": {
+      "schema": "Contract",
+      "description": "Contracts, proposals and acceptances"
+    },
+    "configLocacaoGarantias": {
+      "schema": "LeaseConfig",
+      "description": "Lease warranty types"
+    },
+    "configLocacaoStatus": {
+      "schema": "LeaseConfig",
+      "description": "Lease status options"
+    },
+    "configLocacaoContratos": {
+      "schema": "LeaseConfig",
+      "description": "Lease contract terms"
+    },
+    "configLocacaoRegras": {
+      "schema": "LeaseConfig",
+      "description": "Lease rules (pet, furniture)"
+    },
+    "bairros": {
+      "schema": "Neighborhood",
+      "description": "Neighborhood database"
+    },
+    "locacoes": {
+      "schema": "Lease",
+      "description": "Rental contracts and management"
     }
   }
 }

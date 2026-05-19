@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { collection, query, getDocs, updateDoc, doc, addDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { 
@@ -12,17 +12,19 @@ import {
   FileText,
   Search,
   MessageCircle,
-  MoreVertical,
-  ChevronRight,
-  Filter,
   RefreshCcw,
-  Sparkles
+  Sparkles,
+  Loader2,
+  Printer,
+  Download
 } from 'lucide-react';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
-import { Visit } from '../../types';
+import html2canvas from 'html2canvas';
+import { Visit, Property } from '../../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { staggerContainer, slideUp, fadeIn, scaleIn } from '../../constants/animations';
+import { useSettings } from '../../hooks/useSettings';
+import { VisitPdfTemplate } from '../../components/admin/VisitPdfExporter';
 
 const SkeletonRow = () => (
   <tr className="animate-pulse border-b border-gray-50">
@@ -57,10 +59,20 @@ export default function AdminVisits() {
   const [loading, setLoading] = useState(true);
   const [selectedVisit, setSelectedVisit] = useState<any>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState('Todas');
   
   // Confirmation Modal Fields
-  const [brokerData, setBrokerData] = useState({ name: '', creci: '' });
+  const [brokerData, setBrokerData] = useState({ name: '', creci: '', phone: '' });
   const [clientData, setClientData] = useState({ cpf: '' });
+
+  const { settings } = useSettings();
+  const pdfRef = useRef<HTMLDivElement>(null);
+  const [generatingPdf, setGeneratingPdf] = useState<string | null>(null);
+  const [pdfData, setPdfData] = useState<{ visit: Visit | null, property: Property | null }>({
+    visit: null,
+    property: null
+  });
 
   useEffect(() => {
     fetchVisits();
@@ -87,123 +99,225 @@ export default function AdminVisits() {
     }
   };
 
-  const generatePDF = async (visit: any) => {
-    const doc = new jsPDF();
-    const primaryColor = '#003030';
-    const goldColor = '#E5BC53';
+  const generatePDF = async (visit: Visit, action: 'download' | 'print' | 'preview' = 'download') => {
+    setGeneratingPdf(visit.id || 'new');
 
-    const clientName = visit.nomeCliente || visit.clientName;
-    const clientEmail = visit.email || visit.clientEmail;
-    const clientPhone = visit.telefone || visit.clientPhone;
-    const propertyCode = visit.codigoImovel || visit.propertyCode;
-    const propertyTitle = visit.tituloImovel || visit.title || 'Imóvel';
-    const city = visit.cidade || 'Balneário Camboriú';
-    const hour = visit.horario || visit.time;
-
-    // Header
-    doc.setFillColor(primaryColor);
-    doc.rect(0, 0, 210, 40, 'F');
+    const company = {
+      nome: settings?.empresa?.nome || 'Menta Negócios Imobiliários',
+      razaoSocial: settings?.empresa?.razaoSocial || 'A & E Negócios Imobiliários Ltda',
+      endereco: settings?.empresa?.endereco || 'Av. Brasil, 2636',
+      telefone: settings?.empresa?.telefone || '(47) 99291-4069',
+      email: settings?.empresa?.email || 'contato@mentaimoveis.com.br',
+      cnpj: settings?.empresa?.cnpj || '63.572.479/0001-50',
+      creciPj: settings?.empresa?.creciPj || '11255PJ'
+    };
     
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(24);
-    doc.setFont('helvetica', 'bold');
-    doc.text('MENTA', 20, 20);
-    
-    doc.setFontSize(8);
-    doc.setTextColor(goldColor);
-    doc.text('NEGÓCIOS IMOBILIÁRIOS', 20, 26);
+    try {
+      // Fetch Property Data
+      let propertyData = null;
+      if (visit.imovelId) {
+        const propSnap = await getDoc(doc(db, 'imoveis', visit.imovelId));
+        if (propSnap.exists()) {
+          propertyData = { id: propSnap.id, ...propSnap.data() } as Property;
+        }
+      }
 
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(10);
-    doc.text('Av Brasil 2636 - Centro, Balneário Camboriú - SC', 190, 15, { align: 'right' });
-    doc.text('47 99291-4069 | 41 98818-711', 190, 22, { align: 'right' });
-    doc.text('CRECI: 11255 PJ', 190, 29, { align: 'right' });
+      // Set data for template
+      setPdfData({ visit, property: propertyData });
 
-    // Title
-    doc.setTextColor(primaryColor);
-    doc.setFontSize(18);
-    doc.text('FICHA DE VISITA DE IMÓVEL', 105, 55, { align: 'center' });
-    doc.setDrawColor(goldColor);
-    doc.setLineWidth(1);
-    doc.line(80, 58, 130, 58);
+      // Wait for state to update and images to load in the template
+      // We use a longer timeout to ensure images are rendered for html2canvas
+      await new Promise(resolve => setTimeout(resolve, 1500));
 
-    // Metadata
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Data: ${visit.date}`, 20, 70);
-    doc.text(`Horário: ${hour}`, 190, 70, { align: 'right' });
+      if (pdfRef.current) {
+        try {
+          const canvas = await html2canvas(pdfRef.current, {
+            scale: 2, // Higher quality
+            useCORS: true, // Allow external images
+            logging: false,
+            backgroundColor: '#ffffff',
+            allowTaint: true,
+                    onclone: (clonedDoc) => {
+                       const pdfElement = clonedDoc.querySelector(".ficha-cliente-pdf") as HTMLElement;
+                       const watermarkSource = clonedDoc.getElementById("pdf-watermark-source") as HTMLImageElement;
 
-    // Client Data
-    doc.setFillColor(245, 245, 245);
-    doc.rect(20, 80, 170, 45, 'F');
-    doc.setFont('helvetica', 'bold');
-    doc.text('DADOS DO CLIENTE', 25, 90);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Nome: ${clientName}`, 25, 100);
-    doc.text(`CPF: ${clientData.cpf || '____.____.____-____'}`, 25, 107);
-    doc.text(`E-mail: ${clientEmail}`, 25, 114);
-    doc.text(`Telefone: ${clientPhone}`, 120, 114);
+                       if (pdfElement && watermarkSource?.src) {
+                          const containerHeight = pdfElement.offsetHeight;
+                          const pageHeightPx = (297 * pdfElement.offsetWidth) / 210; // Calculate A4 height in pixels based on current width
+                          const numPages = Math.ceil(containerHeight / pageHeightPx);
 
-    // Broker Data
-    doc.setFillColor(245, 245, 245);
-    doc.rect(20, 130, 170, 30, 'F');
-    doc.setFont('helvetica', 'bold');
-    doc.text('DADOS DO CORRETOR', 25, 140);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Corretor: ${brokerData.name || visit.brokerName || '________________'}`, 25, 150);
-    doc.text(`CRECI: ${brokerData.creci || '________________'}`, 120, 150);
+                          for (let i = 0; i < numPages; i++) {
+                            const watermarkImg = clonedDoc.createElement('img');
+                            watermarkImg.src = watermarkSource.src;
+                            watermarkImg.style.position = 'absolute';
+                            watermarkImg.style.top = `${(i * pageHeightPx) + (pageHeightPx / 2)}px`;
+                            watermarkImg.style.left = '50%';
+                            watermarkImg.style.transform = 'translate(-50%, -50%)';
+                            watermarkImg.style.opacity = '0.04';
+                            watermarkImg.style.width = '100mm';
+                            watermarkImg.style.zIndex = '0';
+                            watermarkImg.style.pointerEvents = 'none';
+                            pdfElement.insertBefore(watermarkImg, pdfElement.firstChild);
+                          }
 
-    // Property Data
-    doc.setFillColor(245, 245, 245);
-    doc.rect(20, 165, 170, 35, 'F');
-    doc.setFont('helvetica', 'bold');
-    doc.text('DADOS DO IMÓVEL', 25, 175);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Código: ${propertyCode}`, 25, 185);
-    doc.text(`Imóvel: ${propertyTitle}`, 25, 192);
-    doc.text(`Localização: ${city}`, 100, 192);
+                          // Fix for OKLCH and other modern CSS colors that html2canvas doesn't support
+                          const allElements = pdfElement.querySelectorAll("*");
+                          allElements.forEach((el) => {
+                             const htmlEl = el as HTMLElement;
+                             const style = window.getComputedStyle(el);
+                             const properties = ['backgroundColor', 'color', 'borderColor', 'borderTopColor', 'borderBottomColor', 'borderLeftColor', 'borderRightColor', 'outlineColor', 'fill', 'stroke'];
+                             
+                             properties.forEach(prop => {
+                               const value = (style as any)[prop];
+                               if (value && (
+                                 value.includes("oklab") || 
+                                 value.includes("oklch") || 
+                                 value.includes("color-mix") || 
+                                 value.includes("lab(") || 
+                                 value.includes("lch(")
+                               )) {
+                                 if (prop.toLowerCase().includes('background')) {
+                                   htmlEl.style.setProperty(prop, "#ffffff", "important");
+                                 } else if (prop.toLowerCase().includes('color')) {
+                                   htmlEl.style.setProperty(prop, "#111827", "important");
+                                 } else if (prop.toLowerCase().includes('border')) {
+                                   htmlEl.style.setProperty(prop, "#e5e7eb", "important");
+                                 } else {
+                                   htmlEl.style.setProperty(prop, "inherit", "important");
+                                 }
+                               }
+                             });
+                          });
+                       }
+                    }
+          });
 
-    // Term
-    doc.setFontSize(9);
-    doc.text('TERMO DE CIÊNCIA E VISITA:', 20, 215);
-    doc.setFontSize(8);
-    doc.text('Declaro que visitei o imóvel acima descrito acompanhado pelo corretor responsável da Menta Negócios Imobiliários.', 20, 222);
-    doc.text('Comprometo-me a tratar qualquer negociação futura referente a este imóvel exclusivamente através desta imobiliária.', 20, 227);
+          const imgData = canvas.toDataURL('image/png');
+          const pdf = new jsPDF('p', 'mm', 'a4');
+          
+          const imgProps = pdf.getImageProperties(imgData);
+          const pdfWidth = pdf.internal.pageSize.getWidth();
+          const pdfHeight = pdf.internal.pageSize.getHeight();
+          
+          // Calculate the height of the image on the PDF while maintaining aspect ratio
+          const imgHeightInPdf = (imgProps.height * pdfWidth) / imgProps.width;
+          
+          let heightLeft = imgHeightInPdf;
+          let position = 0;
 
-    // Signatures
-    doc.line(20, 260, 90, 260);
-    doc.text('Assinatura do Cliente', 40, 265);
-    
-    doc.line(120, 260, 190, 260);
-    doc.text('Assinatura do Corretor', 140, 265);
+          // Function to add footer and watermark to each page
+          const addPageDecorations = (pageNum: number, totalPages: number) => {
+            pdf.setFontSize(8);
+            pdf.setTextColor(180, 180, 180);
+            const footerText = `${company.nome} • CNPJ: ${company.cnpj} • CRECI PJ: ${company.creciPj}`;
+            const pageText = `Página ${pageNum} de ${totalPages}`;
+            
+            pdf.text(footerText, pdfWidth / 2, pdfHeight - 10, { align: 'center' });
+            pdf.text(pageText, pdfWidth - 15, pdfHeight - 10, { align: 'right' });
+          };
 
-    doc.save(`Ficha_Visita_${propertyCode}_${clientName}.pdf`);
-    
-    // Save to Firestore
-    await addDoc(collection(db, 'fichas_visita'), {
-      visitId: visit.id,
-      propertyCode: propertyCode,
-      clientName: clientName,
-      brokerName: brokerData.name,
-      createdAt: serverTimestamp()
-    });
+          // Calculate total pages
+          const totalPages = Math.ceil(imgHeightInPdf / pdfHeight);
+
+          // First page
+          pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeightInPdf);
+          addPageDecorations(1, totalPages);
+          heightLeft -= pdfHeight;
+
+          // Add additional pages
+          let currentPage = 2;
+          while (heightLeft > 0) {
+            position = heightLeft - imgHeightInPdf;
+            pdf.addPage();
+            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeightInPdf);
+            addPageDecorations(currentPage, totalPages);
+            heightLeft -= pdfHeight;
+            currentPage++;
+          }
+          
+          const safeClientName = (visit.nomeCliente || (visit as any).clientName || 'cliente')
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "") // Remove accents
+            .replace(/[^a-z0-9]/gi, "-") // Replace non-alphanumeric with hyphen
+            .toLowerCase();
+          
+          const propertyCode = (propertyData?.code || visit.codigoImovel || 'imovel').replace(/[^a-z0-9]/gi, "-");
+          
+          const fileName = `ficha-cliente-${safeClientName}-${propertyCode}.pdf`;
+
+          if (action === 'download') {
+            pdf.save(fileName);
+          } else if (action === 'print') {
+            pdf.autoPrint();
+            window.open(pdf.output('bloburl'), '_blank');
+          } else if (action === 'preview') {
+            window.open(pdf.output('bloburl'), '_blank');
+          }
+
+          // Record in Firestore if not already recorded (optional, but keep for history)
+          await addDoc(collection(db, 'fichas_visita'), {
+            visitId: visit.id,
+            propertyCode: propertyCode,
+            clientName: visit.nomeCliente || (visit as any).clientName || 'Cliente',
+            brokerName: visit.brokerName || brokerData.name || 'Atendimento Direto',
+            createdAt: serverTimestamp(),
+            action: action
+          });
+
+        } catch (err) {
+          console.error("Error during canvas capture:", err);
+          alert("Erro ao capturar dados para o PDF. Verifique se as imagens estão acessíveis.");
+        } finally {
+          setGeneratingPdf(null);
+        }
+      } else {
+        setGeneratingPdf(null);
+        alert("Template do PDF não encontrado.");
+      }
+
+    } catch (error) {
+      console.error("Error fetching data for PDF:", error);
+      alert("Erro ao processar dados do imóvel. Verifique a conexão.");
+      setGeneratingPdf(null);
+    }
+  };
+
+  const sendWhatsAppMsg = (visit: any) => {
+    const clientPhone = (visit.telefone || visit.clientPhone || "").replace(/\D/g, '');
+    const propertyLink = `${window.location.origin}/imovel/${visit.imovelId}`;
+    const message = `Olá ${visit.nomeCliente || visit.clientName}! Falamos da Menta Imóveis sobre sua solicitação de visita ao imóvel ${visit.codigoImovel || ""}.\n\nPara facilitar, aqui está o link do imóvel:\n${propertyLink}\n\nConseguimos confirmar para ${visit.date} às ${visit.horario || visit.time}?`;
+    window.open(`https://wa.me/${clientPhone}?text=${encodeURIComponent(message)}`, '_blank');
   };
 
   const handleConfirm = async () => {
     if (!selectedVisit) return;
     try {
-      await updateDoc(doc(db, 'visitas', selectedVisit.id), {
+      const confirmData = {
         status: 'confirmada',
         brokerName: brokerData.name,
         brokerCreci: brokerData.creci,
+        brokerPhone: brokerData.phone,
         clientCpf: clientData.cpf,
-      });
+        confirmadoEm: serverTimestamp(),
+        pdfGerado: true,
+        atualizadoEm: serverTimestamp()
+      };
+
+      await updateDoc(doc(db, 'visitas', selectedVisit.id), confirmData);
       
-      generatePDF(selectedVisit);
+      // Update local state first to reflect changes in template
+      const updatedVisit = { ...selectedVisit, ...confirmData };
+      
+      alert("Visita confirmada com sucesso. Gerando PDF...");
+      
+      // Pass the updated visit object to generatePDF
+      generatePDF(updatedVisit, 'preview');
+      
       setShowConfirmModal(false);
       fetchVisits();
     } catch (error) {
       console.error("Error confirming visit:", error);
+      alert("Erro ao confirmar visita no banco de dados.");
     }
   };
 
@@ -238,6 +352,8 @@ export default function AdminVisits() {
             <input 
               type="text" 
               placeholder="Buscar por cliente ou imóvel..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-16 pr-8 py-5 bg-white border border-transparent rounded-2xl focus:ring-4 focus:ring-gold/10 focus:border-gold/20 outline-none transition-all shadow-sm font-medium text-sm placeholder:text-gray-300"
             />
           </div>
@@ -251,10 +367,15 @@ export default function AdminVisits() {
             </motion.button>
             <div className="flex items-center gap-3 bg-white p-2 border border-gray-100 rounded-2xl shadow-sm">
                <span className="text-[10px] font-black uppercase text-gray-300 ml-4 tracking-widest leading-none">Filtro:</span>
-               <select className="bg-transparent border-none rounded-lg text-xs font-black uppercase tracking-widest px-4 py-3 outline-none text-primary-black">
-                  <option>Todas</option>
+               <select 
+                 value={filterStatus}
+                 onChange={(e) => setFilterStatus(e.target.value)}
+                 className="bg-transparent border-none rounded-lg text-xs font-black uppercase tracking-widest px-4 py-3 outline-none text-primary-black"
+               >
+                  <option value="Todas">Todas</option>
                   <option value="pendente">Pendentes</option>
                   <option value="confirmada">Confirmadas</option>
+                  <option value="cancelada">Canceladas</option>
                </select>
             </div>
           </div>
@@ -272,35 +393,53 @@ export default function AdminVisits() {
                    {[1, 2, 3, 4, 5].map(i => <SkeletonRow key={i} />)}
                 </tbody>
               </motion.table>
-            ) : visits.length === 0 ? (
-              <motion.div 
-                key="empty"
-                {...fadeIn}
-                className="p-32 text-center flex flex-col items-center"
-              >
-                 <div className="w-24 h-24 bg-gray-50 rounded-[2rem] flex items-center justify-center mb-6 shadow-inner">
-                   <Calendar size={40} className="text-gray-200" />
-                 </div>
-                 <p className="text-lg font-display font-medium text-gray-400">Nenhum agendamento encontrado.</p>
-              </motion.div>
             ) : (
-              <motion.table 
-                variants={staggerContainer}
-                initial="initial"
-                animate="animate"
-                className="w-full"
-              >
-                <thead>
-                  <tr className="text-left bg-gray-50/50 border-b border-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">
-                    <th className="p-8 pl-12">Cliente / Contato</th>
-                    <th className="p-8">Imóvel</th>
-                    <th className="p-8">Agenda</th>
-                    <th className="p-8">Status</th>
-                    <th className="p-8 text-right pr-12">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {visits.map(visit => {
+              (() => {
+                const filteredVisits = visits.filter(v => {
+                  const matchesSearch = 
+                    (v.nomeCliente || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    (v.codigoImovel || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    (v.telefone || '').includes(searchQuery);
+                  
+                  const matchesStatus = filterStatus === 'Todas' || v.status?.toLowerCase() === filterStatus.toLowerCase();
+                  
+                  return matchesSearch && matchesStatus;
+                });
+
+                if (filteredVisits.length === 0) {
+                  return (
+                    <motion.div 
+                      key="empty"
+                      {...fadeIn}
+                      className="p-32 text-center flex flex-col items-center"
+                    >
+                       <div className="w-24 h-24 bg-gray-50 rounded-[2rem] flex items-center justify-center mb-6 shadow-inner">
+                         <Calendar size={40} className="text-gray-200" />
+                       </div>
+                       <p className="text-lg font-display font-medium text-gray-400">Nenhum agendamento encontrado.</p>
+                    </motion.div>
+                  );
+                }
+
+                return (
+                  <motion.table 
+                    key="table"
+                    variants={staggerContainer}
+                    initial="initial"
+                    animate="animate"
+                    className="w-full"
+                  >
+                    <thead>
+                      <tr className="text-left bg-gray-50/50 border-b border-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">
+                        <th className="p-8 pl-12">Cliente / Contato</th>
+                        <th className="p-8">Imóvel</th>
+                        <th className="p-8">Agenda</th>
+                        <th className="p-8">Status</th>
+                        <th className="p-8 text-right pr-12">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {filteredVisits.map(visit => {
                     const clientName = visit.nomeCliente || visit.clientName;
                     const clientPhone = visit.telefone || visit.clientPhone;
                     const propertyCode = visit.codigoImovel || visit.propertyCode;
@@ -384,24 +523,55 @@ export default function AdminVisits() {
                                </>
                              )}
                              {visit.status?.toLowerCase() === 'confirmada' && (
-                               <motion.button 
-                                 whileHover={{ scale: 1.1 }}
-                                 onClick={() => generatePDF(visit)}
-                                 className="w-11 h-11 flex items-center justify-center bg-white text-blue-500 rounded-2xl hover:bg-blue-600 hover:text-white transition-all shadow-xl shadow-black/5 group/btn"
-                                 title="Gerar PDF"
-                               >
-                                 <FileText size={20} className="transition-transform group-hover/btn:scale-110" />
-                               </motion.button>
+                               <>
+                                 <motion.button 
+                                   whileHover={{ scale: 1.1 }}
+                                   disabled={generatingPdf === visit.id}
+                                   onClick={() => generatePDF(visit, 'preview')}
+                                   className="w-11 h-11 flex items-center justify-center bg-white text-gold rounded-2xl hover:bg-gold hover:text-white transition-all shadow-xl shadow-black/5 group/btn disabled:opacity-50 disabled:cursor-not-allowed"
+                                   title="Visualizar FICHA COMPLETA"
+                                 >
+                                   {generatingPdf === visit.id ? (
+                                     <Loader2 size={20} className="animate-spin" />
+                                   ) : (
+                                     <Sparkles size={18} className="transition-transform group-hover/btn:scale-110" />
+                                   )}
+                                 </motion.button>
+                                 <motion.button 
+                                   whileHover={{ scale: 1.1 }}
+                                   disabled={generatingPdf === visit.id}
+                                   onClick={() => generatePDF(visit, 'download')}
+                                   className="w-11 h-11 flex items-center justify-center bg-white text-blue-500 rounded-2xl hover:bg-blue-600 hover:text-white transition-all shadow-xl shadow-black/5 group/btn disabled:opacity-50 disabled:cursor-not-allowed"
+                                   title="Baixar PDF"
+                                 >
+                                   {generatingPdf === visit.id ? (
+                                     <Loader2 size={20} className="animate-spin" />
+                                   ) : (
+                                     <Download size={20} className="transition-transform group-hover/btn:scale-110" />
+                                   )}
+                                 </motion.button>
+                                 <motion.button 
+                                   whileHover={{ scale: 1.1 }}
+                                   disabled={generatingPdf === visit.id}
+                                   onClick={() => generatePDF(visit, 'print')}
+                                   className="w-11 h-11 flex items-center justify-center bg-white text-amber-500 rounded-2xl hover:bg-amber-600 hover:text-white transition-all shadow-xl shadow-black/5 group/btn disabled:opacity-50 disabled:cursor-not-allowed"
+                                   title="Imprimir"
+                                 >
+                                   {generatingPdf === visit.id ? (
+                                     <Loader2 size={20} className="animate-spin" />
+                                   ) : (
+                                     <Printer size={20} className="transition-transform group-hover/btn:scale-110" />
+                                   )}
+                                 </motion.button>
+                               </>
                              )}
-                             <motion.a 
+                             <motion.button 
                                whileHover={{ scale: 1.1 }}
-                               href={`https://wa.me/${clientPhone.replace(/\D/g, '')}`}
-                               target="_blank"
-                               rel="noopener noreferrer"
+                               onClick={() => sendWhatsAppMsg(visit)}
                                className="w-11 h-11 flex items-center justify-center bg-white text-emerald-500 rounded-2xl hover:bg-emerald-500 hover:text-white transition-all shadow-xl shadow-black/5 group/btn"
                              >
                                <MessageCircle size={20} className="transition-transform group-hover/btn:scale-110" />
-                             </motion.a>
+                             </motion.button>
                           </div>
                         </td>
                       </motion.tr>
@@ -409,8 +579,10 @@ export default function AdminVisits() {
                   })}
                 </tbody>
               </motion.table>
-            )}
-          </AnimatePresence>
+            );
+          })()
+        )}
+      </AnimatePresence>
         </div>
       </motion.div>
 
@@ -458,6 +630,16 @@ export default function AdminVisits() {
                         onChange={e => setBrokerData({...brokerData, creci: e.target.value})}
                       />
                     </div>
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] pl-1">WhatsApp do Corretor</label>
+                      <input 
+                        type="text" 
+                        className="w-full bg-gray-50 border border-transparent rounded-[1.5rem] py-5 px-7 text-sm font-bold focus:ring-4 focus:ring-gold/10 focus:border-gold/20 focus:bg-white outline-none transition-all placeholder:text-gray-300" 
+                        placeholder="(00) 00000-0000" 
+                        value={brokerData.phone} 
+                        onChange={e => setBrokerData({...brokerData, phone: e.target.value})}
+                      />
+                    </div>
                     <div className="space-y-3 md:col-span-2">
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] pl-1">CPF do Cliente (Obrigatório para o PDF)</label>
                       <input 
@@ -486,6 +668,18 @@ export default function AdminVisits() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Hidden PDF Template for Capture */}
+      <div style={{ position: 'absolute', left: '-9999px', top: '-9999px' }}>
+        {pdfData.visit && (
+          <VisitPdfTemplate 
+            ref={pdfRef}
+            visit={pdfData.visit}
+            property={pdfData.property}
+            settings={settings}
+          />
+        )}
+      </div>
     </motion.div>
   );
 }

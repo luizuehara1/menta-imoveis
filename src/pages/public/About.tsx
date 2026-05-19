@@ -2,6 +2,7 @@ import React from 'react';
 import { Check, Mail, Phone, MapPin } from 'lucide-react';
 import { PremiumHeroBackground } from '../../components/three/PremiumHeroBackground';
 import { LuxuryShapeCanvas } from '../../components/three/AbstractLuxuryShape';
+import { SafeImage } from '../../components/ui/SafeImage';
 
 export default function About() {
   return (
@@ -36,7 +37,11 @@ export default function About() {
             </div>
          </div>
          <div className="relative">
-            <img src="https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80&w=1000" className="rounded-2xl shadow-2xl" alt="Escritório" />
+            <SafeImage 
+              src="https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80&w=1000" 
+              className="rounded-2xl shadow-2xl overflow-hidden h-96 w-full" 
+              alt="Escritório" 
+            />
             <div className="absolute -bottom-8 -left-8 bg-gold p-8 rounded-2xl shadow-xl hidden md:block">
                <h4 className="font-display text-4xl font-bold text-primary-black">15+</h4>
                <p className="text-primary-black/60 text-xs font-bold uppercase">Anos de Mercado</p>

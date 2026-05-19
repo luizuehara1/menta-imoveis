@@ -26,6 +26,7 @@ export default function AdminBrokers() {
     whatsapp: '',
     email: '',
     creci: '',
+    photo: '',
     active: true
   });
 
@@ -53,7 +54,7 @@ export default function AdminBrokers() {
         createdAt: new Date()
       });
       setShowModal(false);
-      setNewBroker({ name: '', phone: '', whatsapp: '', email: '', creci: '', active: true });
+      setNewBroker({ name: '', phone: '', whatsapp: '', email: '', creci: '', photo: '', active: true });
       fetchBrokers();
     } catch (error) {
       console.error("Error adding broker:", error);
@@ -156,7 +157,7 @@ export default function AdminBrokers() {
                 
                 <div className="flex items-center gap-6 mb-8 relative z-10">
                   <div className="w-20 h-20 rounded-3xl bg-primary-black text-gold flex items-center justify-center font-display font-bold text-3xl shadow-xl shadow-black/10 group-hover:scale-110 transition-transform">
-                    {broker.photo ? <img src={broker.photo} alt={broker.name} className="w-full h-full object-cover rounded-3xl" /> : broker.name.charAt(0)}
+                    {broker.photo ? <img src={broker.photo} alt={broker.name} referrerPolicy="no-referrer" className="w-full h-full object-cover rounded-3xl" /> : broker.name.charAt(0)}
                   </div>
                   <div>
                     <h3 className="text-xl font-display font-bold text-primary-black mb-1">{broker.name}</h3>
@@ -271,6 +272,16 @@ export default function AdminBrokers() {
                       className="w-full bg-gray-50 border border-transparent rounded-2xl py-4 px-6 text-sm font-bold focus:ring-4 focus:ring-gold/10 outline-none transition-all" 
                       value={newBroker.phone} 
                       onChange={e => setNewBroker({...newBroker, phone: e.target.value, whatsapp: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">URL da Foto (Perfil)</label>
+                    <input 
+                      type="text" 
+                      className="w-full bg-gray-50 border border-transparent rounded-2xl py-4 px-6 text-sm font-bold focus:ring-4 focus:ring-gold/10 outline-none transition-all" 
+                      value={newBroker.photo} 
+                      onChange={e => setNewBroker({...newBroker, photo: e.target.value})}
+                      placeholder="https://exemplo.com/foto.jpg"
                     />
                   </div>
                 </div>

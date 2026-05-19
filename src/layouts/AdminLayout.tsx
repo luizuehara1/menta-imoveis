@@ -9,12 +9,17 @@ import {
   DollarSign, 
   FileText, 
   Settings, 
+  Settings2,
+  MapPin,
   LogOut,
   Menu,
-  X
+  X,
+  ExternalLink
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
+import { SafeImage } from '../components/ui/SafeImage';
+import { useSettings } from '../hooks/useSettings';
 import { staggerContainer, slideUp, fadeIn } from '../constants/animations';
 
 const Sidebar = ({ onClose }: { onClose?: () => void }) => {
@@ -25,11 +30,15 @@ const Sidebar = ({ onClose }: { onClose?: () => void }) => {
   const menuItems = [
     { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
     { name: 'Imóveis', path: '/admin/imoveis', icon: Home },
+    { name: 'Locações', path: '/admin/locacoes', icon: FileText },
+    { name: 'Bairros', path: '/admin/bairros', icon: MapPin },
     { name: 'Cadastrar Imóvel', path: '/admin/imoveis/novo', icon: PlusCircle },
     { name: 'Visitas', path: '/admin/visitas', icon: Calendar },
     { name: 'Corretores', path: '/admin/corretores', icon: Users },
     { name: 'Financeiro', path: '/admin/financeiro', icon: DollarSign },
-    { name: 'Configurações', path: '/admin/configuracoes-site', icon: Settings },
+    { name: 'Contratos', path: '/admin/contratos', icon: FileText },
+    { name: 'Config. Locação', path: '/admin/configuracoes-locacao', icon: Settings2 },
+    { name: 'Aparência Site', path: '/admin/configuracoes-site', icon: Settings },
   ];
 
   const handleLogout = async () => {
@@ -39,15 +48,22 @@ const Sidebar = ({ onClose }: { onClose?: () => void }) => {
     }
   };
 
+  const { settings } = useSettings();
+
   return (
     <div className="h-full flex flex-col bg-primary-black text-white w-[300px] shrink-0 overflow-y-auto border-r border-white/5 relative z-[60]">
       <div className="p-10 border-b border-white/5">
         <Link to="/admin" className="flex items-center gap-4 mb-4 group">
           <motion.div 
             whileHover={{ scale: 1.05, rotate: -5 }}
-            className="bg-white/10 backdrop-blur-md p-2 rounded-xl border border-white/10 shadow-xl group-hover:border-gold/30 transition-colors"
+            className="bg-primary-black w-14 h-14 flex items-center justify-center rounded-xl shadow-xl transition-all p-2 border border-gold/10"
           >
-            <img src="https://i.postimg.cc/ZRkx8Py6/image.png" alt="Menta" className="h-10 w-auto object-contain brightness-0 invert" />
+            <SafeImage 
+              src={settings.aparencia.logoUrl || "https://i.postimg.cc/kMZXNdCS/image.png"} 
+              alt={settings.empresa.nome} 
+              priority
+              className="w-full h-full object-contain" 
+            />
           </motion.div>
           <div className="flex flex-col items-start">
             <span className="font-display text-2xl font-bold tracking-tighter text-white leading-tight group-hover:text-gold transition-colors">
@@ -111,6 +127,15 @@ const Sidebar = ({ onClose }: { onClose?: () => void }) => {
            <p className="text-[10px] font-black uppercase text-gold/60 tracking-widest mb-1">Menta Evolution</p>
            <p className="text-xs text-gray-500 leading-relaxed font-medium">Sistema Premium <span className="text-white">v2.0</span></p>
         </div>
+        <Link 
+          to="/" 
+          target="_blank"
+          className="w-full flex items-center gap-4 py-4 px-6 rounded-2xl text-gold hover:bg-gold/10 transition-all font-bold group border border-gold/10"
+        >
+          <ExternalLink size={22} className="transition-transform group-hover:scale-110" />
+          <span className="text-sm">Ver Site</span>
+        </Link>
+
         <motion.button 
           whileHover={{ x: 5 }}
           onClick={handleLogout}
@@ -190,6 +215,15 @@ export default function AdminLayout() {
           </div>
 
           <div className="flex items-center gap-6">
+            <Link 
+              to="/" 
+              target="_blank"
+              className="hidden sm:flex items-center gap-2 bg-primary-black text-gold px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-gold/10"
+            >
+              <ExternalLink size={14} />
+              Ver Site
+            </Link>
+
             {/* Desktop User Info */}
             <div className="hidden md:flex items-center gap-4 bg-gray-50/50 p-2 pr-6 rounded-2xl border border-gray-100 group cursor-pointer hover:bg-white hover:shadow-xl hover:scale-105 transition-all">
               <div className="relative">
