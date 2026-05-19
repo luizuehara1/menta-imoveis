@@ -14,6 +14,17 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || firebaseConfigLocal.measurementId
 };
 
+console.log("[Firebase] Active Config:", {
+  authDomain: firebaseConfig.authDomain,
+  projectId: firebaseConfig.projectId,
+  appId: firebaseConfig.appId,
+  hostname: window.location.hostname
+});
+
+if (firebaseConfig.projectId !== 'menta-imobiliaria1') {
+  console.warn(`[Firebase] ATENÇÃO: O Project ID atual (${firebaseConfig.projectId}) é diferente do esperado (menta-imobiliaria1). Verifique as variáveis de ambiente no Vercel.`);
+}
+
 // Initialize Firebase
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 

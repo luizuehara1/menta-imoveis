@@ -111,9 +111,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async () => {
     try {
+      console.log("[Auth] Attempting login with Google. Hostname:", window.location.hostname);
+      console.log("[Auth] Current Firebase config:", {
+        projectId: auth.app.options.projectId,
+        authDomain: auth.app.options.authDomain
+      });
       await signInWithPopup(auth, googleProvider);
-    } catch (error) {
-      console.error("Login failed:", error);
+    } catch (error: any) {
+      console.error("[Auth] Login failed:", error);
+      console.error("[Auth] Error Code:", error.code);
+      console.error("[Auth] Error Message:", error.message);
+      
+      if (error.code === 'auth/unauthorized-domain') {
+        alert(`Erro: Domínio não autorizado (${window.location.hostname}). Verifique as configurações do Firebase Console > Authentication > Settings > Authorized domains.`);
+      }
+      
       throw error;
     }
   };
