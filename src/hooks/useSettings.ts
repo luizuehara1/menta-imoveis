@@ -9,20 +9,70 @@ export function useSettings() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Safety timeout: stop loading after 3 seconds no matter what for better speed
+    const timer = setTimeout(() => {
+      setLoading(false);
+      console.warn("[useSettings] Safety timeout reached.");
+    }, 3000);
+
     const unsub = onSnapshot(doc(db, 'siteSettings', 'main'), (docSnap) => {
       if (docSnap.exists()) {
-        setSettings({ ...DEFAULT_SITE_CONFIG, ...docSnap.data() } as SiteConfig);
+        const data = docSnap.data();
+        
+        // Requirement: support both nested and flat fields redundancy
+        // Mapping flat fields from user "Expected Fields" to our SiteConfig structure
+        const mappedData = {
+          ...DEFAULT_SITE_CONFIG,
+          ...data,
+          hero: {
+            ...DEFAULT_SITE_CONFIG.hero,
+            tituloPrincipal: data.heroTitulo || data.hero?.tituloPrincipal || DEFAULT_SITE_CONFIG.hero.tituloPrincipal,
+            subtitulo: data.heroSubtitulo || data.hero?.subtitulo || DEFAULT_SITE_CONFIG.hero.subtitulo,
+            heroBadge: data.heroBadge || data.hero?.heroBadge || DEFAULT_SITE_CONFIG.hero.heroBadge,
+            imagemFundoUrl: data.heroImagemUrl || data.hero?.imagemFundoUrl || DEFAULT_SITE_CONFIG.hero.imagemFundoUrl,
+            textoBotaoPrincipal: data.heroBotaoPrincipalTexto || data.hero?.textoBotaoPrincipal || DEFAULT_SITE_CONFIG.hero.textoBotaoPrincipal,
+            linkBotaoPrincipal: data.heroBotaoPrincipalLink || data.hero?.linkBotaoPrincipal || DEFAULT_SITE_CONFIG.hero.linkBotaoPrincipal,
+            textoBotaoSecundario: data.heroBotaoSecundarioTexto || data.hero?.textoBotaoSecundario || DEFAULT_SITE_CONFIG.hero.textoBotaoSecundario,
+            linkBotaoSecundario: data.heroBotaoSecundarioLink || data.hero?.linkBotaoSecundario || DEFAULT_SITE_CONFIG.hero.linkBotaoSecundario,
+          },
+          empresa: {
+            ...DEFAULT_SITE_CONFIG.empresa,
+            nome: data.empresaNome || data.empresa?.nome || DEFAULT_SITE_CONFIG.empresa.nome,
+            razaoSocial: data.empresaRazaoSocial || data.empresa?.razaoSocial || DEFAULT_SITE_CONFIG.empresa.razaoSocial,
+            cnpj: data.empresaCnpj || data.empresa?.cnpj || DEFAULT_SITE_CONFIG.empresa.cnpj,
+            creciPj: data.empresaCreciPj || data.empresa?.creciPj || DEFAULT_SITE_CONFIG.empresa.creciPj,
+            telefone: data.empresaTelefone || data.empresa?.telefone || DEFAULT_SITE_CONFIG.empresa.telefone,
+            whatsapp: data.empresaWhatsapp || data.empresa?.whatsapp || DEFAULT_SITE_CONFIG.empresa.whatsapp,
+            email: data.empresaEmail || data.empresa?.email || DEFAULT_SITE_CONFIG.empresa.email,
+            endereco: data.empresaEndereco || data.empresa?.endereco || DEFAULT_SITE_CONFIG.empresa.endereco,
+            logoCabecalhoUrl: data.empresaLogoCabecalhoUrl || data.logoUrl || data.empresa?.logoCabecalhoUrl || DEFAULT_SITE_CONFIG.empresa.logoCabecalhoUrl,
+            marcaDaguaUrl: data.empresaMarcaDaguaUrl || data.marcaDaguaUrl || data.empresa?.marcaDaguaUrl || DEFAULT_SITE_CONFIG.empresa.marcaDaguaUrl,
+          },
+          aparencia: {
+            ...DEFAULT_SITE_CONFIG.aparencia,
+            logoUrl: data.logoUrl || data.aparencia?.logoUrl || DEFAULT_SITE_CONFIG.aparencia.logoUrl,
+            logoNavbarUrl: data.logoNavbarUrl || data.aparencia?.logoNavbarUrl || DEFAULT_SITE_CONFIG.aparencia.logoNavbarUrl,
+            logoFooterUrl: data.logoFooterUrl || data.aparencia?.logoFooterUrl || DEFAULT_SITE_CONFIG.aparencia.logoFooterUrl,
+            faviconUrl: data.faviconUrl || data.aparencia?.faviconUrl || DEFAULT_SITE_CONFIG.aparencia.faviconUrl,
+          }
+        };
+        setSettings(mappedData as SiteConfig);
       } else {
         setSettings(DEFAULT_SITE_CONFIG);
       }
       setLoading(false);
+      clearTimeout(timer);
     }, (error) => {
       console.error("Error fetching settings:", error);
-      setSettings(DEFAULT_SITE_CONFIG); // Fallback explicitly
+      setSettings(DEFAULT_SITE_CONFIG);
       setLoading(false);
+      clearTimeout(timer);
     });
 
-    return () => unsub();
+    return () => {
+      unsub();
+      clearTimeout(timer);
+    };
   }, []);
 
   return { settings, loading };
@@ -33,6 +83,12 @@ export function useOptions() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Safety timeout
+    const timer = setTimeout(() => {
+      setLoading(false);
+      console.warn("[useOptions] Safety timeout reached.");
+    }, 5000);
+
     const categories = [
       'tiposImovel', 'tiposNegocio', 'statusImovel', 'cidades', 
       'faixasPreco', 'caracteristicas', 'instalacoes', 'acabamentos', 

@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ImageOff } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { cn, getSafeImageUrl } from '../../lib/utils';
 
 interface SafeImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   fallbackSrc?: string;
@@ -13,26 +13,33 @@ export const SafeImage: React.FC<SafeImageProps> = ({
   alt, 
   className, 
   priority = false,
-  fallbackSrc = "https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&q=80&w=800",
+  fallbackSrc,
   ...props 
 }) => {
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(priority ? false : true);
+  
+  // Use robust helper for initial URL and fallback
+  const safeSrc = getSafeImageUrl(src, fallbackSrc || "https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&q=80&w=800");
 
-  const imgRef = React.useRef<HTMLImageElement>(null);
-
-  React.useEffect(() => {
-    if (imgRef.current?.complete && loading) {
-      setLoading(false);
-    }
-  }, [loading, src]);
-
-  // Handle case where src changes
-  React.useEffect(() => {
+  useEffect(() => {
     setError(false);
   }, [src]);
 
-  if (!src || error) {
+  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+    console.warn("[SafeImage] Load failed:", src);
+    setError(true);
+    setLoading(false);
+    
+    // Explicitly set fallback source on the element to ensure visual consistency
+    if (fallbackSrc) {
+      e.currentTarget.src = fallbackSrc;
+    } else {
+      e.currentTarget.src = "/placeholder-imovel.png";
+    }
+  };
+
+  if (!src && !fallbackSrc) {
     return (
       <div className={cn("flex items-center justify-center bg-gray-100 text-gray-400", className)} style={props.style}>
         <div className="text-center p-4">
@@ -51,16 +58,12 @@ export const SafeImage: React.FC<SafeImageProps> = ({
         </div>
       )}
       <img
-        ref={imgRef}
-        src={src}
+        src={error ? (fallbackSrc || "/placeholder-imovel.png") : safeSrc}
         alt={alt}
         className={cn("w-full h-full object-cover transition-opacity duration-300", loading ? "opacity-0" : "opacity-100")}
         referrerPolicy="no-referrer"
         crossOrigin="anonymous"
-        onError={(e) => {
-          console.warn("Image load failed, trying fallback:", src);
-          setError(true);
-        }}
+        onError={handleImageError}
         onLoad={() => setLoading(false)}
         loading={priority ? "eager" : props.loading || "lazy"}
         {...props}

@@ -9,6 +9,7 @@ import { staggerContainer, slideUp } from '../../constants/animations';
 import { PremiumHeroBackground } from '../../components/three/PremiumHeroBackground';
 import { LuxuryShapeCanvas } from '../../components/three/AbstractLuxuryShape';
 import { useSettings, useOptions } from '../../hooks/useSettings';
+import { DEFAULT_SITE_CONFIG } from '../../constants/defaultSettings';
 import { formatCurrency, isValidPublicProperty, getSafeImageUrl } from '../../lib/utils';
 
 import { SafeImage } from '../../components/ui/SafeImage';
@@ -271,7 +272,22 @@ export default function Home() {
   const { options, loading: optionsLoading } = useOptions();
   const [featuredProperties, setFeaturedProperties] = useState<any[]>([]);
   const [fetchingProperties, setFetchingProperties] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const navigate = useNavigate();
+
+  // Safety timer to force clear initial loading state
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setInitialLoading(false);
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!settingsLoading && !optionsLoading) {
+      setInitialLoading(false);
+    }
+  }, [settingsLoading, optionsLoading]);
 
   useEffect(() => {
     const fetchFeatured = async () => {
@@ -280,57 +296,34 @@ export default function Home() {
         console.log("[Home] Buscando imóveis em destaque...");
         const q = query(
           collection(db, 'imoveis'), 
-          where('publicado', 'in', [true]), // Rule requirement
+          where('publicado', '==', true),
           where('destaque', '==', true),
-          limit(20) // Fetch more to filter in JS
+          limit(20)
         );
         const snap = await getDocs(q);
         const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
-        
-        console.log("[Home] Imóveis em destaque recebidos do Firestore:", data);
-
-        // Strict Validation Filter
-        const filtered = data.filter(isValidPublicProperty).slice(0, 3); // Keep only top 3
-        
-        console.log("[Home] Imóveis em destaque filtrados para exibição:", filtered);
-
+        const filtered = data.filter(isValidPublicProperty).slice(0, 3);
         setFeaturedProperties(filtered);
       } catch (error) {
         console.error("[Home] Erro ao buscar imóveis em destaque:", error);
-        setFeaturedProperties([]); // Fallback to empty list
+        setFeaturedProperties([]);
       } finally {
         setFetchingProperties(false);
       }
     };
-    if (!settingsLoading && !optionsLoading) {
-      console.log("[Home] Configurações carregadas:", settings);
+
+    if (!initialLoading) {
       fetchFeatured();
     }
-  }, [settingsLoading, optionsLoading]);
+  }, [initialLoading]);
 
-  if (settingsLoading || optionsLoading) {
-    return (
-      <PageWrapper>
-        <div className="bg-primary-black min-h-screen">
-          {/* Skeleton Hero */}
-          <div className="h-[80vh] w-full bg-gray-900 animate-pulse flex flex-col items-center justify-center space-y-6 px-4">
-            <div className="h-8 bg-gray-800 rounded-full w-48 mb-4"></div>
-            <div className="h-20 bg-gray-800 rounded-3xl w-full max-w-2xl"></div>
-            <div className="h-12 bg-gray-800 rounded-2xl w-48 mt-8"></div>
-          </div>
-          
-          <div className="max-w-7xl mx-auto px-4 -mt-24 relative z-10">
-            <div className="h-48 bg-white rounded-[2.5rem] shadow-xl animate-pulse"></div>
-          </div>
-        </div>
-      </PageWrapper>
-    );
-  }
+  // Use local fallback if settings is empty for some reason (rare but possible after timeout)
+  const homeSettings = settings || DEFAULT_SITE_CONFIG;
 
   return (
     <PageWrapper>
       <div className="bg-white">
-        <Hero settings={settings} />
+        <Hero settings={homeSettings} />
         
         <motion.div
           initial={{ opacity: 0, y: 40 }}
@@ -351,9 +344,9 @@ export default function Home() {
             <div>
               <span className="text-gold font-bold uppercase tracking-widest text-xs mb-2 block">Destaques da semana</span>
               <h2 className="section-title">
-                {settings.secoes.imoveisDestaque.titulo.split(' ')[0]} <span className="text-gold">{settings.secoes.imoveisDestaque.titulo.split(' ').slice(1).join(' ')}</span>
+                {homeSettings.secoes.imoveisDestaque.titulo.split(' ')[0]} <span className="text-gold">{homeSettings.secoes.imoveisDestaque.titulo.split(' ').slice(1).join(' ')}</span>
               </h2>
-              <p className="text-gray-500 max-w-lg mt-2">{settings.secoes.imoveisDestaque.subtitulo}</p>
+              <p className="text-gray-500 max-w-lg mt-2">{homeSettings.secoes.imoveisDestaque.subtitulo}</p>
             </div>
             <button onClick={() => navigate('/imoveis')} className="text-primary-gray font-bold border-b-2 border-gold pb-1 hover:text-gold transition-colors">
               Ver catálogo completo
@@ -452,10 +445,10 @@ export default function Home() {
               </div>
               <span className="text-gold font-black uppercase tracking-[0.3em] text-[10px] mb-4 block">Institucional</span>
               <h2 className="font-display text-4xl md:text-5xl font-bold mb-8 leading-[1.1] tracking-tighter">
-                {settings.secoes.sobre.titulo.split(' ').slice(0, -1).join(' ')} <span className="text-gold font-light italic">{settings.secoes.sobre.titulo.split(' ').slice(-1)}</span>
+                {homeSettings.secoes.sobre.titulo.split(' ').slice(0, -1).join(' ')} <span className="text-gold font-light italic">{homeSettings.secoes.sobre.titulo.split(' ').slice(-1)}</span>
               </h2>
               <p className="text-gray-400 text-lg mb-8 leading-relaxed font-light">
-                {settings.secoes.sobre.texto}
+                {homeSettings.secoes.sobre.texto}
               </p>
               <div className="space-y-5">
                 {[

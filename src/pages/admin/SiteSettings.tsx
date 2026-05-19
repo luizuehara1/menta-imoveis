@@ -78,12 +78,26 @@ const SiteSettings = () => {
                whatsapp: data.empresaWhatsapp || DEFAULT_SITE_CONFIG.empresa.whatsapp,
                email: data.empresaEmail || DEFAULT_SITE_CONFIG.empresa.email,
                endereco: data.empresaEndereco || DEFAULT_SITE_CONFIG.empresa.endereco,
-               logoCabecalhoUrl: data.empresaLogoCabecalhoUrl || DEFAULT_SITE_CONFIG.empresa.logoCabecalhoUrl,
-               marcaDaguaUrl: data.empresaMarcaDaguaUrl || DEFAULT_SITE_CONFIG.empresa.marcaDaguaUrl,
+               logoCabecalhoUrl: data.empresaLogoCabecalhoUrl || data.empresa?.logoCabecalhoUrl || DEFAULT_SITE_CONFIG.empresa.logoCabecalhoUrl,
+               marcaDaguaUrl: data.empresaMarcaDaguaUrl || data.empresa?.marcaDaguaUrl || DEFAULT_SITE_CONFIG.empresa.marcaDaguaUrl,
+             },
+             aparencia: {
+               ...DEFAULT_SITE_CONFIG.aparencia,
+               logoUrl: data.logoUrl || data.aparencia?.logoUrl || DEFAULT_SITE_CONFIG.aparencia.logoUrl,
+               logoNavbarUrl: data.logoNavbarUrl || data.aparencia?.logoNavbarUrl || DEFAULT_SITE_CONFIG.aparencia.logoNavbarUrl,
+               logoFooterUrl: data.logoFooterUrl || data.aparencia?.logoFooterUrl || DEFAULT_SITE_CONFIG.aparencia.logoFooterUrl,
+               faviconUrl: data.faviconUrl || data.aparencia?.faviconUrl || DEFAULT_SITE_CONFIG.aparencia.faviconUrl,
              }
            } as SiteConfig);
         } else {
-           setSettings({ ...DEFAULT_SITE_CONFIG, ...data } as SiteConfig);
+           // Even if not flat ONLY, we still map to fill any missing pieces from potential flat updates
+           setSettings({ 
+             ...DEFAULT_SITE_CONFIG, 
+             ...data,
+             hero: { ...DEFAULT_SITE_CONFIG.hero, ...(data.hero || {}) },
+             empresa: { ...DEFAULT_SITE_CONFIG.empresa, ...(data.empresa || {}) },
+             aparencia: { ...DEFAULT_SITE_CONFIG.aparencia, ...(data.aparencia || {}) }
+           } as SiteConfig);
         }
       } else {
         console.warn("Documento siteSettings/main não encontrado. Usando padrões.");
@@ -161,6 +175,13 @@ const SiteSettings = () => {
       empresaEndereco: settings.empresa.endereco,
       empresaLogoCabecalhoUrl: settings.empresa.logoCabecalhoUrl,
       empresaMarcaDaguaUrl: settings.empresa.marcaDaguaUrl,
+      
+      // Additional requested flat fields
+      logoUrl: settings.aparencia.logoUrl,
+      logoNavbarUrl: settings.aparencia.logoNavbarUrl,
+      logoFooterUrl: settings.aparencia.logoFooterUrl,
+      faviconUrl: settings.aparencia.faviconUrl,
+      
       updatedAt: serverTimestamp()
     };
 

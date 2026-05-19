@@ -270,8 +270,15 @@ export default function PropertyDetail() {
                 {/* Broker Mobile Card */}
                 {property.brokerName && (
                   <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-lg flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-2xl bg-primary-black text-gold flex items-center justify-center font-display font-bold text-xl shadow-md shrink-0 overflow-hidden">
-                      {property.brokerPhoto ? <img src={property.brokerPhoto} alt={property.brokerName} className="w-full h-full object-cover" /> : property.brokerName.charAt(0)}
+                    <div className="w-14 h-14 rounded-2xl bg-primary-black text-gold flex items-center justify-center shadow-md shrink-0 overflow-hidden">
+                      {property.brokerPhoto ? (
+                        <SafeImage 
+                          src={property.brokerPhoto} 
+                          alt={property.brokerName} 
+                          className="w-full h-full"
+                          fallbackSrc="/placeholder-broker.png" 
+                        />
+                      ) : property.brokerName.charAt(0)}
                     </div>
                     <div className="flex-grow">
                       <p className="text-[8px] font-black text-gold uppercase tracking-widest mb-0.5">Atendimento Exclusivo</p>
@@ -550,8 +557,15 @@ export default function PropertyDetail() {
                           Especialista Responsável
                         </p>
                         <div className="flex items-center gap-4 p-4 rounded-3xl bg-gray-50/50 border border-gray-100 group hover:border-gold/30 hover:bg-white transition-all duration-300">
-                          <div className="w-14 h-14 rounded-2xl bg-primary-black text-gold flex items-center justify-center font-display font-bold text-xl shadow-md shrink-0 overflow-hidden group-hover:scale-105 transition-transform">
-                            {property.brokerPhoto ? <img src={property.brokerPhoto} alt={property.brokerName} className="w-full h-full object-cover" /> : property.brokerName.charAt(0)}
+                          <div className="w-14 h-14 rounded-2xl bg-primary-black text-gold flex items-center justify-center shadow-md shrink-0 overflow-hidden group-hover:scale-105 transition-transform">
+                            {property.brokerPhoto ? (
+                              <SafeImage 
+                                src={property.brokerPhoto} 
+                                alt={property.brokerName} 
+                                className="w-full h-full"
+                                fallbackSrc="/placeholder-broker.png" 
+                              />
+                            ) : property.brokerName.charAt(0)}
                           </div>
                           <div className="min-w-0">
                             <h4 className="font-display font-bold text-primary-black text-lg leading-tight truncate">{property.brokerName}</h4>
@@ -563,11 +577,12 @@ export default function PropertyDetail() {
 
                    {/* Agency Info */}
                    <div className="pt-8 border-t border-gray-100 flex items-center gap-5">
-                      <div className="w-14 h-14 rounded-2xl bg-white border border-gray-100 flex items-center justify-center shadow-sm shrink-0">
-                        <img 
-                          src={settings.aparencia.logoUrl || "https://i.postimg.cc/kMZXNdCS/image.png"} 
+                      <div className="w-14 h-14 rounded-2xl bg-white border border-gray-100 flex items-center justify-center shadow-sm shrink-0 overflow-hidden">
+                        <SafeImage 
+                          src={getSafeImageUrl(settings.aparencia.logoUrl)} 
                           alt="Agency Logo" 
-                          className="h-7 w-auto grayscale opacity-40 hover:opacity-100 hover:grayscale-0 transition-all"
+                          className="h-7 w-auto transition-all"
+                          fallbackSrc="/logo.png"
                         />
                       </div>
                       <div>

@@ -139,7 +139,7 @@ export function getSafeImageUrl(url: any, fallback = "/placeholder-imovel.png"):
   
   const cleanUrl = url.trim();
   
-  // Only allow https or local public paths
+  // Requirement: Must start with https:// or /
   if (!cleanUrl.startsWith("https://") && !cleanUrl.startsWith("/")) {
     return fallback;
   }
