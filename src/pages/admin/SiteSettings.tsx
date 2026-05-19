@@ -40,68 +40,70 @@ const SiteSettings = () => {
 
   const fetchData = async () => {
     setLoading(true);
-    console.log("DOMÍNIO ATUAL:", window.location.hostname);
-    console.log("FIREBASE PROJECT ID:", db.app.options.projectId);
-    console.log("Carregando configurações de siteSettings/main...");
+    console.log("[SiteSettings] DOMÍNIO ATUAL:", window.location.hostname);
+    console.log("[SiteSettings] FIREBASE PROJECT ID:", db.app.options.projectId);
+    console.log("[SiteSettings] Carregando configurações de siteSettings/main...");
 
     try {
       // Fetch Site Config from NEW collection siteSettings/main
       const configDoc = await getDoc(doc(db, 'siteSettings', 'main'));
+      
       if (configDoc.exists()) {
         const data = configDoc.data();
-        console.log("Configurações carregadas do Firestore:", data);
+        console.log("[SiteSettings] Dados crus carregados:", data);
         
-        // Handle potential flat data from older versions or external edits
-        // If data has heroTitulo instead of hero.tituloPrincipal
-        if (data.heroTitulo && !data.hero) {
-           console.log("Detectado formato FLAT no Firestore. Mapeando para formato NESTED...");
-           setSettings({
-             ...DEFAULT_SITE_CONFIG,
-             hero: {
-               ...DEFAULT_SITE_CONFIG.hero,
-               tituloPrincipal: data.heroTitulo || DEFAULT_SITE_CONFIG.hero.tituloPrincipal,
-               subtitulo: data.heroSubtitulo || DEFAULT_SITE_CONFIG.hero.subtitulo,
-               heroBadge: data.heroBadge || DEFAULT_SITE_CONFIG.hero.heroBadge,
-               imagemFundoUrl: data.heroImagemUrl || DEFAULT_SITE_CONFIG.hero.imagemFundoUrl,
-               textoBotaoPrincipal: data.heroBotaoPrincipalTexto || DEFAULT_SITE_CONFIG.hero.textoBotaoPrincipal,
-               linkBotaoPrincipal: data.heroBotaoPrincipalLink || DEFAULT_SITE_CONFIG.hero.linkBotaoPrincipal,
-               textoBotaoSecundario: data.heroBotaoSecundarioTexto || DEFAULT_SITE_CONFIG.hero.textoBotaoSecundario,
-               linkBotaoSecundario: data.heroBotaoSecundarioLink || DEFAULT_SITE_CONFIG.hero.linkBotaoSecundario,
-             },
-             empresa: {
-               ...DEFAULT_SITE_CONFIG.empresa,
-               nome: data.empresaNome || DEFAULT_SITE_CONFIG.empresa.nome,
-               razaoSocial: data.empresaRazaoSocial || DEFAULT_SITE_CONFIG.empresa.razaoSocial,
-               cnpj: data.empresaCnpj || DEFAULT_SITE_CONFIG.empresa.cnpj,
-               creciPj: data.empresaCreciPj || DEFAULT_SITE_CONFIG.empresa.creciPj,
-               telefone: data.empresaTelefone || DEFAULT_SITE_CONFIG.empresa.telefone,
-               whatsapp: data.empresaWhatsapp || DEFAULT_SITE_CONFIG.empresa.whatsapp,
-               email: data.empresaEmail || DEFAULT_SITE_CONFIG.empresa.email,
-               endereco: data.empresaEndereco || DEFAULT_SITE_CONFIG.empresa.endereco,
-               logoCabecalhoUrl: data.empresaLogoCabecalhoUrl || data.empresa?.logoCabecalhoUrl || DEFAULT_SITE_CONFIG.empresa.logoCabecalhoUrl,
-               marcaDaguaUrl: data.empresaMarcaDaguaUrl || data.empresa?.marcaDaguaUrl || DEFAULT_SITE_CONFIG.empresa.marcaDaguaUrl,
-             },
-             aparencia: {
-               ...DEFAULT_SITE_CONFIG.aparencia,
-               logoUrl: data.logoUrl || data.aparencia?.logoUrl || DEFAULT_SITE_CONFIG.aparencia.logoUrl,
-               logoNavbarUrl: data.logoNavbarUrl || data.aparencia?.logoNavbarUrl || DEFAULT_SITE_CONFIG.aparencia.logoNavbarUrl,
-               logoFooterUrl: data.logoFooterUrl || data.aparencia?.logoFooterUrl || DEFAULT_SITE_CONFIG.aparencia.logoFooterUrl,
-               faviconUrl: data.faviconUrl || data.aparencia?.faviconUrl || DEFAULT_SITE_CONFIG.aparencia.faviconUrl,
-             }
-           } as SiteConfig);
-        } else {
-           // Even if not flat ONLY, we still map to fill any missing pieces from potential flat updates
-           setSettings({ 
-             ...DEFAULT_SITE_CONFIG, 
-             ...data,
-             hero: { ...DEFAULT_SITE_CONFIG.hero, ...(data.hero || {}) },
-             empresa: { ...DEFAULT_SITE_CONFIG.empresa, ...(data.empresa || {}) },
-             aparencia: { ...DEFAULT_SITE_CONFIG.aparencia, ...(data.aparencia || {}) }
-           } as SiteConfig);
-        }
+        // Robust mapping to ensure we fill our SiteConfig structure regardless of data shape
+        const mappedSettings: SiteConfig = {
+          ...DEFAULT_SITE_CONFIG,
+          ...data,
+          hero: {
+            ...DEFAULT_SITE_CONFIG.hero,
+            tituloPrincipal: data.heroTitulo || data.hero?.tituloPrincipal || DEFAULT_SITE_CONFIG.hero.tituloPrincipal,
+            subtitulo: data.heroSubtitulo || data.hero?.subtitulo || DEFAULT_SITE_CONFIG.hero.subtitulo,
+            heroBadge: data.heroBadge || data.hero?.heroBadge || DEFAULT_SITE_CONFIG.hero.heroBadge,
+            imagemFundoUrl: data.heroImagemUrl || data.hero?.imagemFundoUrl || DEFAULT_SITE_CONFIG.hero.imagemFundoUrl,
+            textoBotaoPrincipal: data.heroBotaoPrincipalTexto || data.hero?.textoBotaoPrincipal || DEFAULT_SITE_CONFIG.hero.textoBotaoPrincipal,
+            linkBotaoPrincipal: data.heroBotaoPrincipalLink || data.hero?.linkBotaoPrincipal || DEFAULT_SITE_CONFIG.hero.linkBotaoPrincipal,
+            textoBotaoSecundario: data.heroBotaoSecundarioTexto || data.hero?.textoBotaoSecundario || DEFAULT_SITE_CONFIG.hero.textoBotaoSecundario,
+            linkBotaoSecundario: data.heroBotaoSecundarioLink || data.hero?.linkBotaoSecundario || DEFAULT_SITE_CONFIG.hero.linkBotaoSecundario,
+            ativarThreeJs: typeof data.hero?.ativarThreeJs === 'boolean' ? data.hero.ativarThreeJs : DEFAULT_SITE_CONFIG.hero.ativarThreeJs
+          },
+          empresa: {
+            ...DEFAULT_SITE_CONFIG.empresa,
+            nome: data.empresaNome || data.empresa?.nome || DEFAULT_SITE_CONFIG.empresa.nome,
+            razaoSocial: data.empresaRazaoSocial || data.empresa?.razaoSocial || DEFAULT_SITE_CONFIG.empresa.razaoSocial,
+            cnpj: data.empresaCnpj || data.empresa?.cnpj || DEFAULT_SITE_CONFIG.empresa.cnpj,
+            creciPj: data.empresaCreciPj || data.empresa?.creciPj || DEFAULT_SITE_CONFIG.empresa.creciPj,
+            creciResponsavel: data.empresaCreciResponsavel || data.empresa?.creciResponsavel || DEFAULT_SITE_CONFIG.empresa.creciResponsavel,
+            telefone: data.empresaTelefone || data.empresa?.telefone || DEFAULT_SITE_CONFIG.empresa.telefone,
+            whatsapp: data.empresaWhatsapp || data.empresa?.whatsapp || DEFAULT_SITE_CONFIG.empresa.whatsapp,
+            email: data.empresaEmail || data.empresa?.email || DEFAULT_SITE_CONFIG.empresa.email,
+            site: data.empresaSite || data.empresa?.site || DEFAULT_SITE_CONFIG.empresa.site,
+            endereco: data.empresaEndereco || data.empresa?.endereco || DEFAULT_SITE_CONFIG.empresa.endereco,
+            bairro: data.empresaBairro || data.empresa?.bairro || DEFAULT_SITE_CONFIG.empresa.bairro,
+            cidade: data.empresaCidade || data.empresa?.cidade || DEFAULT_SITE_CONFIG.empresa.cidade,
+            estado: data.empresaEstado || data.empresa?.estado || DEFAULT_SITE_CONFIG.empresa.estado,
+            cep: data.empresaCep || data.empresa?.cep || DEFAULT_SITE_CONFIG.empresa.cep,
+            logoCabecalhoUrl: data.empresaLogoCabecalhoUrl || data.logoUrl || data.empresa?.logoCabecalhoUrl || DEFAULT_SITE_CONFIG.empresa.logoCabecalhoUrl,
+            marcaDaguaUrl: data.empresaMarcaDaguaUrl || data.marcaDaguaUrl || data.empresa?.marcaDaguaUrl || DEFAULT_SITE_CONFIG.empresa.marcaDaguaUrl,
+            rodapeContratos: data.empresaRodapeContratos || data.empresa?.rodapeContratos || DEFAULT_SITE_CONFIG.empresa.rodapeContratos,
+            responsavelLegal: data.empresaResponsavelLegal || data.empresa?.responsavelLegal || DEFAULT_SITE_CONFIG.empresa.responsavelLegal,
+            responsavelCpf: data.empresaResponsavelCpf || data.empresa?.responsavelCpf || DEFAULT_SITE_CONFIG.empresa.responsavelCpf,
+            responsavelCargo: data.empresaResponsavelCargo || data.empresa?.responsavelCargo || DEFAULT_SITE_CONFIG.empresa.responsavelCargo,
+          },
+          aparencia: {
+            ...DEFAULT_SITE_CONFIG.aparencia,
+            logoUrl: data.logoUrl || data.aparencia?.logoUrl || DEFAULT_SITE_CONFIG.aparencia.logoUrl,
+            logoNavbarUrl: data.logoNavbarUrl || data.aparencia?.logoNavbarUrl || DEFAULT_SITE_CONFIG.aparencia.logoNavbarUrl,
+            logoFooterUrl: data.logoFooterUrl || data.aparencia?.logoFooterUrl || DEFAULT_SITE_CONFIG.aparencia.logoFooterUrl,
+            faviconUrl: data.faviconUrl || data.aparencia?.faviconUrl || DEFAULT_SITE_CONFIG.aparencia.faviconUrl,
+          }
+        };
+
+        setSettings(mappedSettings);
+        console.log("[SiteSettings] Configurações mapeadas final:", mappedSettings);
       } else {
-        console.warn("Documento siteSettings/main não encontrado. Usando padrões.");
-        // Create initial doc if doesn't exist
+        console.warn("[SiteSettings] Documento siteSettings/main não encontrado. Criando com padrões.");
         await setDoc(doc(db, 'siteSettings', 'main'), {
           ...DEFAULT_SITE_CONFIG,
           updatedAt: serverTimestamp()
@@ -151,51 +153,83 @@ const SiteSettings = () => {
 
   const saveSettings = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (saving) return;
+
     setSaving(true);
-    
-    // Create a data object with both nested and flat fields for maximum compatibility
-    const dados = {
-      ...settings,
-      // Flat redundancy as per user "Expected Fields" for external integrations (Vercel/public site)
-      heroTitulo: settings.hero.tituloPrincipal,
-      heroSubtitulo: settings.hero.subtitulo,
-      heroBadge: settings.hero.heroBadge,
-      heroImagemUrl: settings.hero.imagemFundoUrl,
-      heroBotaoPrincipalTexto: settings.hero.textoBotaoPrincipal,
-      heroBotaoPrincipalLink: settings.hero.linkBotaoPrincipal,
-      heroBotaoSecundarioTexto: settings.hero.textoBotaoSecundario,
-      heroBotaoSecundarioLink: settings.hero.linkBotaoSecundario,
-      empresaNome: settings.empresa.nome,
-      empresaRazaoSocial: settings.empresa.razaoSocial,
-      empresaCnpj: settings.empresa.cnpj,
-      empresaCreciPj: settings.empresa.creciPj,
-      empresaTelefone: settings.empresa.telefone,
-      empresaWhatsapp: settings.empresa.whatsapp,
-      empresaEmail: settings.empresa.email,
-      empresaEndereco: settings.empresa.endereco,
-      empresaLogoCabecalhoUrl: settings.empresa.logoCabecalhoUrl,
-      empresaMarcaDaguaUrl: settings.empresa.marcaDaguaUrl,
-      
-      // Additional requested flat fields
-      logoUrl: settings.aparencia.logoUrl,
-      logoNavbarUrl: settings.aparencia.logoNavbarUrl,
-      logoFooterUrl: settings.aparencia.logoFooterUrl,
-      faviconUrl: settings.aparencia.faviconUrl,
-      
-      updatedAt: serverTimestamp()
-    };
+    console.log("[SiteSettings] Iniciando processo de salvamento...");
 
-    console.log("Salvando configurações em siteSettings/main:", dados);
-
-    try {
-      await setDoc(doc(db, 'siteSettings', 'main'), dados, { merge: true });
-      setMessage({ type: 'success', text: 'Configurações salvas com sucesso!' });
-      setTimeout(() => setMessage(null), 3000);
-    } catch (error) {
-      console.error("Error saving settings:", error);
-      setMessage({ type: 'error', text: 'Erro ao salvar configurações. Verifique o Firebase.' });
-    } finally {
+    // Safety timeout: force reset saving state after 15 seconds if it hangs
+    const safetyTimer = setTimeout(() => {
+      console.warn("[SiteSettings] Safety timeout reached. Forcing saving to false.");
       setSaving(false);
+      setMessage({ type: 'error', text: 'O salvamento demorou mais que o esperado. Tente recarregar.' });
+    }, 15000);
+    
+    try {
+      // Create a data object with both nested and flat fields for maximum compatibility
+      // We ensure no nested fields are undefined/null by using fallback to empty strings or defaults
+      const dados = {
+        ...settings,
+        // Flat redundancy as per user "Expected Fields" for external integrations (Vercel/public site)
+        heroTitulo: settings.hero.tituloPrincipal || "",
+        heroSubtitulo: settings.hero.subtitulo || "",
+        heroBadge: settings.hero.heroBadge || "",
+        heroImagemUrl: settings.hero.imagemFundoUrl || "",
+        heroBotaoPrincipalTexto: settings.hero.textoBotaoPrincipal || "",
+        heroBotaoPrincipalLink: settings.hero.linkBotaoPrincipal || "",
+        heroBotaoSecundarioTexto: settings.hero.textoBotaoSecundario || "",
+        heroBotaoSecundarioLink: settings.hero.linkBotaoSecundario || "",
+        
+        empresaNome: settings.empresa.nome || "",
+        empresaRazaoSocial: settings.empresa.razaoSocial || "",
+        empresaCnpj: settings.empresa.cnpj || "",
+        empresaCreciPj: settings.empresa.creciPj || "",
+        empresaCreciResponsavel: settings.empresa.creciResponsavel || "",
+        empresaTelefone: settings.empresa.telefone || "",
+        empresaWhatsapp: settings.empresa.whatsapp || "",
+        empresaEmail: settings.empresa.email || "",
+        empresaSite: settings.empresa.site || "",
+        empresaEndereco: settings.empresa.endereco || "",
+        empresaBairro: settings.empresa.bairro || "",
+        empresaCidade: settings.empresa.cidade || "",
+        empresaEstado: settings.empresa.estado || "",
+        empresaCep: settings.empresa.cep || "",
+        empresaResponsavelLegal: settings.empresa.responsavelLegal || "",
+        empresaResponsavelCpf: settings.empresa.responsavelCpf || "",
+        empresaResponsavelCargo: settings.empresa.responsavelCargo || "",
+        empresaLogoCabecalhoUrl: settings.empresa.logoCabecalhoUrl || "",
+        empresaMarcaDaguaUrl: settings.empresa.marcaDaguaUrl || "",
+        empresaRodapeContratos: settings.empresa.rodapeContratos || "",
+        
+        // Additional requested flat fields
+        logoUrl: settings.aparencia.logoUrl || "",
+        logoNavbarUrl: settings.aparencia.logoNavbarUrl || "",
+        logoFooterUrl: settings.aparencia.logoFooterUrl || "",
+        faviconUrl: settings.aparencia.faviconUrl || "",
+        
+        updatedAt: serverTimestamp()
+      };
+
+      console.log("[SiteSettings] Dados a serem salvos em siteSettings/main:", dados);
+
+      await setDoc(doc(db, 'siteSettings', 'main'), dados, { merge: true });
+      
+      console.log("[SiteSettings] Salvo com sucesso!");
+      setMessage({ type: 'success', text: 'Configurações salvas com sucesso!' });
+      
+      // Auto clear message
+      setTimeout(() => setMessage(null), 4000);
+    } catch (error: any) {
+      console.error("[SiteSettings] Erro ao salvar configurações:", error);
+      let errorMsg = 'Erro ao salvar configurações. Verifique o Firebase.';
+      if (error.code === 'permission-denied') {
+        errorMsg = 'Sem permissão para salvar. Você precisa ser administrador.';
+      }
+      setMessage({ type: 'error', text: errorMsg });
+    } finally {
+      clearTimeout(safetyTimer);
+      setSaving(false);
+      console.log("[SiteSettings] Estado 'saving' resetado.");
     }
   };
 

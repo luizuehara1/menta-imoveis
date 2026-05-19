@@ -71,14 +71,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, 8000);
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      console.log("%c[Auth] State change:", "color: #2196F3; font-weight: bold;", currentUser ? currentUser.email : "NO USER");
+      console.log("%c[Auth] Verificando sessão...", "color: #2196F3; font-weight: bold;");
+      console.log("Usuário atual:", currentUser?.email);
       setUser(currentUser);
       
       try {
         if (currentUser?.email) {
           const email = currentUser.email.toLowerCase();
           
-          console.log("[Auth] Verifying admin status for:", email);
+          console.log("Buscando admin em admins:", email);
+          console.log("Buscando admin em administradores:", email);
           
           // Check both collections as per requirement
           const adminRef1 = doc(db, 'admins', email);
@@ -89,48 +91,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             getDoc(adminRef2)
           ]);
           
-          const data1 = snap1.exists() ? snap1.data() : null;
-          const data2 = snap2.exists() ? snap2.data() : null;
+          const adminData1 = snap1.exists() ? snap1.data() : null;
+          const adminData2 = snap2.exists() ? snap2.data() : null;
           
-          console.log("[Auth] admins collection:", snap1.exists() ? "Found" : "Not Found", data1);
-          console.log("[Auth] administradores collection:", snap2.exists() ? "Found" : "Not Found", data2);
+          console.log("Admin encontrado em admins:", snap1.exists());
+          console.log("Data admins:", adminData1);
+          console.log("Admin encontrado em administradores:", snap2.exists());
+          console.log("Data administradores:", adminData2);
 
           const adminValido = 
-            (data1?.ativo === true || data1?.role === 'admin') ||
-            (data2?.ativo === true || data2?.role === 'admin');
+            (adminData1?.ativo === true) || 
+            (adminData2?.ativo === true);
 
-          // Auto-seed for developer if not found
-          const devEmail = 'luiz.uehara1@gmail.com';
-          if (!adminValido && email === devEmail) {
-            console.log("[Auth] SEEDING: Creating admin doc for developer.");
-            await setDoc(adminRef2, {
-              email: devEmail,
-              role: 'admin',
-              ativo: true,
-              nome: currentUser.displayName || 'Luiz Admin',
-              updatedAt: new Date().toISOString()
-            }, { merge: true });
-            setIsAdmin(true);
-          } else {
-            setIsAdmin(adminValido);
-            
-            if (currentUser && !adminValido) {
-              console.warn("[Auth] USER LOGGED IN BUT NOT AUTHORIZED AS ADMIN.");
-            }
+          console.log("Admin autorizado:", adminValido);
+          setIsAdmin(adminValido);
+
+          if (currentUser && !adminValido) {
+            console.warn("Acesso negado. Este e-mail não possui permissão administrativa.");
+            // We DON'T sign out immediately here anymore, 
+            // the UI (Login or AdminRoute) will show the Access Denied message
+            // and the user can click a button to log out.
           }
         } else {
           setIsAdmin(false);
-          console.log("[Auth] No user logged in.");
+          console.log("[Auth] Nenhum usuário logado.");
         }
       } catch (error: any) {
-        console.error("[Auth] Permission check failed:", error.code, error.message);
-        // Minimal fallback for developer
+        console.error("Erro ao verificar admin:", error.code, error.message);
+        
+        // Safety fallback for developer in case of Firestore breakdown
         const devEmail = 'luiz.uehara1@gmail.com';
-        setIsAdmin(currentUser?.email?.toLowerCase() === devEmail);
+        if (currentUser?.email?.toLowerCase() === devEmail) {
+          console.log("Fallback especial para desenvolvedor ativo.");
+          setIsAdmin(true);
+        } else {
+          setIsAdmin(false);
+        }
       } finally {
         setLoading(false);
         clearTimeout(safetyTimeout);
-        console.log("[Auth] Loading complete.");
+        console.log("[Auth] Carregamento finalizado.");
       }
     });
 
