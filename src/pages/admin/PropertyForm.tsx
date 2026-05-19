@@ -409,16 +409,26 @@ export default function AdminPropertyForm() {
         return;
       }
 
+      console.log("[PropertyForm] Preparando dados para salvar:", {
+        id,
+        publicado: data.publicado,
+        destaque: data.destaque
+      });
+
       const propertyData: any = {
         ...data,
         images,
         videos,
         mainImage,
         updatedAt: serverTimestamp(),
-        // Redundancy for different filter styles across the app
-        ativo: !!data.publicado,
-        publicadoNoSite: !!data.publicado,
+        // Explicit redundancy for visibility across all possible filters
+        ativo: data.publicado === true,
+        publicadoNoSite: data.publicado === true,
+        publicado: data.publicado === true,
+        destaque: data.destaque === true
       };
+
+      console.log("[PropertyForm] Salvando na coleção 'imoveis' do projeto:", auth.app.options.projectId);
 
       // Add broker details
       if (data.brokerId) {

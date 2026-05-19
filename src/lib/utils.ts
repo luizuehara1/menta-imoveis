@@ -62,12 +62,9 @@ export function isValidPublicProperty(p: any): boolean {
   // 1. Mandatory presence of ID
   const hasId = !!p.id;
   
-  // 2. Minimum Content (Must have one identifier AND type AND business category AND location)
-  const title = String(p.title || p.titulo || "").trim();
-  const code = String(p.code || p.codigo || "").trim();
-  const hasType = !!String(p.propertyType || p.tipoImovel || "").trim();
-  const hasBusinessType = !!String(p.businessType || p.tipoNegocio || "").trim();
-  const hasLocation = !!String(p.city || p.cidade || p.neighborhood || p.bairro || "").trim();
+  // 2. Minimum Content (Must have one identifier)
+  const title = String(p.title || p.titulo || p.nome || "").trim();
+  const code = String(p.code || p.codigo || p.codigoImovel || "").trim();
   
   const hasTitleOrCode = title.length > 0 || code.length > 0;
 
@@ -86,10 +83,22 @@ export function isValidPublicProperty(p: any): boolean {
     'indisponivel'
   ].some(blocked => status.includes(blocked));
 
-  // 5. Ghost check (No ID, no title/code, no type, no business category, or no location)
-  const isGhost = !hasTitleOrCode || !hasType || !hasBusinessType || !hasLocation;
+  const isValid = hasId && hasTitleOrCode && isPublished && !isBlocked;
 
-  return hasId && !isGhost && isPublished && !isBlocked;
+  if (!isValid && p.id && (p.title || p.code)) {
+    console.warn(`[Property Validation] Imóvel ${p.code || p.id} INVÁLIDO. Motivos:`, {
+       hasId,
+       hasTitleOrCode,
+       isPublished,
+       isBlocked,
+       status: p.status,
+       publicado: p.publicado,
+       publicadoNoSite: p.publicadoNoSite,
+       ativo: p.ativo
+    });
+  }
+
+  return isValid;
 }
 
 /**

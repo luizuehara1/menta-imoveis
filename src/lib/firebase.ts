@@ -5,6 +5,14 @@ import { getAnalytics, isSupported } from 'firebase/analytics';
 
 import firebaseConfigLocal from '../../firebase-applet-config.json';
 
+console.log("--------------------------------------------------");
+console.log("FIREBASE INITIALIZATION DEBUG");
+console.log("DOMÍNIO ATUAL:", window.location.hostname);
+console.log("FIREBASE PROJECT ID:", import.meta.env.VITE_FIREBASE_PROJECT_ID);
+console.log("FIREBASE AUTH DOMAIN:", import.meta.env.VITE_FIREBASE_AUTH_DOMAIN);
+console.log("FIREBASE APP ID:", import.meta.env.VITE_FIREBASE_APP_ID);
+console.log("--------------------------------------------------");
+
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || firebaseConfigLocal.apiKey,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || firebaseConfigLocal.authDomain,
@@ -14,15 +22,8 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || firebaseConfigLocal.measurementId
 };
 
-console.log("[Firebase] Active Config:", {
-  authDomain: firebaseConfig.authDomain,
-  projectId: firebaseConfig.projectId,
-  appId: firebaseConfig.appId,
-  hostname: window.location.hostname
-});
-
 if (firebaseConfig.projectId !== 'menta-imobiliaria1') {
-  console.warn(`[Firebase] ATENÇÃO: O Project ID atual (${firebaseConfig.projectId}) é diferente do esperado (menta-imobiliaria1). Verifique as variáveis de ambiente no Vercel.`);
+  console.warn(`[Firebase] ATENÇÃO: O Project ID que está sendo usado pelo SDK (${firebaseConfig.projectId}) é diferente de 'menta-imobiliaria1'. Verifique se as variáveis de ambiente no Vercel estão configuradas corretamente.`);
 }
 
 // Initialize Firebase

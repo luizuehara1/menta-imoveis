@@ -220,9 +220,13 @@ export default function PropertyList() {
       const invalidData = rawData.filter(p => !isValidPublicProperty(p));
 
       console.group("DEBUG: Carregamento de Imóveis Público");
-      console.log("Recebidos do Firestore (Total):", rawData.length);
+      console.log("Variáveis de ambiente:", {
+        projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+        authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN
+      });
+      console.log("Recebidos do Firestore (Total):", rawData.length, rawData);
       console.log("Válidos (Exibindo):", validData.length, validData);
-      console.log("Inválidos (Removidos):", invalidData.length, invalidData);
+      console.log("Inválidos (Removidos pela validação):", invalidData.length, invalidData);
       console.groupEnd();
 
       let data = validData;

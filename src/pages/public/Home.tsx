@@ -275,27 +275,32 @@ export default function Home() {
     const fetchFeatured = async () => {
       setFetchingProperties(true);
       try {
+        console.log("[Home] Buscando imóveis em destaque...");
         const q = query(
           collection(db, 'imoveis'), 
           where('destaque', '==', true),
-          where('status', 'in', ['disponivel', 'Disponível', 'disponível']),
-          limit(10) // Fetch a bit more to filter in JS
+          limit(20) // Fetch more to filter in JS
         );
         const snap = await getDocs(q);
         const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
         
+        console.log("[Home] Imóveis em destaque recebidos do Firestore:", data);
+
         // Strict Validation Filter
         const filtered = data.filter(isValidPublicProperty).slice(0, 3); // Keep only top 3
+        
+        console.log("[Home] Imóveis em destaque filtrados para exibição:", filtered);
 
         setFeaturedProperties(filtered);
       } catch (error) {
-        console.error("Error fetching featured properties:", error);
+        console.error("[Home] Erro ao buscar imóveis em destaque:", error);
         setFeaturedProperties([]); // Fallback to empty list
       } finally {
         setFetchingProperties(false);
       }
     };
     if (!settingsLoading && !optionsLoading) {
+      console.log("[Home] Configurações carregadas:", settings);
       fetchFeatured();
     }
   }, [settingsLoading, optionsLoading]);
