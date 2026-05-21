@@ -40,19 +40,35 @@ export default function PropertyDetail() {
   const [loading, setLoading] = useState(true);
   const [activeImage, setActiveImage] = useState(0);
 
-  const galleryImages = React.useMemo(() => {
+  const galleryImagesWithMeta = React.useMemo(() => {
     if (!property) return [];
     const images = [...(property.images || [])];
+    
+    // Sort so main is first, keeping track of original objects/strings
     const mainImg = property.mainImage;
     if (mainImg) {
-      const index = images.indexOf(mainImg);
+      const index = images.findIndex(img => {
+        const u = typeof img === 'string' ? img : img.url;
+        return u === mainImg;
+      });
       if (index > -1) {
-        images.splice(index, 1);
+        const [found] = images.splice(index, 1);
+        images.unshift(found);
       }
-      images.unshift(mainImg);
     }
-    return images.filter(Boolean).map(img => getSafeImageUrl(img));
+    
+    return images.filter(Boolean).map(img => {
+      const unwrapped = typeof img === 'string' ? { url: img, aplicarMarcaDagua: false } : img;
+      return {
+        url: getSafeImageUrl(unwrapped.url),
+        aplicarMarcaDagua: unwrapped.aplicarMarcaDagua === true
+      };
+    });
   }, [property]);
+
+  const galleryImages = React.useMemo(() => {
+    return galleryImagesWithMeta.map(item => item.url);
+  }, [galleryImagesWithMeta]);
 
   useEffect(() => {
     if (id) {
@@ -191,13 +207,24 @@ export default function PropertyDetail() {
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0 }}
                       transition={{ duration: 0.6, ease: "easeOut" }}
-                      className="w-full h-full"
+                      className="w-full h-full relative"
                     >
                       <SafeImage
                         src={galleryImages[activeImage]}
                         alt={`${property.title} - Imagem ${activeImage + 1}`}
                         className="w-full h-full"
                       />
+                      {/* Interactive watermark overlay for public page */}
+                      {galleryImagesWithMeta[activeImage]?.aplicarMarcaDagua && (
+                        <div className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden z-10 select-none">
+                           <img 
+                             src={settings?.empresa?.marcaDaguaUrl || '/watermark.png'} 
+                             alt="Watermark" 
+                             className="w-[50%] max-w-[360px] opacity-[0.09] object-contain select-none pointer-events-none"
+                             onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                           />
+                        </div>
+                      )}
                     </motion.div>
                   </AnimatePresence>
                   

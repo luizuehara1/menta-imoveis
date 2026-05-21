@@ -35,8 +35,12 @@ import {
 import { 
   maskCurrency, 
   parseCurrencyToNumber,
-  formatCurrency 
+  formatCurrency,
+  safeText,
+  safeMoney,
+  safeDate
 } from '../../lib/utils';
+import { useSettings } from '../../hooks/useSettings';
 import { FinanceRecord, Property, Lease } from '../../types';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -52,6 +56,8 @@ const REVENUE_CATEGORIES = [
 const PAYMENT_METHODS = ['Pix', 'Dinheiro', 'Cartão', 'Transferência', 'Boleto', 'Outro'];
 
 export default function AdminFinance() {
+  const { settings } = useSettings();
+  const empresa = (settings?.empresa || {}) as any;
   const [activeTab, setActiveTab] = useState<'todos' | 'entradas' | 'saidas'>('todos');
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState<(FinanceRecord & { sourceCollection?: string })[]>([]);
@@ -255,47 +261,103 @@ export default function AdminFinance() {
   }, [records]);
 
   const exportPDF = () => {
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-    
-    doc.setFontSize(22);
-    doc.setTextColor(201, 161, 82);
-    doc.text('Relatório Financeiro', pageWidth / 2, 20, { align: 'center' });
-    
-    doc.setFontSize(10);
-    doc.setTextColor(100);
-    doc.text(`Período: ${startDate || 'Início'} até ${endDate || 'Hoje'}`, 20, 30);
-    doc.text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')}`, pageWidth - 20, 30, { align: 'right' });
-    
-    autoTable(doc, {
-      startY: 40,
-      head: [['Data', 'Tipo', 'Descrição', 'Categoria', 'Valor']],
-      body: filteredRecords.map(r => [
-        r.data,
-        r.tipo === 'entrada' ? 'Entrada' : 'Saída',
-        r.descricao,
-        r.categoria,
-        formatCurrency(r.valor)
-      ]),
-      headStyles: { fillColor: [30, 30, 30] },
-      theme: 'grid'
-    });
+    try {
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      
+      // 1. Watermark - Draw multiple diagonal light gray texts
+      const watermarkText = safeText(empresa.nome || 'MENTA IMÓVEIS');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(26);
+      doc.setTextColor(245, 245, 245);
+      
+      // Draw watermarks at 30 degrees
+      doc.text(watermarkText, pageWidth / 2, pageHeight * 0.25, { align: 'center', angle: 30 });
+      doc.text(watermarkText, pageWidth / 2, pageHeight * 0.55, { align: 'center', angle: 30 });
+      doc.text(watermarkText, pageWidth / 2, pageHeight * 0.85, { align: 'center', angle: 30 });
 
-    const finalY = (doc as any).lastAutoTable.finalY + 20;
-    
-    doc.setFontSize(14);
-    doc.setTextColor(30);
-    doc.text('Resumo do Filtro', 20, finalY);
-    
-    const inflow = filteredRecords.filter(r => r.tipo === 'entrada').reduce((acc, curr) => acc + curr.valor, 0);
-    const outflow = filteredRecords.filter(r => r.tipo === 'saida').reduce((acc, curr) => acc + curr.valor, 0);
-    
-    doc.setFontSize(10);
-    doc.text(`Total Entradas: ${formatCurrency(inflow)}`, 20, finalY + 10);
-    doc.text(`Total Saídas: ${formatCurrency(outflow)}`, 20, finalY + 18);
-    doc.text(`Saldo: ${formatCurrency(inflow - outflow)}`, 20, finalY + 26);
-    
-    doc.save('Relatorio_Financeiro.pdf');
+      // 2. Beautiful Corporate Header
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.setTextColor(30, 30, 30);
+      doc.text(safeText(empresa.nome || 'MENTA IMÓVEIS'), 20, 20);
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(110, 110, 110);
+      const headerLine2 = `${safeText(empresa.razaoSocial || 'Menta Negócios Imobiliários Ltda')} | CNPJ: ${safeText(empresa.cnpj || '---')}`;
+      const headerLine3 = `${safeText(empresa.endereco || '---')} | CRECI PJ: ${safeText(empresa.creciPj || '---')}`;
+      doc.text(headerLine2, 20, 25);
+      doc.text(headerLine3, 20, 29);
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(15);
+      doc.setTextColor(201, 161, 82); // Gold
+      doc.text('RELATÓRIO FINANCEIRO', pageWidth - 20, 22, { align: 'right' });
+      
+      // Line under header
+      doc.setDrawColor(210, 210, 210);
+      doc.setLineWidth(0.5);
+      doc.line(20, 33, pageWidth - 20, 33);
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(100, 100, 100);
+      doc.text(`Período: ${startDate || 'Início'} até ${endDate || 'Hoje'}`, 20, 39);
+      doc.text(`Gerado em: ${safeDate(new Date())}`, pageWidth - 20, 39, { align: 'right' });
+      
+      autoTable(doc, {
+        startY: 45,
+        head: [['Data', 'Tipo', 'Descrição', 'Categoria', 'Valor']],
+        body: filteredRecords.map(r => [
+          safeDate(r.data),
+          r.tipo === 'entrada' ? 'Entrada' : 'Saída',
+          safeText(r.descricao),
+          safeText(r.categoria),
+          safeMoney(r.valor)
+        ]),
+        headStyles: { fillColor: [30, 30, 30], textColor: [255, 255, 255] },
+        theme: 'grid',
+        styles: { fontSize: 8.5 }
+      });
+  
+      const finalY = (doc as any).lastAutoTable.finalY + 15;
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.setTextColor(30, 30, 30);
+      doc.text('RESUMO FINANCEIRO', 20, finalY);
+      
+      const inflow = filteredRecords.filter(r => r.tipo === 'entrada').reduce((acc, curr) => acc + curr.valor, 0);
+      const outflow = filteredRecords.filter(r => r.tipo === 'saida').reduce((acc, curr) => acc + curr.valor, 0);
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.text(`Total de Entradas:`, 20, finalY + 8);
+      doc.setFont('helvetica', 'bold');
+      doc.text(safeMoney(inflow), 70, finalY + 8);
+      
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Total de Saídas:`, 20, finalY + 15);
+      doc.setFont('helvetica', 'bold');
+      doc.text(safeMoney(outflow), 70, finalY + 15);
+      
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Saldo Líquido:`, 20, finalY + 22);
+      doc.setFont('helvetica', 'bold');
+      if (inflow - outflow >= 0) {
+        doc.setTextColor(30, 80, 50);
+      } else {
+        doc.setTextColor(180, 40, 40);
+      }
+      doc.text(safeMoney(inflow - outflow), 70, finalY + 22);
+      
+      doc.save('Relatorio_Financeiro.pdf');
+    } catch (e) {
+      console.error("Erro ao gerar relatório financeiro em PDF:", e);
+      alert("Não foi possível gerar o PDF financeiro. Tente novamente.");
+    }
   };
 
   return (

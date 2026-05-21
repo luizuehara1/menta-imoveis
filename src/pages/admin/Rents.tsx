@@ -32,13 +32,19 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   maskCurrency, 
   parseCurrencyToNumber,
-  formatCurrency 
+  formatCurrency,
+  safeText,
+  safeMoney,
+  safeDate
 } from '../../lib/utils';
+import { useSettings } from '../../hooks/useSettings';
 import { staggerContainer, slideUp, fadeIn, scaleIn } from '../../constants/animations';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 export default function AdminRents() {
+  const { settings } = useSettings();
+  const empresa = (settings?.empresa || {}) as any;
   const [leases, setLeases] = useState<Lease[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
@@ -271,78 +277,131 @@ export default function AdminRents() {
   };
 
   const generateReceipt = (lease: Lease) => {
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-    
-    // Header
-    doc.setFontSize(22);
-    doc.setTextColor(201, 161, 82); // Gold
-    doc.text('RECIBO DE PAGAMENTO', pageWidth / 2, 20, { align: 'center' });
-    
-    doc.setFontSize(10);
-    doc.setTextColor(150, 150, 150);
-    doc.text(`Nº RECIBO: ${lease.id?.slice(-8).toUpperCase()}`, pageWidth - 20, 30, { align: 'right' });
-    
-    // Line
-    doc.setDrawColor(230, 230, 230);
-    doc.line(20, 35, pageWidth - 20, 35);
-    
-    // Content
-    doc.setFontSize(12);
-    doc.setTextColor(0, 0, 0);
-    
-    const text1 = `Recebemos de ${lease.tenantName}, CPF ${lease.tenantCpf || '---'}, a importância de:`;
-    doc.text(text1, 20, 50);
-    
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.text(formatCurrency(lease.valorTotalPagar), 20, 60);
-    doc.setFont('helvetica', 'normal');
-    
-    doc.setFontSize(12);
-    const text2 = `Referente ao aluguel do imóvel localizado em:`;
-    doc.text(text2, 20, 75);
-    
-    doc.setFont('helvetica', 'bold');
-    doc.text(`${lease.propertyAddress}, ${lease.propertyNeighborhood}, ${lease.propertyCity}`, 20, 85);
-    doc.setFont('helvetica', 'normal');
-    
-    doc.text(`Código do Imóvel: ${lease.propertyCode}`, 20, 95);
+    try {
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      
+      // 1. Watermark - Draw multiple diagonal light gray texts
+      const watermarkText = safeText(empresa.nome || 'MENTA IMÓVEIS');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(26);
+      doc.setTextColor(245, 245, 245);
+      
+      // Draw watermarks at 45 degrees
+      doc.text(watermarkText, pageWidth / 2, pageHeight * 0.25, { align: 'center', angle: 30 });
+      doc.text(watermarkText, pageWidth / 2, pageHeight * 0.55, { align: 'center', angle: 30 });
+      doc.text(watermarkText, pageWidth / 2, pageHeight * 0.85, { align: 'center', angle: 30 });
 
-    // Breakdown Table
-    autoTable(doc, {
-      startY: 105,
-      head: [['Descrição', 'Valor']],
-      body: [
-        ['Aluguel', formatCurrency(lease.valorAluguel)],
-        ['IPTU', formatCurrency(lease.valorIptu)],
-        ['Taxa de Lixo', formatCurrency(lease.valorTaxaLixo)],
-        ['Condomínio', formatCurrency(lease.valorCondominio)],
-        ['Outros', formatCurrency(lease.valorOutros)],
-        ['Desconto', `- ${formatCurrency(lease.valorDesconto)}`],
-        ['TOTAL PAGO', formatCurrency(lease.valorTotalPagar)],
-        ['', ''],
-        ['Comissão Imobiliária (Receita)', formatCurrency(lease.valorComissaoImobiliaria || 0)],
-        ['Repasse ao Proprietário', formatCurrency(lease.valorRepassadoProprietario || 0)],
-      ],
-      headStyles: { fillColor: [30, 30, 30] },
-      columnStyles: { 1: { halign: 'right' } },
-      theme: 'grid'
-    });
-
-    const finalY = (doc as any).lastAutoTable.finalY + 30;
-    
-    // Date
-    const today = new Date();
-    const dateStr = today.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
-    doc.text(`${lease.propertyCity || 'Brasil'}, ${dateStr}`, pageWidth / 2, finalY, { align: 'center' });
-    
-    // Signature
-    doc.line(pageWidth / 4, finalY + 40, (pageWidth / 4) * 3, finalY + 40);
-    doc.text('Assinatura Responsável', pageWidth / 2, finalY + 50, { align: 'center' });
-    
-    // Save/Print
-    doc.save(`Recibo_Aluguel_${lease.propertyCode}_${lease.tenantName.replace(/\s+/g, '_')}.pdf`);
+      // 2. Headings with brand details
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.setTextColor(30, 30, 30);
+      doc.text(safeText(empresa.nome || 'MENTA IMÓVEIS'), 20, 20);
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(110, 110, 110);
+      const headerLine2 = `${safeText(empresa.razaoSocial || 'Menta Negócios Imobiliários Ltda')} | CNPJ: ${safeText(empresa.cnpj || '---')}`;
+      const headerLine3 = `${safeText(empresa.endereco || '---')} | CRECI PJ: ${safeText(empresa.creciPj || '---')}`;
+      doc.text(headerLine2, 20, 25);
+      doc.text(headerLine3, 20, 29);
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(15);
+      doc.setTextColor(201, 161, 82); // Gold
+      doc.text('RECIBO DE PAGAMENTO', pageWidth - 20, 22, { align: 'right' });
+      
+      doc.setFontSize(9);
+      doc.setTextColor(150, 150, 150);
+      doc.text(`Nº RECIBO: ${safeText(lease.id?.slice(-8).toUpperCase())}`, pageWidth - 20, 29, { align: 'right' });
+      
+      // Solid grey line separating header
+      doc.setDrawColor(210, 210, 210);
+      doc.setLineWidth(0.5);
+      doc.line(20, 33, pageWidth - 20, 33);
+      
+      // Content
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.setTextColor(60, 60, 60);
+      
+      doc.text(`Recebemos de:`, 20, 44);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(20, 20, 20);
+      doc.text(`${safeText(lease.tenantName)} (CPF: ${safeText(lease.tenantCpf)})`, 20, 49);
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.setTextColor(60, 60, 60);
+      doc.text(`A importância líquida de:`, 20, 57);
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(15);
+      doc.setTextColor(30, 80, 50); // Emerald
+      doc.text(safeMoney(lease.valorTotalPagar), 20, 64);
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.setTextColor(60, 60, 60);
+      doc.text(`Referente à locação do imóvel localizado em:`, 20, 74);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(30, 30, 30);
+      doc.text(`${safeText(lease.propertyAddress)}, ${safeText(lease.propertyNeighborhood)}, ${safeText(lease.propertyCity)}`, 20, 80);
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(120, 120, 120);
+      doc.text(`Código do Imóvel: ${safeText(lease.propertyCode)}`, 20, 86);
+  
+      // Breakdown Table
+      autoTable(doc, {
+        startY: 92,
+        head: [['Dedução / Encargo do Aluguel', 'Valor']],
+        body: [
+          ['Aluguel Mensal Base', safeMoney(lease.valorAluguel)],
+          ['IPTU', safeMoney(lease.valorIptu)],
+          ['Taxa de Lixo', safeMoney(lease.valorTaxaLixo)],
+          ['Condomínio', safeMoney(lease.valorCondominio)],
+          ['Outras Taxas / Serviços', safeMoney(lease.valorOutros)],
+          ['Desconto Concedido', `- ${safeMoney(lease.valorDesconto)}`],
+          ['TOTAL PAGO PELO LOCATÁRIO', safeMoney(lease.valorTotalPagar)],
+          ['Comissão da Imobiliária', safeMoney(lease.valorComissaoImobiliaria)],
+          ['Valor Repassado ao Proprietário', safeMoney(lease.valorRepassadoProprietario)],
+        ],
+        headStyles: { fillColor: [30, 30, 30], textColor: [255, 255, 255] },
+        columnStyles: { 1: { halign: 'right', fontStyle: 'bold' } },
+        theme: 'grid',
+        styles: { fontSize: 8.5 }
+      });
+  
+      const finalY = (doc as any).lastAutoTable.finalY + 20;
+      
+      // Date
+      const today = new Date();
+      const dateStr = today.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.setTextColor(60, 60, 60);
+      doc.text(`${safeText(lease.propertyCity || empresa.cidade || 'Balneário Camboriú')}, ${dateStr}`, pageWidth / 2, finalY, { align: 'center' });
+      
+      // Signature lines
+      doc.setDrawColor(180, 180, 180);
+      doc.setLineWidth(0.5);
+      doc.line(pageWidth / 4, finalY + 25, (pageWidth / 4) * 3, finalY + 25);
+      doc.setFont('helvetica', 'bold');
+      doc.text(safeText(empresa.nome || 'Menta Negócios Imobiliários'), pageWidth / 2, finalY + 30, { align: 'center' });
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.text('Imobiliária Intermediadora - Recibo Emitido Eletronicamente', pageWidth / 2, finalY + 34, { align: 'center' });
+      
+      // Save/Print
+      doc.save(`Recibo_Aluguel_${safeText(lease.propertyCode)}_${safeText(lease.tenantName).replace(/\s+/g, '_')}.pdf`);
+    } catch (e) {
+      console.error("Erro ao gerar recibo de pagamento do aluguel:", e);
+      alert("Não foi possível gerar o recibo. Verifique os dados e tente novamente.");
+    }
   };
 
   const stats = useMemo(() => {

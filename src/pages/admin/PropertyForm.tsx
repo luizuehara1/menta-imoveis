@@ -42,7 +42,8 @@ import {
   Edit,
   Eye,
   ExternalLink,
-  MessageSquare
+  MessageSquare,
+  FileText
 } from 'lucide-react';
 import { useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -104,6 +105,14 @@ export default function AdminPropertyForm() {
   const [activeTab, setActiveTab] = useState('bash');
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(!!id);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  const triggerToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  };
+
   const [cepLoading, setCepLoading] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showReplaceModal, setShowReplaceModal] = useState(false);
@@ -111,7 +120,8 @@ export default function AdminPropertyForm() {
   const [manualCode, setManualCode] = useState(false);
   const [pendingType, setPendingType] = useState('');
   const [imageUrl, setImageUrl] = useState('');
-  const [images, setImages] = useState<string[]>([]);
+  const [images, setImages] = useState<any[]>([]);
+  const [aplicarMarcaDagua, setAplicarMarcaDagua] = useState(false);
   const [videoUrl, setVideoUrl] = useState('');
   const [videos, setVideos] = useState<string[]>([]);
   const [mainImage, setMainImage] = useState('');
@@ -313,7 +323,7 @@ export default function AdminPropertyForm() {
   useEffect(() => {
     if (id) {
       const fetchProperty = async () => {
-        setLoading(true);
+        setInitialLoading(true);
         try {
           const propertyDoc = await getDoc(doc(db, 'imoveis', id));
           if (propertyDoc.exists()) {
@@ -325,20 +335,26 @@ export default function AdminPropertyForm() {
             setVideos(data.videos || []);
             setMainImage(data.mainImage || '');
             
-            // Fetch owner info
-            const ownerDoc = await getDoc(doc(db, 'imoveis', id, 'privado', 'proprietario'));
-            if (ownerDoc.exists()) {
-              const ownerData = ownerDoc.data();
-              setValue('ownerName', ownerData.name);
-              setValue('ownerPhone', ownerData.phone);
-              setValue('ownerEmail', ownerData.email);
-              setValue('ownerNotes', ownerData.notes);
+            // Fetch owner info - isolated try-catch to prevent trapping the main load
+            try {
+              const ownerDoc = await getDoc(doc(db, 'imoveis', id, 'privado', 'proprietario'));
+              if (ownerDoc.exists()) {
+                const ownerData = ownerDoc.data();
+                setValue('ownerName', ownerData.name);
+                setValue('ownerPhone', ownerData.phone);
+                setValue('ownerEmail', ownerData.email);
+                setValue('ownerNotes', ownerData.notes);
+              }
+            } catch (ownerError: any) {
+              console.warn("Imóvel carregado, mas houve erro ao carregar dados do proprietário (privado):", ownerError.message);
             }
+          } else {
+            console.warn("Imóvel não encontrado no Firestore ID:", id);
           }
         } catch (error) {
           console.error("Error fetching property:", error);
         } finally {
-          setLoading(false);
+          setInitialLoading(false);
         }
       };
       fetchProperty();
@@ -356,15 +372,37 @@ export default function AdminPropertyForm() {
       return;
     }
 
-    const newImages = [...images, trimmedUrl];
+    const newImageItem = { url: trimmedUrl, aplicarMarcaDagua: aplicarMarcaDagua };
+    const newImages = [...images, newImageItem];
     setImages(newImages);
     if (!mainImage) setMainImage(trimmedUrl);
     setImageUrl('');
+    setAplicarMarcaDagua(false);
   };
 
-  const removeImage = (url: string) => {
-    setImages(images.filter(img => img !== url));
-    if (mainImage === url) setMainImage(images[0] || '');
+  const removeImage = (urlToRemove: string) => {
+    const itemUrl = urlToRemove;
+    const filtered = images.filter(img => {
+      const u = typeof img === 'string' ? img : img.url;
+      return u !== itemUrl;
+    });
+    setImages(filtered);
+    if (mainImage === itemUrl) {
+      const firstImg = filtered[0];
+      const nextMainUrl = firstImg ? (typeof firstImg === 'string' ? firstImg : firstImg.url) : '';
+      setMainImage(nextMainUrl);
+    }
+  };
+
+  const toggleWatermark = (urlToToggle: string) => {
+    setImages(images.map(img => {
+      const u = typeof img === 'string' ? img : img.url;
+      if (u === urlToToggle) {
+        const flag = typeof img === 'string' ? false : img.aplicarMarcaDagua;
+        return { url: u, aplicarMarcaDagua: !flag };
+      }
+      return img;
+    }));
   };
 
   const addVideoUrl = () => {
@@ -419,10 +457,13 @@ export default function AdminPropertyForm() {
         return;
       }
 
-      console.log("[PropertyForm] Preparando dados para salvar:", {
-        id,
-        publicado: data.publicado,
-        destaque: data.destaque
+      console.log("[PropertyForm] Iniciando gravação do imóvel...");
+      console.log("Salvando imóvel em:", id ? `imoveis/${id}` : "Novo documento na coleção 'imoveis'");
+      console.log("Dados do imóvel:", {
+        ...data,
+        images,
+        videos,
+        mainImage
       });
 
       const propertyData: any = {
@@ -474,6 +515,7 @@ export default function AdminPropertyForm() {
       const linkImovel = `${window.location.origin}/imovel/${propertyId || ''}`;
       propertyData.linkImovel = linkImovel;
 
+      // 1. SALVAMENTO PRINCIPAL DO IMÓVEL (Must not trigger fake errors if secondary steps fail)
       if (id) {
         await updateDoc(doc(db, 'imoveis', id), propertyData);
       } else {
@@ -481,21 +523,60 @@ export default function AdminPropertyForm() {
         propertyData.createdBy = auth.currentUser?.uid;
         const newDoc = await addDoc(collection(db, 'imoveis'), propertyData);
         propertyId = newDoc.id;
-        // Update with the correct ID link after creation
-        const finalLink = `${window.location.origin}/imovel/${propertyId}`;
-        await updateDoc(doc(db, 'imoveis', propertyId), { linkImovel: finalLink });
       }
 
-      // Save owner info to subcollection
+      // Success in primary save!
+      console.log("[PropertyForm] Sucesso real no salvamento do documento principal. ID:", propertyId);
+      triggerToast("Imóvel salvo com sucesso.", "success");
+
+      // 2. AÇÕES SECUNDÁRIAS (Wrapped in separate try-catches with safe warning logging so they never throw fake errors)
+
+      // Secondary: Update with correct ID link after creation
+      if (!id && propertyId) {
+        try {
+          const finalLink = `${window.location.origin}/imovel/${propertyId}`;
+          console.log("[PropertyForm] Atualizando link público do imóvel...");
+          await updateDoc(doc(db, 'imoveis', propertyId), { linkImovel: finalLink });
+        } catch (linkError: any) {
+          console.warn(
+            "Erro na etapa:", 
+            "atualizacao_link_imovel", 
+            linkError.code || "UNKNOWN_CODE", 
+            linkError.message || "Sem mensagem"
+          );
+        }
+      }
+
+      // Secondary: Save owner info to subcollection 'privado/proprietario'
       if (propertyId) {
-        await setDoc(doc(db, 'imoveis', propertyId, 'privado', 'proprietario'), ownerData);
+        try {
+          console.log("Atualizando patrimônio/proprietário em:", `imoveis/${propertyId}/privado/proprietario`);
+          await setDoc(doc(db, 'imoveis', propertyId, 'privado', 'proprietario'), ownerData);
+        } catch (ownerSaveError: any) {
+          console.warn(
+            "Erro na etapa:", 
+            "gravacao_proprietario_privado", 
+            ownerSaveError.code || "UNKNOWN_CODE", 
+            ownerSaveError.message || "Sem mensagem"
+          );
+        }
       }
 
-      localStorage.removeItem('property_draft');
-      navigate('/admin/imoveis');
-    } catch (error) {
-      console.error("Save error:", error);
-      alert("Erro ao salvar imóvel.");
+      // Secondary: Any extra custom logic/updates go here safely
+      try {
+        localStorage.removeItem('property_draft');
+      } catch (draftError: any) {
+        console.warn("Erro ao limpar rascunho de rascunhos:", draftError);
+      }
+
+      // Redirect user after showing the gorgeous toast shortly
+      setTimeout(() => {
+        navigate('/admin/imoveis');
+      }, 1500);
+
+    } catch (error: any) {
+      console.error("Erro real ao salvar imóvel:", error);
+      triggerToast("Erro ao salvar imóvel. Verifique o console.", "error");
     } finally {
       setLoading(false);
       setShowConfirmModal(false);
@@ -1473,6 +1554,19 @@ export default function AdminPropertyForm() {
                    {imageUrl && !isValidImageUrl(imageUrl) && (
                      <p className="text-[10px] text-red-500 font-bold ml-1">URL inválida</p>
                    )}
+                   
+                   <div className="flex items-center gap-2 pt-1.5 pl-1">
+                     <input 
+                       type="checkbox" 
+                       id="aplicarMarcaDaguaCheck"
+                       checked={aplicarMarcaDagua}
+                       onChange={(e) => setAplicarMarcaDagua(e.target.checked)}
+                       className="rounded border-gray-300 text-gold focus:ring-gold focus:ring-offset-0 h-4 w-4"
+                     />
+                     <label htmlFor="aplicarMarcaDaguaCheck" className="text-xs font-black uppercase text-gray-600 tracking-wider cursor-pointer select-none">
+                       Aplicar marca d'água ao adicionar
+                     </label>
+                   </div>
                  </div>
                  <button 
                    type="button"
@@ -1494,38 +1588,66 @@ export default function AdminPropertyForm() {
 
             {images.length > 0 && (
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                {images.map((url, idx) => (
-                  <div key={idx} className={`relative rounded-xl overflow-hidden group aspect-square border-2 transition-all ${mainImage === url ? 'border-gold shadow-lg shadow-gold/20 scale-[1.02]' : 'border-gray-100 hover:border-gold/50'}`}>
-                    <SafeImage 
-                      src={url} 
-                      alt={`Preview ${idx}`} 
-                      className="w-full h-full" 
-                    />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                       <button 
-                         type="button" 
-                         onClick={() => setMainImage(url)}
-                         className="p-2 bg-gold text-primary-black rounded-lg hover:scale-110"
-                         title="Definir como principal"
-                       >
-                         <Sparkles size={16} />
-                       </button>
-                       <button 
-                         type="button" 
-                         onClick={() => removeImage(url)}
-                         className="p-2 bg-red-500 text-white rounded-lg hover:scale-110"
-                         title="Excluir"
-                       >
-                         <X size={16} />
-                       </button>
-                    </div>
-                    {mainImage === url && (
-                      <div className="absolute top-2 left-2 bg-gold text-primary-black text-[10px] font-bold px-2 py-0.5 rounded">
-                        PRINCIPAL
+                {images.map((img, idx) => {
+                  const unwrapped = typeof img === 'string' ? { url: img, aplicarMarcaDagua: false } : img;
+                  const url = unwrapped.url;
+                  const isWatermarked = unwrapped.aplicarMarcaDagua === true;
+                  
+                  return (
+                    <div key={idx} className={`relative rounded-xl overflow-hidden group aspect-square border-2 transition-all ${mainImage === url ? 'border-gold shadow-lg shadow-gold/20 scale-[1.02]' : 'border-gray-100 hover:border-gold/50'}`}>
+                      <SafeImage 
+                        src={url} 
+                        alt={`Preview ${idx}`} 
+                        className="w-full h-full" 
+                      />
+                      
+                      {/* Watermark Indicating Border */}
+                      {isWatermarked && (
+                        <div className="absolute inset-0 bg-emerald-500/10 pointer-events-none border-[3px] border-emerald-500/60 rounded-lg " />
+                      )}
+
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
+                         <button 
+                           type="button" 
+                           onClick={() => setMainImage(url)}
+                           className="p-1.5 bg-gold text-primary-black rounded-lg hover:scale-110"
+                           title="Definir como principal"
+                         >
+                           <Sparkles size={14} />
+                         </button>
+                         <button 
+                           type="button" 
+                           onClick={() => toggleWatermark(url)}
+                           className={`p-1.5 rounded-lg hover:scale-110 ${isWatermarked ? 'bg-emerald-500 text-white' : 'bg-white text-gray-700'}`}
+                           title={isWatermarked ? "Remover Marca d'Água" : "Aplicar Marca d'Água"}
+                         >
+                           <FileText size={14} />
+                         </button>
+                         <button 
+                           type="button" 
+                           onClick={() => removeImage(url)}
+                           className="p-1.5 bg-red-500 text-white rounded-lg hover:scale-110"
+                           title="Excluir"
+                         >
+                           <X size={14} />
+                         </button>
                       </div>
-                    )}
-                  </div>
-                ))}
+
+                      {mainImage === url && (
+                        <div className="absolute top-2 left-2 bg-gold text-primary-black text-[9px] font-black tracking-widest px-1.5 py-0.5 rounded uppercase z-10">
+                          PRINCIPAL
+                        </div>
+                      )}
+
+                      {isWatermarked && (
+                        <div className="absolute bottom-2 right-2 bg-emerald-700 text-white text-[8px] font-bold px-1.5 py-0.5 rounded uppercase flex items-center gap-1 shadow z-10">
+                          <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                          M. Dagua
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -1715,7 +1837,7 @@ export default function AdminPropertyForm() {
     }
   };
 
-  if (loading && id) return (
+  if (initialLoading && id) return (
     <div className="h-full flex flex-col items-center justify-center p-20 text-center">
       <div className="w-12 h-12 border-4 border-gold border-t-transparent rounded-full animate-spin mb-4" />
       <p className="text-gray-400 font-medium">Carregando dados do patrimônio...</p>
@@ -1736,13 +1858,32 @@ export default function AdminPropertyForm() {
   };
 
   return (
-    <motion.form 
-      variants={staggerContainer}
-      initial="initial"
-      animate="animate"
-      onSubmit={handleSubmit(onSubmit)} 
-      className="space-y-10 pb-20"
-    >
+    <>
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            className="fixed top-24 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-6 py-4 rounded-2xl text-white backdrop-blur-md shadow-2xl border"
+            style={{
+              backgroundColor: toast.type === 'success' ? '#14532d' : '#7f1d1d',
+              borderColor: toast.type === 'success' ? '#16a34a' : '#b91c1c',
+            }}
+          >
+            {toast.type === 'success' ? <CheckCircle size={20} className="text-emerald-300" /> : <X size={20} className="text-red-300" />}
+            <span className="font-bold text-sm tracking-wide">{toast.message}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <motion.form 
+        variants={staggerContainer}
+        initial="initial"
+        animate="animate"
+        onSubmit={handleSubmit(onSubmit)} 
+        className="space-y-10 pb-20"
+      >
       {/* Property Link Card (Task 6) */}
       {id && (
         <motion.div 
@@ -2038,5 +2179,6 @@ export default function AdminPropertyForm() {
         )}
       </AnimatePresence>
     </motion.form>
+    </>
   );
 }

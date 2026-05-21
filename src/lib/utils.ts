@@ -112,6 +112,23 @@ export function isValidPublicImageUrl(url: any): boolean {
 }
 
 /**
+ * Unwraps an image which can be a string or an object with url and optional watermark flag
+ */
+export function unwrapImage(img: any): { url: string; aplicarMarcaDagua: boolean } {
+  if (!img) return { url: "", aplicarMarcaDagua: false };
+  if (typeof img === "string") {
+    return { url: img, aplicarMarcaDagua: false };
+  }
+  if (typeof img === "object") {
+    return {
+      url: img.url || img.imageUrl || img.imagem || "",
+      aplicarMarcaDagua: img.aplicarMarcaDagua === true || img.watermark === true
+    };
+  }
+  return { url: "", aplicarMarcaDagua: false };
+}
+
+/**
  * Safely extracts the best image for a property
  */
 export function getPropertyImage(p: any): string {
@@ -127,17 +144,22 @@ export function getPropertyImage(p: any): string {
     Array.isArray(p.fotos) ? p.fotos[0] : null
   ];
 
-  const found = possible.find(url => isValidPublicImageUrl(url));
-  return found || ""; // SafeImage will handle the fallback if empty
+  const found = possible.find(item => {
+    if (!item) return false;
+    const unwrapped = unwrapImage(item);
+    return isValidPublicImageUrl(unwrapped.url);
+  });
+  
+  return getSafeImageUrl(found);
 }
 
 /**
  * Robust image fallback logic for external URLs (CORS/Broken)
  */
 export function getSafeImageUrl(url: any, fallback = "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&q=80&w=1200"): string {
-  if (!url || typeof url !== "string") return fallback;
-  
-  const cleanUrl = url.trim();
+  if (!url) return fallback;
+  const unwrapped = unwrapImage(url);
+  const cleanUrl = (unwrapped.url || "").trim();
   
   // Requirement: Must start with https:// or /
   if (!cleanUrl.startsWith("https://") && !cleanUrl.startsWith("/")) {
@@ -158,3 +180,53 @@ export function cleanPhoneForWhatsapp(phone: string): string {
   }
   return cleaned;
 }
+
+export function safeText(value: any, fallback = '---'): string {
+  if (value === null || value === undefined || value === '') return fallback;
+  if (typeof value === 'number' && Number.isNaN(value)) return fallback;
+  if (typeof value === 'object') {
+    if (value.nome) return String(value.nome);
+    if (value.label) return String(value.label);
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return fallback;
+    }
+  }
+  const str = String(value).trim();
+  if (str === 'undefined' || str === 'null' || str === 'NaN' || str === '[object Object]') return fallback;
+  return str;
+}
+
+export function safeMoney(value: any, fallback = 'R$ 0,00'): string {
+  if (value === null || value === undefined || value === '') return fallback;
+  const num = typeof value === 'number' ? value : parseFloat(String(value).replace(/[^\d,-]/g, '').replace(',', '.'));
+  if (isNaN(num)) return fallback;
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  }).format(num);
+}
+
+export function safeDate(value: any, fallback = '---'): string {
+  if (value === null || value === undefined || value === '') return fallback;
+  const str = String(value).trim();
+  if (str === 'undefined' || str === 'null' || str === 'NaN' || str === '[object Object]') return fallback;
+  try {
+    // If it's already structured as dd/mm/yyyy or equivalent, return as is
+    if (str.includes('/') && str.split('/').length === 3) {
+      return str;
+    }
+    if (str.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      const [year, month, day] = str.split('-');
+      return `${day}/${month}/${year}`;
+    }
+    // Check if we can parse it
+    const d = new Date(str);
+    if (isNaN(d.getTime())) return str;
+    return d.toLocaleDateString('pt-BR');
+  } catch {
+    return str;
+  }
+}
+

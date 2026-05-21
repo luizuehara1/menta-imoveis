@@ -71,7 +71,7 @@ export const VisitPdfTemplate = React.forwardRef<HTMLDivElement, VisitPdfTemplat
     cnpj: safeText(settings.empresa.cnpj, '63.572.479/0001-50'),
     creciPj: safeText(settings.empresa.creciPj, '11255PJ'),
     logoUrl: settings.empresa.logoCabecalhoUrl || settings.aparencia.logoUrl || "https://i.postimg.cc/kMZXNdCS/image.png",
-    marcaDaguaUrl: settings.empresa.marcaDaguaUrl || ""
+    marcaDaguaUrl: settings.empresa.marcaDaguaUrl || "/watermark.png"
   };
 
   // List normalization
