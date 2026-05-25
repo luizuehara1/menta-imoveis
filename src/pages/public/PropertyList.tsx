@@ -7,12 +7,27 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useSettings, useOptions } from '../../hooks/useSettings';
 import PageWrapper from '../../components/PageWrapper';
 import { SafeImage } from '../../components/ui/SafeImage';
-import { formatCurrency, isValidPublicProperty, cleanPhoneForWhatsapp, getSafeImageUrl } from '../../lib/utils';
+import { formatCurrency, isValidPublicProperty, cleanPhoneForWhatsapp, getSafeImageUrl, isImovelAlugado } from '../../lib/utils';
 import { staggerContainer, slideUp, fadeIn } from '../../constants/animations';
 import { GoldenParticles } from '../../components/three/GoldenParticles';
 import { Canvas } from '@react-three/fiber';
 
 const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
+  const { settings } = useSettings();
+
+  const mainImageUnwrapped = React.useMemo(() => {
+    const imgs = property?.images || property?.imagens || [];
+    const mainUrl = typeof property?.mainImage === 'string' ? property?.mainImage : property?.mainImage?.url;
+    if (!mainUrl) return { url: '', aplicarMarcaDagua: false };
+    const match = imgs.find((img: any) => (typeof img === 'string' ? img : img.url) === mainUrl);
+    if (match) {
+      const isString = typeof match === 'string';
+      const aplicar = isString ? true : (match.aplicarMarcaDagua !== false);
+      return { url: isString ? match : match.url, aplicarMarcaDagua: aplicar };
+    }
+    return { url: mainUrl, aplicarMarcaDagua: true };
+  }, [property]);
+
   const getWhatsAppUrl = () => {
     const rawPhone = property.brokerWhatsapp || agencyWhatsApp;
     const cleanNumber = cleanPhoneForWhatsapp(rawPhone || '554188364069');
@@ -35,12 +50,28 @@ const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
           className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"
         />
         
+        {mainImageUnwrapped.aplicarMarcaDagua && (
+          <div className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden z-10 select-none">
+            <img 
+              src={settings?.empresa?.marcaDaguaUrl || settings?.empresa?.logoCabecalhoUrl || settings?.aparencia?.logoUrl || '/watermark.png'} 
+              alt="Watermark" 
+              className="w-[45%] max-w-[120px] opacity-[0.09] object-contain select-none pointer-events-none"
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            />
+          </div>
+        )}
+        
         {/* Badges */}
         <div className="absolute top-4 left-4 flex flex-col gap-2 z-10">
           <div className="flex flex-wrap gap-2">
             <span className="bg-primary-black/90 backdrop-blur-md text-white text-[9px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg border border-white/10 shadow-lg">
               {property.businessType}
             </span>
+            {isImovelAlugado(property) && (
+              <span className="bg-primary-black border border-gold text-gold text-[9px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg shadow-lg">
+                JÁ ALUGADO
+              </span>
+            )}
             {property.destaque && (
               <span className="bg-gold text-primary-black text-[9px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg shadow-lg border border-gold/20">
                 Destaque
@@ -77,26 +108,53 @@ const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
         </Link>
         
         <div className="mb-6 bg-gray-50/50 rounded-2xl p-4 border border-gray-50">
-          <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">
-             Valor de {property.businessType === 'Locação' ? 'Locação' : 'Investimento'}
-          </p>
-          <div className="flex items-baseline gap-1">
-            <span className="text-2xl font-display font-black text-primary-green">
-              {formatCurrency(property.businessType === 'Locação' ? property.priceLocacao : property.priceVenda)}
-            </span>
-            {property.businessType === 'Locação' && (
-              <span className="text-xs font-bold text-gray-400">/mês</span>
-            )}
-          </div>
-          {(property.condoFee > 0 || property.iptu > 0) && (
-            <div className="flex gap-3 mt-2 pt-2 border-t border-gray-100">
-               {property.condoFee > 0 && (
-                 <p className="text-[9px] font-bold text-gray-400">Cond: {formatCurrency(property.condoFee)}</p>
-               )}
-               {property.iptu > 0 && (
-                 <p className="text-[9px] font-bold text-gray-400">IPTU: {formatCurrency(property.iptu)}</p>
-               )}
-            </div>
+          {isImovelAlugado(property) ? (
+            property.businessType === 'Venda e Locação' && property.priceVenda ? (
+              <div>
+                <p className="text-[9px] font-black text-emerald-700 uppercase tracking-widest mb-1">
+                  Disponível para Venda
+                </p>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-2xl font-display font-black text-primary-green">
+                    {formatCurrency(property.priceVenda)}
+                  </span>
+                </div>
+                <p className="text-[9px] text-gray-500 mt-1 leading-tight">Imóvel alugado atualmente, disponível para venda</p>
+              </div>
+            ) : (
+              <div>
+                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">
+                  Status
+                </p>
+                <span className="text-lg font-display font-black text-primary-black uppercase tracking-wide">
+                  Já alugado
+                </span>
+              </div>
+            )
+          ) : (
+            <>
+              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">
+                 Valor de {property.businessType === 'Locação' ? 'Locação' : 'Investimento'}
+              </p>
+              <div className="flex items-baseline gap-1">
+                <span className="text-2xl font-display font-black text-primary-green">
+                  {formatCurrency(property.businessType === 'Locação' ? property.priceLocacao : property.priceVenda)}
+                </span>
+                {property.businessType === 'Locação' && (
+                  <span className="text-xs font-bold text-gray-400">/mês</span>
+                )}
+              </div>
+              {(property.condoFee > 0 || property.iptu > 0) && (
+                <div className="flex gap-3 mt-2 pt-2 border-t border-gray-100">
+                   {property.condoFee > 0 && (
+                     <p className="text-[9px] font-bold text-gray-400">Cond: {formatCurrency(property.condoFee)}</p>
+                   )}
+                   {property.iptu > 0 && (
+                     <p className="text-[9px] font-bold text-gray-400">IPTU: {formatCurrency(property.iptu)}</p>
+                   )}
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -180,7 +238,8 @@ export default function PropertyList() {
     garageSpaces: '',
     minArea: '',
     maxArea: '',
-    destaque: false
+    destaque: false,
+    leaseFilterStatus: 'disponiveis'
   });
 
   useEffect(() => {
@@ -198,7 +257,8 @@ export default function PropertyList() {
       garageSpaces: params.get('garageSpaces') || '',
       minArea: params.get('minArea') || '',
       maxArea: params.get('maxArea') || '',
-      destaque: params.get('destaque') === 'true'
+      destaque: params.get('destaque') === 'true',
+      leaseFilterStatus: params.get('leaseFilterStatus') || 'disponiveis'
     };
     setSearchFilters(initialFilters);
     fetchProperties(initialFilters);
@@ -217,8 +277,7 @@ export default function PropertyList() {
       // Note: "publicado" must be true for the query to pass rules for unauthenticated users
       const q = query(
         collection(db, 'imoveis'), 
-        where('publicado', '==', true),
-        where('status', 'in', ['disponivel', 'disponivel_venda', 'disponivel_locacao', 'Disponível', 'disponível', 'DISPONÍVEL'])
+        where('publicado', '==', true)
       );
 
       const snap = await getDocs(q);
@@ -256,6 +315,17 @@ export default function PropertyList() {
         data = data.filter((p: any) => p.businessType === 'Locação' || p.businessType === 'Venda e Locação');
       } else if (normalizedBType === 'venda_locacao' || normalizedBType === 'venda e locacao') {
         data = data.filter((p: any) => p.businessType === 'Venda e Locação');
+      }
+
+      // Filter by lease/rental status (Disponíveis, Alugados, Todos)
+      const leaseFilter = filters.leaseFilterStatus || 'disponiveis';
+      if (leaseFilter === 'alugados') {
+        data = data.filter((p: any) => isImovelAlugado(p));
+      } else if (leaseFilter === 'todos') {
+        // Keep both
+      } else {
+        // default to "disponiveis"
+        data = data.filter((p: any) => !isImovelAlugado(p));
       }
 
       // 3. Other Filters
@@ -492,8 +562,9 @@ export default function PropertyList() {
                <p className="text-gray-400 font-medium mb-10 leading-relaxed text-sm">Não encontramos nenhum imóvel publicado que atenda aos critérios. Tente ajustar sua busca ou volte mais tarde.</p>
                <button 
                   onClick={() => {
-                    setSearchFilters({ businessType: 'Venda', propertyType: '', city: '', neighborhood: '', minPrice: '', maxPrice: '', bedrooms: '', bathrooms: '', garageSpaces: '', minArea: '', maxArea: '', destaque: false });
-                    fetchProperties({ businessType: 'Venda', propertyType: '', city: '', neighborhood: '', minPrice: '', maxPrice: '', bedrooms: '', bathrooms: '', garageSpaces: '', minArea: '', maxArea: '', destaque: false });
+                    const defaultFilters = { businessType: 'Venda', propertyType: '', city: '', neighborhood: '', minPrice: '', maxPrice: '', bedrooms: '', bathrooms: '', garageSpaces: '', minArea: '', maxArea: '', destaque: false, leaseFilterStatus: 'disponiveis' };
+                    setSearchFilters(defaultFilters);
+                    fetchProperties(defaultFilters);
                   }} 
                   className="btn-gold !rounded-2xl !py-4 !px-8 shadow-xl shadow-gold/20"
                 >
@@ -571,6 +642,31 @@ export default function PropertyList() {
                        })}
                      </div>
                   </div>
+
+                  {searchFilters.businessType !== 'Venda' && (
+                    <div className="space-y-5">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Disponibilidade de Locação</label>
+                      <div className="grid grid-cols-3 gap-2 bg-gray-50 p-2 rounded-2xl border border-gray-100">
+                        {[
+                          { id: 'disponiveis', label: 'Disponíveis' },
+                          { id: 'alugados', label: 'Alugados' },
+                          { id: 'todos', label: 'Todos' }
+                        ].map((o) => {
+                          const isSelected = searchFilters.leaseFilterStatus === o.id;
+                          return (
+                            <button
+                              key={o.id}
+                              type="button"
+                              onClick={() => setSearchFilters({...searchFilters, leaseFilterStatus: o.id})}
+                              className={`py-3 px-1 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isSelected ? 'bg-white text-primary-black shadow-md border border-gray-100 font-black' : 'text-gray-400 hover:text-primary-black font-bold'}`}
+                            >
+                              {o.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="space-y-5">
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Faixa de Preço (R$)</label>

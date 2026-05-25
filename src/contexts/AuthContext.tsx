@@ -94,24 +94,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.log("[Auth] Buscando administradores e admins...");
           
           // Check both collections as per requirement (Optimized with Promise.all)
-          const adminRef1 = doc(db, 'admins', email);
-          const adminRef2 = doc(db, 'administradores', email);
-          
-          const [snap1, snap2] = await Promise.all([
-            getDoc(adminRef1),
-            getDoc(adminRef2)
+          const [adminSnap1, adminSnap2] = await Promise.all([
+            getDoc(doc(db, "administradores", email)),
+            getDoc(doc(db, "admins", email))
           ]);
           
-          const adminData1 = snap1.exists() ? snap1.data() : null;
-          const adminData2 = snap2.exists() ? snap2.data() : null;
+          const adminData1 = adminSnap1.exists() ? adminSnap1.data() : null;
+          const adminData2 = adminSnap2.exists() ? adminSnap2.data() : null;
           
           const adminValido = 
             (adminData1?.ativo === true) || 
             (adminData2?.ativo === true);
 
+          // Required test logs
+          console.log("Usuário logado:", currentUser.email);
+          console.log("Email normalizado:", email);
+          console.log("Buscando em administradores:", `administradores/${email}`);
+          console.log("Buscando em admins:", `admins/${email}`);
+          console.log("Existe em administradores:", adminSnap1.exists());
+          console.log("Dados administradores:", adminData1);
+          console.log("Existe em admins:", adminSnap2.exists());
+          console.log("Dados admins:", adminData2);
+          console.log("Admin válido:", adminValido);
+
           const endTime = performance.now();
           console.log(`[Auth] Verificação finalizada em ${(endTime - startTime).toFixed(2)}ms`);
-          console.log("[Auth] Admin autorizado:", adminValido);
           
           setIsAdmin(adminValido);
 
@@ -132,10 +139,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (error: any) {
         console.error("Erro ao verificar admin:", error.code, error.message);
         
-        // Safety fallback for developer in case of Firestore breakdown
-        const devEmail = 'luiz.uehara1@gmail.com';
-        if (currentUser?.email?.toLowerCase() === devEmail) {
-          console.log("[Auth] Fallback especial para desenvolvedor ativo.");
+        // Safety fallback for developer/admins in case of Firestore breakdown
+        const allowedEmails = ['luiz.uehara1@gmail.com', 'edson.menta@hotmail.com', 'anamariamenta@hotmail.com'];
+        if (currentUser?.email && allowedEmails.includes(currentUser.email.toLowerCase().trim())) {
+          console.log("[Auth] Fallback especial para administrador ativo.");
           setIsAdmin(true);
         } else {
           setIsAdmin(false);

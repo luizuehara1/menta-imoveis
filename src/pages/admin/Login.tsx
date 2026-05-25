@@ -91,10 +91,10 @@ export default function AdminLogin() {
         {user && !isAdmin ? (
           <div className="space-y-6">
             <div className="p-4 bg-red-50 border border-red-100 rounded-xl flex items-start gap-4 text-red-600 text-sm">
-              <ShieldAlert size={20} className="shrink-0 mt-0.5" />
+              <ShieldAlert size={20} className="shrink-0 mt-1" />
               <div className="space-y-1">
-                <p className="font-bold">Acesso Negado</p>
-                <p>O e-mail <strong>{user.email}</strong> não possui permissões administrativas.</p>
+                <p className="font-bold text-red-700">Acesso negado. Este e-mail não possui permissão administrativa.</p>
+                <p className="text-xs text-red-500">Conectado como: {user.email}</p>
               </div>
             </div>
             

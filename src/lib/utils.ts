@@ -117,12 +117,12 @@ export function isValidPublicImageUrl(url: any): boolean {
 export function unwrapImage(img: any): { url: string; aplicarMarcaDagua: boolean } {
   if (!img) return { url: "", aplicarMarcaDagua: false };
   if (typeof img === "string") {
-    return { url: img, aplicarMarcaDagua: false };
+    return { url: img, aplicarMarcaDagua: true };
   }
   if (typeof img === "object") {
     return {
       url: img.url || img.imageUrl || img.imagem || "",
-      aplicarMarcaDagua: img.aplicarMarcaDagua === true || img.watermark === true
+      aplicarMarcaDagua: img.aplicarMarcaDagua !== false && img.watermark !== false
     };
   }
   return { url: "", aplicarMarcaDagua: false };
@@ -228,5 +228,16 @@ export function safeDate(value: any, fallback = '---'): string {
   } catch {
     return str;
   }
+}
+
+export function isImovelAlugado(imovel: any): boolean {
+  if (!imovel) return false;
+  const statusStr = String(imovel.status || "").toLowerCase();
+  return (
+    imovel.imovelAlugado === true ||
+    imovel.rented === true ||
+    statusStr.includes("alugado") ||
+    statusStr.includes("locado")
+  );
 }
 

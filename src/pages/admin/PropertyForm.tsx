@@ -33,6 +33,8 @@ import {
   Hammer,
   Waves,
   MessageCircle,
+  Upload,
+  UploadCloud,
   CheckCircle,
   ChevronLeft,
   ChevronRight,
@@ -98,6 +100,75 @@ const getPrefixByPropertyType = (tipoImovel: string) => {
   return PROPERTY_TYPE_PREFIXES[tipo] || "IM";
 };
 
+async function uploadImageToCloudinary(file: File) {
+  const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+  const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+
+  console.log("Cloudinary cloud:", cloudName);
+  console.log("Upload preset:", uploadPreset);
+
+  if (!cloudName || !uploadPreset) {
+    console.error("Cloudinary não configurado.");
+    throw new Error("Cloudinary não configurado. Verifique as variáveis de ambiente.");
+  }
+
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("upload_preset", uploadPreset);
+  formData.append("folder", "menta-imoveis");
+
+  const response = await fetch(
+    `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+    {
+      method: "POST",
+      body: formData
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    console.error("Erro Cloudinary:", data);
+    throw new Error(data?.error?.message || "Erro ao enviar imagem para Cloudinary.");
+  }
+
+  return {
+    url: data.secure_url,
+    publicId: data.public_id,
+    width: data.width,
+    height: data.height,
+    format: data.format,
+    ordem: 0,
+    principal: false,
+    aplicarMarcaDagua: true
+  };
+}
+
+function normalizeImages(imovel: any, aplicarPadrao = true): any[] {
+  const imagensRaw = Array.isArray(imovel) ? imovel : (imovel?.imagens || imovel?.images || []);
+  if (!Array.isArray(imagensRaw)) return [];
+
+  return imagensRaw.map((img: any, index: number) => {
+    if (typeof img === "string") {
+      return {
+        url: img,
+        publicId: "",
+        ordem: index,
+        principal: index === 0,
+        aplicarMarcaDagua: aplicarPadrao
+      };
+    }
+
+    return {
+      url: img?.url || "",
+      publicId: img?.publicId || "",
+      ordem: img?.ordem ?? index,
+      principal: img?.principal ?? (index === 0),
+      aplicarMarcaDagua: img?.aplicarMarcaDagua ?? aplicarPadrao
+    };
+  }).filter((img: any) => img.url).sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0));
+}
+
 export default function AdminPropertyForm() {
   const { options, loading: optionsLoading } = useOptions();
   const { id } = useParams();
@@ -121,7 +192,132 @@ export default function AdminPropertyForm() {
   const [pendingType, setPendingType] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [images, setImages] = useState<any[]>([]);
-  const [aplicarMarcaDagua, setAplicarMarcaDagua] = useState(false);
+  const [uploadingFiles, setUploadingFiles] = useState<{ id: string; name: string; previewUrl: string; error?: string }[]>([]);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+
+  const handleDragStart = (index: number) => {
+    setDraggedIndex(index);
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (index: number) => {
+    if (draggedIndex === null || draggedIndex === index) return;
+    
+    const reordered = [...images];
+    const [draggedItem] = reordered.splice(draggedIndex, 1);
+    reordered.splice(index, 0, draggedItem);
+    
+    const updated = reordered.map((img, idx) => {
+      if (typeof img === 'string') {
+        return { url: img, aplicarMarcaDagua: false, ordem: idx };
+      }
+      return { ...img, ordem: idx };
+    });
+    
+    setImages(updated);
+    setDraggedIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const fileList = Array.from(files);
+    
+    const validFiles: File[] = [];
+    for (const file of fileList) {
+      if (!file.type.startsWith('image/')) {
+        alert(`O arquivo "${file.name}" não é uma imagem válida.`);
+        continue;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        alert(`A imagem "${file.name}" excede o limite máximo de 10MB.`);
+        continue;
+      }
+      validFiles.push(file);
+    }
+
+    if (validFiles.length === 0) return;
+
+    const newUploads = validFiles.map(file => ({
+      id: Math.random().toString(36).substring(2, 9),
+      name: file.name,
+      previewUrl: URL.createObjectURL(file),
+      file
+    }));
+
+    setUploadingFiles(prev => [...prev, ...newUploads.map(item => ({ id: item.id, name: item.name, previewUrl: item.previewUrl }))]);
+
+    try {
+      // Upload images in parallel safely, tracking each one
+      const uploadedResults = await Promise.all(
+        validFiles.map(async (file) => {
+          try {
+            const uploadResult = await uploadImageToCloudinary(file);
+            return {
+              url: uploadResult.url,
+              publicId: uploadResult.publicId,
+              aplicarMarcaDagua: aplicarMarcaDagua
+            };
+          } catch (error) {
+            console.error(`Erro no upload da imagem ${file.name}:`, error);
+            alert(`Houve um erro ao enviar a imagem "${file.name}".`);
+            return null;
+          }
+        })
+      );
+
+      // Filter out errors
+      const successUploads = uploadedResults.filter(img => img !== null) as any[];
+
+      if (successUploads.length > 0) {
+        setImages(prev => {
+          const updated = [...prev];
+          successUploads.forEach((img, index) => {
+            updated.push({
+              ...img,
+              ordem: updated.length,
+              principal: updated.length === 0
+            });
+          });
+
+          // Re-sort / adjust indices to ensure sequential integers
+          const finalized = updated.map((img, idx) => ({
+            ...img,
+            ordem: idx,
+            principal: idx === 0
+          }));
+
+          const firstUrl = finalized[0]?.url || "";
+          if (firstUrl && !mainImage) {
+            setMainImage(firstUrl);
+          }
+          return finalized;
+        });
+
+        triggerToast("Imagens enviadas com sucesso.", "success");
+      }
+    } catch (globalError) {
+      console.error("Erro geral no upload das imagens:", globalError);
+      triggerToast("Erro ao processar o envio das imagens.", "error");
+    } finally {
+      // Clear file list previewUrls and clean queue states
+      for (const item of newUploads) {
+        URL.revokeObjectURL(item.previewUrl);
+      }
+      setUploadingFiles([]);
+      e.target.value = "";
+    }
+  };
+
+  const [aplicarMarcaDagua, setAplicarMarcaDagua] = useState(true);
   const [videoUrl, setVideoUrl] = useState('');
   const [videos, setVideos] = useState<string[]>([]);
   const [mainImage, setMainImage] = useState('');
@@ -159,8 +355,13 @@ export default function AdminPropertyForm() {
       priceLocacao: 0,
       condoFee: 0,
       iptu: 0,
+      valorTaxaLixo: 0,
+      valorTaxaGas: 0,
+      taxaLixo: 0,
+      taxaGas: 0,
       fireInsurance: 0,
       totalMonthlyPrice: 0,
+      valorTotalMensal: 0,
       usefulArea: 0,
       areaConstruida: 0,
       totalArea: 0,
@@ -240,7 +441,7 @@ export default function AdminPropertyForm() {
   const isRented = watch('rented');
   useEffect(() => {
     if (isRented) {
-      setValue('status', 'Locado');
+      setValue('status', 'Alugado');
     }
   }, [isRented, setValue]);
 
@@ -249,14 +450,30 @@ export default function AdminPropertyForm() {
   const condoFee = watch('condoFee');
   const iptu = watch('iptu');
   const fireInsurance = watch('fireInsurance');
+  const valorTaxaLixo = watch('valorTaxaLixo');
+  const valorTaxaGas = watch('valorTaxaGas');
+  const taxes = watch('taxes'); // other fees
   const priceVenda = watch('priceVenda');
   const areaUtil = watch('usefulArea');
   const areaConstruida = watch('areaConstruida');
 
   useEffect(() => {
-    const total = (Number(priceLocacao) || 0) + (Number(condoFee) || 0) + (Number(iptu) || 0) + (Number(fireInsurance) || 0);
+    const toNumber = (value: any) => {
+      const number = Number(String(value || "0").replace(",", "."));
+      return Number.isFinite(number) ? number : 0;
+    };
+    
+    const total = toNumber(priceLocacao) + 
+                  toNumber(condoFee) + 
+                  toNumber(iptu) + 
+                  toNumber(valorTaxaLixo) + 
+                  toNumber(valorTaxaGas) + 
+                  toNumber(fireInsurance) + 
+                  toNumber(taxes);
+                  
     setValue('totalMonthlyPrice', total);
-  }, [priceLocacao, condoFee, iptu, fireInsurance, setValue]);
+    setValue('valorTotalMensal', total);
+  }, [priceLocacao, condoFee, iptu, valorTaxaLixo, valorTaxaGas, fireInsurance, taxes, setValue]);
 
   useEffect(() => {
     const areaBase = Number(areaUtil) || Number(areaConstruida);
@@ -331,7 +548,22 @@ export default function AdminPropertyForm() {
             Object.keys(data).forEach(key => {
               setValue(key, data[key]);
             });
-            setImages(data.images || []);
+            
+            // Normalize "Alugado" status for backwards compatibility
+            const statusStr = String(data.status || "").toLowerCase();
+            const alugado = data.imovelAlugado === true || statusStr.includes("alugado") || statusStr.includes("locado") || data.rented === true;
+            setValue('rented', alugado);
+            if (alugado) {
+              setValue('status', 'Alugado');
+            }
+
+            // Set garbage and gas taxes with fallback for old properties
+            const loadedTaxaLixo = Number(data.valorTaxaLixo ?? data.taxaLixo ?? 0);
+            const loadedTaxaGas = Number(data.valorTaxaGas ?? data.taxaGas ?? 0);
+            setValue('valorTaxaLixo', loadedTaxaLixo);
+            setValue('valorTaxaGas', loadedTaxaGas);
+
+            setImages(normalizeImages(data));
             setVideos(data.videos || []);
             setMainImage(data.mainImage || '');
             
@@ -377,7 +609,7 @@ export default function AdminPropertyForm() {
     setImages(newImages);
     if (!mainImage) setMainImage(trimmedUrl);
     setImageUrl('');
-    setAplicarMarcaDagua(false);
+    setAplicarMarcaDagua(true);
   };
 
   const removeImage = (urlToRemove: string) => {
@@ -446,6 +678,10 @@ export default function AdminPropertyForm() {
   const onSubmit = async (data: any) => {
     setLoading(true);
     try {
+      console.log("Cloudinary cloud:", import.meta.env.VITE_CLOUDINARY_CLOUD_NAME);
+      console.log("Upload preset:", import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
+      console.log("Imagens antes de salvar:", images);
+
       // Check for duplicate code
       const codeQ = query(collection(db, 'imoveis'), where('code', '==', data.code));
       const codeSnap = await getDocs(codeQ);
@@ -457,27 +693,90 @@ export default function AdminPropertyForm() {
         return;
       }
 
+      if (uploadingFiles.length > 0) {
+        alert("Aguarde o término do envio das imagens antes de salvar o imóvel.");
+        setLoading(false);
+        return;
+      }
+
       console.log("[PropertyForm] Iniciando gravação do imóvel...");
       console.log("Salvando imóvel em:", id ? `imoveis/${id}` : "Novo documento na coleção 'imoveis'");
-      console.log("Dados do imóvel:", {
-        ...data,
-        images,
-        videos,
-        mainImage
+
+      // Recalculate ordem and principal based on the final images state
+      const finalImagesOrdered = images.map((img, idx) => {
+        const unwrapped = typeof img === 'string' ? { url: img, publicId: '', aplicarMarcaDagua: true } : img;
+        return {
+          url: unwrapped.url || '',
+          publicId: unwrapped.publicId || '',
+          ordem: idx,
+          principal: (mainImage ? (unwrapped.url === mainImage) : (idx === 0)),
+          aplicarMarcaDagua: unwrapped.aplicarMarcaDagua !== false
+        };
       });
+
+      console.log("Imagens normalizadas:", finalImagesOrdered);
+
+      // Find the main image URL
+      const finalMainImg = finalImagesOrdered.find(img => img.principal)?.url || (finalImagesOrdered[0]?.url || '');
+      console.log("Imagem principal:", finalMainImg);
+      console.log("Salvando imóvel em:", "imoveis");
+
+      const toNumber = (value: any) => {
+        const number = Number(String(value || "0").replace(",", "."));
+        return Number.isFinite(number) ? number : 0;
+      };
+
+      const valLixo = toNumber(data.valorTaxaLixo ?? data.taxaLixo);
+      const valGas = toNumber(data.valorTaxaGas ?? data.taxaGas);
+      const aluguel = toNumber(data.priceLocacao);
+      const condoFee = toNumber(data.condoFee);
+      const iptu = toNumber(data.iptu);
+      const fireInsurance = toNumber(data.fireInsurance);
+      const outrasTaxas = toNumber(data.taxes);
+
+      const computedTotal = aluguel + condoFee + iptu + valLixo + valGas + fireInsurance + outrasTaxas;
 
       const propertyData: any = {
         ...data,
-        images,
+        valorTaxaLixo: valLixo,
+        valorTaxaGas: valGas,
+        taxaLixo: valLixo,
+        taxaGas: valGas,
+        valorTotalMensal: computedTotal,
+        totalMonthlyPrice: computedTotal,
+        images: finalImagesOrdered,
+        imagens: finalImagesOrdered,
+        mainImage: finalMainImg,
+        imagemPrincipal: finalMainImg,
         videos,
-        mainImage,
         updatedAt: serverTimestamp(),
-        // Explicit redundancy for visibility across all possible filters
-        ativo: data.publicado === true,
-        publicadoNoSite: data.publicado === true,
-        publicado: data.publicado === true,
         destaque: data.destaque === true
       };
+
+      const statusValue = String(data.status || "").trim();
+      const checkboxRented = data.rented === true;
+      const isAlugado = checkboxRented || statusValue.toLowerCase().includes("alugado") || statusValue.toLowerCase().includes("locado");
+
+      if (isAlugado) {
+        propertyData.status = "Alugado";
+        propertyData.imovelAlugado = true;
+        propertyData.disponivelParaVisita = false;
+        propertyData.availableForVisit = "Não";
+        propertyData.publicadoNoSite = true;
+        propertyData.publicado = true;
+        propertyData.ativo = true;
+        propertyData.rented = true;
+      } else {
+        propertyData.imovelAlugado = false;
+        propertyData.rented = false;
+        if (propertyData.status === "Alugado" || propertyData.status === "Locado") {
+          propertyData.status = "Disponível";
+        }
+        propertyData.disponivelParaVisita = data.availableForVisit !== "Não";
+        propertyData.publicadoNoSite = data.publicado === true;
+        propertyData.publicado = data.publicado === true;
+        propertyData.ativo = data.publicado === true;
+      }
 
       console.log("[PropertyForm] Salvando na coleção 'imoveis' do projeto:", auth.app.options.projectId);
 
@@ -823,172 +1122,223 @@ export default function AdminPropertyForm() {
               </select>
             </div>
 
-            {watch('businessType') === 'Venda' && (
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700">Valor de Venda (R$)</label>
-                <Controller
-                  name="priceVenda"
-                  control={control}
-                  render={({ field }) => (
-                    <input
-                      type="text"
-                      className="input-field"
-                      value={maskCurrency(field.value ?? '')}
-                      onChange={(e) => field.onChange(parseCurrencyToNumber(e.target.value))}
-                      placeholder="0,00"
-                    />
+            {(() => {
+              const businessType = watch('businessType');
+              const isTypeLocacao = businessType === 'Locação' || businessType === 'Venda e Locação';
+              const isTypeVenda = businessType === 'Venda' || businessType === 'Venda e Locação';
+
+              return (
+                <>
+                  {isTypeVenda && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold text-gray-700">Valor de Venda (R$)</label>
+                      <Controller
+                        name="priceVenda"
+                        control={control}
+                        render={({ field }) => (
+                          <input
+                            type="text"
+                            className="input-field"
+                            value={maskCurrency(field.value ?? '')}
+                            onChange={(e) => field.onChange(parseCurrencyToNumber(e.target.value))}
+                            placeholder="0,00"
+                          />
+                        )}
+                      />
+                    </div>
                   )}
-                />
-              </div>
-            )}
 
-            {watch('businessType') === 'Locação' && (
-              <>
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700">Valor do Aluguel (R$)</label>
-                  <Controller
-                    name="priceLocacao"
-                    control={control}
-                    render={({ field }) => (
-                      <input
-                        type="text"
-                        className="input-field"
-                        value={maskCurrency(field.value ?? '')}
-                        onChange={(e) => field.onChange(parseCurrencyToNumber(e.target.value))}
-                        placeholder="0,00"
+                  {isTypeLocacao && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold text-gray-700">Valor do Aluguel (R$)</label>
+                      <Controller
+                        name="priceLocacao"
+                        control={control}
+                        render={({ field }) => (
+                          <input
+                            type="text"
+                            className="input-field"
+                            value={maskCurrency(field.value ?? '')}
+                            onChange={(e) => field.onChange(parseCurrencyToNumber(e.target.value))}
+                            placeholder="0,00"
+                          />
+                        )}
                       />
-                    )}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700">Valor do Condomínio (R$)</label>
-                  <Controller
-                    name="condoFee"
-                    control={control}
-                    render={({ field }) => (
-                      <input
-                        type="text"
-                        className="input-field"
-                        value={maskCurrency(field.value ?? '')}
-                        onChange={(e) => field.onChange(parseCurrencyToNumber(e.target.value))}
-                        placeholder="0,00"
-                      />
-                    )}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700">Valor do IPTU (R$)</label>
-                  <Controller
-                    name="iptu"
-                    control={control}
-                    render={({ field }) => (
-                      <input
-                        type="text"
-                        className="input-field"
-                        value={maskCurrency(field.value ?? '')}
-                        onChange={(e) => field.onChange(parseCurrencyToNumber(e.target.value))}
-                        placeholder="0,00"
-                      />
-                    )}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700">Seguro Incêndio (R$)</label>
-                  <Controller
-                    name="fireInsurance"
-                    control={control}
-                    render={({ field }) => (
-                      <input
-                        type="text"
-                        className="input-field"
-                        value={maskCurrency(field.value ?? '')}
-                        onChange={(e) => field.onChange(parseCurrencyToNumber(e.target.value))}
-                        placeholder="0,00"
-                      />
-                    )}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700 font-black text-primary-green">Valor Total Mensal (R$)</label>
-                  <Controller
-                    name="totalMonthlyPrice"
-                    control={control}
-                    render={({ field }) => (
-                      <input
-                        type="text"
-                        className="input-field font-bold bg-green-50 border-green-200"
-                        value={maskCurrency(field.value ?? '')}
-                        onChange={(e) => field.onChange(parseCurrencyToNumber(e.target.value))}
-                        placeholder="0,00"
-                      />
-                    )}
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700">Garantia Locatícia</label>
-                  <select {...register('leaseWarrantyType')} className="input-field">
-                    <option value="">Selecione...</option>
-                    {leaseOptions.garantias.map((o: any) => (
-                      <option key={o.id} value={o.nome}>{o.nome}</option>
-                    ))}
-                  </select>
-                </div>
+                    </div>
+                  )}
 
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700">Permite Pet?</label>
-                  <select {...register('allowsPet')} className="input-field">
-                    <option value="">Selecione...</option>
-                    <option value="Sim">Sim</option>
-                    <option value="Não">Não</option>
-                  </select>
-                </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-gray-700">Valor do Condomínio (R$)</label>
+                    <Controller
+                      name="condoFee"
+                      control={control}
+                      render={({ field }) => (
+                        <input
+                          type="text"
+                          className="input-field"
+                          value={maskCurrency(field.value ?? '')}
+                          onChange={(e) => field.onChange(parseCurrencyToNumber(e.target.value))}
+                          placeholder="0,00"
+                        />
+                      )}
+                    />
+                  </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700">Mobiliado?</label>
-                  <select {...register('furnishingStatus')} className="input-field">
-                    <option value="">Selecione...</option>
-                    <option value="Mobiliado">Sim</option>
-                    <option value="Não Mobiliado">Não</option>
-                    <option value="Parcialmente">Parcialmente</option>
-                  </select>
-                </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-gray-700">Valor do IPTU (R$)</label>
+                    <Controller
+                      name="iptu"
+                      control={control}
+                      render={({ field }) => (
+                        <input
+                          type="text"
+                          className="input-field"
+                          value={maskCurrency(field.value ?? '')}
+                          onChange={(e) => field.onChange(parseCurrencyToNumber(e.target.value))}
+                          placeholder="0,00"
+                        />
+                      )}
+                    />
+                  </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700">Tempo Mínimo Contrato</label>
-                  <select {...register('minLeaseTerm')} className="input-field">
-                    <option value="">Selecione...</option>
-                    {leaseOptions.contratos.map((o: any) => (
-                      <option key={o.id} value={o.nome}>{o.nome}</option>
-                    ))}
-                  </select>
-                </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-gray-700 font-extrabold text-[#a27e1f]">Taxa de Lixo (R$)</label>
+                    <Controller
+                      name="valorTaxaLixo"
+                      control={control}
+                      render={({ field }) => (
+                        <input
+                          type="text"
+                          className="input-field font-semibold bg-amber-50/20 border-amber-200"
+                          value={maskCurrency(field.value ?? '')}
+                          onChange={(e) => field.onChange(parseCurrencyToNumber(e.target.value))}
+                          placeholder="0,00"
+                        />
+                      )}
+                    />
+                  </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700">Disponível para Visita?</label>
-                  <select {...register('availableForVisit')} className="input-field">
-                    <option value="">Selecione...</option>
-                    <option value="Sim">Sim</option>
-                    <option value="Não">Não</option>
-                  </select>
-                </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-gray-700 font-extrabold text-[#a27e1f]">Taxa de Gás (R$)</label>
+                    <Controller
+                      name="valorTaxaGas"
+                      control={control}
+                      render={({ field }) => (
+                        <input
+                          type="text"
+                          className="input-field font-semibold bg-amber-50/20 border-amber-200"
+                          value={maskCurrency(field.value ?? '')}
+                          onChange={(e) => field.onChange(parseCurrencyToNumber(e.target.value))}
+                          placeholder="0,00"
+                        />
+                      )}
+                    />
+                  </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700">Status da Locação</label>
-                  <select {...register('leaseStatus')} className="input-field">
-                    <option value="">Selecione...</option>
-                    {leaseOptions.status.map((o: any) => (
-                      <option key={o.id} value={o.nome}>{o.nome}</option>
-                    ))}
-                  </select>
-                </div>
+                  {isTypeLocacao && (
+                    <>
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-gray-700">Seguro Incêndio (R$)</label>
+                        <Controller
+                          name="fireInsurance"
+                          control={control}
+                          render={({ field }) => (
+                            <input
+                              type="text"
+                              className="input-field"
+                              value={maskCurrency(field.value ?? '')}
+                              onChange={(e) => field.onChange(parseCurrencyToNumber(e.target.value))}
+                              placeholder="0,00"
+                            />
+                          )}
+                        />
+                      </div>
 
-                <div className="md:col-span-3 space-y-2">
-                  <label className="text-sm font-bold text-gray-700">Observações da Locação</label>
-                  <textarea {...register('leaseNotes')} className="input-field h-24" placeholder="Detalhes adicionais sobre a locação..." />
-                </div>
-              </>
-            )}
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-gray-700 font-black text-primary-green">Valor Total Mensal (R$)</label>
+                        <Controller
+                          name="totalMonthlyPrice"
+                          control={control}
+                          render={({ field }) => (
+                            <input
+                              type="text"
+                              className="input-field font-bold bg-green-50 border-green-200"
+                              value={maskCurrency(field.value ?? '')}
+                              onChange={(e) => field.onChange(parseCurrencyToNumber(e.target.value))}
+                              placeholder="0,00"
+                              readOnly
+                            />
+                          )}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-gray-700">Garantia Locatícia</label>
+                        <select {...register('leaseWarrantyType')} className="input-field">
+                          <option value="">Selecione...</option>
+                          {leaseOptions.garantias.map((o: any) => (
+                            <option key={o.id} value={o.nome}>{o.nome}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-gray-700">Permite Pet?</label>
+                        <select {...register('allowsPet')} className="input-field">
+                          <option value="">Selecione...</option>
+                          <option value="Sim">Sim</option>
+                          <option value="Não">Não</option>
+                        </select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-gray-700">Mobiliado?</label>
+                        <select {...register('furnishingStatus')} className="input-field">
+                          <option value="">Selecione...</option>
+                          <option value="Mobiliado">Sim</option>
+                          <option value="Não Mobiliado">Não</option>
+                          <option value="Parcialmente">Parcialmente</option>
+                        </select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-gray-700">Tempo Mínimo Contrato</label>
+                        <select {...register('minLeaseTerm')} className="input-field">
+                          <option value="">Selecione...</option>
+                          {leaseOptions.contratos.map((o: any) => (
+                            <option key={o.id} value={o.nome}>{o.nome}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-gray-700">Disponível para Visita?</label>
+                        <select {...register('availableForVisit')} className="input-field">
+                          <option value="">Selecione...</option>
+                          <option value="Sim">Sim</option>
+                          <option value="Não">Não</option>
+                        </select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-gray-700">Status da Locação</label>
+                        <select {...register('leaseStatus')} className="input-field">
+                          <option value="">Selecione...</option>
+                          {leaseOptions.status.map((o: any) => (
+                            <option key={o.id} value={o.nome}>{o.nome}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="md:col-span-3 space-y-2">
+                        <label className="text-sm font-bold text-gray-700">Observações da Locação</label>
+                        <textarea {...register('leaseNotes')} className="input-field h-24" placeholder="Detalhes adicionais sobre a locação..." />
+                      </div>
+                    </>
+                  )}
+                </>
+              );
+            })()}
 
             <div className="space-y-2">
               <label className="text-sm font-bold text-gray-700">Taxas Adicionais (R$)</label>
@@ -1530,124 +1880,202 @@ export default function AdminPropertyForm() {
       case 'img':
         return (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
-            <div className="bg-gray-50 p-8 rounded-2xl border border-gray-100">
-               <h4 className="font-bold text-primary-black mb-4 flex items-center gap-2">
-                 <ImageIcon size={20} className="text-gold" /> Adicionar Imagens por URL (Ex: Postimage)
-               </h4>
-               <p className="text-sm text-gray-500 mb-6 font-medium">Use sites como <strong>Postimage.org</strong> ou <strong>Imgur</strong>. Cole o "Link Direto" da imagem abaixo.</p>
-               
-               <div className="flex flex-col md:flex-row gap-4 items-start">
-                 <div className="flex-grow w-full space-y-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-6 md:p-8 rounded-2xl border border-gray-100">
+               {/* Seção 1: Upload de arquivos */}
+               <div className="space-y-4">
+                 <h4 className="font-bold text-primary-black flex items-center gap-2">
+                   <UploadCloud size={20} className="text-gold" /> Enviar Fotos do Computador
+                 </h4>
+                 <p className="text-xs text-gray-500 font-medium">
+                   Selecione uma ou mais fotos (JPG, PNG, WEBP) de até 10MB para fazer o upload automático para o Cloudinary.
+                 </p>
+                 
+                 <label className="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-gray-300 hover:border-gold rounded-2xl cursor-pointer bg-white transition-all hover:bg-gold/5 group">
+                   <div className="flex flex-col items-center justify-center pt-5 pb-6 text-center px-4">
+                     <Upload size={28} className="text-gray-400 group-hover:text-gold mb-2 transition-colors" />
+                     <p className="text-xs text-gray-700 font-bold group-hover:text-gold transition-colors">
+                       Clique para selecionar fotos
+                     </p>
+                     <p className="text-[10px] text-gray-400 mt-1 uppercase tracking-wider">
+                       Arraste e solte ou escolha arquivos
+                     </p>
+                   </div>
                    <input 
-                     type="text" 
-                     value={imageUrl}
-                     onChange={(e) => setImageUrl(e.target.value)}
-                     onKeyDown={(e) => {
-                       if (e.key === 'Enter') {
-                         e.preventDefault();
-                         addImageUrl();
-                       }
-                     }}
-                     placeholder="https://exemplo.com/imagem.jpg"
-                     className={`input-field w-full ${imageUrl && !isValidImageUrl(imageUrl) ? 'border-red-300' : ''}`}
+                     type="file" 
+                     className="hidden" 
+                     accept="image/png, image/jpeg, image/jpg, image/webp" 
+                     multiple 
+                     onChange={handleFileChange}
                    />
-                   {imageUrl && !isValidImageUrl(imageUrl) && (
-                     <p className="text-[10px] text-red-500 font-bold ml-1">URL inválida</p>
-                   )}
+                 </label>
+               </div>
+
+               {/* Seção 2: URL Manual */}
+               <div className="space-y-4 border-t md:border-t-0 md:border-l border-gray-200 pt-6 md:pt-0 md:pl-6 flex flex-col justify-between">
+                 <div>
+                   <h4 className="font-bold text-primary-black flex items-center gap-2">
+                     <ImageIcon size={20} className="text-gold" /> Adicionar Imagem por URL
+                   </h4>
+                   <p className="text-xs text-gray-500 font-medium">
+                     Insira a URL direta da imagem (ex: Postimage, Imgur).
+                   </p>
                    
-                   <div className="flex items-center gap-2 pt-1.5 pl-1">
+                   <div className="mt-3 flex flex-col space-y-2">
                      <input 
-                       type="checkbox" 
-                       id="aplicarMarcaDaguaCheck"
-                       checked={aplicarMarcaDagua}
-                       onChange={(e) => setAplicarMarcaDagua(e.target.checked)}
-                       className="rounded border-gray-300 text-gold focus:ring-gold focus:ring-offset-0 h-4 w-4"
+                       type="text" 
+                       value={imageUrl}
+                       onChange={(e) => setImageUrl(e.target.value)}
+                       onKeyDown={(e) => {
+                         if (e.key === 'Enter') {
+                           e.preventDefault();
+                           addImageUrl();
+                         }
+                       }}
+                       placeholder="https://exemplo.com/imagem.jpg"
+                       className={`input-field w-full ${imageUrl && !isValidImageUrl(imageUrl) ? 'border-red-300' : ''}`}
                      />
-                     <label htmlFor="aplicarMarcaDaguaCheck" className="text-xs font-black uppercase text-gray-600 tracking-wider cursor-pointer select-none">
-                       Aplicar marca d'água ao adicionar
-                     </label>
+                     
+                     <div className="flex items-center gap-2 pt-1 pl-1">
+                       <input 
+                         type="checkbox" 
+                         id="aplicarMarcaDaguaCheck"
+                         checked={aplicarMarcaDagua}
+                         onChange={(e) => setAplicarMarcaDagua(e.target.checked)}
+                         className="rounded border-gray-300 text-gold focus:ring-gold focus:ring-offset-0 h-4 w-4"
+                       />
+                       <label htmlFor="aplicarMarcaDaguaCheck" className="text-xs font-black uppercase text-gray-600 tracking-wider cursor-pointer select-none">
+                         Aplicar marca d'água ao adicionar
+                       </label>
+                     </div>
                    </div>
                  </div>
+
                  <button 
                    type="button"
                    onClick={addImageUrl}
-                   className="btn-gold !px-8 h-[50px] shrink-0"
+                   className="btn-gold !px-8 h-[46px] w-full mt-4 flex items-center justify-center gap-2 shadow-sm"
                    disabled={!imageUrl || !isValidImageUrl(imageUrl)}
                  >
-                   <Plus size={20} /> Adicionar
+                   <Plus size={18} /> Adicionar URL
                  </button>
                </div>
-               
-               {imageUrl && isValidImageUrl(imageUrl) && (
-                 <div className="mt-4 p-4 bg-white rounded-xl border border-gray-100 max-w-xs">
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Pré-visualização da URL:</p>
-                    <SafeImage src={imageUrl} className="w-full aspect-video rounded-lg shadow-sm" />
-                 </div>
-               )}
             </div>
 
-            {images.length > 0 && (
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                {images.map((img, idx) => {
-                  const unwrapped = typeof img === 'string' ? { url: img, aplicarMarcaDagua: false } : img;
-                  const url = unwrapped.url;
-                  const isWatermarked = unwrapped.aplicarMarcaDagua === true;
-                  
-                  return (
-                    <div key={idx} className={`relative rounded-xl overflow-hidden group aspect-square border-2 transition-all ${mainImage === url ? 'border-gold shadow-lg shadow-gold/20 scale-[1.02]' : 'border-gray-100 hover:border-gold/50'}`}>
-                      <SafeImage 
-                        src={url} 
-                        alt={`Preview ${idx}`} 
-                        className="w-full h-full" 
-                      />
-                      
-                      {/* Watermark Indicating Border */}
-                      {isWatermarked && (
-                        <div className="absolute inset-0 bg-emerald-500/10 pointer-events-none border-[3px] border-emerald-500/60 rounded-lg " />
-                      )}
+            {imageUrl && isValidImageUrl(imageUrl) && (
+              <div className="p-4 bg-white rounded-xl border border-gray-100 max-w-xs shadow-sm shadow-gold/5">
+                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Pré-visualização da URL:</p>
+                 <SafeImage src={imageUrl} className="w-full aspect-video rounded-lg shadow-sm" />
+              </div>
+            )}
 
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
-                         <button 
-                           type="button" 
-                           onClick={() => setMainImage(url)}
-                           className="p-1.5 bg-gold text-primary-black rounded-lg hover:scale-110"
-                           title="Definir como principal"
-                         >
-                           <Sparkles size={14} />
-                         </button>
-                         <button 
-                           type="button" 
-                           onClick={() => toggleWatermark(url)}
-                           className={`p-1.5 rounded-lg hover:scale-110 ${isWatermarked ? 'bg-emerald-500 text-white' : 'bg-white text-gray-700'}`}
-                           title={isWatermarked ? "Remover Marca d'Água" : "Aplicar Marca d'Água"}
-                         >
-                           <FileText size={14} />
-                         </button>
-                         <button 
-                           type="button" 
-                           onClick={() => removeImage(url)}
-                           className="p-1.5 bg-red-500 text-white rounded-lg hover:scale-110"
-                           title="Excluir"
-                         >
-                           <X size={14} />
-                         </button>
+            {(images.length > 0 || uploadingFiles.length > 0) && (
+              <div className="space-y-4">
+                <div className="flex justify-between items-center bg-gray-50/50 py-2 px-4 rounded-xl border border-gray-100/60">
+                  <span className="text-xs font-extrabold text-gold uppercase tracking-widest">Galeria de Fotos ({images.length})</span>
+                  <span className="text-[10px] text-gray-500 font-bold uppercase">💡 Arraste as fotos para mudar a ordem de exibição</span>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                  {images.map((img, idx) => {
+                    const unwrapped = typeof img === 'string' ? { url: img, aplicarMarcaDagua: true } : img;
+                    const url = unwrapped.url;
+                    const isWatermarked = unwrapped.aplicarMarcaDagua !== false;
+                    
+                    return (
+                      <div 
+                        key={`${url}-${idx}`} 
+                        draggable
+                        onDragStart={() => handleDragStart(idx)}
+                        onDragOver={(e) => handleDragOver(e, idx)}
+                        onDrop={() => handleDrop(idx)}
+                        onDragEnd={handleDragEnd}
+                        className={`relative rounded-xl overflow-hidden group aspect-square border-2 transition-all cursor-move select-none ${draggedIndex === idx ? 'opacity-45 scale-95 border-dashed border-gold/40' : ''} ${mainImage === url ? 'border-gold shadow-lg shadow-gold/25 scale-[1.03]' : 'border-gray-100 hover:border-gold/50'}`}
+                      >
+                        <SafeImage 
+                          src={url} 
+                          alt={`Preview ${idx}`} 
+                          className="w-full h-full object-cover" 
+                        />
+                        
+                        {/* Watermark Indicating Border */}
+                        {isWatermarked && (
+                          <div className="absolute inset-0 bg-emerald-500/10 pointer-events-none border-[3px] border-emerald-500/60 rounded-xl" />
+                        )}
+
+                        {/* Order Number Indicator */}
+                        <div className="absolute top-2 right-2 bg-primary-black/80 backdrop-blur-sm text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center shadow">
+                          {idx + 1}
+                        </div>
+
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 rounded-lg">
+                           <button 
+                             type="button" 
+                             onClick={() => setMainImage(url)}
+                             className="p-1.5 bg-gold text-primary-black rounded-lg hover:scale-110 transition-transform"
+                             title="Definir como principal"
+                           >
+                             <Sparkles size={14} />
+                           </button>
+                           <button 
+                             type="button" 
+                             onClick={() => toggleWatermark(url)}
+                             className={`p-1.5 rounded-lg hover:scale-110 transition-transform ${isWatermarked ? 'bg-emerald-500 text-white' : 'bg-white text-gray-700'}`}
+                             title={isWatermarked ? "Remover Marca d'Água" : "Aplicar Marca d'Água"}
+                           >
+                             <FileText size={14} />
+                           </button>
+                           <button 
+                             type="button" 
+                             onClick={() => removeImage(url)}
+                             className="p-1.5 bg-red-500 text-white rounded-lg hover:scale-110 transition-transform"
+                             title="Excluir"
+                           >
+                             <X size={14} />
+                           </button>
+                        </div>
+
+                        {mainImage === url && (
+                          <div className="absolute top-2 left-2 bg-gold text-primary-black text-[9px] font-black tracking-widest px-1.5 py-0.5 rounded uppercase z-10 shadow">
+                            PRINCIPAL
+                          </div>
+                        )}
+
+                        <div className="absolute bottom-2 left-2 flex items-center gap-1 bg-black/70 backdrop-blur-md text-white text-[9px] font-bold px-2 py-1 rounded-lg shadow z-10 hover:bg-black/95 transition-all">
+                          <input 
+                            type="checkbox" 
+                            id={`wm-check-${idx}`}
+                            checked={isWatermarked}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              toggleWatermark(url);
+                            }}
+                            className="rounded border-gray-400 text-gold focus:ring-0 focus:ring-offset-0 h-3 w-3 bg-transparent cursor-pointer"
+                          />
+                          <label htmlFor={`wm-check-${idx}`} className="cursor-pointer select-none text-[8px]">
+                            Marca d'água
+                          </label>
+                        </div>
+
+                        {isWatermarked && (
+                          <div className="absolute bottom-2 right-2 bg-emerald-700 text-white text-[8px] font-bold px-1.5 py-0.5 rounded uppercase flex items-center gap-1 shadow z-10">
+                            <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                            M. Dagua
+                          </div>
+                        )}
                       </div>
+                    );
+                  })}
 
-                      {mainImage === url && (
-                        <div className="absolute top-2 left-2 bg-gold text-primary-black text-[9px] font-black tracking-widest px-1.5 py-0.5 rounded uppercase z-10">
-                          PRINCIPAL
-                        </div>
-                      )}
-
-                      {isWatermarked && (
-                        <div className="absolute bottom-2 right-2 bg-emerald-700 text-white text-[8px] font-bold px-1.5 py-0.5 rounded uppercase flex items-center gap-1 shadow z-10">
-                          <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
-                          M. Dagua
-                        </div>
-                      )}
+                  {uploadingFiles.map((file) => (
+                    <div key={file.id} className="relative rounded-xl overflow-hidden aspect-square border-2 border-dashed border-gray-300 flex flex-col items-center justify-center p-3 bg-gray-50/50 animate-pulse select-none">
+                      <img src={file.previewUrl} alt="Uploading preview" className="absolute inset-0 w-full h-full object-cover opacity-40 blur-[1px]" />
+                      <div className="relative z-10 flex flex-col items-center gap-2">
+                        <div className="w-9 h-9 rounded-full border-4 border-gold border-t-transparent animate-spin" />
+                        <span className="text-[10px] font-black uppercase tracking-wider text-primary-black bg-white/80 px-2 py-0.5 rounded shadow">Enviando...</span>
+                      </div>
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -1881,7 +2309,12 @@ export default function AdminPropertyForm() {
         variants={staggerContainer}
         initial="initial"
         animate="animate"
-        onSubmit={handleSubmit(onSubmit)} 
+        onSubmit={handleSubmit(onSubmit, (formErrors) => {
+          console.warn("Erros de validação do formulário:", formErrors);
+          triggerToast("Verifique os campos obrigatórios em vermelho antes de salvar.", "error");
+          setShowConfirmModal(false);
+          setLoading(false);
+        })} 
         className="space-y-10 pb-20"
       >
       {/* Property Link Card (Task 6) */}

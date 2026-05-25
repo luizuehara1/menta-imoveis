@@ -30,7 +30,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import PageWrapper from '../../components/PageWrapper';
 import { SafeImage } from '../../components/ui/SafeImage';
-import { formatCurrency, isValidPublicProperty, cleanPhoneForWhatsapp, getSafeImageUrl } from '../../lib/utils';
+import { formatCurrency, isValidPublicProperty, cleanPhoneForWhatsapp, getSafeImageUrl, isImovelAlugado } from '../../lib/utils';
 
 export default function PropertyDetail() {
   const { id } = useParams();
@@ -58,10 +58,10 @@ export default function PropertyDetail() {
     }
     
     return images.filter(Boolean).map(img => {
-      const unwrapped = typeof img === 'string' ? { url: img, aplicarMarcaDagua: false } : img;
+      const unwrapped = typeof img === 'string' ? { url: img, aplicarMarcaDagua: true } : img;
       return {
         url: getSafeImageUrl(unwrapped.url),
-        aplicarMarcaDagua: unwrapped.aplicarMarcaDagua === true
+        aplicarMarcaDagua: unwrapped.aplicarMarcaDagua !== false
       };
     });
   }, [property]);
@@ -179,6 +179,11 @@ export default function PropertyDetail() {
               <span className="bg-gold/10 text-gold px-4 py-1 rounded-full text-[9px] font-black uppercase tracking-widest">
                 {property.propertyType}
               </span>
+              {isImovelAlugado(property) && (
+                <span className="bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-200 px-4 py-1 rounded-full text-[9px] font-black uppercase tracking-widest">
+                  JÁ ALUGADO / INDISPONÍVEL PARA VISITA
+                </span>
+              )}
               {property.statusImovel && (
                 <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest ml-auto lg:ml-2">
                   {property.statusImovel}
@@ -218,7 +223,7 @@ export default function PropertyDetail() {
                       {galleryImagesWithMeta[activeImage]?.aplicarMarcaDagua && (
                         <div className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden z-10 select-none">
                            <img 
-                             src={settings?.empresa?.marcaDaguaUrl || '/watermark.png'} 
+                             src={settings?.empresa?.marcaDaguaUrl || settings?.empresa?.logoCabecalhoUrl || settings?.aparencia?.logoUrl || '/watermark.png'} 
                              alt="Watermark" 
                              className="w-[50%] max-w-[360px] opacity-[0.09] object-contain select-none pointer-events-none"
                              onError={(e) => { e.currentTarget.style.display = 'none'; }}
@@ -264,35 +269,84 @@ export default function PropertyDetail() {
                     ))}
                   </div>
                 )}
-              </div>
-
-               {/* Mobile CTA (Hidden on Desktop) */}
-              <div className="lg:hidden space-y-4">
-                <div className="bg-white p-8 rounded-[2rem] border border-gray-100 shadow-xl space-y-6">
-                   <div>
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Investimento</p>
-                      <p className="text-4xl font-display font-bold text-primary-black tracking-tight">
-                        {formatCurrency(property.businessType === 'Locação' ? property.priceLocacao : property.priceVenda)}
-                        {property.businessType === 'Locação' && <span className="text-sm font-medium"> / mês</span>}
-                      </p>
-                   </div>
-                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                     <a 
-                      href={whatsappUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-center gap-3 bg-emerald-500 text-white py-5 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
-                     >
-                       <MessageCircle size={20} /> Chamar no WhatsApp
-                     </a>
-                     <button 
-                      onClick={scrollToScheduler}
-                      className="flex items-center justify-center gap-3 bg-gold text-primary-black py-5 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-lg shadow-gold/20 active:scale-95 transition-all"
-                     >
-                       <Calendar size={18} /> Agendar Visita
-                     </button>
-                   </div>
-                </div>
+                           {/* Mobile CTA (Hidden on Desktop) */}
+               <div className="lg:hidden space-y-4">
+                 <div className="bg-white p-8 rounded-[2rem] border border-gray-100 shadow-xl space-y-6">
+                    {isImovelAlugado(property) ? (
+                      property.businessType === 'Venda e Locação' && property.priceVenda ? (
+                        <div className="space-y-4">
+                          <div>
+                             <p className="text-[10px] font-black text-emerald-700 uppercase tracking-widest mb-1">Disponível para Venda (Investimento)</p>
+                             <p className="text-4xl font-display font-bold text-primary-black tracking-tight">
+                               {formatCurrency(property.priceVenda)}
+                             </p>
+                             <p className="text-xs text-gray-400 mt-2 font-medium">Imóvel alugado atualmente. Visitas e propostas aceitas exclusivamente para fins de aquisição/venda.</p>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <a 
+                             href={whatsappUrl}
+                             target="_blank"
+                             rel="noopener noreferrer"
+                             className="flex items-center justify-center gap-3 bg-emerald-500 text-white py-5 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
+                            >
+                              <MessageCircle size={20} /> Fazer Proposta Venda
+                            </a>
+                            <button 
+                             onClick={scrollToScheduler}
+                             className="flex items-center justify-center gap-3 bg-gold text-primary-black py-5 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-lg shadow-gold/20 active:scale-95 transition-all"
+                            >
+                              <Calendar size={18} /> Agendar Visita Compra
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          <div className="bg-amber-50 rounded-2xl p-5 border border-amber-100">
+                             <span className="text-[10px] font-black text-amber-800 uppercase tracking-widest block mb-1">Status de Locação</span>
+                             <span className="text-lg font-display font-bold text-amber-900 uppercase">JÁ ALUGADO / INDISPONÍVEL</span>
+                             <p className="text-xs text-amber-800/85 mt-2 font-medium leading-relaxed">Este imóvel se encontra atualmente alugado e sob nossa administração. Valores de locação e agendamentos de visita estão suspensos.</p>
+                          </div>
+                          <a 
+                           href={whatsappUrl}
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           className="flex items-center justify-center gap-3 bg-emerald-500 text-white py-5 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-lg shadow-emerald-500/20 active:scale-95 transition-all w-full"
+                          >
+                            <MessageCircle size={20} /> Falar com Administradora
+                          </a>
+                        </div>
+                      )
+                    ) : (
+                      <>
+                        <div>
+                           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">
+                             {property.businessType === 'Locação' ? 'Valor de Locação' : 'Investimento'}
+                           </p>
+                           <p className="text-4xl font-display font-bold text-primary-black tracking-tight">
+                             {formatCurrency(property.businessType === 'Locação' ? property.priceLocacao : property.priceVenda)}
+                             {property.businessType === 'Locação' && <span className="text-sm font-medium"> / mês</span>}
+                           </p>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <a 
+                           href={whatsappUrl}
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           className="flex items-center justify-center gap-3 bg-emerald-500 text-white py-5 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
+                          >
+                            <MessageCircle size={20} /> Chamar no WhatsApp
+                          </a>
+                          <button 
+                           onClick={scrollToScheduler}
+                           className="flex items-center justify-center gap-3 bg-gold text-primary-black py-5 rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-lg shadow-gold/20 active:scale-95 transition-all"
+                          >
+                            <Calendar size={18} /> Agendar Visita
+                          </button>
+                        </div>
+                      </>
+                    )}
+                 </div>
+               </div>
 
                 {/* Broker Mobile Card */}
                 {property.brokerName && (
@@ -501,81 +555,161 @@ export default function PropertyDetail() {
                 <div className="absolute top-0 right-0 w-40 h-40 bg-gold/5 blur-[80px] rounded-full -translate-y-1/2 translate-x-1/2" />
                 
                 <div className="relative z-10 space-y-12">
-                   {/* Main Pricing */}
-                   <div>
-                      <p className="text-[10px] font-black text-gray-400 opacity-60 uppercase tracking-[0.4em] mb-3 pl-1">
-                        Valor de {property.businessType}
-                      </p>
-                      <h2 className="text-5xl font-display font-bold text-primary-black tracking-tighter flex items-start gap-1">
-                        <span className="text-2xl mt-1.5 font-bold text-gold">R$</span>
-                        {formatCurrency(property.businessType === 'Locação' ? property.priceLocacao : property.priceVenda).replace('R$', '').trim()}
-                        {property.businessType === 'Locação' && <span className="text-sm font-medium self-end mb-2 ml-1 text-gray-400">/ mês</span>}
-                      </h2>
-                      {property.businessType === 'Locação' && property.totalMonthlyPrice && (
-                        <div className="mt-6 p-5 bg-emerald-50 rounded-2xl border border-emerald-100">
-                          <div className="flex items-center justify-between mb-2">
-                             <span className="text-[9px] font-black text-emerald-700 uppercase tracking-widest leading-none">Pacote Mensal Total</span>
-                          </div>
-                          <p className="text-2xl font-display font-bold text-emerald-600 leading-none">
-                            {formatCurrency(property.totalMonthlyPrice)}
+                   {isImovelAlugado(property) ? (
+                     property.businessType === 'Venda e Locação' && property.priceVenda ? (
+                       <>
+                         <div>
+                            <p className="text-[10px] font-black text-emerald-700 uppercase tracking-[0.4em] mb-3 pl-1">
+                              Disponível para Venda
+                            </p>
+                            <h2 className="text-5xl font-display font-bold text-primary-black tracking-tighter flex items-start gap-1">
+                              <span className="text-2xl mt-1.5 font-bold text-gold">R$</span>
+                              {formatCurrency(property.priceVenda).replace('R$', '').trim()}
+                            </h2>
+                            <p className="text-xs text-gray-400 mt-4 leading-relaxed font-medium">
+                              Este imóvel encontra-se alugado atualmente. Porém, continua disponível para aquisição e investimento.
+                            </p>
+                         </div>
+
+                         {/* CTA Actions */}
+                         <div className="space-y-5">
+                            <motion.a 
+                              whileHover={{ scale: 1.02, y: -2 }}
+                              whileTap={{ scale: 0.98 }}
+                              href={whatsappUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center justify-center gap-4 bg-emerald-500 text-white font-black text-[11px] uppercase tracking-widest py-6 rounded-2xl shadow-xl shadow-emerald-500/10 hover:bg-emerald-600 transition-all w-full"
+                            >
+                              <MessageCircle size={22} />
+                              Proposta de Compra
+                            </motion.a>
+                            <motion.button 
+                              whileHover={{ scale: 1.02, y: -2 }}
+                              whileTap={{ scale: 0.98 }}
+                              onClick={scrollToScheduler}
+                              className="flex items-center justify-center gap-4 bg-primary-black text-white font-black text-[11px] uppercase tracking-widest py-6 rounded-2xl shadow-xl shadow-black/10 hover:bg-black/90 transition-all w-full"
+                            >
+                              <Calendar size={20} className="text-gold" />
+                              Agendar Visita Compra
+                            </motion.button>
+                         </div>
+                       </>
+                     ) : (
+                       <>
+                         <div className="bg-amber-50 rounded-3xl p-6 border border-amber-150 space-y-2">
+                            <span className="text-[10px] font-black text-amber-800 uppercase tracking-widest block">Status de Locação</span>
+                            <span className="text-xl font-display font-bold text-amber-900 uppercase leading-snug">JÁ ALUGADO / INDISPONÍVEL</span>
+                            <p className="text-xs text-amber-800/80 leading-relaxed font-medium">Este imóvel se encontra atualmente alugado por nosso portfólio de imóveis em administração. Novas visitas para locação e valores de aluguel estão suspensos.</p>
+                         </div>
+
+                         {/* CTA Actions */}
+                         <div className="space-y-5">
+                            <motion.a 
+                              whileHover={{ scale: 1.02, y: -2 }}
+                              whileTap={{ scale: 0.98 }}
+                              href={whatsappUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center justify-center gap-4 bg-emerald-500 text-white font-black text-[11px] uppercase tracking-widest py-6 rounded-2xl shadow-xl shadow-emerald-500/10 hover:bg-emerald-600 transition-all w-full"
+                            >
+                              <MessageCircle size={22} />
+                              Falar com Corretor
+                            </motion.a>
+                         </div>
+                       </>
+                     )
+                   ) : (
+                     <>
+                       {/* Main Pricing */}
+                       <div>
+                          <p className="text-[10px] font-black text-gray-400 opacity-60 uppercase tracking-[0.4em] mb-3 pl-1">
+                            Valor de {property.businessType}
                           </p>
-                        </div>
-                      )}
-                      {property.businessType === 'Venda' && property.priceLocacao && (
-                        <div className="mt-4 flex items-center justify-between text-gray-400 border-t border-gray-50 pt-4">
-                          <span className="text-[10px] font-black uppercase tracking-widest opacity-60">Valor Locação:</span>
-                          <span className="font-bold text-primary-black">{formatCurrency(property.priceLocacao)}</span>
-                        </div>
-                      )}
-                   </div>
+                          <h2 className="text-5xl font-display font-bold text-primary-black tracking-tighter flex items-start gap-1">
+                            <span className="text-2xl mt-1.5 font-bold text-gold">R$</span>
+                            {formatCurrency(property.businessType === 'Locação' ? property.priceLocacao : property.priceVenda).replace('R$', '').trim()}
+                            {property.businessType === 'Locação' && <span className="text-sm font-medium self-end mb-2 ml-1 text-gray-400">/ mês</span>}
+                          </h2>
+                          {(property.businessType === 'Locação' || property.businessType === 'Venda e Locação') && (property.totalMonthlyPrice || property.valorTotalMensal) && (
+                            <div className="mt-6 p-5 bg-emerald-50 rounded-2xl border border-emerald-100">
+                              <div className="flex items-center justify-between mb-2">
+                                 <span className="text-[9px] font-black text-emerald-700 uppercase tracking-widest leading-none">Pacote Mensal Total</span>
+                              </div>
+                              <p className="text-2xl font-display font-bold text-emerald-600 leading-none">
+                                {formatCurrency(property.totalMonthlyPrice || property.valorTotalMensal || 0)}
+                              </p>
+                            </div>
+                          )}
+                          {property.businessType === 'Venda' && property.priceLocacao && (
+                            <div className="mt-4 flex items-center justify-between text-gray-400 border-t border-gray-50 pt-4">
+                              <span className="text-[10px] font-black uppercase tracking-widest opacity-60">Valor Locação:</span>
+                              <span className="font-bold text-primary-black">{formatCurrency(property.priceLocacao)}</span>
+                            </div>
+                          )}
+                       </div>
 
-                   {/* Secondary Costs Card */}
-                   {(property.condoFee || property.iptu || property.fireInsurance) && (
-                     <div className="bg-gray-50/50 rounded-2xl p-6 space-y-4 border border-gray-100">
-                        {property.condoFee && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Condomínio</span>
-                            <span className="font-bold text-primary-black text-sm">{formatCurrency(property.condoFee)}</span>
-                          </div>
-                        )}
-                        {property.iptu && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{property.businessType === 'Locação' ? 'IPTU (Mensal)' : 'IPTU (Anual)'}</span>
-                            <span className="font-bold text-primary-black text-sm">{formatCurrency(property.iptu)}</span>
-                          </div>
-                        )}
-                        {property.fireInsurance && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Seguro Incêndio</span>
-                            <span className="font-bold text-primary-black text-sm">{formatCurrency(property.fireInsurance)}</span>
-                          </div>
-                        )}
-                     </div>
+                       {/* Secondary Costs Card */}
+                       {(property.condoFee || property.iptu || property.fireInsurance || property.valorTaxaLixo || property.taxaLixo || property.valorTaxaGas || property.taxaGas) && (
+                         <div className="bg-gray-50/50 rounded-2xl p-6 space-y-4 border border-gray-100">
+                            {property.condoFee && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Condomínio</span>
+                                <span className="font-bold text-primary-black text-sm">{formatCurrency(property.condoFee)}</span>
+                              </div>
+                            )}
+                            {property.iptu && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{property.businessType === 'Locação' || property.businessType === 'Venda e Locação' ? 'IPTU (Mensal)' : 'IPTU (Anual)'}</span>
+                                <span className="font-bold text-primary-black text-sm">{formatCurrency(property.iptu)}</span>
+                              </div>
+                            )}
+                            {(property.valorTaxaLixo || property.taxaLixo) ? (
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Taxa de Lixo</span>
+                                <span className="font-bold text-primary-black text-sm">{formatCurrency(property.valorTaxaLixo || property.taxaLixo || 0)}</span>
+                              </div>
+                            ) : null}
+                            {(property.valorTaxaGas || property.taxaGas) ? (
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Taxa de Gás</span>
+                                <span className="font-bold text-primary-black text-sm">{formatCurrency(property.valorTaxaGas || property.taxaGas || 0)}</span>
+                              </div>
+                            ) : null}
+                            {property.fireInsurance && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Seguro Incêndio</span>
+                                <span className="font-bold text-primary-black text-sm">{formatCurrency(property.fireInsurance)}</span>
+                              </div>
+                            )}
+                         </div>
+                       )}
+
+                       {/* CTA Actions */}
+                       <div className="space-y-5">
+                          <motion.a 
+                            whileHover={{ scale: 1.02, y: -2 }}
+                            whileTap={{ scale: 0.98 }}
+                            href={whatsappUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-center gap-4 bg-emerald-500 text-white font-black text-[11px] uppercase tracking-widest py-6 rounded-2xl shadow-xl shadow-emerald-500/10 hover:bg-emerald-600 transition-all w-full"
+                          >
+                            <MessageCircle size={22} />
+                            Chamar no WhatsApp
+                          </motion.a>
+                          <motion.button 
+                            whileHover={{ scale: 1.02, y: -2 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={scrollToScheduler}
+                            className="flex items-center justify-center gap-4 bg-primary-black text-white font-black text-[11px] uppercase tracking-widest py-6 rounded-2xl shadow-xl shadow-black/10 hover:bg-black/90 transition-all w-full"
+                          >
+                            <Calendar size={20} className="text-gold" />
+                            Agendar Visita
+                          </motion.button>
+                       </div>
+                     </>
                    )}
-
-                   {/* CTA Actions */}
-                   <div className="space-y-5">
-                      <motion.a 
-                        whileHover={{ scale: 1.02, y: -2 }}
-                        whileTap={{ scale: 0.98 }}
-                        href={whatsappUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-center gap-4 bg-emerald-500 text-white font-black text-[11px] uppercase tracking-widest py-6 rounded-2xl shadow-xl shadow-emerald-500/10 hover:bg-emerald-600 transition-all w-full"
-                      >
-                        <MessageCircle size={22} />
-                        Chamar no WhatsApp
-                      </motion.a>
-                      <motion.button 
-                        whileHover={{ scale: 1.02, y: -2 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={scrollToScheduler}
-                        className="flex items-center justify-center gap-4 bg-primary-black text-white font-black text-[11px] uppercase tracking-widest py-6 rounded-2xl shadow-xl shadow-black/10 hover:bg-black/90 transition-all w-full"
-                      >
-                        <Calendar size={20} className="text-gold" />
-                        Agendar Visita
-                      </motion.button>
-                   </div>
 
                    {/* Broker Desktop Card */}
                    {property.brokerName && (
@@ -641,20 +775,27 @@ export default function PropertyDetail() {
         </div>
 
         {/* Visit Scheduler Section */}
-        <section id="agendamento" className="max-w-4xl mx-auto px-4 md:px-8 mt-32">
-           <div className="bg-white p-10 md:p-16 rounded-[4rem] border border-gray-100 shadow-2xl mb-12">
-             <div className="text-center max-w-2xl mx-auto mb-12">
-               <h2 className="font-display text-4xl font-bold text-primary-black mb-4 tracking-tight">Agende sua Experiência</h2>
-               <p className="text-gray-400 leading-relaxed font-medium">Selecione uma data e horário que melhor atendam sua agenda para uma visita guiada e exclusiva.</p>
+        {(!isImovelAlugado(property) || (property.businessType === 'Venda e Locação' && property.priceVenda)) ? (
+          <section id="agendamento" className="max-w-4xl mx-auto px-4 md:px-8 mt-32">
+             <div className="bg-white p-10 md:p-16 rounded-[4rem] border border-gray-100 shadow-2xl mb-12">
+               <div className="text-center max-w-2xl mx-auto mb-12">
+                 <h2 className="font-display text-4xl font-bold text-primary-black mb-4 tracking-tight">Agende sua Experiência</h2>
+                 <p className="text-gray-400 leading-relaxed font-semibold">Selecione uma data e horário que melhor atendam sua agenda para uma visita guiada e exclusiva.</p>
+                 {isImovelAlugado(property) && (
+                   <div className="mt-4 p-4 bg-amber-50 rounded-2xl border border-amber-100 text-amber-800 text-xs font-semibold">
+                     Atenção: Imóvel encabeçado em carteira de administração (Alugado). O agendamento de visitas é de caráter exclusivo para fins de aquisição/investimento.
+                   </div>
+                 )}
+               </div>
+               <VisitScheduler 
+                 property={{
+                   ...property,
+                   brokerWhatsapp: property.brokerWhatsapp || settings.empresa.whatsapp
+                 }} 
+               />
              </div>
-             <VisitScheduler 
-               property={{
-                 ...property,
-                 brokerWhatsapp: property.brokerWhatsapp || settings.empresa.whatsapp
-               }} 
-             />
-           </div>
-        </section>
+          </section>
+        ) : null}
       </div>
     </PageWrapper>
   );

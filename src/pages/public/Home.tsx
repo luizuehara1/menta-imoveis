@@ -10,7 +10,7 @@ import { PremiumHeroBackground } from '../../components/three/PremiumHeroBackgro
 import { LuxuryShapeCanvas } from '../../components/three/AbstractLuxuryShape';
 import { useSettings, useOptions } from '../../hooks/useSettings';
 import { DEFAULT_SITE_CONFIG } from '../../constants/defaultSettings';
-import { formatCurrency, isValidPublicProperty, getSafeImageUrl } from '../../lib/utils';
+import { formatCurrency, isValidPublicProperty, getSafeImageUrl, isImovelAlugado } from '../../lib/utils';
 
 import { SafeImage } from '../../components/ui/SafeImage';
 
@@ -375,11 +375,37 @@ export default function Home() {
                       alt={property.title}
                       className="w-full h-full transition-transform duration-1000 group-hover:scale-110"
                     />
-                    <div className="absolute top-4 left-4 flex flex-col gap-2">
-                      <div className="bg-primary-black/80 text-white text-[10px] font-bold uppercase px-3 py-1 rounded-full backdrop-blur-md">
+                    {(() => {
+                      const imgs = property.images || property.imagens || [];
+                      const mainUrl = typeof property.mainImage === 'string' ? property.mainImage : property.mainImage?.url;
+                      if (!mainUrl) return null;
+                      const match = imgs.find((img: any) => (typeof img === 'string' ? img : img.url) === mainUrl);
+                      const unwrapped = match ? (typeof match === 'string' ? { url: match, aplicarMarcaDagua: true } : match) : { url: mainUrl, aplicarMarcaDagua: true };
+                      if (unwrapped.aplicarMarcaDagua !== false) {
+                        return (
+                          <div className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden z-10 select-none">
+                            <img 
+                              src={homeSettings?.empresa?.marcaDaguaUrl || homeSettings?.empresa?.logoCabecalhoUrl || homeSettings?.aparencia?.logoUrl || '/watermark.png'} 
+                              alt="Watermark" 
+                              className="w-[45%] max-w-[120px] opacity-[0.09] object-contain select-none pointer-events-none"
+                              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                            />
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+
+                    <div className="absolute top-4 left-4 flex flex-col gap-2 z-10">
+                      <div className="bg-primary-black/80 text-white text-[10px] font-bold uppercase px-3 py-1 rounded-full backdrop-blur-md self-start">
                         {property.businessType}
                       </div>
-                      {(property.valorMetroQuadrado > 0 || property.valorMetroQuadradoLocacao > 0) && (
+                      {isImovelAlugado(property) && (
+                        <div className="bg-primary-black border border-gold text-gold text-[10px] font-black uppercase px-3 py-1 rounded-full backdrop-blur-sm shadow-xl self-start">
+                          JÁ ALUGADO
+                        </div>
+                      )}
+                      {!isImovelAlugado(property) && (property.valorMetroQuadrado > 0 || property.valorMetroQuadradoLocacao > 0) && (
                         <div className="bg-gold text-primary-black text-[9px] font-black uppercase px-3 py-1 rounded-full backdrop-blur-md shadow-lg border border-gold/20 self-start">
                           {property.businessType === 'Locação' 
                             ? `${formatCurrency(property.valorMetroQuadradoLocacao)}/m²`
@@ -388,9 +414,22 @@ export default function Home() {
                         </div>
                       )}
                     </div>
-                    <div className="absolute bottom-4 left-4 bg-white/95 text-primary-black text-lg font-bold px-4 py-1 rounded-lg backdrop-blur-md shadow-lg border border-gold/20">
-                      {formatCurrency(property.businessType === 'Locação' ? property.priceLocacao : property.priceVenda)}
-                      {property.businessType === 'Locação' && ' / mês'}
+                    <div className="absolute bottom-4 left-4 bg-white/95 text-primary-black text-xs font-bold px-4 py-2.5 rounded-lg backdrop-blur-md shadow-lg border border-gold/20 z-10 max-w-[85%]">
+                      {isImovelAlugado(property) ? (
+                        property.businessType === 'Venda e Locação' && property.priceVenda ? (
+                          <div className="space-y-0.5">
+                            <span className="text-emerald-700 font-extrabold uppercase text-[9px] block">Venda: {formatCurrency(property.priceVenda)}</span>
+                            <span className="text-gray-500 text-[8px] leading-tight block">Imóvel alugado atualmente, disponível para venda</span>
+                          </div>
+                        ) : (
+                          <span className="text-primary-black font-extrabold uppercase tracking-wide text-[10px]">Já alugado</span>
+                        )
+                      ) : (
+                        <div>
+                          {formatCurrency(property.businessType === 'Locação' ? property.priceLocacao : property.priceVenda)}
+                          {property.businessType === 'Locação' && ' / mês'}
+                        </div>
+                      )}
                     </div>
                   </Link>
                   <div className="p-6">

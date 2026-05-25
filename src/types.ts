@@ -13,6 +13,11 @@ export interface Property {
   iptu?: number;
   fireInsurance?: number;
   totalMonthlyPrice?: number;
+  valorTaxaLixo?: number;
+  taxaLixo?: number;
+  valorTaxaGas?: number;
+  taxaGas?: number;
+  valorTotalMensal?: number;
   leaseWarrantyType?: string;
   allowsPet?: 'Sim' | 'Não';
   furnishingStatus?: 'Mobiliado' | 'Parcialmente' | 'Não Mobiliado';
@@ -20,6 +25,13 @@ export interface Property {
   availableForVisit?: 'Sim' | 'Não';
   leaseStatus?: string;
   leaseNotes?: string;
+  imovelAlugado?: boolean;
+  disponivelParaVisita?: boolean;
+  locacaoAtivaId?: string | null;
+  dataInicioLocacao?: string;
+  dataFimLocacao?: string;
+  publicadoNoSite?: boolean;
+  ativo?: boolean;
   
   linkImovel?: string;
   
@@ -194,6 +206,7 @@ export interface Lease {
   valorAluguel: number;
   valorIptu: number;
   valorTaxaLixo: number;
+  valorTaxaGas?: number;
   valorCondominio: number;
   valorOutros: number;
   valorDesconto: number;
@@ -207,6 +220,7 @@ export interface Lease {
   lastPaymentMonth?: string; // YYYY-MM
   observacoes?: string;
   active: boolean;
+  manterPublicado?: boolean;
   createdAt?: any;
   updatedAt?: any;
   value: number; // Compatibility
