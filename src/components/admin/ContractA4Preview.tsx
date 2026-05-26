@@ -32,7 +32,7 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
           <img 
             src={logoUrl} 
             alt={safeText(empresa.nome)} 
-            className="h-14 w-auto object-contain shrink-0" 
+            className="h-20 w-auto object-contain shrink-0" 
             crossOrigin="anonymous"
             referrerPolicy="no-referrer"
             onError={(e) => {
@@ -189,6 +189,25 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
     );
   };
 
+  const renderClausulasSelecionadas = () => {
+    const list = dados.clausulasSelecionadas || [];
+    if (list.length === 0) return null;
+
+    return (
+      <section className="section prevent-page-break mt-4 pt-3 border-t border-gray-150">
+        <h3 className="section-title text-[9.5px] uppercase font-black text-black">Cláusulas e Condições Gerais</h3>
+        <div className="space-y-3 mt-2">
+          {list.map((c: any, idx: number) => (
+            <div key={c.id || idx} className="text-justify leading-relaxed text-[9px] text-gray-800">
+              <p className="font-bold mb-0.5">Cláusula {idx + 1}ª - {c.titulo}:</p>
+              <p className="whitespace-pre-wrap pl-2 border-l border-gold/20">{safeText(c.texto)}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  };
+
   const renderLocacaoTemporaria = () => {
     const l = dados.locador || {};
     const t = dados.locatario || {};
@@ -319,6 +338,8 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
            </div>
         )}
 
+        {renderClausulasSelecionadas()}
+
         {/* ASSINATURAS */}
         <div className="pt-6 space-y-6">
           <p className="text-right font-medium text-[9.5px]">
@@ -405,6 +426,8 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
         </div>
       </section>
 
+      {renderClausulasSelecionadas()}
+
       <div className="mt-4 text-right font-bold text-[9.5px]">
         {dados.local}, {dados.data}
       </div>
@@ -471,6 +494,8 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
         </div>
       </section>
 
+      {renderClausulasSelecionadas()}
+
       <div className="mt-4 text-right font-bold text-[9.5px]">
         {dados.local}, {dados.data}
       </div>
@@ -523,6 +548,8 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
           </div>
         </div>
       </section>
+
+      {renderClausulasSelecionadas()}
 
       <div className="mt-8 text-right font-bold text-[9.5px]">
         {dados.local}, {dados.data}
@@ -621,8 +648,8 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
           margin-bottom: 8px;
         }
         .pdf-compact-header img {
-          width: 48px;
-          height: 48px;
+          width: 72px;
+          height: 72px;
           object-fit: contain;
         }
         .pdf-compact-header .company-name {

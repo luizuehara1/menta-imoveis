@@ -37,6 +37,7 @@ const Sidebar = ({ onClose }: { onClose?: () => void }) => {
     { name: 'Corretores', path: '/admin/corretores', icon: Users },
     { name: 'Financeiro', path: '/admin/financeiro', icon: DollarSign },
     { name: 'Contratos', path: '/admin/contratos', icon: FileText },
+    { name: 'Cláusulas', path: '/admin/clausulas-contrato', icon: Settings2 },
     { name: 'Config. Locação', path: '/admin/configuracoes-locacao', icon: Settings2 },
     { name: 'Aparência Site', path: '/admin/configuracoes-site', icon: Settings },
   ];

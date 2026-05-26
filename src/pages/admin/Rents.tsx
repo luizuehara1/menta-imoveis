@@ -492,31 +492,52 @@ export default function AdminRents() {
         });
       }
 
+      // Fetch corporate logo for header
+      const logoUrl = empresa.logoCabecalhoUrl || empresa.logoUrl || "/logo.png";
+      let logoBase64 = "";
+      let logoAspect = 1.0;
+      try {
+        const logoData = await getWatermarkData(logoUrl, 1.0);
+        logoBase64 = logoData.base64;
+        logoAspect = logoData.aspectRatio;
+      } catch (logoErr) {
+        console.error("Error fetching header logo for receipt:", logoErr);
+      }
+
       // 2. Headings with brand details
+      let headerTextOffset = 20;
+      if (logoBase64 && logoBase64 !== "/logo.png" && logoBase64 !== "/watermark.png") {
+        const logoWidth = 18;
+        const logoHeight = logoWidth * logoAspect;
+        // Make sure its vertical center sits nicely
+        doc.addImage(logoBase64, "PNG", 20, 14, logoWidth, logoHeight);
+        headerTextOffset = 20 + logoWidth + 6;
+      }
+
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(14);
+      doc.setFontSize(12);
       doc.setTextColor(30, 30, 30);
-      doc.text(safeText(empresa.nome || "MENTA IMÓVEIS"), 20, 20);
+      doc.text(safeText(empresa.nome || "MENTA IMÓVEIS"), headerTextOffset, 19);
 
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(8);
+      doc.setFontSize(7.5);
       doc.setTextColor(110, 110, 110);
       const headerLine2 = `${safeText(empresa.razaoSocial || "Menta Negócios Imobiliários Ltda")} | CNPJ: ${safeText(empresa.cnpj || "---")}`;
       const headerLine3 = `${safeText(empresa.endereco || "---")} | CRECI PJ: ${safeText(empresa.creciPj || "---")}`;
-      doc.text(headerLine2, 20, 25);
-      doc.text(headerLine3, 20, 29);
+      doc.text(headerLine2, headerTextOffset, 23);
+      doc.text(headerLine3, headerTextOffset, 27);
 
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(15);
+      doc.setFontSize(14);
       doc.setTextColor(201, 161, 82); // Gold
-      doc.text("RECIBO DE PAGAMENTO", pageWidth - 20, 22, { align: "right" });
+      doc.text("RECIBO DE PAGAMENTO", pageWidth - 20, 21, { align: "right" });
 
-      doc.setFontSize(9);
+      doc.setFontSize(8.5);
       doc.setTextColor(150, 150, 150);
       doc.text(
         `Nº RECIBO: ${safeText(lease.id?.slice(-8).toUpperCase())}`,
         pageWidth - 20,
-        29,
+        27,
         { align: "right" },
       );
 

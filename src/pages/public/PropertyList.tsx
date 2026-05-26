@@ -394,26 +394,31 @@ export default function PropertyList() {
     <PageWrapper>
       <div className="bg-gray-50 min-h-screen">
         {/* Search Header */}
-        <div className="bg-primary-green pt-12 pb-24 text-white relative overflow-hidden">
+        <div className="relative overflow-hidden bg-primary-green">
+          {/* Fundo Overlay Escuro para Contraste de Leitura */}
+          <div className="absolute inset-0 bg-gradient-to-b from-[#000000]/80 via-[#000000]/52 to-[#000000]/78 z-[2] pointer-events-none" />
+
           {/* Three.js Layer */}
-          <div className="absolute inset-0 z-0 pointer-events-none opacity-30">
+          <div className="absolute inset-0 z-[1] pointer-events-none opacity-40">
             <Canvas camera={{ position: [0, 0, 5] }} gl={{ alpha: true }}>
-              <GoldenParticles count={30} size={0.05} speed={0.2} />
+              <GoldenParticles count={35} size={0.06} speed={0.25} />
             </Canvas>
           </div>
+          
           <motion.div 
-            initial={{ opacity: 0, scale: 1.2 }}
-            animate={{ opacity: 0.1, scale: 1 }}
-            transition={{ duration: 2 }}
-            className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&q=80&w=2000')] bg-cover bg-center"
+            initial={{ opacity: 0, scale: 1.25 }}
+            animate={{ opacity: 0.15, scale: 1 }}
+            transition={{ duration: 2.2 }}
+            className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&q=80&w=2000')] bg-cover bg-center z-0"
           />
-          <div className="max-w-7xl mx-auto px-4 md:px-8 relative z-10 text-center md:text-left">
+
+          <div className="max-w-7xl mx-auto px-6 md:px-12 relative z-10 text-center md:text-left pt-[115px] pb-[60px] md:pt-[150px] md:pb-[85px]">
             <motion.div variants={staggerContainer} initial="initial" animate="animate">
-              <span className="text-gold font-black uppercase text-[10px] tracking-[0.4em] mb-4 block">Nossas Oportunidades</span>
-              <motion.h1 variants={slideUp} className="font-display text-4xl md:text-6xl font-black mb-6 leading-tight">
-                {settings.secoes.imoveisDestaque.titulo?.split(' ')[0]} <span className="text-gold">{settings.secoes.imoveisDestaque.titulo?.split(' ').slice(1).join(' ')}</span>
+              <span className="text-[#e8c14f] font-black uppercase text-[11px] tracking-[0.45em] mb-4.5 block">Nossas Oportunidades</span>
+              <motion.h1 variants={slideUp} className="font-display text-[34px] md:text-[clamp(36px,5vw,72px)] leading-[1.05] font-black tracking-tighter text-white mb-6">
+                {settings.secoes.imoveisDestaque.titulo?.split(' ')[0]} <span className="text-[#e8c14f]">{settings.secoes.imoveisDestaque.titulo?.split(' ').slice(1).join(' ')}</span>
               </motion.h1>
-              <motion.p variants={slideUp} className="text-emerald-100 font-medium opacity-80 text-lg max-w-2xl mx-auto md:mx-0">
+              <motion.p variants={slideUp} className="text-emerald-100 font-medium opacity-90 text-md md:text-lg max-w-2xl mx-auto md:mx-0 leading-relaxed">
                 {settings.secoes.imoveisDestaque.subtitulo}
               </motion.p>
             </motion.div>

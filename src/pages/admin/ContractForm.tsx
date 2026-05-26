@@ -18,7 +18,11 @@ import {
   Calendar,
   AlertCircle,
   Home,
-  Clock
+  Clock,
+  Plus,
+  Trash2,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -88,6 +92,51 @@ export default function AdminContractForm() {
       objeto: { tipoAceite: 'proposta' }
     }
   });
+
+  const [allSysClauses, setAllSysClauses] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchSysClauses = async () => {
+      try {
+        const q = query(collection(db, 'clausulasContratos'), orderBy('ordem', 'asc'));
+        const snap = await getDocs(q);
+        const list = snap.docs.map(dSnapshot => ({ id: dSnapshot.id, ...dSnapshot.data() }));
+        setAllSysClauses(list);
+      } catch (e) {
+        console.error("Error loading system clauses:", e);
+      }
+    };
+    fetchSysClauses();
+  }, []);
+
+  useEffect(() => {
+    if (allSysClauses.length === 0) return;
+    
+    // Check if contract already has selected clauses
+    if (contract.dados?.clausulasSelecionadas && contract.dados.clausulasSelecionadas.length > 0) {
+      return;
+    }
+
+    // Auto-select mandatory clauses for the current contract type
+    const mandatory = allSysClauses
+      .filter(c => c.ativo && c.obrigatorio && (c.tipo === 'todos' || c.tipo === contract.tipoContrato))
+      .map(c => ({
+        id: c.id,
+        titulo: c.titulo,
+        texto: c.texto,
+        ordem: c.ordem
+      }));
+
+    if (mandatory.length > 0) {
+      setContract(prev => ({
+        ...prev,
+        dados: {
+          ...prev.dados,
+          clausulasSelecionadas: mandatory
+        }
+      }));
+    }
+  }, [contract.tipoContrato, allSysClauses, contract.dados?.clausulasSelecionadas]);
 
   const diffInDays = (start: string, end: string) => {
     if (!start || !end) return 1;
@@ -368,6 +417,99 @@ export default function AdminContractForm() {
       currentMetodos.push(metodo);
     }
     updateDados(section, 'metodos', currentMetodos);
+  };
+
+  const handleAddClauseFromSys = (sysClause: any) => {
+    const selectedClauses = contract.dados?.clausulasSelecionadas || [];
+    const exists = selectedClauses.some((c: any) => c.id === sysClause.id);
+    if (exists) return;
+
+    const updated = [...selectedClauses, {
+      id: sysClause.id,
+      titulo: sysClause.titulo,
+      texto: sysClause.texto,
+      ordem: selectedClauses.length + 1
+    }];
+    
+    setContract(prev => ({
+      ...prev,
+      dados: {
+        ...prev?.dados,
+        clausulasSelecionadas: updated
+      }
+    }));
+  };
+
+  const handleRemoveClause = (clauseId: string, idx: number) => {
+    const selectedClauses = contract.dados?.clausulasSelecionadas || [];
+    const updated = selectedClauses.filter((c: any, i: number) => c.id !== clauseId && i !== idx);
+    setContract(prev => ({
+      ...prev,
+      dados: {
+        ...prev?.dados,
+        clausulasSelecionadas: updated
+      }
+    }));
+  };
+
+  const handleClauseTextChange = (idx: number, newText: string) => {
+    const selectedClauses = contract.dados?.clausulasSelecionadas || [];
+    const updated = selectedClauses.map((c: any, i: number) => i === idx ? { ...c, texto: newText } : c);
+    setContract(prev => ({
+      ...prev,
+      dados: {
+        ...prev?.dados,
+        clausulasSelecionadas: updated
+      }
+    }));
+  };
+
+  const handleClauseTitleChange = (idx: number, newTitle: string) => {
+    const selectedClauses = contract.dados?.clausulasSelecionadas || [];
+    const updated = selectedClauses.map((c: any, i: number) => i === idx ? { ...c, titulo: newTitle } : c);
+    setContract(prev => ({
+      ...prev,
+      dados: {
+        ...prev?.dados,
+        clausulasSelecionadas: updated
+      }
+    }));
+  };
+
+  const handleAddCustomClause = () => {
+    const selectedClauses = contract.dados?.clausulasSelecionadas || [];
+    const updated = [...selectedClauses, {
+      id: 'custom-' + Date.now(),
+      titulo: 'Nova Cláusula Personalizada',
+      texto: '',
+      ordem: selectedClauses.length + 1
+    }];
+    setContract(prev => ({
+      ...prev,
+      dados: {
+        ...prev?.dados,
+        clausulasSelecionadas: updated
+      }
+    }));
+  };
+
+  const handleMoveClause = (idx: number, direction: 'up' | 'down') => {
+    const selectedClauses = contract.dados?.clausulasSelecionadas || [];
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= selectedClauses.length) return;
+
+    const copy = [...selectedClauses];
+    const temp = copy[idx];
+    copy[idx] = copy[targetIdx];
+    copy[targetIdx] = temp;
+
+    setContract(prev => ({
+      ...prev,
+      dados: {
+        ...prev?.dados,
+        clausulasSelecionadas: copy
+      }
+    }));
   };
 
   if (fetching) {
@@ -1067,7 +1209,146 @@ export default function AdminContractForm() {
                 </>
               )}
 
-              <div className="flex justify-between">
+              {/* DYNAMIC CONTRACT CLAUSES MANAGER */}
+              <div className="bg-white p-10 rounded-[2.5rem] shadow-xl border border-gray-100 mt-10">
+                <div className="flex items-center gap-4 mb-6 text-left">
+                  <div className="w-12 h-12 bg-primary-black text-gold rounded-2xl flex items-center justify-center shadow-lg">
+                    <FileText size={24} />
+                  </div>
+                  <div className="flex-grow">
+                    <h3 className="text-xl font-display font-bold text-primary-black">Cláusulas do Contrato</h3>
+                    <p className="text-sm text-gray-400">Selecione, ordene ou personalize cláusulas dinâmicas oficiais da imobiliária para este documento.</p>
+                  </div>
+                </div>
+
+                {/* System-wide active template clauses selector */}
+                {allSysClauses.length > 0 && (
+                  <div className="mb-8 p-6 bg-gray-50 rounded-3xl border border-gray-100/50 text-left">
+                    <p className="text-[10px] font-black uppercase text-gold tracking-widest mb-3 select-none">Ativar Clausulas do Banco de Dados</p>
+                    <div className="flex flex-wrap gap-2">
+                      {allSysClauses
+                        .filter(sys => sys.ativo && (sys.tipo === 'todos' || sys.tipo === contract.tipoContrato))
+                        .map(sys => {
+                          const isSelected = (contract.dados?.clausulasSelecionadas || []).some((c: any) => c.id === sys.id);
+                          return (
+                            <button
+                              key={sys.id}
+                              type="button"
+                              onClick={() => {
+                                if (isSelected) {
+                                  const idx = (contract.dados?.clausulasSelecionadas || []).findIndex((c: any) => c.id === sys.id);
+                                  if (idx !== -1) handleRemoveClause(sys.id, idx);
+                                } else {
+                                  handleAddClauseFromSys(sys);
+                                }
+                              }}
+                              className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold border transition-all ${
+                                isSelected 
+                                  ? 'bg-gold/10 text-gold border-gold/30' 
+                                  : 'bg-white hover:bg-gray-100 text-gray-500 border-gray-150 shadow-sm'
+                              }`}
+                            >
+                              <span>{sys.titulo}</span>
+                              {isSelected ? <Check size={14} className="text-gold" /> : <Plus size={14} />}
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Edit list of selected clauses for current contract */}
+                <div className="space-y-4">
+                  {(contract.dados?.clausulasSelecionadas || []).length === 0 ? (
+                    <p className="text-sm text-center text-gray-400 py-10 border border-dashed border-gray-150 rounded-3xl bg-gray-50/20">
+                      Nenhuma cláusula dinâmica ativa neste documento. Use os botões acima ou adicione uma cláusula personalizada abaixo.
+                    </p>
+                  ) : (
+                    (contract.dados?.clausulasSelecionadas || []).map((clause: any, idx: number) => (
+                      <div key={clause.id || idx} className="p-6 bg-gray-50/50 hover:bg-gray-50 border border-gray-100 rounded-3xl transition-all space-y-3 text-left">
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-3 flex-grow">
+                            <span className="w-6 h-6 bg-gold/15 text-gold text-xs font-black rounded-full flex items-center justify-center select-none">
+                              {idx + 1}
+                            </span>
+                            <input 
+                              type="text"
+                              className="bg-transparent border-b border-transparent hover:border-gray-200 focus:border-gold focus:outline-none font-bold text-sm text-primary-black py-0.5 flex-grow font-sans"
+                              value={clause.titulo}
+                              onChange={(e) => handleClauseTitleChange(idx, e.target.value)}
+                              placeholder="Título da cláusula..."
+                            />
+                          </div>
+                          
+                          {/* Actions and order controls */}
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              disabled={idx === 0}
+                              onClick={() => handleMoveClause(idx, 'up')}
+                              className="w-8 h-8 rounded-xl bg-white border border-gray-100 hover:border-gray-200 flex items-center justify-center text-gray-400 disabled:opacity-35 shadow-sm"
+                            >
+                              <ChevronUp size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={idx === (contract.dados?.clausulasSelecionadas || []).length - 1}
+                              onClick={() => handleMoveClause(idx, 'down')}
+                              className="w-8 h-8 rounded-xl bg-white border border-gray-100 hover:border-gray-200 flex items-center justify-center text-gray-400 disabled:opacity-35 shadow-sm"
+                            >
+                              <ChevronDown size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveClause(clause.id, idx)}
+                              className="w-8 h-8 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-100 flex items-center justify-center text-rose-500 transition-colors"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+
+                        <textarea 
+                          className="w-full bg-white border border-gray-200 rounded-2xl p-4 text-xs text-gray-650 leading-relaxed font-serif focus:ring-2 focus:ring-gold/20 focus:outline-none transition-all"
+                          rows={4}
+                          value={clause.texto}
+                          onChange={(e) => handleClauseTextChange(idx, e.target.value)}
+                          placeholder="Teor descritivo e legal da cláusula..."
+                        />
+                      </div>
+                    ))
+                  )}
+
+                  {/* Actions footer */}
+                  <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-gray-50">
+                    <button
+                      type="button"
+                      onClick={handleAddCustomClause}
+                      className="flex items-center gap-2 px-5 py-2.5 border border-dashed border-gold/30 text-gold hover:border-gold hover:bg-gold/5 rounded-2xl text-xs font-bold transition-all bg-white"
+                    >
+                      <Plus size={14} />
+                      <span>Adicionar Cláusula Personalizada</span>
+                    </button>
+
+                    <div className="text-[10px] font-bold text-gray-400 select-none">
+                      {(contract.dados?.clausulasSelecionadas || []).length} Cláusula(s) Aplicada(s)
+                    </div>
+                  </div>
+
+                  {/* Additional General Clause box */}
+                  <div className="w-full pt-6 border-t border-gray-100 space-y-2 text-left">
+                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Anotações e Observações Gerais Extras</label>
+                     <textarea 
+                       className="input-field min-h-[100px] py-4 text-xs font-serif" 
+                       placeholder="Adicionalmente, você pode escrever observações gerais extras aqui..."
+                       value={contract.dados.clausulas || ''}
+                       onChange={e => setContract(prev => ({ ...prev, dados: { ...prev.dados, clausulas: e.target.value } }))}
+                     />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-between mt-10">
                 <button 
                   onClick={() => setStep('dados')}
                   className="px-10 py-4 bg-white text-gray-400 font-bold rounded-2xl border border-gray-100 flex items-center gap-3 hover:text-primary-black hover:shadow-xl transition-all"

@@ -29,25 +29,82 @@ const Navbar = () => {
   const cleanNumber = cleanPhoneForWhatsapp(settings.empresa.whatsapp);
   const whatsappUrl = `https://wa.me/55${cleanNumber}`;
 
+  // Analyze active route
+  const isPropertyDetailPage = location.pathname.startsWith('/imovel/');
+  const isPropertyListPage = location.pathname === '/imoveis' || location.pathname.startsWith('/imoveis/');
+
+  // Determine navbar theme
+  let navBgClass = '';
+  let logoTitleClass = '';
+  let logoSubClass = '';
+  let linkClassGetter = (path: string) => '';
+  let whatsappButtonClass = '';
+  let mobileMenuButtonThemeClass = '';
+
+  if (isPropertyDetailPage) {
+    navBgClass = 'bg-white/96 backdrop-blur-xl shadow-[0_8px_30px_rgba(0,0,0,0.06)] border-b border-gray-150/70 py-3 md:py-4';
+    logoTitleClass = 'text-slate-950 font-black';
+    logoSubClass = 'text-gold-700 font-extrabold';
+    linkClassGetter = (path: string) => 
+      location.pathname === path 
+        ? 'text-gold' 
+        : 'text-slate-800 hover:text-gold';
+    whatsappButtonClass = 'bg-[#050505] text-white hover:bg-gold hover:text-primary-black shadow-md font-bold hover:shadow-lg transition-all duration-300';
+    mobileMenuButtonThemeClass = 'text-slate-900 bg-slate-100 hover:bg-slate-200';
+  } else if (isPropertyListPage) {
+    navBgClass = 'bg-[#050505]/82 backdrop-blur-xl shadow-[0_10px_30px_rgba(0,0,0,0.18)] border-b border-white/8 py-3 md:py-4';
+    logoTitleClass = 'text-white font-bold';
+    logoSubClass = 'text-[#e8c14f] font-bold';
+    linkClassGetter = (path: string) => 
+      location.pathname === path 
+        ? 'text-[#e8c14f]' 
+        : 'text-white/95 hover:text-[#e8c14f]';
+    whatsappButtonClass = 'bg-white text-[#050505] font-black uppercase tracking-wider hover:bg-[#e8c14f] hover:text-[#050505] shadow-xl hover:-translate-y-0.5 duration-300';
+    mobileMenuButtonThemeClass = 'text-white bg-white/10 border border-white/14 hover:bg-white/20';
+  } else {
+    // Default dynamic behavior
+    navBgClass = scrolled 
+      ? 'bg-white/90 backdrop-blur-lg shadow-xl py-3 border-b border-gray-100' 
+      : 'bg-transparent py-5';
+    logoTitleClass = scrolled ? 'text-primary-black font-bold' : 'text-white font-bold';
+    logoSubClass = scrolled ? 'text-gold font-bold' : 'text-gold/80 font-semibold';
+    linkClassGetter = (path: string) => 
+      location.pathname === path 
+        ? 'text-gold' 
+        : scrolled ? 'text-primary-black hover:text-gold' : 'text-white hover:text-gold';
+    whatsappButtonClass = scrolled 
+      ? 'bg-primary-black text-white hover:bg-gold shadow-lg font-semibold' 
+      : 'bg-white text-primary-black hover:bg-gold shadow-xl font-semibold';
+    mobileMenuButtonThemeClass = scrolled ? 'text-primary-black hover:bg-gray-100' : 'text-white hover:bg-white/10';
+  }
+
   return (
-    <nav className={`fixed top-0 left-0 w-full z-[100] transition-all duration-500 ${
-      scrolled ? 'bg-white/80 backdrop-blur-lg shadow-xl py-3' : 'bg-transparent py-5'
-    }`}>
+    <nav className={`fixed top-0 left-0 w-full z-[100] transition-all duration-500 ${navBgClass}`}>
       <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-4 group">
-          <div className={`w-14 h-14 flex items-center justify-center transition-transform duration-500 group-hover:scale-110 ${scrolled ? 'bg-primary-black rounded-xl border border-gold/10' : 'bg-primary-black rounded-xl shadow-2xl border border-gold/10'}`}>
+          <div className={`transition-all duration-500 group-hover:scale-105 flex items-center justify-center ${
+            isPropertyListPage 
+              ? 'bg-black/55 border border-white/10 rounded-2xl h-14 px-3 shadow-xl' 
+              : isPropertyDetailPage 
+                ? 'bg-[#0b0b0b] rounded-xl h-14 w-14 shadow-md border border-gold/10'
+                : 'bg-primary-black rounded-xl h-14 w-14 shadow-2xl border border-gold/10'
+          }`}>
             <SafeImage 
               src={settings.aparencia.logoNavbarUrl || settings.aparencia.logoUrl || "https://i.postimg.cc/kMZXNdCS/image.png"} 
               alt={settings.empresa.nome} 
               priority
-              className="h-10 w-10 object-contain" 
+              className={`${
+                isPropertyListPage 
+                  ? 'h-10 w-auto max-w-[80px] object-contain'
+                  : 'h-10 w-10 object-contain'
+              }`} 
             />
           </div>
-          <div className="flex flex-col items-start border-l border-white/20 pl-4">
-            <span className={`font-display text-2xl font-bold tracking-tighter leading-tight transition-colors ${scrolled ? 'text-primary-black' : 'text-white'}`}>
+          <div className={`flex flex-col items-start border-l pl-4 ${isPropertyDetailPage ? 'border-slate-350/40' : 'border-white/20'}`}>
+            <span className={`font-display text-2xl font-bold tracking-tighter leading-tight transition-colors ${logoTitleClass}`}>
               {settings.empresa.nome.split(' ')[0].toUpperCase()}
             </span>
-            <span className={`text-[9px] font-bold tracking-[0.3em] -mt-1 uppercase transition-colors ${scrolled ? 'text-gold' : 'text-gold/80'}`}>
+            <span className={`text-[9px] font-bold tracking-[0.3em] -mt-1 uppercase transition-colors ${logoSubClass}`}>
               {settings.empresa.nome.split(' ').slice(1).join(' ').toUpperCase() || 'Negócios Imobiliários'}
             </span>
           </div>
@@ -59,9 +116,7 @@ const Navbar = () => {
             <Link
               key={link.path}
               to={link.path}
-              className={`text-xs font-bold uppercase tracking-widest transition-all hover:text-gold relative group ${
-                location.pathname === link.path ? 'text-gold' : scrolled ? 'text-primary-black' : 'text-white'
-              }`}
+              className={`text-xs font-bold uppercase tracking-widest transition-all relative group ${linkClassGetter(link.path)}`}
             >
               {link.name}
               <span className={`absolute -bottom-1 left-0 h-0.5 bg-gold transition-all duration-300 ${location.pathname === link.path ? 'w-full' : 'w-0 group-hover:w-full'}`} />
@@ -71,11 +126,7 @@ const Navbar = () => {
             href={whatsappUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className={`flex items-center gap-2 font-bold px-6 py-3 rounded-full transition-all active:scale-95 ${
-              scrolled 
-              ? 'bg-primary-black text-white hover:bg-gold shadow-lg shadow-black/10' 
-              : 'bg-white text-primary-black hover:bg-gold shadow-xl shadow-white/5'
-            }`}
+            className={`flex items-center gap-2 px-6 py-3 rounded-full transition-all active:scale-95 ${whatsappButtonClass}`}
           >
             <MessageCircle size={18} />
             <span className="text-xs uppercase tracking-widest">WhatsApp</span>
@@ -83,8 +134,8 @@ const Navbar = () => {
         </div>
 
         {/* Mobile Menu Button */}
-        <button className={`md:hidden p-2 rounded-xl transition-colors ${scrolled ? 'text-primary-black hover:bg-gray-100' : 'text-white hover:bg-white/10'}`} onClick={() => setIsOpen(!isOpen)}>
-          {isOpen ? <X size={28} /> : <Menu size={28} />}
+        <button className={`md:hidden p-2.5 rounded-xl transition-all ${mobileMenuButtonThemeClass}`} onClick={() => setIsOpen(!isOpen)}>
+          {isOpen ? <X size={24} /> : <Menu size={24} />}
         </button>
       </div>
 

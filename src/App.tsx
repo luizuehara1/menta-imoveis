@@ -28,6 +28,7 @@ import AdminContractForm from './pages/admin/ContractForm';
 import AdminSiteSettings from './pages/admin/SiteSettings';
 import AdminLeaseSettings from './pages/admin/LeaseSettings';
 import AdminNeighborhoods from './pages/admin/Neighborhoods';
+import AdminContractClauses from './pages/admin/ContractClauses';
 import AdminLogin from './pages/admin/Login';
 
 const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -118,6 +119,7 @@ function AppRoutes() {
           <Route path="contratos/editar/:id" element={<AdminContractForm />} />
           <Route path="configuracoes-locacao" element={<AdminLeaseSettings />} />
           <Route path="bairros" element={<AdminNeighborhoods />} />
+          <Route path="clausulas-contrato" element={<AdminContractClauses />} />
           <Route path="configuracoes-site" element={<AdminSiteSettings />} />
         </Route>
       </Routes>

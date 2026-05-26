@@ -357,6 +357,22 @@
         "criadoEm": { "type": "string", "format": "date-time" },
         "atualizadoEm": { "type": "string", "format": "date-time" }
       }
+    },
+    "ContractClause": {
+      "title": "Contract Clause",
+      "description": "Customizable clauses for lease, purchase and proposal contracts",
+      "type": "object",
+      "properties": {
+        "titulo": { "type": "string" },
+        "texto": { "type": "string" },
+        "tipoContrato": { "type": "string", "enum": ["locacao", "locacao_temporaria", "compra_venda", "proposta", "contraproposta", "aceite", "recibo", "todos"] },
+        "ordem": { "type": "number" },
+        "ativo": { "type": "boolean" },
+        "obrigatoria": { "type": "boolean" },
+        "criadoEm": { "type": "string", "format": "date-time" },
+        "atualizadoEm": { "type": "string", "format": "date-time" }
+      },
+      "required": ["titulo", "texto", "tipoContrato", "ordem", "ativo"]
     }
   },
   "firestore": {
@@ -427,6 +443,10 @@
     "locacoes": {
       "schema": "Lease",
       "description": "Rental contracts and management"
+    },
+    "clausulasContratos": {
+      "schema": "ContractClause",
+      "description": "Customizable contract clauses database"
     }
   }
 }

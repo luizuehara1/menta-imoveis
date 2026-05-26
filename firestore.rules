@@ -78,6 +78,7 @@ service cloud.firestore {
     }
 
     // Protected Collections
+    match /clausulasContratos/{id} { allow read, write: if isAdmin(); }
     match /locacoes/{id} { allow read, write: if isAdmin(); }
     match /contratos/{id} { allow read, write: if isAdmin(); }
     match /financeiro/{id} { allow read, write: if isAdmin(); }

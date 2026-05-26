@@ -55,6 +55,66 @@ const REVENUE_CATEGORIES = [
 
 const PAYMENT_METHODS = ['Pix', 'Dinheiro', 'Cartão', 'Transferência', 'Boleto', 'Outro'];
 
+const getWatermarkData = (
+  url: string,
+  opacity: number = 0.07,
+): Promise<{ base64: string; aspectRatio: number }> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.globalAlpha = opacity;
+          ctx.drawImage(img, 0, 0);
+          resolve({
+            base64: canvas.toDataURL("image/png"),
+            aspectRatio: img.height / img.width,
+          });
+          return;
+        }
+      } catch (e) {
+        console.error("Error creating watermark canvas:", e);
+      }
+      resolve({ base64: url, aspectRatio: 1 });
+    };
+    img.onerror = () => {
+      if (url !== "/watermark.png") {
+        const fallbackImg = new Image();
+        fallbackImg.onload = () => {
+          try {
+            const canvas = document.createElement("canvas");
+            canvas.width = fallbackImg.width;
+            canvas.height = fallbackImg.height;
+            const ctx = canvas.getContext("2d");
+            if (ctx) {
+              ctx.globalAlpha = opacity;
+              ctx.drawImage(fallbackImg, 0, 0);
+              resolve({
+                base64: canvas.toDataURL("image/png"),
+                aspectRatio: fallbackImg.height / fallbackImg.width,
+              });
+              return;
+            }
+          } catch (e) {}
+          resolve({ base64: "/watermark.png", aspectRatio: 1 });
+        };
+        fallbackImg.onerror = () => {
+          resolve({ base64: "/watermark.png", aspectRatio: 1 });
+        };
+        fallbackImg.src = "/watermark.png";
+      } else {
+        resolve({ base64: "/watermark.png", aspectRatio: 1 });
+      }
+    };
+    img.src = url;
+  });
+};
+
 export default function AdminFinance() {
   const { settings } = useSettings();
   const empresa = (settings?.empresa || {}) as any;
@@ -260,41 +320,78 @@ export default function AdminFinance() {
     };
   }, [records]);
 
-  const exportPDF = () => {
+  const exportPDF = async () => {
     try {
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
       
-      // 1. Watermark - Draw multiple diagonal light gray texts
-      const watermarkText = safeText(empresa.nome || 'MENTA IMÓVEIS');
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(26);
-      doc.setTextColor(245, 245, 245);
-      
-      // Draw watermarks at 30 degrees
-      doc.text(watermarkText, pageWidth / 2, pageHeight * 0.25, { align: 'center', angle: 30 });
-      doc.text(watermarkText, pageWidth / 2, pageHeight * 0.55, { align: 'center', angle: 30 });
-      doc.text(watermarkText, pageWidth / 2, pageHeight * 0.85, { align: 'center', angle: 30 });
+      // Resolve watermark image
+      const watermarkUrl = empresa.marcaDaguaUrl || empresa.logoCabecalhoUrl || "/watermark.png";
+      let watermarkBase64 = "";
+      let watermarkAspect = 1.0;
+      try {
+        const watermarkData = await getWatermarkData(watermarkUrl, 0.08);
+        watermarkBase64 = watermarkData.base64;
+        watermarkAspect = watermarkData.aspectRatio;
+      } catch (e) {
+        console.error("Error drawing watermark:", e);
+      }
+
+      const logoUrl = empresa.logoCabecalhoUrl || empresa.logoUrl || "/logo.png";
+      let logoBase64 = "";
+      let logoAspect = 1.0;
+      try {
+        const logoData = await getWatermarkData(logoUrl, 1.0);
+        logoBase64 = logoData.base64;
+        logoAspect = logoData.aspectRatio;
+      } catch (err) {
+        console.error("Error fetching logo for finance report:", err);
+      }
+
+      // 1. Watermark - Centered high-fidelity branding or fallback diagonal texts
+      if (watermarkBase64 && watermarkBase64 !== "/watermark.png") {
+        const wWidth = 140;
+        const wHeight = wWidth * watermarkAspect;
+        const wX = (pageWidth - wWidth) / 2;
+        const wY = (pageHeight - wHeight) / 2;
+        doc.addImage(watermarkBase64, "PNG", wX, wY, wWidth, wHeight);
+      } else {
+        const watermarkText = safeText(empresa.nome || 'MENTA IMÓVEIS');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(26);
+        doc.setTextColor(245, 245, 245);
+        doc.text(watermarkText, pageWidth / 2, pageHeight * 0.25, { align: 'center', angle: 30 });
+        doc.text(watermarkText, pageWidth / 2, pageHeight * 0.55, { align: 'center', angle: 30 });
+        doc.text(watermarkText, pageWidth / 2, pageHeight * 0.85, { align: 'center', angle: 30 });
+      }
 
       // 2. Beautiful Corporate Header
+      let headerTextOffset = 20;
+      if (logoBase64 && logoBase64 !== "/logo.png" && logoBase64 !== "/watermark.png") {
+        const logoWidth = 18;
+        const logoHeight = logoWidth * logoAspect;
+        doc.addImage(logoBase64, "PNG", 20, 14, logoWidth, logoHeight);
+        headerTextOffset = 20 + logoWidth + 6;
+      }
+
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(14);
+      doc.setFontSize(12);
       doc.setTextColor(30, 30, 30);
-      doc.text(safeText(empresa.nome || 'MENTA IMÓVEIS'), 20, 20);
+      doc.text(safeText(empresa.nome || 'MENTA IMÓVEIS'), headerTextOffset, 19);
       
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
+      doc.setFontSize(7.5);
       doc.setTextColor(110, 110, 110);
       const headerLine2 = `${safeText(empresa.razaoSocial || 'Menta Negócios Imobiliários Ltda')} | CNPJ: ${safeText(empresa.cnpj || '---')}`;
       const headerLine3 = `${safeText(empresa.endereco || '---')} | CRECI PJ: ${safeText(empresa.creciPj || '---')}`;
-      doc.text(headerLine2, 20, 25);
-      doc.text(headerLine3, 20, 29);
+      doc.text(headerLine2, headerTextOffset, 23);
+      doc.text(headerLine3, headerTextOffset, 27);
       
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(15);
+      doc.setFontSize(14);
       doc.setTextColor(201, 161, 82); // Gold
-      doc.text('RELATÓRIO FINANCEIRO', pageWidth - 20, 22, { align: 'right' });
+      doc.text('RELATÓRIO FINANCEIRO', pageWidth - 20, 21, { align: 'right' });
       
       // Line under header
       doc.setDrawColor(210, 210, 210);
