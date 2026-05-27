@@ -50,7 +50,7 @@ const EXPENSE_CATEGORIES = [
 ];
 
 const REVENUE_CATEGORIES = [
-  'Comissão de venda', 'Comissão de locação', 'Aluguel recebido', 'Taxa administrativa', 'Serviço prestado', 'Entrada avulsa', 'Outros'
+  'Receita de Comissão', 'Comissão de venda', 'Comissão de locação', 'Aluguel recebido', 'Taxa administrativa', 'Serviço prestado', 'Entrada avulsa', 'Outros'
 ];
 
 const PAYMENT_METHODS = ['Pix', 'Dinheiro', 'Cartão', 'Transferência', 'Boleto', 'Outro'];
@@ -113,6 +113,40 @@ const getWatermarkData = (
     };
     img.src = url;
   });
+};
+
+const toNumber = (value: any) => {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+
+  const clean = String(value || "0")
+    .replace("R$", "")
+    .replace(/\./g, "")
+    .replace(",", ".")
+    .trim();
+
+  const number = Number(clean);
+  return Number.isFinite(number) ? number : 0;
+};
+
+const calcularComissaoImobiliaria = (locacao: any) => {
+  const comissaoSalva = toNumber(locacao.valorComissaoImobiliaria);
+
+  if (comissaoSalva > 0) return comissaoSalva;
+
+  const totalLocatario = toNumber(locacao.valorTotalLocatario || locacao.valorTotalPagar);
+  const valorAluguel = toNumber(locacao.valorAluguel);
+  const baseCalculo = totalLocatario > 0 ? totalLocatario : valorAluguel;
+
+  const percentualSalvo = toNumber(locacao.percentualComissaoImobiliaria);
+
+  const percentual =
+    percentualSalvo > 0
+      ? percentualSalvo
+      : locacao.tipoLocacao === "temporaria"
+        ? 20
+        : 10;
+
+  return baseCalculo * percentual / 100;
 };
 
 export default function AdminFinance() {
@@ -241,14 +275,80 @@ export default function AdminFinance() {
     }
   };
 
+  const handleSelecionarLocacao = (locacaoId: string) => {
+    if (!locacaoId) {
+      setFormData(prev => ({
+        ...prev,
+        locacaoId: '',
+        imovelId: '',
+        codigoImovel: '',
+        clienteOrigem: '',
+        descricao: '',
+        valor: 0
+      }));
+      return;
+    }
+
+    const locacao = leases.find((item) => item.id === locacaoId) as any;
+    if (!locacao) return;
+
+    const valorComissao = calcularComissaoImobiliaria(locacao);
+    const nomeLocatario = locacao.locatarioNome || locacao.tenantName || locacao.clienteNome || "";
+    const codImovel = locacao.propertyCode || locacao.imovelCodigo || "";
+
+    setFormData((prev) => ({
+      ...prev,
+      tipo: 'entrada',
+      categoria: 'Receita de Comissão',
+      valor: valorComissao,
+      clienteOrigem: nomeLocatario,
+      descricao: `Comissão imobiliária referente à locação do imóvel ${codImovel} - ${nomeLocatario}`.trim(),
+      locacaoId: locacao.id,
+      imovelId: locacao.imovelId || locacao.propertyId || '',
+      codigoImovel: codImovel,
+      formaRecebimento: prev.formaRecebimento || 'Pix'
+    }));
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
+      // 1. Prevent duplicate commission entries for this lease
+      if (formData.locacaoId && formData.categoria === 'Receita de Comissão') {
+        const duplicateExists = records.some(r => r.locacaoId === formData.locacaoId && r.categoria === 'Receita de Comissão');
+        if (duplicateExists) {
+          if (!confirm('Comissão desta locação já foi lançada no financeiro. Deseja registrar outro lançamento mesmo assim?')) {
+            setLoading(false);
+            return;
+          }
+        }
+      }
+
+      // 2. Fetch extra keys for lease if not present or to ensure fidelity
+      let extraFields: any = {};
+      if (formData.locacaoId) {
+        const lease = leases.find(l => l.id === formData.locacaoId) as any;
+        if (lease) {
+          const lNome = lease.locatarioNome || lease.tenantName || lease.clienteNome || '';
+          const lCod = lease.propertyCode || lease.imovelCodigo || '';
+          extraFields = {
+            locatarioNome: lNome,
+            imovelCodigo: lCod,
+            origem: 'locacao',
+            identificacao: `${lCod} - ${lNome}`.trim()
+          };
+        }
+      }
+
       const payload = {
         ...formData,
+        ...extraFields,
+        dataEfetiva: formData.data || '', // Ensure dataEfetiva matches standard field
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
+        criadoEm: serverTimestamp(),
+        atualizadoEm: serverTimestamp()
       };
       
       await addDoc(collection(db, 'financeiro'), payload);
@@ -274,7 +374,12 @@ export default function AdminFinance() {
         formaPagamento: 'Pix',
         formaRecebimento: 'Pix',
         observacoes: '',
-        status: 'confirmado'
+        status: 'confirmado',
+        imovelId: '',
+        codigoImovel: '',
+        locacaoId: '',
+        clienteOrigem: '',
+        beneficiario: ''
       });
       fetchData();
     } catch (error) {
@@ -319,7 +424,7 @@ export default function AdminFinance() {
     const today = new Date();
     const currentMonthStr = today.toISOString().slice(0, 7);
 
-    const inflows = records.filter(r => r.tipo === 'entrada');
+    const inflows = records.filter(r => r.tipo === 'entrada' && r.categoria === 'Receita de Comissão');
     const outflows = records.filter(r => r.tipo === 'saida');
 
     const totalInflow = inflows.reduce((acc, curr) => acc + curr.valor, 0);
@@ -425,7 +530,7 @@ export default function AdminFinance() {
       autoTable(doc, {
         startY: 45,
         head: [['Data', 'Tipo', 'Descrição', 'Categoria', 'Valor']],
-        body: filteredRecords.map(r => [
+        body: filteredRecords.filter(r => r.tipo !== 'entrada' || r.categoria === 'Receita de Comissão').map(r => [
           safeDate(r.data),
           r.tipo === 'entrada' ? 'Entrada' : 'Saída',
           safeText(r.descricao),
@@ -444,7 +549,7 @@ export default function AdminFinance() {
       doc.setTextColor(30, 30, 30);
       doc.text('RESUMO FINANCEIRO', 20, finalY);
       
-      const inflow = filteredRecords.filter(r => r.tipo === 'entrada').reduce((acc, curr) => acc + curr.valor, 0);
+      const inflow = filteredRecords.filter(r => r.tipo === 'entrada' && r.categoria === 'Receita de Comissão').reduce((acc, curr) => acc + curr.valor, 0);
       const outflow = filteredRecords.filter(r => r.tipo === 'saida').reduce((acc, curr) => acc + curr.valor, 0);
       
       doc.setFont('helvetica', 'normal');
@@ -877,21 +982,15 @@ export default function AdminFinance() {
                     <div className="relative">
                       <select 
                         className="w-full bg-gray-50 border border-transparent rounded-2xl py-4 px-6 text-sm font-bold appearance-none focus:ring-4 focus:ring-gold/10 focus:border-gold/20 outline-none transition-all"
-                        value={formData.locacaoId}
-                        onChange={e => {
-                          const lease = leases.find(l => l.id === e.target.value);
-                          setFormData({
-                            ...formData, 
-                            locacaoId: e.target.value,
-                            imovelId: lease?.propertyId,
-                            codigoImovel: lease?.propertyCode,
-                            clienteOrigem: lease?.tenantName,
-                            valor: lease?.valorTotalPagar || formData.valor
-                          });
-                        }}
+                        value={formData.locacaoId ?? ''}
+                        onChange={e => handleSelecionarLocacao(e.target.value)}
                       >
                         <option value="">Nenhuma</option>
-                        {leases.map(l => <option key={l.id} value={l.id}>{l.propertyCode} - {l.tenantName}</option>)}
+                        {leases.map((l: any) => (
+                          <option key={l.id} value={l.id}>
+                            {(l.propertyCode || l.imovelCodigo || "Sem Código")} - {(l.tenantName || l.locatarioNome || l.clienteNome || "Sem Nome")}
+                          </option>
+                        ))}
                       </select>
                       <ChevronDown size={18} className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                     </div>
@@ -902,7 +1001,7 @@ export default function AdminFinance() {
                     <div className="relative">
                       <select 
                         className="w-full bg-gray-50 border border-transparent rounded-2xl py-4 px-6 text-sm font-bold appearance-none focus:ring-4 focus:ring-gold/10 focus:border-gold/20 outline-none transition-all"
-                        value={formData.imovelId}
+                        value={formData.imovelId ?? ''}
                         onChange={e => {
                           const prop = properties.find(p => p.id === e.target.value);
                           setFormData({
