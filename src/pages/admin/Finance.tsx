@@ -24,7 +24,8 @@ import {
   X,
   PlusCircle,
   MinusCircle,
-  FileDown
+  FileDown,
+  CheckCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -150,8 +151,52 @@ const calcularComissaoImobiliaria = (locacao: any) => {
   return baseCalculo * percentual / 100;
 };
 
+function cleanFirestoreData(obj: any): any {
+  if (Array.isArray(obj)) {
+    return obj
+      .map(cleanFirestoreData)
+      .filter(item => item !== undefined);
+  }
+
+  if (obj && typeof obj === "object") {
+    // If it is a Firestore FieldValue (or anything not a plain object or array), return it as is
+    const proto = Object.getPrototypeOf(obj);
+    if (proto !== null && proto !== Object.prototype) {
+      return obj;
+    }
+
+    const cleaned: any = {};
+
+    Object.entries(obj).forEach(([key, value]) => {
+      if (value === undefined) return;
+
+      if (typeof value === "number" && !Number.isFinite(value)) {
+        cleaned[key] = 0;
+        return;
+      }
+
+      if (value && typeof value === "object") {
+        cleaned[key] = cleanFirestoreData(value);
+        return;
+      }
+
+      cleaned[key] = value;
+    });
+
+    return cleaned;
+  }
+
+  return obj;
+}
+
 export default function AdminFinance() {
-  const { isAdmin } = useAuth();
+  const { user, isAdmin } = useAuth();
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  const triggerToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 5000);
+  };
   const { settings } = useSettings();
   const empresa = (settings?.empresa || {}) as any;
   const [activeTab, setActiveTab] = useState<'todos' | 'entradas' | 'saidas'>('todos');
@@ -314,12 +359,40 @@ export default function AdminFinance() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("Usuário atual:", user?.email);
+    console.log("É admin:", isAdmin);
+
     if (!isAdmin) {
-      alert("Usuário sem permissão administrativa.");
+      triggerToast("Você não tem permissão para salvar lançamentos.", "error");
       return;
     }
+
+    // Custom Form Validation
+    const valNumerico = parseFloat(String(formData.valor || '0'));
+    if (!formData.data) {
+      triggerToast("Informe a data efetiva do lançamento.", "error");
+      return;
+    }
+    if (!(valNumerico > 0)) {
+      triggerToast("Informe um valor maior que R$ 0,00.", "error");
+      return;
+    }
+    if (!formData.descricao || !formData.descricao.trim()) {
+      triggerToast("Informe a descrição do lançamento.", "error");
+      return;
+    }
+    if (!formData.categoria) {
+      triggerToast("Informe a categoria do lançamento.", "error");
+      return;
+    }
+
     setLoading(true);
     try {
+      console.log("Tipo lançamento:", formData.tipo);
+      console.log("Categoria:", formData.categoria);
+      console.log("Imóvel selecionado:", formData.imovelId);
+      console.log("É gasto da imobiliária:", formData.imovelId === 'imobiliaria');
+
       // 1. Prevent duplicate commission entries for this lease
       if (formData.locacaoId && formData.categoria === 'Receita de Comissão') {
         const duplicateExists = records.some(r => r.locacaoId === formData.locacaoId && r.categoria === 'Receita de Comissão');
@@ -347,17 +420,60 @@ export default function AdminFinance() {
         }
       }
 
-      const payload = {
-        ...formData,
+      // Set property-related fields depending on whether 'imobiliaria' is selected or not
+      let finalImovelId = formData.imovelId || null;
+      let finalImovelCodigo = formData.codigoImovel || '';
+      let finalImovelTitulo = '';
+      let finalCentroCusto = 'Imóvel';
+      let finalOrigem = formData.tipo === 'entrada' ? 'entrada' : 'imovel';
+
+      if (formData.imovelId === 'imobiliaria') {
+        finalImovelId = null;
+        finalImovelCodigo = 'IMOBILIARIA';
+        finalImovelTitulo = 'Imobiliária';
+        finalCentroCusto = 'Imobiliária';
+        finalOrigem = 'imobiliaria';
+      } else if (formData.imovelId) {
+        const prop = properties.find(p => p.id === formData.imovelId);
+        if (prop) {
+          finalImovelTitulo = prop.title || '';
+          finalImovelCodigo = prop.code || '';
+        }
+      }
+
+      const rawPayload = {
+        tipo: formData.tipo || 'saida',
+        categoria: formData.categoria || '',
+        descricao: (formData.descricao || '').trim(),
+        valor: valNumerico,
+        formaPagamento: formData.tipo === 'entrada' ? '' : (formData.formaPagamento || 'Pix'),
+        formaRecebimento: formData.tipo === 'entrada' ? (formData.formaRecebimento || 'Pix') : '',
+        dataEfetiva: formData.data || '',
+        data: formData.data || '', // kept for safety/compatibility
+        destinatarioFornecedor: formData.tipo === 'entrada' ? '' : (formData.beneficiario || formData.clienteOrigem || ''),
+        clienteOrigem: formData.tipo === 'entrada' ? (formData.clienteOrigem || '') : '',
+        observacoes: formData.observacoes || "",
+        imovelId: finalImovelId,
+        imovelCodigo: finalImovelCodigo,
+        codigoImovel: finalImovelCodigo, // kept for safety/compatibility
+        imovelTitulo: finalImovelTitulo,
+        centroCusto: finalCentroCusto,
+        origem: finalOrigem,
+        locacaoId: formData.locacaoId || null,
+        responsavel: formData.responsavel || 'Admin',
+        status: formData.status || 'confirmado',
         ...extraFields,
-        dataEfetiva: formData.data || '', // Ensure dataEfetiva matches standard field
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         criadoEm: serverTimestamp(),
         atualizadoEm: serverTimestamp()
       };
-      
-      await addDoc(collection(db, 'financeiro'), payload);
+
+      const cleanPayload = cleanFirestoreData(rawPayload);
+
+      console.log("Dados finais do lançamento:", cleanPayload);
+
+      await addDoc(collection(db, "financeiro"), cleanPayload);
 
       // If linked to a lease and confirmed inflow, update lease status
       if (formData.tipo === 'entrada' && formData.locacaoId && formData.status === 'confirmado') {
@@ -388,8 +504,10 @@ export default function AdminFinance() {
         beneficiario: ''
       });
       fetchData();
-    } catch (error) {
-      console.error("Save error:", error);
+      triggerToast("Lançamento registrado com sucesso.", "success");
+    } catch (error: any) {
+      console.error("Erro ao registrar saída:", error.code, error.message, error);
+      triggerToast(`Erro ao registrar saída: ${error.message}`, "error");
     } finally {
       setLoading(false);
     }
@@ -535,14 +653,25 @@ export default function AdminFinance() {
       
       autoTable(doc, {
         startY: 45,
-        head: [['Data', 'Tipo', 'Descrição', 'Categoria', 'Valor']],
-        body: filteredRecords.filter(r => r.tipo !== 'entrada' || r.categoria === 'Receita de Comissão').map(r => [
-          safeDate(r.data),
-          r.tipo === 'entrada' ? 'Entrada' : 'Saída',
-          safeText(r.descricao),
-          safeText(r.categoria),
-          safeMoney(r.valor)
-        ]),
+        head: [['Data', 'Tipo', 'Descrição', 'Categoria', 'Centro de Custo', 'Valor']],
+        body: filteredRecords.filter(r => r.tipo !== 'entrada' || r.categoria === 'Receita de Comissão').map(r => {
+          let centroCustoText = 'Imóvel';
+          if (r.centroCusto === 'Imobiliária' || r.codigoImovel === 'IMOBILIARIA' || (!r.imovelId && r.origem === 'imobiliaria')) {
+            centroCustoText = 'Imobiliária';
+          } else if (r.imovelId || r.codigoImovel) {
+            centroCustoText = `Imóvel: ${r.codigoImovel || ''}`;
+          } else {
+            centroCustoText = '-';
+          }
+          return [
+            safeDate(r.data),
+            r.tipo === 'entrada' ? 'Entrada' : 'Saída',
+            safeText(r.descricao),
+            safeText(r.categoria),
+            centroCustoText,
+            safeMoney(r.valor)
+          ];
+        }),
         headStyles: { fillColor: [30, 30, 30], textColor: [255, 255, 255] },
         theme: 'grid',
         styles: { fontSize: 8.5 }
@@ -877,6 +1006,7 @@ export default function AdminFinance() {
             />
             <motion.form 
               onSubmit={handleSave}
+              noValidate
               {...scaleIn}
               className="bg-white max-w-4xl w-full rounded-[3rem] shadow-2xl relative z-10 my-auto"
             >
@@ -1009,15 +1139,25 @@ export default function AdminFinance() {
                         className="w-full bg-gray-50 border border-transparent rounded-2xl py-4 px-6 text-sm font-bold appearance-none focus:ring-4 focus:ring-gold/10 focus:border-gold/20 outline-none transition-all"
                         value={formData.imovelId ?? ''}
                         onChange={e => {
-                          const prop = properties.find(p => p.id === e.target.value);
-                          setFormData({
-                            ...formData, 
-                            imovelId: e.target.value,
-                            codigoImovel: prop?.code
-                          });
+                          const val = e.target.value;
+                          if (val === 'imobiliaria') {
+                            setFormData({
+                              ...formData,
+                              imovelId: 'imobiliaria',
+                              codigoImovel: 'IMOBILIARIA'
+                            });
+                          } else {
+                            const prop = properties.find(p => p.id === val);
+                            setFormData({
+                              ...formData, 
+                              imovelId: val,
+                              codigoImovel: prop?.code || ''
+                            });
+                          }
                         }}
                       >
                         <option value="">Nenhum</option>
+                        <option value="imobiliaria">Imobiliária</option>
                         {properties.map(p => <option key={p.id} value={p.id}>{p.code} - {p.title}</option>)}
                       </select>
                       <ChevronDown size={18} className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
@@ -1051,6 +1191,24 @@ export default function AdminFinance() {
               </div>
             </motion.form>
           </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            className="fixed top-24 left-1/2 -translate-x-1/2 z-[300] flex items-center gap-3 px-6 py-4 rounded-2xl text-white backdrop-blur-md shadow-2xl border"
+            style={{
+              backgroundColor: toast.type === 'success' ? '#14532d' : '#7f1d1d',
+              borderColor: toast.type === 'success' ? '#16a34a' : '#b91c1c',
+            }}
+          >
+            {toast.type === 'success' ? <CheckCircle size={20} className="text-emerald-300" /> : <X size={20} className="text-red-300" />}
+            <span className="font-bold text-sm tracking-wide">{toast.message}</span>
+          </motion.div>
         )}
       </AnimatePresence>
     </motion.div>

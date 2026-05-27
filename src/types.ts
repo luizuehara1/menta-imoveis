@@ -239,10 +239,12 @@ export interface FinanceRecord {
   formaPagamento?: string;
   formaRecebimento?: string;
   observacoes?: string;
-  imovelId?: string;
+  imovelId?: string | null;
   codigoImovel?: string;
-  locacaoId?: string;
+  locacaoId?: string | null;
   status: 'confirmado' | 'pendente';
+  centroCusto?: string;
+  origem?: string;
   criadoEm?: any;
   atualizadoEm?: any;
 }
