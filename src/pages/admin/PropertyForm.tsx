@@ -170,6 +170,19 @@ function normalizeImages(imovel: any, aplicarPadrao = true): any[] {
   }).filter((img: any) => img.url).sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0));
 }
 
+const toNumber = (value: any): number => {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+
+  const clean = String(value || "0")
+    .replace("R$", "")
+    .replace(/\./g, "")
+    .replace(",", ".")
+    .trim();
+
+  const number = Number(clean);
+  return Number.isFinite(number) ? number : 0;
+};
+
 export default function AdminPropertyForm() {
   const { isAdmin } = useAuth();
   const { options, loading: optionsLoading } = useOptions();
@@ -321,35 +334,7 @@ export default function AdminPropertyForm() {
 
   const [aplicarMarcaDagua, setAplicarMarcaDagua] = useState(true);
   const [videoUrl, setVideoUrl] = useState('');
-  const QUANTITY_AMBIENTES_MAP: Record<string, string> = {
-    "Dormitórios": "dormitorios",
-    "Suítes": "suites",
-    "Demi-suíte": "demi_suite",
-    "Lavabo": "lavabo",
-    "WC social": "wc_social",
-    "WC empregada": "wc_empregada",
-    "Dependência de empregada": "dependencia_empregada",
-    "Escritório": "escritorio",
-    "Número de salas": "salas",
-    "Quantidade de vagas privativas": "vagas_privativas",
-    "Número de vagas": "vagas",
-    "Box privativo": "box_privativo"
-  };
-
-  const [quantidadesAmbientes, setQuantidadesAmbientes] = useState<Record<string, number>>({
-    dormitorios: 0,
-    suites: 0,
-    demi_suite: 0,
-    lavabo: 0,
-    wc_social: 0,
-    wc_empregada: 0,
-    dependencia_empregada: 0,
-    escritorio: 0,
-    salas: 0,
-    vagas_privativas: 0,
-    vagas: 0,
-    box_privativo: 0
-  });
+  const [optionQuantities, setOptionQuantities] = useState<Record<string, number>>({});
   const [videos, setVideos] = useState<string[]>([]);
   const [mainImage, setMainImage] = useState('');
   const [brokers, setBrokers] = useState<Broker[]>([]);
@@ -388,8 +373,12 @@ export default function AdminPropertyForm() {
       iptu: 0,
       valorTaxaLixo: 0,
       valorTaxaGas: 0,
+      valorTaxaAgua: 0,
+      valorTaxaLuz: 0,
       taxaLixo: 0,
       taxaGas: 0,
+      taxaAgua: 0,
+      taxaLuz: 0,
       fireInsurance: 0,
       totalMonthlyPrice: 0,
       valorTotalMensal: 0,
@@ -483,28 +472,27 @@ export default function AdminPropertyForm() {
   const fireInsurance = watch('fireInsurance');
   const valorTaxaLixo = watch('valorTaxaLixo');
   const valorTaxaGas = watch('valorTaxaGas');
+  const valorTaxaAgua = watch('valorTaxaAgua');
+  const valorTaxaLuz = watch('valorTaxaLuz');
   const taxes = watch('taxes'); // other fees
   const priceVenda = watch('priceVenda');
   const areaUtil = watch('usefulArea');
   const areaConstruida = watch('areaConstruida');
 
   useEffect(() => {
-    const toNumber = (value: any) => {
-      const number = Number(String(value || "0").replace(",", "."));
-      return Number.isFinite(number) ? number : 0;
-    };
-    
     const total = toNumber(priceLocacao) + 
                   toNumber(condoFee) + 
                   toNumber(iptu) + 
                   toNumber(valorTaxaLixo) + 
                   toNumber(valorTaxaGas) + 
+                  toNumber(valorTaxaAgua) + 
+                  toNumber(valorTaxaLuz) + 
                   toNumber(fireInsurance) + 
                   toNumber(taxes);
                   
     setValue('totalMonthlyPrice', total);
     setValue('valorTotalMensal', total);
-  }, [priceLocacao, condoFee, iptu, valorTaxaLixo, valorTaxaGas, fireInsurance, taxes, setValue]);
+  }, [priceLocacao, condoFee, iptu, valorTaxaLixo, valorTaxaGas, valorTaxaAgua, valorTaxaLuz, fireInsurance, taxes, setValue]);
 
   useEffect(() => {
     const areaBase = Number(areaUtil) || Number(areaConstruida);
@@ -603,69 +591,101 @@ export default function AdminPropertyForm() {
             // Set garbage and gas taxes with fallback for old properties
             const loadedTaxaLixo = Number(data.valorTaxaLixo ?? data.taxaLixo ?? 0);
             const loadedTaxaGas = Number(data.valorTaxaGas ?? data.taxaGas ?? 0);
+            const loadedTaxaAgua = toNumber(data.valorTaxaAgua ?? data.taxaAgua ?? 0);
+            const loadedTaxaLuz = toNumber(data.valorTaxaLuz ?? data.taxaLuz ?? 0);
             setValue('valorTaxaLixo', loadedTaxaLixo);
             setValue('valorTaxaGas', loadedTaxaGas);
+            setValue('valorTaxaAgua', loadedTaxaAgua);
+            setValue('valorTaxaLuz', loadedTaxaLuz);
 
-            // Load quantities of custom environments
-            const initialQuantities: Record<string, number> = {
-              dormitorios: 0,
-              suites: 0,
-              demi_suite: 0,
-              lavabo: 0,
-              wc_social: 0,
-              wc_empregada: 0,
-              dependencia_empregada: 0,
-              escritorio: 0,
-              salas: 0,
-              vagas_privativas: 0,
-              vagas: 0,
-              box_privativo: 0
-            };
+            // Load quantities across all options categories supporting both legacy lists and object lists
+            const loadedOptionQuantities: Record<string, number> = {};
 
-            const dataAmbientes = data.ambientes || [];
-            if (Array.isArray(dataAmbientes)) {
-              dataAmbientes.forEach((item: any) => {
-                if (item.value && item.quantidade !== undefined && item.quantidade !== null) {
-                  initialQuantities[item.value] = Number(item.quantidade);
+            const parseFieldOptionsForLoading = (fieldData: any) => {
+              if (!Array.isArray(fieldData)) return;
+              fieldData.forEach((item: any) => {
+                if (typeof item === 'string') {
+                  loadedOptionQuantities[item] = 1;
+                } else if (item && typeof item === 'object') {
+                  const label = item.label || item.nome || item.value || "";
+                  if (label && item.ativo !== false) {
+                    loadedOptionQuantities[label] = Number(item.quantidade ?? 1);
+                  }
                 }
               });
+            };
+
+            // Parse all sections to compile optionQuantities
+            parseFieldOptionsForLoading(data.ambientes);
+            parseFieldOptionsForLoading(data.caracteristicasApartamento);
+            parseFieldOptionsForLoading(data.caracteristicasEmpreendimento);
+            parseFieldOptionsForLoading(data.lazer_objects);
+            parseFieldOptionsForLoading(data.lazer);
+            parseFieldOptionsForLoading(data.instalacoes_objects);
+            parseFieldOptionsForLoading(data.instalacoes);
+            parseFieldOptionsForLoading(data.acabamentos_objects);
+            parseFieldOptionsForLoading(data.acabamentos);
+            parseFieldOptionsForLoading(data.localizacao);
+            parseFieldOptionsForLoading(data.locationTags);
+            parseFieldOptionsForLoading(data.caracteristicas);
+
+            // Fetch standard fallbacks for ambientes from direct flat fields
+            if (!loadedOptionQuantities["Dormitórios"]) {
+              const val = Number(data.dormitorios ?? data.bedrooms ?? 0);
+              if (val > 0) loadedOptionQuantities["Dormitórios"] = val;
+            }
+            if (!loadedOptionQuantities["Suítes"]) {
+              const val = Number(data.suites ?? 0);
+              if (val > 0) loadedOptionQuantities["Suítes"] = val;
+            }
+            if (!loadedOptionQuantities["Lavabo"]) {
+              const val = Number(data.lavabos ?? data.lavabo ?? 0);
+              if (val > 0) loadedOptionQuantities["Lavabo"] = val;
+            }
+            if (!loadedOptionQuantities["Número de salas"]) {
+              const val = Number(data.salas ?? 0);
+              if (val > 0) loadedOptionQuantities["Número de salas"] = val;
+            }
+            if (!loadedOptionQuantities["Número de vagas"]) {
+              const val = Number(data.vagas ?? data.garageSpaces ?? 0);
+              if (val > 0) loadedOptionQuantities["Número de vagas"] = val;
+            }
+            if (!loadedOptionQuantities["WC social"]) {
+              const val = Number(data.bathrooms ?? 0);
+              if (val > 0) loadedOptionQuantities["WC social"] = val;
             }
 
-            // Compatibility with old properties - use direct fields as fallback if they weren't loaded
-            const oldDormitorios = Number(data.dormitorios ?? data.bedrooms ?? 0);
-            const oldSuites = Number(data.suites ?? 0);
-            const oldLavabo = Number(data.lavabos ?? data.lavabo ?? 0);
-            const oldSalas = Number(data.salas ?? 0);
-            const oldVagas = Number(data.vagas ?? data.garageSpaces ?? 0);
-            const oldWcSocial = Number(data.bathrooms ?? 0);
+            setOptionQuantities(loadedOptionQuantities);
 
-            if (oldDormitorios > 0 && !initialQuantities.dormitorios) initialQuantities.dormitorios = oldDormitorios;
-            if (oldSuites > 0 && !initialQuantities.suites) initialQuantities.suites = oldSuites;
-            if (oldLavabo > 0 && !initialQuantities.lavabo) initialQuantities.lavabo = oldLavabo;
-            if (oldSalas > 0 && !initialQuantities.salas) initialQuantities.salas = oldSalas;
-            if (oldVagas > 0 && !initialQuantities.vagas) initialQuantities.vagas = oldVagas;
-            if (oldWcSocial > 0 && !initialQuantities.wc_social) initialQuantities.wc_social = oldWcSocial;
+            // Transform nested object arrays back to flat string arrays for the React Hook Form checkbox checked state
+            const extractStringArray = (fieldData: any): string[] => {
+              if (!Array.isArray(fieldData)) return [];
+              return fieldData.map(item => {
+                if (typeof item === 'string') return item;
+                if (item && typeof item === 'object') return item.label || item.nome || item.value || '';
+                return '';
+              }).filter(Boolean);
+            };
 
-            setQuantidadesAmbientes(initialQuantities);
+            const loadedCaracteristicas = extractStringArray(data.caracteristicas || []);
+            const loadedLazer = extractStringArray(data.caracteristicasEmpreendimento || data.lazer || []);
+            const loadedInstalacoes = extractStringArray(data.instalacoes_objects || data.instalacoes || []);
+            const loadedAcabamentos = extractStringArray(data.acabamentos_objects || data.acabamentos || []);
+            const loadedLocationTags = extractStringArray(data.localizacao || data.locationTags || []);
 
-            // Ensure checkboxes in caracteristicas are checked for anything that has quantity > 0
-            const currentFeatures = data.caracteristicas || [];
-            const newFeatures = [...currentFeatures];
+            // Ensure Checked state based on quantities
+            if (loadedOptionQuantities["Dormitórios"] > 0 && !loadedCaracteristicas.includes("Dormitórios")) loadedCaracteristicas.push("Dormitórios");
+            if (loadedOptionQuantities["Suítes"] > 0 && !loadedCaracteristicas.includes("Suítes")) loadedCaracteristicas.push("Suítes");
+            if (loadedOptionQuantities["Lavabo"] > 0 && !loadedCaracteristicas.includes("Lavabo")) loadedCaracteristicas.push("Lavabo");
+            if (loadedOptionQuantities["Número de salas"] > 0 && !loadedCaracteristicas.includes("Número de salas")) loadedCaracteristicas.push("Número de salas");
+            if (loadedOptionQuantities["Número de vagas"] > 0 && !loadedCaracteristicas.includes("Número de vagas")) loadedCaracteristicas.push("Número de vagas");
+            if (loadedOptionQuantities["WC social"] > 0 && !loadedCaracteristicas.includes("WC social")) loadedCaracteristicas.push("WC social");
 
-            if (initialQuantities.dormitorios > 0 && !newFeatures.includes("Dormitórios")) newFeatures.push("Dormitórios");
-            if (initialQuantities.suites > 0 && !newFeatures.includes("Suítes")) newFeatures.push("Suítes");
-            if (initialQuantities.demi_suite > 0 && !newFeatures.includes("Demi-suíte")) newFeatures.push("Demi-suíte");
-            if (initialQuantities.lavabo > 0 && !newFeatures.includes("Lavabo")) newFeatures.push("Lavabo");
-            if (initialQuantities.wc_social > 0 && !newFeatures.includes("WC social")) newFeatures.push("WC social");
-            if (initialQuantities.wc_empregada > 0 && !newFeatures.includes("WC empregada")) newFeatures.push("WC empregada");
-            if (initialQuantities.dependencia_empregada > 0 && !newFeatures.includes("Dependência de empregada")) newFeatures.push("Dependência de empregada");
-            if (initialQuantities.escritorio > 0 && !newFeatures.includes("Escritório")) newFeatures.push("Escritório");
-            if (initialQuantities.salas > 0 && !newFeatures.includes("Número de salas")) newFeatures.push("Número de salas");
-            if (initialQuantities.vagas_privativas > 0 && !newFeatures.includes("Quantidade de vagas privativas")) newFeatures.push("Quantidade de vagas privativas");
-            if (initialQuantities.vagas > 0 && !newFeatures.includes("Número de vagas")) newFeatures.push("Número de vagas");
-            if (initialQuantities.box_privativo > 0 && !newFeatures.includes("Box privativo")) newFeatures.push("Box privativo");
-
-            setValue('caracteristicas', Array.from(new Set(newFeatures)));
+            setValue('caracteristicas', Array.from(new Set(loadedCaracteristicas)));
+            setValue('lazer', Array.from(new Set(loadedLazer)));
+            setValue('instalacoes', Array.from(new Set(loadedInstalacoes)));
+            setValue('acabamentos', Array.from(new Set(loadedAcabamentos)));
+            setValue('locationTags', Array.from(new Set(loadedLocationTags)));
 
             setImages(normalizeImages(data));
             setVideos(data.videos || []);
@@ -829,20 +849,17 @@ export default function AdminPropertyForm() {
       console.log("Imagem principal:", finalMainImg);
       console.log("Salvando imóvel em:", "imoveis");
 
-      const toNumber = (value: any) => {
-        const number = Number(String(value || "0").replace(",", "."));
-        return Number.isFinite(number) ? number : 0;
-      };
-
       const valLixo = toNumber(data.valorTaxaLixo ?? data.taxaLixo);
       const valGas = toNumber(data.valorTaxaGas ?? data.taxaGas);
+      const valAgua = toNumber(data.valorTaxaAgua ?? data.taxaAgua);
+      const valLuz = toNumber(data.valorTaxaLuz ?? data.taxaLuz);
       const aluguel = toNumber(data.priceLocacao);
       const condoFee = toNumber(data.condoFee);
       const iptu = toNumber(data.iptu);
       const fireInsurance = toNumber(data.fireInsurance);
       const outrasTaxas = toNumber(data.taxes);
 
-      const computedTotal = aluguel + condoFee + iptu + valLixo + valGas + fireInsurance + outrasTaxas;
+      const computedTotal = aluguel + condoFee + iptu + valLixo + valGas + valAgua + valLuz + fireInsurance + outrasTaxas;
 
       const rawSaveBType = String(data.businessType || 'Venda').toLowerCase();
       let normalizedSaveBType = 'Venda';
@@ -859,8 +876,12 @@ export default function AdminPropertyForm() {
         businessType: normalizedSaveBType,
         valorTaxaLixo: valLixo,
         valorTaxaGas: valGas,
+        valorTaxaAgua: valAgua,
+        valorTaxaLuz: valLuz,
         taxaLixo: valLixo,
         taxaGas: valGas,
+        taxaAgua: valAgua,
+        taxaLuz: valLuz,
         valorTotalMensal: computedTotal,
         totalMonthlyPrice: computedTotal,
         images: finalImagesOrdered,
@@ -872,60 +893,120 @@ export default function AdminPropertyForm() {
         destaque: data.destaque === true
       };
 
-      const finalAmbientes = (data.caracteristicas || []).map((name: string) => {
-        const mapKey = QUANTITY_AMBIENTES_MAP[name];
-        if (mapKey) {
-          let qty = Number(quantidadesAmbientes[mapKey]);
-          if (!qty || qty < 1 || isNaN(qty)) {
-            qty = 1;
-          }
-          return {
-            label: name,
-            value: mapKey,
-            quantidade: qty,
-            ativo: true
-          };
-        } else {
-          const valueSlug = name.toLowerCase()
-            .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-            .replace(/[^a-z0-9_]/g, "_")
-            .replace(/_+/g, "_")
-            .replace(/^_+|_+$/g, "");
-          return {
-            label: name,
-            value: valueSlug,
-            quantidade: null,
-            ativo: true
-          };
-        }
-      });
+      // Helper to map checklist items to clean serializable Firestore objects with quantities
+      const buildObjectArrayWithQuantity = (selectedNames: string[], optionsConfigList: any[]) => {
+        if (!Array.isArray(selectedNames)) return [];
+        return selectedNames
+          .map((name: string, index: number) => {
+            const label = name || "";
+            const value = slugify(label);
+            const qty = Math.max(1, Number(optionQuantities[label] ?? 1));
+            return {
+              label,
+              value,
+              ativo: true,
+              quantidade: qty,
+              ordem: index
+            };
+          })
+          .filter(Boolean);
+      };
 
-      propertyData.ambientes = finalAmbientes;
+      // 1. Ambientes
+      const checkedAmbientes = (data.caracteristicas || []).filter((name: string) => 
+        (options.ambientes || []).some((o: any) => o.nome === name)
+      );
+      propertyData.ambientes = buildObjectArrayWithQuantity(checkedAmbientes, options.ambientes || []);
 
-      const isDormitoriosChecked = (data.caracteristicas || []).includes("Dormitórios");
-      const computedDormitorios = isDormitoriosChecked ? Number(quantidadesAmbientes.dormitorios || 1) : 0;
+      // 2. Características do Apartamento
+      const checkedApt = (data.caracteristicas || []).filter((name: string) => 
+        (options.caracteristicasApartamento || []).some((o: any) => o.nome === name)
+      );
+      propertyData.caracteristicasApartamento = buildObjectArrayWithQuantity(checkedApt, options.caracteristicasApartamento || []);
+
+      // 3. Características do Empreendimento / Lazer
+      const checkedLazer = data.lazer || [];
+      const opLazerList = buildObjectArrayWithQuantity(checkedLazer, options.lazer || []);
+      propertyData.caracteristicasEmpreendimento = opLazerList;
+      propertyData.lazer_objects = opLazerList;
+      propertyData.lazer = checkedLazer; // also keep string list
+
+      // 4. Instalações
+      const checkedInst = data.instalacoes || [];
+      const opInstList = buildObjectArrayWithQuantity(checkedInst, options.instalacoes || []);
+      propertyData.instalacoes_objects = opInstList;
+      propertyData.instalacoes = checkedInst; // also keep string list
+
+      // 5. Acabamentos
+      const checkedAcab = data.acabamentos || [];
+      const opAcabList = buildObjectArrayWithQuantity(checkedAcab, options.acabamentos || []);
+      propertyData.acabamentos_objects = opAcabList;
+      propertyData.acabamentos = checkedAcab; // also keep string list
+
+      // 6. Localização
+      const checkedLoc = data.locationTags || [];
+      const opLocList = buildObjectArrayWithQuantity(checkedLoc, options.localizacoes || []);
+      propertyData.localizacao = opLocList;
+      propertyData.locationTags = checkedLoc; // also keep string list
+
+      // Keep string list of combined características for any global filters, searches, etc.
+      propertyData.caracteristicas = data.caracteristicas || [];
+
+      // Support direct legacy property fields as requested:
+      // Dormitórios → dormitorios, bedrooms
+      // Suítes → suites
+      // Banheiros → bathrooms, banheiros
+      // Vagas → vagas, garageSpaces
+      // Salas → salas
+      // Elevadores → elevadores
+      // Piscinas → piscinas
+      // Ar condicionado -> quantidadeArCondicionado
+      const getQtyByName = (name: string) => {
+        const isChecked = [
+          ...(data.caracteristicas || []),
+          ...(data.lazer || []),
+          ...(data.instalacoes || []),
+          ...(data.acabamentos || []),
+          ...(data.locationTags || [])
+        ].includes(name);
+        return isChecked ? Math.max(1, Number(optionQuantities[name] ?? 1)) : 0;
+      };
+
+      const computedDormitorios = getQtyByName("Dormitórios");
       propertyData.dormitorios = computedDormitorios;
       propertyData.bedrooms = computedDormitorios;
 
-      const isSuitesChecked = (data.caracteristicas || []).includes("Suítes");
-      propertyData.suites = isSuitesChecked ? Number(quantidadesAmbientes.suites || 1) : 0;
+      const computedSuites = getQtyByName("Suítes");
+      propertyData.suites = computedSuites;
 
-      const isLavaboChecked = (data.caracteristicas || []).includes("Lavabo");
-      const computedLavabo = isLavaboChecked ? Number(quantidadesAmbientes.lavabo || 1) : 0;
+      const computedLavabo = getQtyByName("Lavabo");
       propertyData.lavabos = computedLavabo;
       propertyData.lavabo = computedLavabo;
 
-      const isSalasChecked = (data.caracteristicas || []).includes("Número de salas");
-      propertyData.salas = isSalasChecked ? Number(quantidadesAmbientes.salas || 1) : 0;
+      const computedSalas = getQtyByName("Número de salas");
+      propertyData.salas = computedSalas;
 
-      const isVagasChecked = (data.caracteristicas || []).includes("Número de vagas");
-      const isVagasPrivChecked = (data.caracteristicas || []).includes("Quantidade de vagas privativas");
-      const finalVagas = isVagasChecked ? Number(quantidadesAmbientes.vagas || 1) : (isVagasPrivChecked ? Number(quantidadesAmbientes.vagas_privativas || 1) : 0);
-      propertyData.vagas = finalVagas;
-      propertyData.garageSpaces = finalVagas;
+      const computedVagas = getQtyByName("Número de vagas") || getQtyByName("Quantidade de vagas privativas");
+      propertyData.vagas = computedVagas;
+      propertyData.garageSpaces = computedVagas;
 
-      const isWcSocialChecked = (data.caracteristicas || []).includes("WC social");
-      propertyData.bathrooms = isWcSocialChecked ? Number(quantidadesAmbientes.wc_social || 1) : 0;
+      const computedBathrooms = getQtyByName("WC social") || getQtyByName("Banheiro");
+      propertyData.bathrooms = computedBathrooms;
+
+      const computedElevadores = getQtyByName("Elevador") || getQtyByName("Elevadores");
+      if (computedElevadores > 0) {
+        propertyData.elevadores = computedElevadores;
+      }
+
+      const computedPiscinas = getQtyByName("Piscina") || getQtyByName("Piscina adulta") || getQtyByName("Piscina infantil") || getQtyByName("Piscina privativa");
+      if (computedPiscinas > 0) {
+        propertyData.piscinas = computedPiscinas;
+      }
+
+      const computedArCondicionado = getQtyByName("Ar condicionado");
+      if (computedArCondicionado > 0) {
+        propertyData.quantidadeArCondicionado = computedArCondicionado;
+      }
 
       const statusValue = String(data.status || "").trim();
       const checkboxRented = data.rented === true;
@@ -1223,6 +1304,108 @@ export default function AdminPropertyForm() {
     }
   }, [id, setValue, watch]);
 
+  const slugify = (text: string) => {
+    if (!text) return "";
+    return text
+      .toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9_]/g, "_")
+      .replace(/_+/g, "_")
+      .replace(/^_+|_+$/g, "");
+  };
+
+  const OptionCardWithQuantity = ({ 
+    fieldName, 
+    optionName, 
+    colorTheme = 'gold' 
+  }: { 
+    fieldName: string; 
+    optionName: string; 
+    colorTheme?: 'gold' | 'primary-green' 
+  }) => {
+    const currentSelections = watch(fieldName) || [];
+    const isChecked = currentSelections.includes(optionName);
+    const colorClass = colorTheme === 'gold' ? 'gold' : 'primary-green';
+    
+    const borderCheckedClass = colorTheme === 'gold' 
+      ? 'border-gold bg-gold/5' 
+      : 'border-primary-green bg-primary-green/5';
+      
+    const bgCheckedClass = colorTheme === 'gold' 
+      ? 'bg-gold border-gold text-primary-black' 
+      : 'bg-primary-green border-primary-green text-white';
+      
+    const focusRingClass = colorTheme === 'gold' 
+      ? 'focus:ring-gold/30 focus:border-gold' 
+      : 'focus:ring-primary-green/30 focus:border-primary-green';
+
+    const handleToggle = (checked: boolean) => {
+      let updatedSelection = [...currentSelections];
+      if (checked) {
+        if (!updatedSelection.includes(optionName)) {
+          updatedSelection.push(optionName);
+        }
+        setOptionQuantities(prev => ({
+          ...prev,
+          [optionName]: prev[optionName] > 0 ? prev[optionName] : 1
+        }));
+      } else {
+        updatedSelection = updatedSelection.filter(item => item !== optionName);
+        setOptionQuantities(prev => {
+          const u = { ...prev };
+          delete u[optionName];
+          return u;
+        });
+      }
+      setValue(fieldName, updatedSelection, { shouldDirty: true });
+    };
+
+    return (
+      <div 
+        className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
+          isChecked ? borderCheckedClass : 'border-gray-100 hover:border-gray-205 bg-gray-50/10'
+        }`}
+      >
+        <div 
+          onClick={() => handleToggle(!isChecked)}
+          className="flex items-center gap-3 cursor-pointer group flex-grow py-1 select-none"
+        >
+          <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors shrink-0 ${
+            isChecked ? bgCheckedClass : `bg-white border-gray-300 group-hover:border-${colorClass}`
+          }`}>
+            {isChecked && <Check size={14} strokeWidth={4} />}
+          </div>
+          <span className={`text-sm font-medium transition-colors ${
+            isChecked ? 'text-primary-black' : 'text-gray-650 group-hover:text-primary-black'
+          }`}>
+            {optionName}
+          </span>
+        </div>
+
+        {isChecked && (
+          <div className="flex items-center gap-2 pl-3 shrink-0" onClick={(e) => e.stopPropagation()}>
+            <span className="text-[10px] font-bold text-gray-450 uppercase tracking-wider">Qtd:</span>
+            <input
+              type="number"
+              min="1"
+              value={optionQuantities[optionName] ?? 1}
+              onChange={(e) => {
+                const valStr = e.target.value;
+                if (valStr === '') {
+                  setOptionQuantities(prev => ({ ...prev, [optionName]: 1 }));
+                } else {
+                  const valNum = Math.max(1, parseInt(valStr) || 1);
+                  setOptionQuantities(prev => ({ ...prev, [optionName]: valNum }));
+                }
+              }}
+              className={`w-12 h-8 text-center text-sm font-bold bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 ${focusRingClass}`}
+            />
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderTabContent = () => {
     // Don't block the whole screen
   // if (optionsLoading) return <div className="py-20 text-center animate-pulse">Carregando opções dinâmicas...</div>;
@@ -1396,6 +1579,40 @@ export default function AdminPropertyForm() {
                     <label className="text-sm font-bold text-gray-700 font-extrabold text-[#a27e1f]">Taxa de Gás (R$)</label>
                     <Controller
                       name="valorTaxaGas"
+                      control={control}
+                      render={({ field }) => (
+                        <input
+                          type="text"
+                          className="input-field font-semibold bg-amber-50/20 border-amber-200"
+                          value={maskCurrency(field.value ?? '')}
+                          onChange={(e) => field.onChange(parseCurrencyToNumber(e.target.value))}
+                          placeholder="0,00"
+                        />
+                      )}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-gray-700 font-extrabold text-[#a27e1f]">Taxa de Água (R$)</label>
+                    <Controller
+                      name="valorTaxaAgua"
+                      control={control}
+                      render={({ field }) => (
+                        <input
+                          type="text"
+                          className="input-field font-semibold bg-amber-50/20 border-amber-200"
+                          value={maskCurrency(field.value ?? '')}
+                          onChange={(e) => field.onChange(parseCurrencyToNumber(e.target.value))}
+                          placeholder="0,00"
+                        />
+                      )}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-gray-700 font-extrabold text-[#a27e1f]">Taxa de Luz (R$)</label>
+                    <Controller
+                      name="valorTaxaLuz"
                       control={control}
                       render={({ field }) => (
                         <input
@@ -1630,17 +1847,14 @@ export default function AdminPropertyForm() {
             </div>
             <div className="space-y-2 md:col-span-2">
               <label className="text-sm font-bold text-gray-700 shrink-0">Tags de Localização (Selecione)</label>
-              <div className="flex flex-wrap gap-2">
-                {(options.localizacoes || []).filter(o => o.ativo).map(tag => (
-                   <label key={tag.id} className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 px-3 py-1 rounded-full text-xs cursor-pointer hover:bg-gold/10 transition-colors">
-                     <input 
-                       type="checkbox" 
-                       value={tag.nome} 
-                       {...register('locationTags')} 
-                       className="accent-gold"
-                     />
-                     {tag.nome}
-                   </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4 pt-2">
+                {(options.localizacoes || []).filter(o => o.ativo).map((tag, idx) => (
+                  <OptionCardWithQuantity 
+                    key={tag.id || `locat-${tag.nome}-${idx}`}
+                    fieldName="locationTags"
+                    optionName={tag.nome}
+                    colorTheme="gold"
+                  />
                 ))}
               </div>
             </div>
@@ -1760,12 +1974,11 @@ export default function AdminPropertyForm() {
                         const current = watch('caracteristicas') || [];
                         const merged = Array.from(new Set([...current, ...allAmb]));
                         setValue('caracteristicas', merged);
-                        setQuantidadesAmbientes(prev => {
+                        setOptionQuantities(prev => {
                           const updated = { ...prev };
-                          Object.keys(QUANTITY_AMBIENTES_MAP).forEach(name => {
-                            const key = QUANTITY_AMBIENTES_MAP[name];
-                            if (!updated[key] || updated[key] < 1) {
-                              updated[key] = 1;
+                          allAmb.forEach(name => {
+                            if (!updated[name] || updated[name] < 1) {
+                              updated[name] = 1;
                             }
                           });
                           return updated;
@@ -1782,11 +1995,10 @@ export default function AdminPropertyForm() {
                         const current = watch('caracteristicas') || [];
                         const remaining = current.filter((item: string) => !allAmb.includes(item));
                         setValue('caracteristicas', remaining);
-                        setQuantidadesAmbientes(prev => {
+                        setOptionQuantities(prev => {
                           const updated = { ...prev };
-                          Object.keys(QUANTITY_AMBIENTES_MAP).forEach(name => {
-                            const key = QUANTITY_AMBIENTES_MAP[name];
-                            updated[key] = 0;
+                          allAmb.forEach(name => {
+                            delete updated[name];
                           });
                           return updated;
                         });
@@ -1799,90 +2011,14 @@ export default function AdminPropertyForm() {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
-                  {(options.ambientes || []).map((opt: any, idx: number) => {
-                    const isChecked = (watch('caracteristicas') || []).includes(opt.nome);
-                    const mapKey = QUANTITY_AMBIENTES_MAP[opt.nome];
-                    const hasQuantityField = !isEmpty(mapKey);
-
-                    function isEmpty(val: any) {
-                      return val === undefined || val === null || val === '';
-                    }
-
-                    return (
-                      <div 
-                        key={opt.id || `amb-${opt.nome}-${idx}`} 
-                        className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
-                          isChecked
-                          ? 'border-gold bg-gold/5'
-                          : 'border-gray-100 hover:border-gray-200 bg-gray-50/30'
-                        }`}
-                      >
-                        <label className="flex items-center gap-3 cursor-pointer group flex-1">
-                          <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
-                            isChecked
-                            ? 'bg-gold border-gold text-primary-black'
-                            : 'bg-white border-gray-300 group-hover:border-gold'
-                          }`}>
-                            <input 
-                              type="checkbox" 
-                              value={opt.nome} 
-                              checked={isChecked}
-                              onChange={(e) => {
-                                const current = watch('caracteristicas') || [];
-                                if (e.target.checked) {
-                                  setValue('caracteristicas', [...current, opt.nome]);
-                                  if (hasQuantityField) {
-                                    setQuantidadesAmbientes(prev => ({
-                                      ...prev,
-                                      [mapKey]: prev[mapKey] > 0 ? prev[mapKey] : 1
-                                    }));
-                                  }
-                                } else {
-                                  setValue('caracteristicas', current.filter((c: string) => c !== opt.nome));
-                                  if (hasQuantityField) {
-                                    setQuantidadesAmbientes(prev => ({
-                                      ...prev,
-                                      [mapKey]: 0
-                                    }));
-                                  }
-                                }
-                              }}
-                              className="hidden" 
-                            />
-                            {isChecked && <Check size={14} strokeWidth={4} />}
-                          </div>
-                          <span className={`text-sm font-medium transition-colors ${
-                            isChecked
-                            ? 'text-primary-black'
-                            : 'text-gray-600 group-hover:text-primary-black'
-                          }`}>
-                            {opt.nome}
-                          </span>
-                        </label>
-
-                        {hasQuantityField && isChecked && (
-                          <div className="flex items-center gap-2 pl-4 shrink-0" onClick={e => e.stopPropagation()}>
-                            <span className="text-[10px] font-bold text-gray-500 uppercase">Qtd:</span>
-                            <input
-                              type="number"
-                              min="1"
-                              value={quantidadesAmbientes[mapKey] || ''}
-                              onChange={(e) => {
-                                const valStr = e.target.value;
-                                if (valStr === '') {
-                                  setQuantidadesAmbientes(prev => ({ ...prev, [mapKey]: 1 }));
-                                } else {
-                                  const valNum = Math.max(1, parseInt(valStr) || 1);
-                                  setQuantidadesAmbientes(prev => ({ ...prev, [mapKey]: valNum }));
-                                }
-                              }}
-                              className="w-12 h-8 text-center text-sm font-bold bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold/30 focus:border-gold"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                  {(options.ambientes || []).map((opt: any, idx: number) => (
+                    <OptionCardWithQuantity 
+                      key={opt.id || `amb-${opt.nome}-${idx}`} 
+                      fieldName="caracteristicas"
+                      optionName={opt.nome}
+                      colorTheme="gold"
+                    />
+                  ))}
                 </div>
               </div>
 
@@ -1901,6 +2037,15 @@ export default function AdminPropertyForm() {
                         const current = watch('caracteristicas') || [];
                         const merged = Array.from(new Set([...current, ...allApt]));
                         setValue('caracteristicas', merged);
+                        setOptionQuantities(prev => {
+                          const updated = { ...prev };
+                          allApt.forEach(name => {
+                            if (!updated[name] || updated[name] < 1) {
+                              updated[name] = 1;
+                            }
+                          });
+                          return updated;
+                        });
                       }}
                       className="text-xs font-bold px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gold/10 hover:border-gold transition-colors"
                     >
@@ -1913,6 +2058,13 @@ export default function AdminPropertyForm() {
                         const current = watch('caracteristicas') || [];
                         const remaining = current.filter((item: string) => !allApt.includes(item));
                         setValue('caracteristicas', remaining);
+                        setOptionQuantities(prev => {
+                          const updated = { ...prev };
+                          allApt.forEach(name => {
+                            delete updated[name];
+                          });
+                          return updated;
+                        });
                       }}
                       className="text-xs font-bold px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gold/10 shadow-sm hover:border-gold transition-colors"
                     >
@@ -1923,35 +2075,12 @@ export default function AdminPropertyForm() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
                   {(options.caracteristicasApartamento || []).map((opt: any, idx: number) => (
-                    <label 
+                    <OptionCardWithQuantity 
                       key={opt.id || `apt-${opt.nome}-${idx}`} 
-                      className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer group ${
-                        (watch('caracteristicas') || []).includes(opt.nome)
-                        ? 'border-gold bg-gold/5'
-                        : 'border-gray-100 hover:border-gray-200 bg-gray-50/30'
-                      }`}
-                    >
-                      <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
-                        (watch('caracteristicas') || []).includes(opt.nome)
-                        ? 'bg-gold border-gold text-primary-black'
-                        : 'bg-white border-gray-300 group-hover:border-gold'
-                      }`}>
-                        <input 
-                          type="checkbox" 
-                          value={opt.nome} 
-                          {...register('caracteristicas')} 
-                          className="hidden" 
-                        />
-                        {(watch('caracteristicas') || []).includes(opt.nome) && <Check size={14} strokeWidth={4} />}
-                      </div>
-                      <span className={`text-sm font-medium transition-colors ${
-                        (watch('caracteristicas') || []).includes(opt.nome)
-                        ? 'text-primary-black'
-                        : 'text-gray-600 group-hover:text-primary-black'
-                      }`}>
-                        {opt.nome}
-                      </span>
-                    </label>
+                      fieldName="caracteristicas"
+                      optionName={opt.nome}
+                      colorTheme="gold"
+                    />
                   ))}
                 </div>
               </div>
@@ -2033,14 +2162,36 @@ export default function AdminPropertyForm() {
               <div className="flex gap-2">
                 <button 
                   type="button" 
-                  onClick={() => selectAll('instalacoes', 'instalacoes')}
+                  onClick={() => {
+                    const allInst = (options.instalacoes || []).map((o: any) => o.nome);
+                    setValue('instalacoes', allInst);
+                    setOptionQuantities(prev => {
+                      const updated = { ...prev };
+                      allInst.forEach(name => {
+                        if (!updated[name] || updated[name] < 1) {
+                          updated[name] = 1;
+                        }
+                      });
+                      return updated;
+                    });
+                  }}
                   className="text-xs font-bold px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
                 >
                   Selecionar tudo
                 </button>
                 <button 
                   type="button" 
-                  onClick={() => clearAll('instalacoes')}
+                  onClick={() => {
+                    const allInst = (options.instalacoes || []).map((o: any) => o.nome);
+                    setValue('instalacoes', []);
+                    setOptionQuantities(prev => {
+                      const updated = { ...prev };
+                      allInst.forEach(name => {
+                        delete updated[name];
+                      });
+                      return updated;
+                    });
+                  }}
                   className="text-xs font-bold px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
                 >
                   Limpar seleção
@@ -2050,35 +2201,12 @@ export default function AdminPropertyForm() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
               {(options.instalacoes || []).map((opt, idx) => (
-                <label 
+                <OptionCardWithQuantity 
                   key={opt.id || `inst-${opt.nome}-${idx}`} 
-                  className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer group ${
-                    (watch('instalacoes') || []).includes(opt.nome)
-                    ? 'border-primary-green bg-primary-green/5'
-                    : 'border-gray-100 hover:border-gray-200 bg-gray-50/30'
-                  }`}
-                >
-                  <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
-                    (watch('instalacoes') || []).includes(opt.nome)
-                    ? 'bg-primary-green border-primary-green text-white'
-                    : 'bg-white border-gray-300 group-hover:border-primary-green'
-                  }`}>
-                    <input 
-                      type="checkbox" 
-                      value={opt.nome} 
-                      {...register('instalacoes')} 
-                      className="hidden" 
-                    />
-                    {(watch('instalacoes') || []).includes(opt.nome) && <Check size={14} strokeWidth={4} />}
-                  </div>
-                  <span className={`text-sm font-medium transition-colors ${
-                    (watch('instalacoes') || []).includes(opt.nome)
-                    ? 'text-primary-black'
-                    : 'text-gray-600 group-hover:text-primary-black'
-                  }`}>
-                    {opt.nome}
-                  </span>
-                </label>
+                  fieldName="instalacoes"
+                  optionName={opt.nome}
+                  colorTheme="primary-green"
+                />
               ))}
             </div>
           </div>
@@ -2094,14 +2222,36 @@ export default function AdminPropertyForm() {
               <div className="flex gap-2">
                 <button 
                   type="button" 
-                  onClick={() => selectAll('acabamentos', 'acabamentos')}
+                  onClick={() => {
+                    const allAcab = (options.acabamentos || []).map((o: any) => o.nome);
+                    setValue('acabamentos', allAcab);
+                    setOptionQuantities(prev => {
+                      const updated = { ...prev };
+                      allAcab.forEach(name => {
+                        if (!updated[name] || updated[name] < 1) {
+                          updated[name] = 1;
+                        }
+                      });
+                      return updated;
+                    });
+                  }}
                   className="text-xs font-bold px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
                 >
                   Selecionar tudo
                 </button>
                 <button 
                   type="button" 
-                  onClick={() => clearAll('acabamentos')}
+                  onClick={() => {
+                    const allAcab = (options.acabamentos || []).map((o: any) => o.nome);
+                    setValue('acabamentos', []);
+                    setOptionQuantities(prev => {
+                      const updated = { ...prev };
+                      allAcab.forEach(name => {
+                        delete updated[name];
+                      });
+                      return updated;
+                    });
+                  }}
                   className="text-xs font-bold px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
                 >
                   Limpar seleção
@@ -2111,35 +2261,12 @@ export default function AdminPropertyForm() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
               {(options.acabamentos || []).map((opt, idx) => (
-                <label 
+                <OptionCardWithQuantity 
                   key={opt.id || `acab-${opt.nome}-${idx}`} 
-                  className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer group ${
-                    (watch('acabamentos') || []).includes(opt.nome)
-                    ? 'border-gold bg-gold/5'
-                    : 'border-gray-100 hover:border-gray-200 bg-gray-50/30'
-                  }`}
-                >
-                  <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
-                    (watch('acabamentos') || []).includes(opt.nome)
-                    ? 'bg-gold border-gold text-primary-black'
-                    : 'bg-white border-gray-300 group-hover:border-gold'
-                  }`}>
-                    <input 
-                      type="checkbox" 
-                      value={opt.nome} 
-                      {...register('acabamentos')} 
-                      className="hidden" 
-                    />
-                    {(watch('acabamentos') || []).includes(opt.nome) && <Check size={14} strokeWidth={4} />}
-                  </div>
-                  <span className={`text-sm font-medium transition-colors ${
-                    (watch('acabamentos') || []).includes(opt.nome)
-                    ? 'text-primary-black'
-                    : 'text-gray-600 group-hover:text-primary-black'
-                  }`}>
-                    {opt.nome}
-                  </span>
-                </label>
+                  fieldName="acabamentos"
+                  optionName={opt.nome}
+                  colorTheme="gold"
+                />
               ))}
             </div>
           </div>
@@ -2155,14 +2282,36 @@ export default function AdminPropertyForm() {
               <div className="flex gap-2">
                 <button 
                   type="button" 
-                  onClick={() => selectAll('lazer', 'lazer')}
+                  onClick={() => {
+                    const allLazer = (options.lazer || []).map((o: any) => o.nome);
+                    setValue('lazer', allLazer);
+                    setOptionQuantities(prev => {
+                      const updated = { ...prev };
+                      allLazer.forEach(name => {
+                        if (!updated[name] || updated[name] < 1) {
+                          updated[name] = 1;
+                        }
+                      });
+                      return updated;
+                    });
+                  }}
                   className="text-xs font-bold px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
                 >
                   Selecionar tudo
                 </button>
                 <button 
                   type="button" 
-                  onClick={() => clearAll('lazer')}
+                  onClick={() => {
+                    const allLazer = (options.lazer || []).map((o: any) => o.nome);
+                    setValue('lazer', []);
+                    setOptionQuantities(prev => {
+                      const updated = { ...prev };
+                      allLazer.forEach(name => {
+                        delete updated[name];
+                      });
+                      return updated;
+                    });
+                  }}
                   className="text-xs font-bold px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
                 >
                   Limpar seleção
@@ -2172,35 +2321,12 @@ export default function AdminPropertyForm() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
               {(options.lazer || []).map((opt, idx) => (
-                <label 
+                <OptionCardWithQuantity 
                   key={opt.id || `lazer-${opt.nome}-${idx}`} 
-                  className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer group ${
-                    (watch('lazer') || []).includes(opt.nome)
-                    ? 'border-primary-green bg-primary-green/5'
-                    : 'border-gray-100 hover:border-gray-200 bg-gray-50/30'
-                  }`}
-                >
-                  <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
-                    (watch('lazer') || []).includes(opt.nome)
-                    ? 'bg-primary-green border-primary-green text-white'
-                    : 'bg-white border-gray-300 group-hover:border-primary-green'
-                  }`}>
-                    <input 
-                      type="checkbox" 
-                      value={opt.nome} 
-                      {...register('lazer')} 
-                      className="hidden" 
-                    />
-                    {(watch('lazer') || []).includes(opt.nome) && <Check size={14} strokeWidth={4} />}
-                  </div>
-                  <span className={`text-sm font-medium transition-colors ${
-                    (watch('lazer') || []).includes(opt.nome)
-                    ? 'text-primary-black'
-                    : 'text-gray-600 group-hover:text-primary-black'
-                  }`}>
-                    {opt.nome}
-                  </span>
-                </label>
+                  fieldName="lazer"
+                  optionName={opt.nome}
+                  colorTheme="primary-green"
+                />
               ))}
             </div>
           </div>
@@ -2602,15 +2728,43 @@ export default function AdminPropertyForm() {
 
   const propertyLink = id ? `${window.location.origin}/imovel/${id}` : '';
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    alert("Link do imóvel copiado com sucesso.");
+  if (id) {
+    console.log("Gerando link público do imóvel:");
+    console.log("Imóvel ID:", id);
+    console.log("Código:", watch('code') || watch('codigo') || watch('codigoImovel') || '');
+    console.log("URL pública:", propertyLink);
+  }
+
+  const copyToClipboard = async (text: string) => {
+    if (!id) {
+      triggerToast("ID do imóvel não encontrado.", "error");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      triggerToast("Link copiado com sucesso.", "success");
+    } catch (err) {
+      console.error("Erro ao copiar link:", err);
+      triggerToast("Erro ao copiar o link.", "error");
+    }
+  };
+
+  const handleOpenLink = () => {
+    if (!id) {
+      triggerToast("ID do imóvel não encontrado.", "error");
+      return;
+    }
+    window.open(propertyLink, "_blank");
   };
 
   const shareWhatsApp = () => {
-    const data = watch();
-    const message = `Olá! Segue o link deste imóvel incrível:\n\n*${data.title}*\n\n🏡 Confira os detalhes completos aqui:\n${propertyLink}\n\nCódigo: *${data.code}*`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+    if (!id) {
+      triggerToast("ID do imóvel não encontrado.", "error");
+      return;
+    }
+    const message = `Olá! Confira este imóvel: ${propertyLink}`;
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, "_blank");
   };
 
   return (
@@ -2682,7 +2836,7 @@ export default function AdminPropertyForm() {
                </button>
                <button 
                  type="button"
-                 onClick={() => window.open(propertyLink, '_blank')}
+                 onClick={handleOpenLink}
                  className="flex items-center gap-2 bg-primary-black text-white px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg hover:bg-gold hover:text-primary-black"
                >
                  <Eye size={14} />

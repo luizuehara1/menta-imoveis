@@ -59,38 +59,17 @@ export function isValidImageUrl(url: any): boolean {
 export function isValidPublicProperty(p: any): boolean {
   if (!p || typeof p !== 'object') return false;
 
-  // 1. Mandatory presence of ID
   const hasId = !!p.id;
-  
-  // 2. Minimum Content (Must have one identifier)
-  const title = String(p.title || p.titulo || p.nome || "").trim();
-  const code = String(p.code || p.codigo || p.codigoImovel || "").trim();
-  
-  const hasTitleOrCode = title.length > 0 || code.length > 0;
-
-  // 3. Visibility Requirement
   const isPublished = p.publicado === true || p.publicadoNoSite === true || p.ativo === true;
-  
-  // 4. Status Filter
-  const status = String(p.status || "").toLowerCase();
-  const isBlocked = [
-    'rascunho', 
-    'excluido', 
-    'excluído', 
-    'inativo', 
-    'cancelado', 
-    'indisponível', 
-    'indisponivel'
-  ].some(blocked => status.includes(blocked));
+  const isExcluded = p.excluido === true || String(p.status || "").toLowerCase().includes("excluid");
 
-  const isValid = hasId && hasTitleOrCode && isPublished && !isBlocked;
+  const isValid = hasId && isPublished && !isExcluded;
 
-  if (!isValid && p.id && (p.title || p.code)) {
-    console.warn(`[Property Validation] Imóvel ${p.code || p.id} INVÁLIDO. Motivos:`, {
+  if (!isValid && p.id) {
+    console.warn(`[Property Validation] Imóvel ${p.id} INVÁLIDO. Motivos:`, {
        hasId,
-       hasTitleOrCode,
        isPublished,
-       isBlocked,
+       isExcluded,
        status: p.status,
        publicado: p.publicado,
        publicadoNoSite: p.publicadoNoSite,
@@ -239,5 +218,184 @@ export function isImovelAlugado(imovel: any): boolean {
     statusStr.includes("alugado") ||
     statusStr.includes("locado")
   );
+}
+
+export function normalizeTipoNegocio(tipo: any): string {
+  const value = String(tipo || "").toLowerCase();
+
+  if (
+    (value.includes("venda") && value.includes("loca")) ||
+    value.includes("ambos")
+  ) {
+    return "Venda e Locação";
+  }
+
+  if (value.includes("compr") || value.includes("vend")) {
+    return "Venda";
+  }
+
+  if (value.includes("loca") || value.includes("alug")) {
+    return "Locação";
+  }
+
+  return "";
+}
+
+export function normalizeText(text: any): string {
+  return String(text || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+export function extractBedrooms(search: string): number | null {
+  const text = normalizeText(search);
+
+  const patterns = [
+    /(\d+)\s*(quarto|quartos)/,
+    /(\d+)\s*(dormitorio|dormitorios)/,
+    /(\d+)\s*(dorm|dorms)/,
+    /(\d+)\s*(qto|qtos)/
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match) return Number(match[1]);
+  }
+
+  return null;
+}
+
+export function extractSuites(search: string): number | null {
+  const text = normalizeText(search);
+
+  const patterns = [
+    /(\d+)\s*(suite|suites)/
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match) return Number(match[1]);
+  }
+
+  return null;
+}
+
+export function extractVagas(search: string): number | null {
+  const text = normalizeText(search);
+
+  const patterns = [
+    /(\d+)\s*(vaga|vagas)/,
+    /(\d+)\s*(garagem|garagens)/,
+    /(\d+)\s*(vaga de garagem|vagas de garagem)/
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match) return Number(match[1]);
+  }
+
+  return null;
+}
+
+export function matchesQuickSearch(imovel: any, searchTerm: string): boolean {
+  const search = normalizeText(searchTerm);
+
+  if (!search) return true;
+
+  const bedrooms = extractBedrooms(search);
+  const suites = extractSuites(search);
+  const vagas = extractVagas(search);
+
+  const tipoImovel = normalizeText(imovel.tipoImovel || imovel.propertyType);
+  const tipoNegocio = normalizeText(imovel.tipoNegocio || imovel.businessType);
+  const titulo = normalizeText(imovel.titulo || imovel.title || imovel.tituloAnuncio || imovel.nome);
+  const codigo = normalizeText(imovel.codigo || imovel.code || imovel.codigoImovel || imovel.id);
+  const bairro = normalizeText(imovel.bairro || imovel.neighborhood);
+  const cidade = normalizeText(imovel.cidade || imovel.city);
+  const descricao = normalizeText(imovel.descricao || imovel.descricaoDetalhada || imovel.description);
+
+  const caracteristicasStr = Array.isArray(imovel.caracteristicas)
+    ? imovel.caracteristicas.map((c: any) => normalizeText(c.nome || c.label || c)).join(" ")
+    : typeof imovel.caracteristicas === 'string'
+      ? normalizeText(imovel.caracteristicas)
+      : '';
+
+  const ambientesStr = Array.isArray(imovel.ambientes)
+    ? imovel.ambientes.map((a: any) => normalizeText(a.nome || a.label || a.descricao || a)).join(" ")
+    : typeof imovel.ambientes === 'string'
+      ? normalizeText(imovel.ambientes)
+      : '';
+
+  const searchableText = [
+    titulo,
+    codigo,
+    tipoImovel,
+    tipoNegocio,
+    bairro,
+    cidade,
+    descricao,
+    caracteristicasStr,
+    ambientesStr
+  ].join(" ");
+
+  if (bedrooms !== null) {
+    const imovelDormitorios = Number(imovel.dormitorios || imovel.quartos || imovel.bedrooms || 0);
+
+    const ambientesDormitorios = Array.isArray(imovel.ambientes)
+      ? imovel.ambientes.find((item: any) => {
+          const label = normalizeText(item.label || item.value || item);
+          return label.includes("dormitorio") || label.includes("quarto");
+        })
+      : null;
+
+    const qtdAmbientesDormitorios = Number(ambientesDormitorios?.quantidade || 0);
+
+    const qtdFinal = imovelDormitorios || qtdAmbientesDormitorios;
+
+    if (qtdFinal !== bedrooms) return false;
+  }
+
+  if (suites !== null) {
+    const qtdSuites = Number(imovel.suites || imovel.banheirosSuites || 0);
+    if (qtdSuites !== suites) return false;
+  }
+
+  if (vagas !== null) {
+    const qtdVagas = Number(imovel.vagas || imovel.numeroVagas || imovel.garageSpaces || imovel.vagasGaragem || 0);
+    if (qtdVagas !== vagas) return false;
+  }
+
+  const words = search
+    .split(" ")
+    .filter(word => word.length > 1)
+    .filter(word => !["com", "de", "da", "do", "no", "na", "em"].includes(word))
+    .filter(word => !/^\d+$/.test(word))
+    .filter(word => !["quarto", "quartos", "dormitorio", "dormitorios", "dorm", "dorms", "suite", "suites", "vaga", "vagas"].includes(word));
+
+  const expandSynonyms = (word: string): string[] => {
+    if (['apartamento', 'apto', 'ap', 'ape'].includes(word)) {
+      return ['apartamento', 'apto', 'ap', 'ape'];
+    }
+    if (['casa', 'sobrado'].includes(word)) {
+      return ['casa', 'sobrado'];
+    }
+    if (['cobertura', 'duplex'].includes(word)) {
+      return ['cobertura', 'duplex'];
+    }
+    if (['venda', 'vender', 'comprar', 'compra'].includes(word)) {
+      return ['venda', 'vender', 'comprar', 'compra'];
+    }
+    if (['locacao', 'aluguel', 'alugar'].includes(word)) {
+      return ['locacao', 'aluguel', 'alugar'];
+    }
+    return [word];
+  };
+
+  return words.every(word => {
+    const synonyms = expandSynonyms(word);
+    return synonyms.some(syn => searchableText.includes(syn));
+  });
 }
 

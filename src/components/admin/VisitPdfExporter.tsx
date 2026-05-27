@@ -149,6 +149,20 @@ export const VisitPdfTemplate = React.forwardRef<HTMLDivElement, VisitPdfTemplat
       }
     }
 
+    const apts = property?.caracteristicasApartamento || [];
+    if (Array.isArray(apts)) {
+      const matched = apts.find(
+        (a: any) => String(a.label || '').trim().toLowerCase() === char.trim().toLowerCase()
+      );
+      if (matched && matched.quantidade !== undefined && matched.quantidade !== null && Number(matched.quantidade) > 0) {
+        const qty = Number(matched.quantidade);
+        if (qty <= 1) {
+          return char;
+        }
+        return `${qty}x ${char}`;
+      }
+    }
+
     if (char === 'Dormitórios' && (property?.dormitorios || property?.bedrooms)) {
       const qty = Number(property.dormitorios || property.bedrooms);
       return qty > 1 ? `${qty} Dormitórios` : '1 Dormitório';
@@ -183,11 +197,44 @@ export const VisitPdfTemplate = React.forwardRef<HTMLDivElement, VisitPdfTemplat
     nome: formatCharacteristicPDF(item.nome, p)
   }));
 
-  const allLeisure = normalizeList(formatList(p?.lazer || p?.leisure || p?.comodidades || p?.amenities || p?.areasComuns));
+  const rawLeisure = normalizeList(formatList(p?.lazer || p?.leisure || p?.comodidades || p?.amenities || p?.areasComuns));
+  const allLeisure = rawLeisure.map((item) => {
+    const qtyObj = (p?.lazer_objects || p?.caracteristicasEmpreendimento || []).find(
+      (o: any) => (o.label || o.nome) === item.nome
+    );
+    const qty = qtyObj?.quantidade;
+    return {
+      ...item,
+      nome: qty && qty > 1 ? `${item.nome} (${qty})` : item.nome
+    };
+  });
+
   const allProximities = normalizeList(formatList(p?.proximidades || p?.proximities));
   const allDiferenciais = normalizeList(formatList(p?.diferenciais || p?.extras || p?.facilidades || p?.infraestrutura || p?.opcoesMarcadas));
-  const allInstallations = normalizeList(formatList(p?.instalacoes || p?.installations));
-  const allFinishes = normalizeList(formatList(p?.acabamentos || p?.finishes));
+  
+  const rawInstallations = normalizeList(formatList(p?.instalacoes || p?.installations));
+  const allInstallations = rawInstallations.map((item) => {
+    const qtyObj = (p?.instalacoes_objects || []).find(
+      (o: any) => (o.label || o.nome) === item.nome
+    );
+    const qty = qtyObj?.quantidade;
+    return {
+      ...item,
+      nome: qty && qty > 1 ? `${item.nome} (${qty})` : item.nome
+    };
+  });
+
+  const rawFinishes = normalizeList(formatList(p?.acabamentos || p?.finishes));
+  const allFinishes = rawFinishes.map((item) => {
+    const qtyObj = (p?.acabamentos_objects || []).find(
+      (o: any) => (o.label || o.nome) === item.nome
+    );
+    const qty = qtyObj?.quantidade;
+    return {
+      ...item,
+      nome: qty && qty > 1 ? `${qty}x ${item.nome}` : item.nome
+    };
+  });
   
   const rules = formatList(p?.regras || p?.regrasLocacao);
   const observations = safeText(p?.observacoes || p?.internalNotes || p?.notas, '');

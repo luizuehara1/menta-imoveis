@@ -137,6 +137,108 @@
   }
 }
 
+/* Public Property Detail Carousel & Overlap Fixes */
+.property-detail-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-rows: auto auto;
+  gap: 32px;
+  align-items: start;
+}
+
+.property-gallery-section {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.property-sidebar {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  position: sticky;
+  top: 110px;
+  z-index: 2;
+}
+
+.property-info-section {
+  grid-column: 1;
+  grid-row: 2;
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.property-carousel-main {
+  position: relative;
+  width: 100%;
+  height: clamp(380px, 55vw, 620px);
+  border-radius: 28px;
+  overflow: hidden;
+  background: #f3f4f6;
+}
+
+.property-carousel-main img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.property-thumbnails {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 14px 4px 4px;
+}
+
+.property-thumbnail {
+  width: 92px;
+  height: 68px;
+  flex: 0 0 auto;
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  border: 2px solid transparent;
+}
+
+.property-thumbnail.active {
+  border-color: #d6b45a;
+}
+
+@media (max-width: 900px) {
+  .property-detail-hero {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .property-gallery-section {
+    order: 1;
+    width: 100%;
+  }
+
+  .property-sidebar {
+    order: 2;
+    position: relative;
+    top: auto;
+    width: 100%;
+  }
+
+  .property-info-section {
+    order: 3;
+    width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .property-carousel-main {
+    height: 320px;
+    border-radius: 20px;
+  }
+}
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
@@ -149,3 +251,34 @@
 ::-webkit-scrollbar-thumb {
   @apply bg-gray-300 rounded-full hover:bg-gold transition-colors;
 }
+
+/* PDF Export compatibility classes to avoid oklab/oklch and color-mix failures in html2canvas */
+.pdf-export,
+.pdf-export * {
+  color: #111827 !important;
+  border-color: #e5e7eb !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+.pdf-export {
+  background: #ffffff !important;
+}
+
+.pdf-title {
+  color: #111827 !important;
+}
+
+.pdf-muted {
+  color: #6b7280 !important;
+}
+
+.pdf-gold {
+  color: #c29b38 !important;
+}
+
+.pdf-table-header {
+  background: #111827 !important;
+  color: #ffffff !important;
+}
+

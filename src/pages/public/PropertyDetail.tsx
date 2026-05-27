@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+import { useAuth } from '../../contexts/AuthContext';
 import VisitScheduler from '../../components/public/VisitScheduler';
 import { useSettings } from '../../hooks/useSettings';
 import { 
@@ -32,7 +33,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import PageWrapper from '../../components/PageWrapper';
 import { SafeImage } from '../../components/ui/SafeImage';
-import { formatCurrency, isValidPublicProperty, cleanPhoneForWhatsapp, getSafeImageUrl, isImovelAlugado } from '../../lib/utils';
+import { formatCurrency, isValidPublicProperty, cleanPhoneForWhatsapp, getSafeImageUrl, isImovelAlugado, normalizeTipoNegocio } from '../../lib/utils';
 
 const formatCharacteristic = (char: string, property: any) => {
   const ambientes = property?.ambientes || [];
@@ -65,6 +66,20 @@ const formatCharacteristic = (char: string, property: any) => {
     }
   }
 
+  const apts = property?.caracteristicasApartamento || [];
+  if (Array.isArray(apts)) {
+    const matched = apts.find(
+      (a: any) => String(a.label || '').trim().toLowerCase() === char.trim().toLowerCase()
+    );
+    if (matched && matched.quantidade !== undefined && matched.quantidade !== null && Number(matched.quantidade) > 0) {
+      const qty = Number(matched.quantidade);
+      if (qty <= 1) {
+        return char;
+      }
+      return `${qty}x ${char}`;
+    }
+  }
+
   if (char === 'Dormitórios' && (property?.dormitorios || property?.bedrooms)) {
     const qty = Number(property.dormitorios || property.bedrooms);
     return qty > 1 ? `${qty} Dormitórios` : '1 Dormitório';
@@ -93,13 +108,42 @@ const formatCharacteristic = (char: string, property: any) => {
   return char;
 };
 
+function getPropertyImages(imovel: any): string[] {
+  const imagens: string[] = [];
+
+  if (imovel?.imagemPrincipal) {
+    if (typeof imovel.imagemPrincipal === "string") {
+      imagens.push(imovel.imagemPrincipal);
+    } else if (imovel.imagemPrincipal?.url) {
+      imagens.push(imovel.imagemPrincipal.url);
+    }
+  }
+
+  if (Array.isArray(imovel?.imagens)) {
+    imovel.imagens.forEach((img: any) => {
+      if (typeof img === "string") {
+        imagens.push(img);
+      } else if (img?.url) {
+        imagens.push(img.url);
+      }
+    });
+  }
+
+  const uniqueImages = [...new Set(imagens.filter(Boolean))];
+
+  return uniqueImages.length ? uniqueImages : ["/placeholder-imovel.png"];
+}
+
 export default function PropertyDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { settings } = useSettings();
+  const { isAdmin } = useAuth();
   const [property, setProperty] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
   const [activeImage, setActiveImage] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
   const [activeMobileSections, setActiveMobileSections] = useState<Record<string, boolean>>({
     caracteristicas: false,
     acabamentos: false,
@@ -116,26 +160,25 @@ export default function PropertyDetail() {
 
   const galleryImagesWithMeta = React.useMemo(() => {
     if (!property) return [];
-    const images = [...(property.images || [])];
-    
-    // Sort so main is first, keeping track of original objects/strings
-    const mainImg = property.mainImage;
-    if (mainImg) {
-      const index = images.findIndex(img => {
-        const u = typeof img === 'string' ? img : img.url;
-        return u === mainImg;
-      });
-      if (index > -1) {
-        const [found] = images.splice(index, 1);
-        images.unshift(found);
+    const urls = getPropertyImages(property);
+    return urls.map(url => {
+      let aplicarMarcaDagua = true;
+      if (property) {
+        const rawImages = [
+          property.imagemPrincipal,
+          ...(Array.isArray(property.imagens) ? property.imagens : []),
+          ...(Array.isArray(property.images) ? property.images : [])
+        ];
+        const match = rawImages.find(
+          (o: any) => o && typeof o !== "string" && (o.url === url || getSafeImageUrl(o.url) === url)
+        );
+        if (match && match.aplicarMarcaDagua === false) {
+          aplicarMarcaDagua = false;
+        }
       }
-    }
-    
-    return images.filter(Boolean).map(img => {
-      const unwrapped = typeof img === 'string' ? { url: img, aplicarMarcaDagua: true } : img;
       return {
-        url: getSafeImageUrl(unwrapped.url),
-        aplicarMarcaDagua: unwrapped.aplicarMarcaDagua !== false
+        url: getSafeImageUrl(url) || url,
+        aplicarMarcaDagua
       };
     });
   }, [property]);
@@ -144,36 +187,93 @@ export default function PropertyDetail() {
     return galleryImagesWithMeta.map(item => item.url);
   }, [galleryImagesWithMeta]);
 
+  // Infinite automated carousel: transitions automatically every 3 seconds unless paused on mouse hover
+  useEffect(() => {
+    if (galleryImages.length <= 1 || isPaused) return;
+
+    const interval = setInterval(() => {
+      setActiveImage((prev) => (prev + 1) % galleryImages.length);
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [galleryImages.length, isPaused]);
+
   useEffect(() => {
     if (id) {
       const fetchProperty = async () => {
         setLoading(true);
+        setNotFound(false);
+        console.log("ID recebido da URL:", id);
+        console.log("Buscando Firestore em:", `imoveis/${id}`);
         try {
           const docSnap = await getDoc(doc(db, 'imoveis', id));
+          console.log("Documento existe:", docSnap.exists());
           if (docSnap.exists()) {
-            const data = docSnap.data();
+             console.log("Dados do imóvel:", docSnap.data());
+          }
+
+          let p: any = null;
+          if (docSnap.exists()) {
+            p = { id: docSnap.id, ...docSnap.data() };
+          } else {
+            console.log("Documento primário não encontrado via ID. Iniciando buscas de fallback...");
             
-            // Strict Validation (Block ghosts and unpublished)
-            const p = { id: docSnap.id, ...data };
-            if (isValidPublicProperty(p)) {
-              setProperty(p);
+            // Try query by 'slug'
+            const slugQuery = query(collection(db, 'imoveis'), where('slug', '==', id));
+            const slugSnap = await getDocs(slugQuery);
+            if (!slugSnap.empty) {
+              const matchedDoc = slugSnap.docs[0];
+              p = { id: matchedDoc.id, ...matchedDoc.data() };
+              console.log("Encontrado por fallback (slug):", p);
             } else {
-              console.warn("Property exists but is not valid for public view or is incomplete.");
-              navigate('/imoveis');
+              // Try query by 'code'
+              const codeQuery = query(collection(db, 'imoveis'), where('code', '==', id));
+              const codeSnap = await getDocs(codeQuery);
+              if (!codeSnap.empty) {
+                const matchedDoc = codeSnap.docs[0];
+                p = { id: matchedDoc.id, ...matchedDoc.data() };
+                console.log("Encontrado por fallback (code):", p);
+              } else {
+                // Try query by 'codigo'
+                const codigoQuery = query(collection(db, 'imoveis'), where('codigo', '==', id));
+                const codigoSnap = await getDocs(codigoQuery);
+                if (!codigoSnap.empty) {
+                  const matchedDoc = codigoSnap.docs[0];
+                  p = { id: matchedDoc.id, ...matchedDoc.data() };
+                  console.log("Encontrado por fallback (codigo):", p);
+                }
+              }
+            }
+          }
+
+          if (p) {
+            // Rule 8: REGRAS DE VISIBILIDADE
+            // O imóvel público deve abrir se publicadoNoSite === true || publicado === true || ativo === true e excluido !== true.
+            // Se o admin estiver logado, pode abrir mesmo se não estiver publicado.
+            const isPublic = p.excluido !== true && (p.publicadoNoSite === true || p.publicado === true || p.ativo === true);
+            console.log("Verificação de visibilidade do imóvel:", { isPublic, isAdmin, excluido: p.excluido, publicadoNoSite: p.publicadoNoSite, publicado: p.publicado, ativo: p.ativo });
+
+            if (isPublic || isAdmin) {
+              setProperty(p);
+              setNotFound(false);
+            } else {
+              console.warn("Imóvel existe no banco de dados, mas não está público e o usuário atual não é Administrador.");
+              setNotFound(true);
             }
           } else {
-            navigate('/imoveis');
+            console.warn(`Nenhum imóvel correspondente foi localizado para o identificador: "${id}".`);
+            setNotFound(true);
           }
-        } catch (error) {
-          console.error("Error fetching detail:", error);
-          navigate('/imoveis');
+        } catch (error: any) {
+          console.error("Erro ao carregar imóvel público:", error?.code, error?.message, error);
+          setNotFound(true);
         } finally {
           setLoading(false);
         }
       };
       fetchProperty();
     }
-  }, [id, navigate]);
+  }, [id, isAdmin, navigate]);
 
   const scrollToScheduler = () => {
     const element = document.getElementById('agendamento');
@@ -204,7 +304,31 @@ export default function PropertyDetail() {
     </div>
   );
   
-  if (!property) return null;
+  if (notFound || !property) {
+    return (
+      <PageWrapper>
+        <div className="bg-[#FAF9F6] min-h-screen pt-[120px] pb-20 flex flex-col items-center justify-center font-sans px-4">
+          <div className="max-w-md w-full bg-white rounded-3xl p-8 text-center shadow-lg border border-gold/10">
+            <div className="w-16 h-16 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Info size={32} />
+            </div>
+            <h1 className="text-2xl font-display font-black text-[#0F172A] mb-3">Imóvel Não Encontrado</h1>
+            <p className="text-gray-500 leading-relaxed text-sm mb-6">
+              Não encontramos o imóvel solicitado. Ele pode ter sido removido, vendido ou estar indisponível no momento.
+            </p>
+            <div className="space-y-3">
+              <Link to="/imoveis" className="block w-full text-center bg-gold hover:bg-[#EEBF32] text-primary-black font-black uppercase tracking-wider py-3.5 rounded-xl text-xs transition-all shadow-md">
+                Ver Outros Imóveis
+              </Link>
+              <Link to="/" className="block text-xs font-bold text-gray-500 hover:text-slate-800 transition-colors uppercase tracking-widest py-2">
+                Ir Para a Home
+              </Link>
+            </div>
+          </div>
+        </div>
+      </PageWrapper>
+    );
+  }
 
   const getWhatsAppUrl = () => {
     const rawPhone = property.brokerWhatsapp || settings.empresa.whatsapp;
@@ -256,9 +380,15 @@ export default function PropertyDetail() {
                 {property.propertyType}
               </span>
               {isImovelAlugado(property) && (
-                <span className="bg-amber-100 hover:bg-amber-100 text-amber-900 border border-amber-200 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider">
-                  CONTRATO DE ALUGUEL ATIVO / INDISPONÍVEL
-                </span>
+                normalizeTipoNegocio(property.businessType || property.tipoNegocio) === "Venda e Locação" ? (
+                  <span className="bg-emerald-500 hover:bg-emerald-600 text-white border border-transparent px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider">
+                    Alugado, disponível para venda
+                  </span>
+                ) : (
+                  <span className="bg-amber-100 hover:bg-amber-100 text-amber-900 border border-amber-200 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider">
+                    Já alugado
+                  </span>
+                )
               )}
               {property.statusImovel && (
                 <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest ml-auto lg:ml-2">
@@ -277,12 +407,14 @@ export default function PropertyDetail() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-10 items-start">
-            {/* LEFT COLUMN: Gallery & Details (65-70%) */}
-            <div className="lg:col-span-8 space-y-6 md:space-y-10">
-              {/* Gallery Section */}
-              <div className="space-y-4">
-                <div className="relative aspect-[16/10] md:aspect-video lg:h-[520px] rounded-[2rem] md:rounded-[2.5rem] overflow-hidden bg-[#F1F5F9] group shadow-[0_20px_45px_rgba(15,23,42,0.06)] border border-[#E2E8F0] z-0">
+          <div className="property-detail-hero">
+            {/* 1. Gallery Section (Carousel & Thumbnails) */}
+            <div className="property-gallery-section space-y-4">
+                <div 
+                  className="property-carousel-main group shadow-[0_20px_45px_rgba(15,23,42,0.06)] border border-[#E2E8F0]"
+                  onMouseEnter={() => setIsPaused(true)}
+                  onMouseLeave={() => setIsPaused(false)}
+                >
                   <AnimatePresence mode="wait">
                     <motion.div
                       key={activeImage}
@@ -335,21 +467,23 @@ export default function PropertyDetail() {
                 </div>
 
                 {galleryImages.length > 1 && (
-                  <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide pt-1 animate-fadeIn">
+                  <div className="property-thumbnails no-scrollbar">
                     {galleryImages.map((img, idx) => (
                       <button
                         key={idx}
                         onClick={() => setActiveImage(idx)}
-                        className={`relative shrink-0 w-24 md:w-28 aspect-[16/10] rounded-xl overflow-hidden border-2 transition-all duration-350 ${activeImage === idx ? 'border-gold ring-4 ring-gold/15 scale-102 shadow-md' : 'border-transparent opacity-60 hover:opacity-100'}`}
+                        className={`property-thumbnail ${activeImage === idx ? 'active' : 'opacity-60 hover:opacity-100'}`}
                       >
-                        <SafeImage src={img} className="w-full h-full object-cover" />
+                        <SafeImage src={img} className="w-full h-full object-cover animate-fadeIn" />
                       </button>
                     ))}
                   </div>
                 )}
-                
-                {/* Mobile CTA Module (Shown index 3, 4) */}
-                <div className="lg:hidden space-y-4">
+              </div>
+
+              <div className="property-info-section space-y-6 md:space-y-8">
+                {/* We completely hide the duplicate/overlapping mobile sections here */}
+                <div className="hidden">
                   <div className="bg-white p-6 md:p-8 rounded-[2rem] border border-[#F1F5F9] shadow-md space-y-5">
                     {isImovelAlugado(property) ? (
                       property.businessType === 'Venda e Locação' && property.priceVenda ? (
@@ -482,8 +616,8 @@ export default function PropertyDetail() {
                   </div>
                 </div>
 
-                {/* Broker Mobile Card Section */}
-                {property.brokerName && (
+                {/* Broker Mobile Card Section - hidden to prevent duplicate/overlapping layout */}
+                {false && property.brokerName && (
                   <div className="lg:hidden bg-white p-5 rounded-[2rem] border border-[#F1F5F9] shadow-sm flex items-center gap-4">
                     <div className="w-12 h-12 rounded-xl bg-[#0F172A] text-gold flex items-center justify-center shadow-md shrink-0 overflow-hidden relative border border-slate-100">
                       {property.brokerPhoto ? (
@@ -662,11 +796,17 @@ export default function PropertyDetail() {
                                </button>
                                <div className={`mt-3 ${activeMobileSections.acabamentos ? 'block' : 'hidden md:block'}`}>
                                   <div className="flex flex-wrap gap-1.5 animate-fadeIn">
-                                     {property.acabamentos.map((item: string) => (
-                                       <span key={item} className="bg-slate-50 px-2.5 py-1 rounded-lg text-[10px] font-semibold text-slate-500 border border-slate-100 hover:border-gold hover:text-gold transition-all">
-                                          {item}
-                                       </span>
-                                     ))}
+                                     {property.acabamentos.map((item: string) => {
+                                       const qtyObj = (property.acabamentos_objects || []).find(
+                                         (o: any) => (o.label || o.nome) === item
+                                       );
+                                       const qty = qtyObj?.quantidade;
+                                       return (
+                                         <span key={item} className="bg-slate-50 px-2.5 py-1 rounded-lg text-[10px] font-semibold text-slate-500 border border-slate-100 hover:border-gold hover:text-gold transition-all">
+                                            {qty && qty > 1 ? `${qty}x ` : ''}{item}
+                                         </span>
+                                       );
+                                     })}
                                   </div>
                                </div>
                             </div>
@@ -691,12 +831,18 @@ export default function PropertyDetail() {
                                </button>
                                <div className={`mt-3 ${activeMobileSections.lazer ? 'block' : 'hidden md:block'}`}>
                                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-1 gap-2 animate-fadeIn">
-                                     {property.lazer.map((item: string) => (
-                                       <div key={item} className="flex items-center gap-2 text-xs text-slate-500 hover:text-slate-850 transition-colors">
-                                          <div className="w-1.5 h-1.5 rounded-full bg-gold/55 shrink-0" />
-                                          <span>{item}</span>
-                                       </div>
-                                     ))}
+                                     {property.lazer.map((item: string) => {
+                                        const qtyObj = (property.lazer_objects || property.caracteristicasEmpreendimento || []).find(
+                                          (o: any) => (o.label || o.nome) === item
+                                        );
+                                        const qty = qtyObj?.quantidade;
+                                        return (
+                                          <div key={item} className="flex items-center gap-2 text-xs text-slate-500 hover:text-slate-850 transition-colors">
+                                             <div className="w-1.5 h-1.5 rounded-full bg-gold/55 shrink-0" />
+                                             <span>{item}{qty && qty > 1 ? ` (${qty})` : ''}</span>
+                                          </div>
+                                        );
+                                      })}
                                   </div>
                                </div>
                             </div>
@@ -718,12 +864,18 @@ export default function PropertyDetail() {
                                </button>
                                <div className={`mt-3 ${activeMobileSections.instalacoes ? 'block' : 'hidden md:block'}`}>
                                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-1 gap-2 animate-fadeIn">
-                                     {property.instalacoes.map((item: string) => (
-                                       <div key={item} className="flex items-center gap-2 text-xs text-slate-500">
-                                          <div className="w-1 h-1 bg-slate-300 rounded-full shrink-0" />
-                                          <span className="truncate">{item}</span>
-                                       </div>
-                                     ))}
+                                     {property.instalacoes.map((item: string) => {
+                                        const qtyObj = (property.instalacoes_objects || []).find(
+                                          (o: any) => (o.label || o.nome) === item
+                                        );
+                                        const qty = qtyObj?.quantidade;
+                                        return (
+                                          <div key={item} className="flex items-center gap-2 text-xs text-slate-500">
+                                             <div className="w-1 h-1 bg-slate-300 rounded-full shrink-0" />
+                                             <span className="truncate">{item}{qty && qty > 1 ? ` (${qty})` : ''}</span>
+                                          </div>
+                                        );
+                                      })}
                                   </div>
                                </div>
                             </div>
@@ -745,10 +897,9 @@ export default function PropertyDetail() {
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* RIGHT COLUMN: Desktop Sidebar Sticky (35%) */}
-            <div className="hidden lg:block lg:col-span-4 lg:sticky lg:top-28">
+              {/* RIGHT COLUMN: Sidebar Sticky / Mobile-Flex */}
+              <aside className="property-sidebar">
               <div className="bg-white rounded-[2.5rem] border border-[#F1F5F9] shadow-[0_25px_60px_-15px_rgba(15,23,42,0.06)] p-8 md:p-9 space-y-8 overflow-hidden relative">
                 {/* Subtle Background Aura */}
                 <div className="absolute top-0 right-0 w-32 h-32 bg-gold/5 blur-[55px] rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
@@ -954,7 +1105,7 @@ export default function PropertyDetail() {
                    Consultoria Premium
                  </Link>
               </motion.div>
-            </div>
+            </aside>
           </div>
         </div>
 

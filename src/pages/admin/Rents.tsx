@@ -3,6 +3,7 @@ import {
   collection,
   query,
   getDocs,
+  getDoc,
   addDoc,
   serverTimestamp,
   deleteDoc,
@@ -11,7 +12,7 @@ import {
   where,
   orderBy,
 } from "firebase/firestore";
-import { db } from "../../lib/firebase";
+import { db, auth } from "../../lib/firebase";
 import { Lease, Property } from "../../types";
 import {
   Home,
@@ -118,6 +119,27 @@ const getWatermarkData = (
   });
 };
 
+function normalizeTipoNegocio(tipo: any): string {
+  const value = String(tipo || "").toLowerCase();
+
+  if (
+    (value.includes("venda") && value.includes("loca")) ||
+    value.includes("ambos")
+  ) {
+    return "Venda e Locação";
+  }
+
+  if (value.includes("compr") || value.includes("vend")) {
+    return "Venda";
+  }
+
+  if (value.includes("loca") || value.includes("alug")) {
+    return "Locação";
+  }
+
+  return "";
+}
+
 export default function AdminRents() {
   const { settings } = useSettings();
   const empresa = (settings?.empresa || {}) as any;
@@ -141,10 +163,15 @@ export default function AdminRents() {
     tenantName: "",
     tenantPhone: "",
     tenantCpf: "",
+    ownerName: "",
+    ownerPhone: "",
     valorAluguel: 0,
     valorIptu: 0,
     valorTaxaLixo: 0,
     valorTaxaGas: 0,
+    valorTaxaAgua: 0,
+    valorTaxaLuz: 0,
+    valorSeguroIncendio: 0,
     valorCondominio: 0,
     valorOutros: 0,
     valorDesconto: 0,
@@ -166,6 +193,38 @@ export default function AdminRents() {
     month: new Date().toISOString().slice(0, 7), // YYYY-MM
   });
 
+  // Editable Receipt states
+  const [showEditableReceiptModal, setShowEditableReceiptModal] = useState(false);
+  const [selectedLeaseForReceipt, setSelectedLeaseForReceipt] = useState<Lease | null>(null);
+  const [receiptType, setReceiptType] = useState<"locatario" | "locador">("locatario");
+  const [receiptDatabaseId, setReceiptDatabaseId] = useState<string | null>(null);
+  const [savingReceipt, setSavingReceipt] = useState(false);
+  const [receiptForm, setReceiptForm] = useState({
+    nomePagadorRecebedor: "",
+    cpfCnpj: "",
+    enderecoImovel: "",
+    codigoImovel: "",
+    valorAluguel: 0,
+    valorCondominio: 0,
+    valorIptu: 0,
+    valorTaxaLixo: 0,
+    valorTaxaGas: 0,
+    valorTaxaAgua: 0,
+    valorTaxaLuz: 0,
+    valorSeguroIncendio: 0,
+    valorOutros: 0,
+    valorDesconto: 0,
+    valorTotal: 0,
+    valorComissaoImobiliaria: 0,
+    valorRepassadoProprietario: 0,
+    dataPagamento: "",
+    formaPagamento: "",
+    observacoes: "",
+    textoExtra: "",
+    cidadeData: "",
+    emitenteAssinatura: ""
+  });
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -182,10 +241,7 @@ export default function AdminRents() {
       setLeases(leaseData);
 
       const propSnap = await getDocs(
-        query(
-          collection(db, "imoveis"),
-          where("businessType", "==", "Locação"),
-        ),
+        query(collection(db, "imoveis")),
       );
       setProperties(
         propSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Property),
@@ -197,6 +253,117 @@ export default function AdminRents() {
     }
   };
 
+  // URL query params load hook
+  useEffect(() => {
+    if (!loading && properties.length > 0) {
+      const params = new URLSearchParams(window.location.search);
+      const imovelIdParam = params.get("imovelId");
+      const reciboIdParam = params.get("reciboId");
+
+      if (reciboIdParam && leases.length > 0) {
+        const fetchReceiptAndOpen = async () => {
+          try {
+            const docRef = doc(db, "recibosEditaveis", reciboIdParam);
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+              const savedReceiptData = docSnap.data();
+              const associatedLease = leases.find(l => l.id === savedReceiptData.locacaoId);
+              if (associatedLease) {
+                setSelectedLeaseForReceipt(associatedLease);
+                setReceiptType(savedReceiptData.tipoRecibo || "locatario");
+                setReceiptDatabaseId(docSnap.id);
+                setReceiptForm(savedReceiptData.dadosRecibo);
+                setShowEditableReceiptModal(true);
+              }
+            }
+          } catch (e) {
+            console.error("Erro ao carregar recibo compartilhado por URL:", e);
+          }
+        };
+        fetchReceiptAndOpen();
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+
+      if (imovelIdParam) {
+        console.log("Parâmetro imovelId recebido:", imovelIdParam);
+        const property = properties.find((p) => p.id === imovelIdParam) as any;
+        if (property) {
+          setIsEditing(false);
+          setShowModal(true);
+
+          console.log("Dados do imóvel carregados na locação:", property);
+
+          const cleaningVal = Number(
+            property.valorLimpeza ??
+              property.taxaLimpeza ??
+              property.limpeza ??
+              0,
+          );
+          const depositVal = Number(
+            property.valorCaucao ?? property.caucao ?? 0,
+          );
+          const fireInsuranceVal = Number(
+            property.valorSeguroIncendio ??
+              property.seguroIncendio ??
+              property.fireInsurance ??
+              0,
+          );
+
+          const fetchOwnerAndPopulate = async () => {
+            let ownerName = property.ownerName || "";
+            let ownerPhone = property.ownerPhone || "";
+            try {
+              const ownerDoc = await getDoc(
+                doc(db, "imoveis", imovelIdParam, "privado", "proprietario")
+              );
+              if (ownerDoc.exists()) {
+                const ownerData = ownerDoc.data();
+                if (ownerData.name) ownerName = ownerData.name;
+                if (ownerData.phone) ownerPhone = ownerData.phone;
+              }
+            } catch (e) {
+              console.warn("Could not load private owner info:", e);
+            }
+
+            console.log("Dados do imóvel carregados na locação (incluindo proprietário):", {
+              ...property,
+              ownerName,
+              ownerPhone,
+            });
+
+            setLeaseForm((prev) => ({
+              ...prev,
+              propertyId: imovelIdParam,
+              propertyCode: property.code || property.codigo || "",
+              propertyTitle: property.title || property.titulo || "",
+              propertyAddress: `${property.address || property.endereco || ""}, ${property.number || property.numero || ""} ${property.complement || property.complemento ? `- ${property.complement || property.complemento}` : ""}`,
+              propertyNeighborhood: property.neighborhood || property.bairro || "",
+              propertyCity: property.city || property.cidade || "",
+              valorAluguel: property.priceLocacao || property.valorAluguel || 0,
+              valorIptu: property.iptu || property.valorIptu || 0,
+              valorCondominio: property.condoFee || property.valorCondominio || 0,
+              valorTaxaLixo: Number(property.valorTaxaLixo ?? property.taxaLixo ?? property.taxalixo ?? 0),
+              valorTaxaGas: Number(property.valorTaxaGas ?? property.taxaGas ?? property.taxagas ?? 0),
+              valorTaxaAgua: Number((property as any).valorTaxaAgua ?? (property as any).taxaAgua ?? (property as any).taxaagua ?? 0),
+              valorTaxaLuz: Number((property as any).valorTaxaLuz ?? (property as any).taxaLuz ?? (property as any).taxaluz ?? 0),
+              valorSeguroIncendio: fireInsuranceVal,
+              tenantName: (property as any).locatarioNome ?? "",
+              tenantPhone: (property as any).locatarioTelefone ?? "",
+              tenantCpf: (property as any).locatarioCpf ?? "",
+              ownerName,
+              ownerPhone,
+            }));
+          };
+
+          fetchOwnerAndPopulate();
+        }
+        
+        // Clear params from URL bar so it doesn't reopen modal on refresh
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+    }
+  }, [loading, properties, leases]);
+
   // Auto-calculate total
   useEffect(() => {
     const total =
@@ -204,6 +371,9 @@ export default function AdminRents() {
       (leaseForm.valorIptu || 0) +
       (leaseForm.valorTaxaLixo || 0) +
       (leaseForm.valorTaxaGas || 0) +
+      (leaseForm.valorTaxaAgua || 0) +
+      (leaseForm.valorTaxaLuz || 0) +
+      (leaseForm.valorSeguroIncendio || 0) +
       (leaseForm.valorCondominio || 0) +
       (leaseForm.valorOutros || 0) -
       (leaseForm.valorDesconto || 0);
@@ -223,28 +393,70 @@ export default function AdminRents() {
     leaseForm.valorIptu,
     leaseForm.valorTaxaLixo,
     leaseForm.valorTaxaGas,
+    leaseForm.valorTaxaAgua,
+    leaseForm.valorTaxaLuz,
+    leaseForm.valorSeguroIncendio,
     leaseForm.valorCondominio,
     leaseForm.valorOutros,
     leaseForm.valorDesconto,
     leaseForm.percentualComissaoImobiliaria,
   ]);
 
-  const handlePropertySelect = (propertyId: string) => {
-    const property = properties.find((p) => p.id === propertyId);
+  const handlePropertySelect = async (propertyId: string) => {
+    const property = properties.find((p) => p.id === propertyId) as any;
     if (property) {
+      console.log("Imóvel selecionado para locação:", property);
+      console.log("Tipo negócio normalizado:", normalizeTipoNegocio(property.businessType || property.tipoNegocio));
+
+      let ownerName = property.ownerName || "";
+      let ownerPhone = property.ownerPhone || "";
+      try {
+        const ownerDoc = await getDoc(
+          doc(db, "imoveis", propertyId, "privado", "proprietario")
+        );
+        if (ownerDoc.exists()) {
+          const ownerData = ownerDoc.data();
+          if (ownerData.name) ownerName = ownerData.name;
+          if (ownerData.phone) ownerPhone = ownerData.phone;
+        }
+      } catch (e) {
+        console.warn("Could not load private owner info:", e);
+      }
+
+      console.log("Dados do imóvel carregados na locação:", {
+        ...property,
+        ownerName,
+        ownerPhone,
+      });
+
+      const fireInsuranceVal = Number(
+        property.valorSeguroIncendio ??
+          property.seguroIncendio ??
+          property.fireInsurance ??
+          0,
+      );
+
       setLeaseForm((prev) => ({
         ...prev,
         propertyId,
-        propertyCode: property.code,
-        propertyTitle: property.title,
-        propertyAddress: `${property.address || ""}, ${property.number || ""} ${property.complement ? `- ${property.complement}` : ""}`,
-        propertyNeighborhood: property.neighborhood,
-        propertyCity: property.city,
-        valorAluguel: property.priceLocacao || 0,
-        valorIptu: property.iptu || 0,
-        valorCondominio: property.condoFee || 0,
-        valorTaxaLixo: Number(property.valorTaxaLixo ?? property.taxaLixo ?? 0),
-        valorTaxaGas: Number(property.valorTaxaGas ?? property.taxaGas ?? 0),
+        propertyCode: property.code || property.codigo || "",
+        propertyTitle: property.title || property.titulo || "",
+        propertyAddress: `${property.address || property.endereco || ""}, ${property.number || property.numero || ""} ${property.complement || property.complemento ? `- ${property.complement || property.complemento}` : ""}`,
+        propertyNeighborhood: property.neighborhood || property.bairro || "",
+        propertyCity: property.city || property.cidade || "",
+        valorAluguel: property.priceLocacao || property.valorAluguel || 0,
+        valorIptu: property.iptu || property.valorIptu || 0,
+        valorCondominio: property.condoFee || property.valorCondominio || 0,
+        valorTaxaLixo: Number(property.valorTaxaLixo ?? property.taxaLixo ?? property.taxalixo ?? 0),
+        valorTaxaGas: Number(property.valorTaxaGas ?? property.taxaGas ?? property.taxagas ?? 0),
+        valorTaxaAgua: Number((property as any).valorTaxaAgua ?? (property as any).taxaAgua ?? (property as any).taxaagua ?? 0),
+        valorTaxaLuz: Number((property as any).valorTaxaLuz ?? (property as any).taxaLuz ?? (property as any).taxaluz ?? 0),
+        valorSeguroIncendio: fireInsuranceVal,
+        tenantName: (property as any).locatarioNome ?? "",
+        tenantPhone: (property as any).locatarioTelefone ?? "",
+        tenantCpf: (property as any).locatarioCpf ?? "",
+        ownerName,
+        ownerPhone,
       }));
     }
   };
@@ -269,19 +481,20 @@ export default function AdminRents() {
       }
 
       if (leaseForm.propertyId) {
-        const statusLoc = String(payload.statusLocacao || "").trim();
-        if (statusLoc === "Ativa") {
+        const statusLoc = String(payload.statusLocacao || "").trim().toLowerCase();
+        const statusActiveList = ["ativa", "pago", "vigente", "confirmada"];
+        if (statusActiveList.includes(statusLoc)) {
           // Determine if we should maintain it published or not on the public site
-          const manterPub = leaseForm.manterPublicado !== false;
           await updateDoc(doc(db, "imoveis", leaseForm.propertyId), {
             status: "Alugado",
+            statusLocacao: "Alugado",
             imovelAlugado: true,
             disponivelParaVisita: false,
             availableForVisit: "Não",
             rented: true,
-            publicadoNoSite: manterPub,
-            publicado: manterPub,
-            ativo: manterPub,
+            publicadoNoSite: true,
+            publicado: true,
+            ativo: true,
             locacaoAtivaId: leaseId,
             dataInicioLocacao: leaseForm.startDate || "",
             dataFimLocacao: "",
@@ -295,6 +508,7 @@ export default function AdminRents() {
           if (confirmarVal) {
             await updateDoc(doc(db, "imoveis", leaseForm.propertyId), {
               status: "Disponível",
+              statusLocacao: null,
               imovelAlugado: false,
               disponivelParaVisita: true,
               availableForVisit: "Sim",
@@ -332,6 +546,8 @@ export default function AdminRents() {
       tenantName: "",
       tenantPhone: "",
       tenantCpf: "",
+      ownerName: "",
+      ownerPhone: "",
       valorAluguel: 0,
       valorIptu: 0,
       valorTaxaLixo: 0,
@@ -443,6 +659,487 @@ export default function AdminRents() {
       } catch (error) {
         console.error("Error deleting lease:", error);
       }
+    }
+  };
+
+  const recalculateReceiptTotal = (form: any, type: "locatario" | "locador") => {
+    const totalPagoPeloLocatario = 
+      (Number(form.valorAluguel) || 0) +
+      (Number(form.valorCondominio) || 0) +
+      (Number(form.valorIptu) || 0) +
+      (Number(form.valorTaxaLixo) || 0) +
+      (Number(form.valorTaxaGas) || 0) +
+      (Number(form.valorTaxaAgua) || 0) +
+      (Number(form.valorTaxaLuz) || 0) +
+      (Number(form.valorSeguroIncendio) || 0) +
+      (Number(form.valorOutros) || 0) -
+      (Number(form.valorDesconto) || 0);
+
+    if (type === "locatario") {
+      return {
+        ...form,
+        valorTotal: totalPagoPeloLocatario
+      };
+    } else {
+      const comissao = Number(form.valorComissaoImobiliaria) || 0;
+      const repasse = totalPagoPeloLocatario - comissao;
+      return {
+        ...form,
+        valorTotal: repasse,
+        valorRepassadoProprietario: repasse
+      };
+    }
+  };
+
+  const handleReceiptFieldChange = (field: string, value: any) => {
+    setReceiptForm(prev => {
+      let updated = { ...prev, [field]: value };
+      if (
+        field === "valorAluguel" ||
+        field === "valorCondominio" ||
+        field === "valorIptu" ||
+        field === "valorTaxaLixo" ||
+        field === "valorTaxaGas" ||
+        field === "valorTaxaAgua" ||
+        field === "valorTaxaLuz" ||
+        field === "valorSeguroIncendio" ||
+        field === "valorOutros" ||
+        field === "valorDesconto" ||
+        field === "valorComissaoImobiliaria"
+      ) {
+        updated = recalculateReceiptTotal(updated, receiptType || "locatario");
+      }
+      return updated;
+    });
+  };
+
+  const initializeReceiptForm = async (lease: Lease, type: "locatario" | "locador") => {
+    setSavingReceipt(true);
+    let savedDoc: any = null;
+    try {
+      const q = query(
+        collection(db, "recibosEditaveis"),
+        where("locacaoId", "==", lease.id || ""),
+        where("tipoRecibo", "==", type)
+      );
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        savedDoc = { id: snap.docs[0].id, ...snap.docs[0].data() };
+      }
+    } catch (e) {
+      console.warn("Error checking saved receipt:", e);
+    }
+    setSavingReceipt(false);
+
+    if (savedDoc && savedDoc.dadosRecibo) {
+      setReceiptDatabaseId(savedDoc.id);
+      setReceiptForm({
+        nomePagadorRecebedor: savedDoc.dadosRecibo.nomePagadorRecebedor || "",
+        cpfCnpj: savedDoc.dadosRecibo.cpfCnpj || "",
+        enderecoImovel: savedDoc.dadosRecibo.enderecoImovel || "",
+        codigoImovel: savedDoc.dadosRecibo.codigoImovel || "",
+        valorAluguel: Number(savedDoc.dadosRecibo.valorAluguel) || 0,
+        valorCondominio: Number(savedDoc.dadosRecibo.valorCondominio) || 0,
+        valorIptu: Number(savedDoc.dadosRecibo.valorIptu) || 0,
+        valorTaxaLixo: Number(savedDoc.dadosRecibo.valorTaxaLixo) || 0,
+        valorTaxaGas: Number(savedDoc.dadosRecibo.valorTaxaGas) || 0,
+        valorTaxaAgua: Number(savedDoc.dadosRecibo.valorTaxaAgua) || 0,
+        valorTaxaLuz: Number(savedDoc.dadosRecibo.valorTaxaLuz) || 0,
+        valorSeguroIncendio: Number(savedDoc.dadosRecibo.valorSeguroIncendio) || 0,
+        valorOutros: Number(savedDoc.dadosRecibo.valorOutros) || 0,
+        valorDesconto: Number(savedDoc.dadosRecibo.valorDesconto) || 0,
+        valorTotal: Number(savedDoc.dadosRecibo.valorTotal) || 0,
+        valorComissaoImobiliaria: Number(savedDoc.dadosRecibo.valorComissaoImobiliaria) || 0,
+        valorRepassadoProprietario: Number(savedDoc.dadosRecibo.valorRepassadoProprietario) || 0,
+        dataPagamento: savedDoc.dadosRecibo.dataPagamento || lease.lastPaymentDate || new Date().toISOString().split("T")[0],
+        formaPagamento: savedDoc.dadosRecibo.formaPagamento || "",
+        observacoes: savedDoc.dadosRecibo.observacoes || lease.observacoes || "",
+        textoExtra: savedDoc.dadosRecibo.textoExtra || "",
+        cidadeData: savedDoc.dadosRecibo.cidadeData || `${lease.propertyCity || empresa.cidade || "Balneário Camboriú"}, SC`,
+        emitenteAssinatura: savedDoc.dadosRecibo.emitenteAssinatura || empresa.nome || "Menta Negócios Imobiliários"
+      });
+    } else {
+      setReceiptDatabaseId(null);
+      const prop = properties.find(p => p.id === lease.propertyId);
+      const ownerName = lease.ownerName || prop?.ownerName || "";
+      
+      const fireInsuranceVal = Number(
+        (lease as any).valorSeguroIncendio ||
+        (lease as any).fireInsurance ||
+        (lease as any).seguroIncendio ||
+        0
+      );
+
+      const cleaningVal = Number(
+        (lease as any).valorLimpeza ||
+        (lease as any).taxaLimpeza ||
+        (lease as any).limpeza ||
+        0
+      );
+
+      const totalOutros = (lease.valorOutros || 0) + cleaningVal;
+
+      let payeeName = lease.tenantName || "";
+      let payeeCpf = lease.tenantCpf || "";
+
+      if (type === "locador") {
+        payeeName = ownerName || "";
+        payeeCpf = "";
+      }
+
+      const defaultForm = {
+        nomePagadorRecebedor: payeeName,
+        cpfCnpj: payeeCpf,
+        enderecoImovel: lease.propertyAddress || prop?.address || "",
+        codigoImovel: lease.propertyCode || prop?.code || "",
+        valorAluguel: lease.valorAluguel || 0,
+        valorCondominio: lease.valorCondominio || 0,
+        valorIptu: lease.valorIptu || 0,
+        valorTaxaLixo: lease.valorTaxaLixo || 0,
+        valorTaxaGas: (lease as any).valorTaxaGas || 0,
+        valorTaxaAgua: (lease as any).valorTaxaAgua || 0,
+        valorTaxaLuz: (lease as any).valorTaxaLuz || 0,
+        valorSeguroIncendio: fireInsuranceVal,
+        valorOutros: totalOutros,
+        valorDesconto: lease.valorDesconto || 0,
+        valorTotal: lease.valorTotalPagar || 0,
+        valorComissaoImobiliaria: lease.valorComissaoImobiliaria || 0,
+        valorRepassadoProprietario: lease.valorRepassadoProprietario || 0,
+        dataPagamento: lease.lastPaymentDate || new Date().toISOString().split("T")[0],
+        formaPagamento: "",
+        observacoes: lease.observacoes || "",
+        textoExtra: "",
+        cidadeData: `${lease.propertyCity || empresa.cidade || "Balneário Camboriú"}, ${new Date().toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" })}`,
+        emitenteAssinatura: empresa.nome || "Menta Negócios Imobiliários"
+      };
+
+      const recalculated = recalculateReceiptTotal(defaultForm, type);
+      setReceiptForm(recalculated);
+    }
+  };
+
+  const handleOpenEditableReceipt = async (lease: Lease) => {
+    setSelectedLeaseForReceipt(lease);
+    setReceiptType("locatario");
+    await initializeReceiptForm(lease, "locatario");
+    setShowEditableReceiptModal(true);
+  };
+
+  const handleSaveReceipt = async () => {
+    if (!selectedLeaseForReceipt) return;
+    setSavingReceipt(true);
+    try {
+      const prop = properties.find(p => p.id === selectedLeaseForReceipt.propertyId);
+      const ownerName = selectedLeaseForReceipt.ownerName || prop?.ownerName || "";
+      
+      const payload = {
+        locacaoId: selectedLeaseForReceipt.id || "",
+        tipoRecibo: receiptType,
+        dadosRecibo: receiptForm,
+        valorTotal: Number(receiptForm.valorTotal) || 0,
+        status: "salvo",
+        atualizadoEm: serverTimestamp(),
+        atualizadoPor: auth.currentUser?.email || "",
+        imovelId: selectedLeaseForReceipt.propertyId || "",
+        imovelCodigo: selectedLeaseForReceipt.propertyCode || "",
+        locatarioNome: selectedLeaseForReceipt.tenantName || "",
+        locadorNome: ownerName || "",
+      };
+
+      if (receiptDatabaseId) {
+        await updateDoc(doc(db, "recibosEditaveis", receiptDatabaseId), payload);
+        alert("Recibo salvo com sucesso!");
+      } else {
+        const docRef = await addDoc(collection(db, "recibosEditaveis"), {
+          ...payload,
+          criadoEm: serverTimestamp(),
+          criadoPor: auth.currentUser?.email || "",
+        });
+        setReceiptDatabaseId(docRef.id);
+        alert("Recibo criado e salvo com sucesso!");
+      }
+    } catch (e) {
+      console.error("Erro ao salvar recibo editável:", e);
+      alert("Erro ao salvar recibo editável no banco de dados.");
+    } finally {
+      setSavingReceipt(false);
+    }
+  };
+
+  const handleCopyReceiptLink = async () => {
+    if (!receiptDatabaseId) {
+      alert("Por favor, clique em 'Salvar Recibo' primeiro para poder gerar seu link de compartilhamento.");
+      return;
+    }
+    const shareUrl = `${window.location.origin}${window.location.pathname}?reciboId=${receiptDatabaseId}`;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      alert("Link de compartilhamento copiado para o seu clipboard!");
+    } catch (err) {
+      console.error("Could not copy:", err);
+      alert(`Não foi possível copiar automaticamente. Use esse link: ${shareUrl}`);
+    }
+  };
+
+  const generateEditedReceiptPDF = async (type: "locatario" | "locador") => {
+    try {
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+
+      const watermarkUrl =
+        empresa.marcaDaguaUrl || empresa.logoCabecalhoUrl || "/watermark.png";
+      try {
+        const { base64, aspectRatio } = await getWatermarkData(
+          watermarkUrl,
+          0.11,
+        );
+        const wWidth = 140;
+        const wHeight = wWidth * aspectRatio;
+        const wX = (pageWidth - wWidth) / 2;
+        const wY = (pageHeight - wHeight) / 2;
+        doc.addImage(base64, "PNG", wX, wY, wWidth, wHeight);
+      } catch (watermarkError) {
+        console.error(
+          "Error drawing logo watermark, resolving to simple light watermark text:",
+          watermarkError,
+        );
+        const watermarkText = safeText(receiptForm.emitenteAssinatura || empresa.nome || "MENTA IMÓVEIS");
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(26);
+        doc.setTextColor(245, 245, 245);
+        doc.text(watermarkText, pageWidth / 2, pageHeight * 0.25, {
+          align: "center",
+          angle: 30,
+        });
+        doc.text(watermarkText, pageWidth / 2, pageHeight * 0.55, {
+          align: "center",
+          angle: 30,
+        });
+        doc.text(watermarkText, pageWidth / 2, pageHeight * 0.85, {
+          align: "center",
+          angle: 30,
+        });
+      }
+
+      const logoUrl = empresa.logoCabecalhoUrl || empresa.logoUrl || "/logo.png";
+      let logoBase64 = "";
+      let logoAspect = 1.0;
+      try {
+        const logoData = await getWatermarkData(logoUrl, 1.0);
+        logoBase64 = logoData.base64;
+        logoAspect = logoData.aspectRatio;
+      } catch (logoErr) {
+        console.error("Error fetching header logo for receipt:", logoErr);
+      }
+
+      let headerTextOffset = 20;
+      if (logoBase64 && logoBase64 !== "/logo.png" && logoBase64 !== "/watermark.png") {
+        const logoWidth = 18;
+        const logoHeight = logoWidth * logoAspect;
+        doc.addImage(logoBase64, "PNG", 20, 14, logoWidth, logoHeight);
+        headerTextOffset = 20 + logoWidth + 6;
+      }
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.setTextColor(30, 30, 30);
+      doc.text(safeText(receiptForm.emitenteAssinatura || empresa.nome || "MENTA IMÓVEIS"), headerTextOffset, 19);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.setTextColor(110, 110, 110);
+      const headerLine2 = `${safeText(empresa.razaoSocial || "Menta Negócios Imobiliários Ltda")} | CNPJ: ${safeText(empresa.cnpj || "---")}`;
+      const headerLine3 = `${safeText(empresa.endereco || "---")} | CRECI PJ: ${safeText(empresa.creciPj || "---")}`;
+      doc.text(headerLine2, headerTextOffset, 23);
+      doc.text(headerLine3, headerTextOffset, 27);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.setTextColor(201, 161, 82);
+      doc.text("RECIBO DE PAGAMENTO", pageWidth - 20, 21, { align: "right" });
+
+      doc.setFontSize(8.5);
+      doc.setTextColor(150, 150, 150);
+      const docNumSuffix = selectedLeaseForReceipt ? selectedLeaseForReceipt.id?.slice(-8).toUpperCase() : "EDITADO";
+      doc.text(
+        `Nº RECIBO: ${safeText(docNumSuffix)}`,
+        pageWidth - 20,
+        27,
+        { align: "right" },
+      );
+
+      doc.setDrawColor(210, 210, 210);
+      doc.setLineWidth(0.5);
+      doc.line(20, 33, pageWidth - 20, 33);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(60, 60, 60);
+
+      const labelRelatorio = type === "locatario" ? "Recebemos de:" : "Repassamos para:";
+      doc.text(labelRelatorio, 20, 44);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(20, 20, 20);
+      const cpfLabel = receiptForm.cpfCnpj ? ` (CPF/CNPJ: ${safeText(receiptForm.cpfCnpj)})` : "";
+      doc.text(
+        `${safeText(receiptForm.nomePagadorRecebedor)}${cpfLabel}`,
+        20,
+        49,
+      );
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(60, 60, 60);
+      const labelImportancia = type === "locatario" ? "A importância líquida de:" : "A importância repassada de:";
+      doc.text(labelImportancia, 20, 57);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(15);
+      doc.setTextColor(30, 80, 50);
+      doc.text(safeMoney(receiptForm.valorTotal), 20, 64);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(60, 60, 60);
+      doc.text(`Referente à locação do imóvel localizado em:`, 20, 74);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(30, 30, 30);
+      doc.text(
+        `${safeText(receiptForm.enderecoImovel)}`,
+        20,
+        80,
+      );
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(120, 120, 120);
+      doc.text(`Código do Imóvel: ${safeText(receiptForm.codigoImovel)}`, 20, 86);
+
+      const tableHead = [["Dedução / Encargo do Aluguel", "Valor"]];
+
+      const tableBody =
+        type === "locatario"
+          ? [
+              ["Aluguel Mensal Base", safeMoney(receiptForm.valorAluguel)],
+              ["IPTU", safeMoney(receiptForm.valorIptu)],
+              ["Taxa de Lixo", safeMoney(receiptForm.valorTaxaLixo)],
+              ["Taxa de Gás", safeMoney(receiptForm.valorTaxaGas)],
+              ["Taxa de Água", safeMoney(receiptForm.valorTaxaAgua)],
+              ["Taxa de Luz", safeMoney(receiptForm.valorTaxaLuz)],
+              ["Condomínio", safeMoney(receiptForm.valorCondominio)],
+              ["Seguro Incêndio", safeMoney(receiptForm.valorSeguroIncendio)],
+              ["Outras Taxas / Serviços", safeMoney(receiptForm.valorOutros)],
+              ["Desconto Concedido", `- ${safeMoney(receiptForm.valorDesconto)}`],
+              ["TOTAL PAGO PELO LOCATÁRIO", safeMoney(receiptForm.valorTotal)],
+            ]
+          : [
+              ["Valor Recebido do Locatário", safeMoney(
+                (Number(receiptForm.valorAluguel) || 0) +
+                (Number(receiptForm.valorCondominio) || 0) +
+                (Number(receiptForm.valorIptu) || 0) +
+                (Number(receiptForm.valorTaxaLixo) || 0) +
+                (Number(receiptForm.valorTaxaGas) || 0) +
+                (Number(receiptForm.valorTaxaAgua) || 0) +
+                (Number(receiptForm.valorTaxaLuz) || 0) +
+                (Number(receiptForm.valorSeguroIncendio) || 0) +
+                (Number(receiptForm.valorOutros) || 0) -
+                (Number(receiptForm.valorDesconto) || 0)
+              )],
+              ["Aluguel Mensal Base", safeMoney(receiptForm.valorAluguel)],
+              ["IPTU", safeMoney(receiptForm.valorIptu)],
+              ["Condomínio", safeMoney(receiptForm.valorCondominio)],
+              ["Taxas (Lixo/Gás/Água/Luz/Outros)", safeMoney(
+                (Number(receiptForm.valorTaxaLixo) || 0) +
+                (Number(receiptForm.valorTaxaGas) || 0) +
+                (Number(receiptForm.valorTaxaAgua) || 0) +
+                (Number(receiptForm.valorTaxaLuz) || 0) +
+                (Number(receiptForm.valorSeguroIncendio) || 0) +
+                (Number(receiptForm.valorOutros) || 0)
+              )],
+              ["Comissão da Imobiliária", `-${safeMoney(receiptForm.valorComissaoImobiliaria)}`],
+              ["Desconto Concedido", `- ${safeMoney(receiptForm.valorDesconto)}`],
+              ["Valor Líquido Repassado ao Proprietário", safeMoney(receiptForm.valorRepassadoProprietario)],
+              ["TOTAL REPASSADO AO LOCADOR", safeMoney(receiptForm.valorTotal)],
+            ];
+
+      autoTable(doc, {
+        startY: 92,
+        head: tableHead,
+        body: tableBody,
+        headStyles: { fillColor: [30, 30, 30], textColor: [255, 255, 255] },
+        columnStyles: { 1: { halign: "right", fontStyle: "bold" } },
+        theme: "grid",
+        styles: { fontSize: 8.5 },
+      });
+
+      let finalY = (doc as any).lastAutoTable.finalY + 12;
+
+      if (receiptForm.observacoes || receiptForm.textoExtra) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.5);
+        doc.setTextColor(80, 80, 80);
+        if (receiptForm.observacoes) {
+          doc.text(`Observações: ${safeText(receiptForm.observacoes)}`, 20, finalY);
+          finalY += 6;
+        }
+        if (receiptForm.textoExtra) {
+          doc.text(`Texto Extra: ${safeText(receiptForm.textoExtra)}`, 20, finalY);
+          finalY += 8;
+        }
+      }
+
+      finalY += 10;
+
+      if (receiptForm.formaPagamento) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        doc.setTextColor(40, 40, 40);
+        doc.text(`Forma de Pagamento: ${safeText(receiptForm.formaPagamento)}`, 20, finalY);
+        finalY += 10;
+      }
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(60, 60, 60);
+      doc.text(
+        safeText(receiptForm.cidadeData || `${empresa.cidade || "Balneário Camboriú"}, SC`),
+        pageWidth / 2,
+        finalY,
+        { align: "center" },
+      );
+
+      doc.setDrawColor(180, 180, 180);
+      doc.setLineWidth(0.5);
+      doc.line(pageWidth / 4, finalY + 20, (pageWidth / 4) * 3, finalY + 20);
+      doc.setFont("helvetica", "bold");
+      doc.text(
+        safeText(receiptForm.emitenteAssinatura || empresa.nome || "MENTA NEGÓCIOS IMOBILIÁRIOS"),
+        pageWidth / 2,
+        finalY + 25,
+        { align: "center" },
+      );
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.text(
+        "Imobiliária Intermediadora - Recibo Emitido Eletronicamente",
+        pageWidth / 2,
+        finalY + 29,
+        { align: "center" },
+      );
+
+      const suffix = type === "locatario" ? "Locatario" : "Locador";
+      const codeSuffix = receiptForm.codigoImovel ? safeText(receiptForm.codigoImovel) : "EDITADO";
+      const nameSuffix = safeText(receiptForm.nomePagadorRecebedor).replace(/\s+/g, "_");
+      doc.save(
+        `Recibo_Aluguel_Editado_${suffix}_${codeSuffix}_${nameSuffix}.pdf`,
+      );
+    } catch (e) {
+      console.error("Erro ao gerar recibo de pagamento editado:", e);
+      alert(
+        "Não foi possível gerar o recibo. Verifique os dados e tente novamente.",
+      );
     }
   };
 
@@ -998,6 +1695,16 @@ export default function AdminRents() {
                           </span>
                         </button>
                         <button
+                          onClick={() => handleOpenEditableReceipt(lease)}
+                          className="p-2.5 bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white rounded-xl transition-all shadow-sm flex items-center gap-1.5"
+                          title="Editar recibo antes de gerar"
+                        >
+                          <Edit size={16} />
+                          <span className="text-[9px] font-black uppercase tracking-wider">
+                            Recibo Editável
+                          </span>
+                        </button>
+                        <button
                           onClick={() => handleDeleteLease(lease)}
                           className="p-2.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
                           title="Excluir"
@@ -1069,9 +1776,15 @@ export default function AdminRents() {
                           >
                             <option value="">Selecione...</option>
                             {properties
-                              .filter((p) =>
-                                isEditing ? true : p.status === "Disponível",
-                              )
+                              .filter((p) => {
+                                const norm = normalizeTipoNegocio(p.businessType || (p as any).tipoNegocio || "");
+                                const matchesType = norm === "Locação" || norm === "Venda e Locação";
+                                const isSelf = p.id === leaseForm.propertyId;
+                                
+                                if (!matchesType && !isSelf) return false;
+                                if (isEditing || isSelf) return true;
+                                return p.status === "Disponível";
+                              })
                               .map((p) => (
                                 <option key={p.id} value={p.id}>
                                   {p.code} - {p.title} ({p.neighborhood})
@@ -1136,6 +1849,49 @@ export default function AdminRents() {
                               setLeaseForm({
                                 ...leaseForm,
                                 tenantPhone: e.target.value,
+                              })
+                            }
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Section: Landlord / Owner Info */}
+                    <div className="space-y-6">
+                      <h4 className="text-xs font-black text-gold uppercase tracking-[0.3em] mb-4 flex items-center gap-3">
+                        <UserIcon size={14} /> Dados do Proprietário / Locador
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                            Nome do Proprietário
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Nome do Proprietário / Locador"
+                            className="w-full bg-gray-50 border border-transparent rounded-2xl py-4 px-6 text-sm font-bold focus:ring-4 focus:ring-gold/10 outline-none transition-all"
+                            value={leaseForm.ownerName || ""}
+                            onChange={(e) =>
+                              setLeaseForm({
+                                ...leaseForm,
+                                ownerName: e.target.value,
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                            Celular / WhatsApp Proprietário
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Telefone do Proprietário"
+                            className="w-full bg-gray-50 border border-transparent rounded-2xl py-4 px-6 text-sm font-bold focus:ring-4 focus:ring-gold/10 outline-none transition-all"
+                            value={leaseForm.ownerPhone || ""}
+                            onChange={(e) =>
+                              setLeaseForm({
+                                ...leaseForm,
+                                ownerPhone: e.target.value,
                               })
                             }
                           />
@@ -1599,6 +2355,21 @@ export default function AdminRents() {
                       {selectedLease.propertyAddress}
                     </p>
                   </div>
+                  {selectedLease.ownerName && (
+                    <div className="col-span-2 border-t border-gray-100 pt-6">
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">
+                        Proprietário / Locador
+                      </p>
+                      <p className="font-bold text-primary-black text-sm">
+                        {selectedLease.ownerName}
+                      </p>
+                      {selectedLease.ownerPhone && (
+                        <p className="text-gray-400 text-xs mt-0.5">
+                          Telefone: {selectedLease.ownerPhone}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="bg-emerald-50 rounded-3xl p-8 border border-emerald-100 flex items-center justify-between">
@@ -1685,6 +2456,13 @@ export default function AdminRents() {
                     title="Recibo Locador"
                   >
                     <Printer size={15} /> Recibo Locador
+                  </button>
+                  <button
+                    onClick={() => handleOpenEditableReceipt(selectedLease)}
+                    className="px-4 py-3 bg-blue-50 text-blue-600 rounded-2xl hover:bg-blue-600 hover:text-white flex items-center gap-1.5 transition-all shadow-sm text-[11px] font-bold"
+                    title="Editar recibo antes de gerar"
+                  >
+                    <Edit size={15} /> Recibo Editável
                   </button>
                 </div>
               </div>
@@ -1783,6 +2561,463 @@ export default function AdminRents() {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Editable Receipt Modal */}
+      <AnimatePresence>
+        {showEditableReceiptModal && selectedLeaseForReceipt && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
+            <motion.div
+              {...fadeIn}
+              className="fixed inset-0 bg-primary-black/60 backdrop-blur-md"
+              onClick={() => setShowEditableReceiptModal(false)}
+            />
+            <motion.div
+              {...scaleIn}
+              className="bg-white max-w-4xl w-full rounded-[3rem] shadow-2xl relative z-10 overflow-hidden max-h-[90vh] flex flex-col"
+            >
+              {/* Header */}
+              <div className="p-10 bg-blue-600 text-white relative flex justify-between items-center flex-shrink-0">
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-[0.3em] opacity-60">
+                    Gestão de Recibos
+                  </span>
+                  <h3 className="text-3xl font-display font-bold mt-2">
+                    Recibo Editável
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowEditableReceiptModal(false)}
+                  className="p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all flex items-center justify-center"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Body Form */}
+              <div className="p-10 space-y-8 overflow-y-auto flex-grow max-h-[calc(90vh-180px)]">
+                {/* Type Selection */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center bg-gray-50 p-6 rounded-2xl border border-gray-100">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                      Modelo do Recibo
+                    </label>
+                    <div className="grid grid-cols-2 gap-4">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (receiptType === "locatario") return;
+                          setReceiptType("locatario");
+                          await initializeReceiptForm(selectedLeaseForReceipt, "locatario");
+                        }}
+                        className={`py-3 px-4 rounded-xl text-xs font-bold transition-all border ${
+                          receiptType === "locatario"
+                            ? "border-primary-black bg-primary-black text-white shadow-md font-black"
+                            : "border-gray-200 bg-white text-gray-500 hover:bg-gray-50"
+                        }`}
+                      >
+                        Locatário (Inquilino)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (receiptType === "locador") return;
+                          setReceiptType("locador");
+                          await initializeReceiptForm(selectedLeaseForReceipt, "locador");
+                        }}
+                        className={`py-3 px-4 rounded-xl text-xs font-bold transition-all border ${
+                          receiptType === "locador"
+                            ? "border-primary-black bg-primary-black text-white shadow-md font-black"
+                            : "border-gray-200 bg-white text-gray-500 hover:bg-gray-50"
+                        }`}
+                      >
+                        Locador (Proprietário)
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Sharing link status */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                      Link de Envio ao Cliente
+                    </label>
+                    {receiptDatabaseId ? (
+                      <button
+                        type="button"
+                        onClick={handleCopyReceiptLink}
+                        className="w-full py-3 px-4 bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold text-xs rounded-xl hover:bg-emerald-100 transition-all flex items-center justify-center gap-1.5"
+                      >
+                        <FileText size={14} /> Copiar Link de Envio
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled
+                        className="w-full py-3 px-4 bg-gray-50 border border-gray-200 text-gray-400 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 opacity-60 cursor-not-allowed"
+                      >
+                        Salve o recibo para gerar link
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {savingReceipt && (
+                  <div className="p-4 bg-blue-50 text-blue-700 text-xs font-semibold rounded-xl text-center animated animate-pulse">
+                    Carregando dados do recibo de forma segura...
+                  </div>
+                )}
+
+                {/* Identification */}
+                <div className="space-y-4">
+                  <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider pl-1 border-l-2 border-blue-500">
+                    Identificação do Recibo
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                        {receiptType === "locatario" ? "Nome do Pagador (Locatário)" : "Nome do Recebedor (Proprietário)"}
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        className="input-field"
+                        value={receiptForm.nomePagadorRecebedor}
+                        onChange={(e) => handleReceiptFieldChange("nomePagadorRecebedor", e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                        CPF / CNPJ
+                      </label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        value={receiptForm.cpfCnpj}
+                        onChange={(e) => handleReceiptFieldChange("cpfCnpj", e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Property Data */}
+                <div className="space-y-4">
+                  <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider pl-1 border-l-2 border-blue-500">
+                    Dados do Imóvel
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2 col-span-1 md:col-span-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                        Endereço Completo
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        className="input-field"
+                        value={receiptForm.enderecoImovel}
+                        onChange={(e) => handleReceiptFieldChange("enderecoImovel", e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                        Código do Imóvel
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        className="input-field"
+                        value={receiptForm.codigoImovel}
+                        onChange={(e) => handleReceiptFieldChange("codigoImovel", e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Financial values editing table */}
+                <div className="space-y-4">
+                  <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider pl-1 border-l-2 border-blue-500">
+                    Valores e Encargos
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                        Aluguel Base (R$)
+                      </label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        value={maskCurrency(receiptForm.valorAluguel)}
+                        onChange={(e) => handleReceiptFieldChange("valorAluguel", parseCurrencyToNumber(e.target.value))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                        Condomínio (R$)
+                      </label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        value={maskCurrency(receiptForm.valorCondominio)}
+                        onChange={(e) => handleReceiptFieldChange("valorCondominio", parseCurrencyToNumber(e.target.value))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                        IPTU (R$)
+                      </label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        value={maskCurrency(receiptForm.valorIptu)}
+                        onChange={(e) => handleReceiptFieldChange("valorIptu", parseCurrencyToNumber(e.target.value))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                        Taxa de Lixo (R$)
+                      </label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        value={maskCurrency(receiptForm.valorTaxaLixo)}
+                        onChange={(e) => handleReceiptFieldChange("valorTaxaLixo", parseCurrencyToNumber(e.target.value))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                        Taxa de Gás (R$)
+                      </label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        value={maskCurrency(receiptForm.valorTaxaGas)}
+                        onChange={(e) => handleReceiptFieldChange("valorTaxaGas", parseCurrencyToNumber(e.target.value))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                        Taxa de Água (R$)
+                      </label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        value={maskCurrency(receiptForm.valorTaxaAgua)}
+                        onChange={(e) => handleReceiptFieldChange("valorTaxaAgua", parseCurrencyToNumber(e.target.value))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                        Taxa de Luz (R$)
+                      </label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        value={maskCurrency(receiptForm.valorTaxaLuz)}
+                        onChange={(e) => handleReceiptFieldChange("valorTaxaLuz", parseCurrencyToNumber(e.target.value))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                        Seguro Incêndio (R$)
+                      </label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        value={maskCurrency(receiptForm.valorSeguroIncendio)}
+                        onChange={(e) => handleReceiptFieldChange("valorSeguroIncendio", parseCurrencyToNumber(e.target.value))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                        Outras Taxas (R$)
+                      </label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        value={maskCurrency(receiptForm.valorOutros)}
+                        onChange={(e) => handleReceiptFieldChange("valorOutros", parseCurrencyToNumber(e.target.value))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                        Desconto Concedido (R$)
+                      </label>
+                      <input
+                        type="text"
+                        className="input-field text-red-600"
+                        value={maskCurrency(receiptForm.valorDesconto)}
+                        onChange={(e) => handleReceiptFieldChange("valorDesconto", parseCurrencyToNumber(e.target.value))}
+                      />
+                    </div>
+
+                    {receiptType === "locador" && (
+                      <>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                            Comissão Imobiliária (R$)
+                          </label>
+                          <input
+                            type="text"
+                            className="input-field"
+                            value={maskCurrency(receiptForm.valorComissaoImobiliaria)}
+                            onChange={(e) => handleReceiptFieldChange("valorComissaoImobiliaria", parseCurrencyToNumber(e.target.value))}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                            Repasse Proprietário (R$)
+                          </label>
+                          <input
+                            type="text"
+                            className="input-field text-emerald-600 font-bold"
+                            value={maskCurrency(receiptForm.valorRepassadoProprietario)}
+                            onChange={(e) => handleReceiptFieldChange("valorRepassadoProprietario", parseCurrencyToNumber(e.target.value))}
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    {/* Total overlay section */}
+                    <div className="col-span-1 md:col-span-3 bg-gray-50 p-6 rounded-2xl border border-gray-100 flex flex-col md:flex-row items-center justify-between gap-4 mt-2">
+                      <div>
+                        <h4 className="text-sm font-bold text-gray-700">
+                          {receiptType === "locatario" ? "TOTAL PAGO PELO LOCATÁRIO" : "TOTAL REPASSADO AO LOCADOR"}
+                        </h4>
+                        <p className="text-xs text-gray-400">
+                          Atualizado dinamicamente. Se necessário, edite o valor manualmente à direita.
+                        </p>
+                      </div>
+                      <div className="w-full md:w-60">
+                        <input
+                          type="text"
+                          className="input-field text-emerald-700 font-black text-xl text-right bg-white"
+                          value={maskCurrency(receiptForm.valorTotal)}
+                          onChange={(e) => handleReceiptFieldChange("valorTotal", parseCurrencyToNumber(e.target.value))}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Metadata */}
+                <div className="space-y-4">
+                  <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider pl-1 border-l-2 border-blue-500">
+                    Detalhes da Emissão e Assinatura
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                        Data do Recibo
+                      </label>
+                      <input
+                        type="date"
+                        className="input-field"
+                        value={receiptForm.dataPagamento}
+                        onChange={(e) => handleReceiptFieldChange("dataPagamento", e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                        Forma de Pagamento
+                      </label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        placeholder="Ex: Pix, Transferência, Dinheiro, Boleto"
+                        value={receiptForm.formaPagamento}
+                        onChange={(e) => handleReceiptFieldChange("formaPagamento", e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2 col-span-1 md:col-span-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                        Cidade e Data por Extenso (Linha de Data)
+                      </label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        value={receiptForm.cidadeData}
+                        onChange={(e) => handleReceiptFieldChange("cidadeData", e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2 col-span-1 md:col-span-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                        Assinatura / Emitente
+                      </label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        value={receiptForm.emitenteAssinatura}
+                        onChange={(e) => handleReceiptFieldChange("emitenteAssinatura", e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Narratives / Text areas */}
+                <div className="space-y-4">
+                  <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider pl-1 border-l-2 border-blue-500">
+                    Textos Complementares
+                  </h4>
+                  <div className="grid grid-cols-1 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                        Observações
+                      </label>
+                      <textarea
+                        className="input-field min-h-[80px]"
+                        value={receiptForm.observacoes}
+                        onChange={(e) => handleReceiptFieldChange("observacoes", e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                        Texto Livre Extra (Aparece no rodapé)
+                      </label>
+                      <textarea
+                        className="input-field min-h-[85px]"
+                        placeholder="Opcional. Ex: 'Aluguel pago com juros correspondentes ao atraso de 3 dias.'"
+                        value={receiptForm.textoExtra}
+                        onChange={(e) => handleReceiptFieldChange("textoExtra", e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action operations */}
+              <div className="p-10 bg-gray-50 border-t border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-6 flex-shrink-0">
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setShowEditableReceiptModal(false)}
+                    className="text-xs font-bold uppercase text-gray-400 tracking-widest hover:text-gray-600 transition-all"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+                <div className="flex items-center gap-4">
+                  <button
+                    type="button"
+                    onClick={handleSaveReceipt}
+                    className="px-6 py-3.5 bg-blue-50 text-blue-700 font-bold text-xs uppercase tracking-wider rounded-2xl hover:bg-blue-100 transition-all"
+                  >
+                    Salvar Recibo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => generateEditedReceiptPDF(receiptType)}
+                    className="btn-gold !py-4 !px-8 shadow-md"
+                  >
+                    <Printer size={16} />
+                    <span className="uppercase text-xs font-black tracking-wider">
+                      Gerar e Baixar PDF
+                    </span>
+                  </button>
+                </div>
+              </div>
             </motion.div>
           </div>
         )}

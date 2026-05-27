@@ -36,7 +36,7 @@ interface ContractClause {
   id: string;
   titulo: string;
   texto: string;
-  tipo: 'todos' | 'proposta' | 'contraproposta' | 'aceite' | 'locacao_temporaria' | 'compra_venda' | 'locacao';
+  tipo: 'todos' | 'proposta' | 'contraproposta' | 'aceite' | 'locacao_temporaria' | 'compra_venda' | 'locacao' | 'arras_confirmatorios';
   ordem: number;
   ativo: boolean;
   obrigatorio: boolean;
@@ -50,7 +50,8 @@ const CONTRACT_TYPE_LABELS: Record<string, string> = {
   aceite: 'Aceite de Proposta',
   locacao_temporaria: 'Locação Temporária',
   compra_venda: 'Compra e Venda',
-  locacao: 'Locatício Anual'
+  locacao: 'Locatício Anual',
+  arras_confirmatorios: 'Arras Confirmatórios'
 };
 
 export default function ContractClauses() {

@@ -17,6 +17,10 @@ export interface Property {
   taxaLixo?: number;
   valorTaxaGas?: number;
   taxaGas?: number;
+  valorTaxaAgua?: number;
+  taxaAgua?: number;
+  valorTaxaLuz?: number;
+  taxaLuz?: number;
   valorTotalMensal?: number;
   leaseWarrantyType?: string;
   allowsPet?: 'Sim' | 'Não';
@@ -207,6 +211,9 @@ export interface Lease {
   valorIptu: number;
   valorTaxaLixo: number;
   valorTaxaGas?: number;
+  valorTaxaAgua?: number;
+  valorTaxaLuz?: number;
+  valorSeguroIncendio?: number;
   valorCondominio: number;
   valorOutros: number;
   valorDesconto: number;
@@ -221,6 +228,8 @@ export interface Lease {
   observacoes?: string;
   active: boolean;
   manterPublicado?: boolean;
+  ownerName?: string;
+  ownerPhone?: string;
   createdAt?: any;
   updatedAt?: any;
   value: number; // Compatibility
@@ -254,7 +263,7 @@ export interface Admin {
   role: 'admin';
 }
 
-export type ContractType = 'proposta' | 'contraproposta' | 'aceite' | 'locacao_temporaria';
+export type ContractType = 'proposta' | 'contraproposta' | 'aceite' | 'locacao_temporaria' | 'arras_confirmatorios';
 export type ContractStatus = 'rascunho' | 'finalizado' | 'assinado' | 'cancelado';
 
 export interface Contract {
@@ -273,6 +282,14 @@ export interface Contract {
   atualizadoEm: any;
   criadoPor: string;
   imovelId?: string;
+  imovelCodigo?: string;
+  imovelTitulo?: string;
+  valorImovel?: number;
+  valorArras?: number;
+  formaPagamentoArras?: string;
+  dataPagamentoArras?: string;
+  prazoContratoDefinitivo?: string;
+  prazoEscritura?: string;
   observacoes?: string;
 }
 

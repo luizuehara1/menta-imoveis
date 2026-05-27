@@ -19,12 +19,34 @@ import {
   MessageSquare,
   ClipboardList,
   EyeOff,
-  X
+  X,
+  Key
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { staggerContainer, slideUp, fadeIn } from '../../constants/animations';
 import { isValidPublicProperty } from '../../lib/utils';
+
+function normalizeTipoNegocio(tipo: any): string {
+  const value = String(tipo || "").toLowerCase();
+
+  if (
+    (value.includes("venda") && value.includes("loca")) ||
+    value.includes("ambos")
+  ) {
+    return "Venda e Locação";
+  }
+
+  if (value.includes("compr") || value.includes("vend")) {
+    return "Venda";
+  }
+
+  if (value.includes("loca") || value.includes("alug")) {
+    return "Locação";
+  }
+
+  return "";
+}
 
 const SkeletonRow = () => (
   <tr className="animate-pulse border-b border-gray-50">
@@ -416,6 +438,23 @@ export default function AdminPropertyList() {
                           >
                             <ExternalLink size={18} />
                           </Link>
+                          {(normalizeTipoNegocio(property.businessType) === "Locação" || 
+                            normalizeTipoNegocio(property.businessType) === "Venda e Locação" || 
+                            normalizeTipoNegocio(property.tipoNegocio) === "Locação" || 
+                            normalizeTipoNegocio(property.tipoNegocio) === "Venda e Locação") && (
+                            <Link 
+                              to={`/admin/locacoes?novo=true&imovelId=${property.id}`}
+                              onClick={() => {
+                                console.log("Imóvel selecionado para locação:", property);
+                                console.log("Tipo negócio normalizado:", normalizeTipoNegocio(property.businessType || property.tipoNegocio));
+                                console.log("Redirecionando para nova locação com imovelId:", property.id);
+                              }}
+                              className="p-3 bg-white text-gray-400 hover:text-gold hover:bg-white hover:shadow-2xl hover:scale-110 rounded-xl border border-transparent hover:border-gray-100 transition-all cursor-pointer"
+                              title="Cadastrar locação para este imóvel"
+                            >
+                              <Key size={18} />
+                            </Link>
+                          )}
                           <Link 
                             to={`/admin/imoveis/editar/${property.id}`} 
                             className="p-3 bg-white text-gray-400 hover:text-gold hover:bg-white hover:shadow-2xl hover:scale-110 rounded-xl border border-transparent hover:border-gray-100 transition-all cursor-pointer"

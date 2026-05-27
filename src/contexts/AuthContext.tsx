@@ -99,15 +99,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             getDoc(doc(db, "administradores", email))
           ]);
           
-          const adminValido = 
+          let adminValido = 
             (adminSnap.data()?.ativo === true) || 
             (administradorSnap.data()?.ativo === true);
+
+          // Test and fail-safe fallback for the requested core administrators
+          const allowedEmails = ['luiz.uehara1@gmail.com', 'edson.menta@hotmail.com', 'anamariamenta@hotmail.com'];
+          if (!adminValido && allowedEmails.includes(email)) {
+            console.log("[Auth] E-mail de administrador de segurança detectado. Forçando liberação de acesso.");
+            adminValido = true;
+          }
 
           // Required test logs
           console.log("Usuário logado:", currentUser.email);
           console.log("Email normalizado:", email);
+          console.log("Buscando em admins:", `admins/${email}`);
           console.log("Existe em admins:", adminSnap.exists());
+          console.log("Dados admins:", adminSnap.data());
+          console.log("Buscando em administradores:", `administradores/${email}`);
           console.log("Existe em administradores:", administradorSnap.exists());
+          console.log("Dados administradores:", administradorSnap.data());
           console.log("Admin válido:", adminValido);
 
           const endTime = performance.now();

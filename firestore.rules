@@ -12,6 +12,8 @@ service cloud.firestore {
              request.auth.token.email != null &&
              (
                request.auth.token.email.lower() == 'luiz.uehara1@gmail.com' ||
+               request.auth.token.email.lower() == 'edson.menta@hotmail.com' ||
+               request.auth.token.email.lower() == 'anamariamenta@hotmail.com' ||
                (exists(/databases/$(database)/documents/administradores/$(request.auth.token.email.lower())) &&
                 get(/databases/$(database)/documents/administradores/$(request.auth.token.email.lower())).data.get('ativo', false) == true) ||
                (exists(/databases/$(database)/documents/admins/$(request.auth.token.email.lower())) &&
@@ -81,19 +83,21 @@ service cloud.firestore {
     match /clausulasContratos/{document=**} { allow read: if true; allow write: if isAdmin(); }
     match /locacoes/{document=**} { allow read, write: if isAdmin(); }
     match /contratos/{document=**} { allow read, write: if isAdmin(); }
+    match /contratosGerados/{document=**} { allow read, write: if isAdmin(); }
     match /financeiro/{document=**} { allow read, write: if isAdmin(); }
     match /gastos/{document=**} { allow read, write: if isAdmin(); }
     match /receitas/{document=**} { allow read, write: if isAdmin(); }
     match /fichas_visita/{id} { allow read, write: if isAdmin(); }
+    match /recibos/{document=**} { allow read, write: if isAdmin(); }
+    match /recibosEditaveis/{document=**} { allow read, write: if isAdmin(); }
 
     match /administradores/{email} {
-      allow read: if isSignedIn() && (request.auth.token.email.lower() == email.lower() || request.auth.token.email.lower() == 'luiz.uehara1@gmail.com');
-      allow create: if isSignedIn() && email.lower() == 'luiz.uehara1@gmail.com';
-      allow update, delete: if isSignedIn() && request.auth.token.email.lower() == 'luiz.uehara1@gmail.com';
+      allow read: if isSignedIn() && (request.auth.token.email.lower() == email.lower() || isAdmin());
+      allow write: if isAdmin();
     }
 
     match /admins/{email} {
-      allow read: if isSignedIn() && (request.auth.token.email.lower() == email.lower() || request.auth.token.email.lower() == 'luiz.uehara1@gmail.com');
+      allow read: if isSignedIn() && (request.auth.token.email.lower() == email.lower() || isAdmin());
       allow write: if isAdmin();
     }
 

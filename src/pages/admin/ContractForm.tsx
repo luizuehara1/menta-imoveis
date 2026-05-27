@@ -156,6 +156,80 @@ export default function AdminContractForm() {
         texto: "A escritura definitiva de compra e venda será outorgada em favor do comprador após a quitação integral do preço ora estabelecido.",
         ordem: 2
       }
+    ],
+    arras_confirmatorios: [
+      {
+        id: "fallback-arras-1",
+        titulo: "CLÁUSULA 1ª - DO OBJETO",
+        texto: "O presente instrumento tem por objeto a formalização do pagamento de arras confirmatórias referente à intenção de compra e venda do imóvel descrito neste contrato.",
+        ordem: 1
+      },
+      {
+        id: "fallback-arras-2",
+        titulo: "CLÁUSULA 2ª - DO IMÓVEL",
+        texto: "O imóvel objeto deste instrumento é aquele identificado pelas partes, contendo suas características, localização, matrícula, cadastro e demais informações constantes neste contrato.",
+        ordem: 2
+      },
+      {
+        id: "fallback-arras-3",
+        titulo: "CLÁUSULA 3ª - DO VALOR TOTAL DO NEGÓCIO",
+        texto: "As partes ajustam que o valor total da negociação do imóvel será aquele informado neste instrumento, podendo ser pago conforme as condições acordadas entre comprador e vendedor.",
+        ordem: 3
+      },
+      {
+        id: "fallback-arras-4",
+        titulo: "CLÁUSULA 4ª - DAS ARRAS CONFIRMATÓRIAS",
+        texto: "O comprador entrega ao vendedor, neste ato ou na data indicada neste instrumento, o valor defined como arras confirmatórias, servindo como sinal de confirmação do negócio e princípio de pagamento.",
+        ordem: 4
+      },
+      {
+        id: "fallback-arras-5",
+        titulo: "CLÁUSULA 5ª - DA FORMA DE PAGAMENTO DAS ARRAS",
+        texto: "O pagamento das arras será realizado conforme forma, data e condições informadas neste instrumento, mediante comprovação pelas partes.",
+        ordem: 5
+      },
+      {
+        id: "fallback-arras-6",
+        titulo: "CLÁUSULA 6ª - DA DESISTÊNCIA DO COMPRADOR",
+        texto: "Em caso de desistência injustificada por parte do comprador, este poderá perder em favor do vendedor o valor pago a título de arras, salvo disposição diversa acordada entre as partes.",
+        ordem: 6
+      },
+      {
+        id: "fallback-arras-7",
+        titulo: "CLÁUSULA 7ª - DA DESISTÊNCIA DO VENDEDOR",
+        texto: "Em caso de desistência injustificada por parte do vendedor, este deverá restituir ao comprador o valor recebido a título de arras, podendo incidir devolução em dobro quando aplicável, conforme legislação vigente e condições pactuadas.",
+        ordem: 7
+      },
+      {
+        id: "fallback-arras-8",
+        titulo: "CLÁUSULA 8ª - DO CONTRATO DEFINITIVO",
+        texto: "As partes se comprometem a formalizar o contrato definitivo de compra e venda ou escritura pública dentro do prazo ajustado neste instrumento, desde que cumpridas as condições estabelecidas.",
+        ordem: 8
+      },
+      {
+        id: "fallback-arras-9",
+        titulo: "CLÁUSULA 9ª - DAS OBRIGAÇÕES DAS PARTES",
+        texto: "Comprador e vendedor comprometem-se a fornecer documentos, informações e assinaturas necessárias para conclusão da negociação, agindo com boa-fé e transparência.",
+        ordem: 9
+      },
+      {
+        id: "fallback-arras-10",
+        titulo: "CLÁUSULA 10ª - DA INTERMEDIAÇÃO IMOBILIÁRIA",
+        texto: "As partes reconhecem a participação da imobiliária/intermediadora na aproximação e formalização do negócio, conforme condições comerciais previamente acordadas.",
+        ordem: 10
+      },
+      {
+        id: "fallback-arras-11",
+        titulo: "CLÁUSULA 11ª - DAS DISPOSIÇÕES GERAIS",
+        texto: "Este instrumento obriga as partes, seus herdeiros e sucessores, sendo firmado em comum acordo, após leitura e compreensão de todas as condições.",
+        ordem: 11
+      },
+      {
+        id: "fallback-arras-12",
+        titulo: "CLÁUSULA 12ª - DO FORO",
+        texto: "Fica eleito o foro da comarca competente para dirimir eventuais dúvidas ou controvérsias decorrentes deste instrumento.",
+        ordem: 12
+      }
     ]
   };
 
@@ -315,7 +389,60 @@ export default function AdminContractForm() {
         const docRef = doc(db, 'contratos', id);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-          setContract({ id: docSnap.id, ...docSnap.data() } as Contract);
+          const data = docSnap.data() as any;
+          if (data.tipoContrato === 'arras_confirmatorios') {
+            if (!data.dados) data.dados = {};
+            if (!data.dados.proponente) data.dados.proponente = {};
+            if (!data.dados.vendedor) data.dados.vendedor = {};
+            if (!data.dados.arras) data.dados.arras = {};
+            
+            if (data.comprador) {
+              data.dados.proponente = {
+                ...data.dados.proponente,
+                cpf: data.comprador.documento || data.dados.proponente.cpf,
+                cpfCnpj: data.comprador.documento || data.dados.proponente.cpfCnpj,
+                rg: data.comprador.rg || data.dados.proponente.rg,
+                estadoCivil: data.comprador.estadoCivil || data.dados.proponente.estadoCivil,
+                profissao: data.comprador.profissao || data.dados.proponente.profissao,
+                telefone: data.comprador.telefone || data.dados.proponente.telefone,
+                whatsapp: data.comprador.whatsapp || data.dados.proponente.whatsapp,
+                email: data.comprador.email || data.dados.proponente.email,
+                endereco: data.comprador.endereco || data.dados.proponente.endereco,
+              };
+            }
+            if (data.vendedor) {
+              data.dados.vendedor = {
+                ...data.dados.vendedor,
+                cpf: data.vendedor.documento || data.dados.vendedor.cpf,
+                cpfCnpj: data.vendedor.documento || data.dados.vendedor.cpfCnpj,
+                rg: data.vendedor.rg || data.dados.vendedor.rg,
+                estadoCivil: data.vendedor.estadoCivil || data.dados.vendedor.estadoCivil,
+                profissao: data.vendedor.profissao || data.dados.vendedor.profissao,
+                telefone: data.vendedor.telefone || data.dados.vendedor.telefone,
+                whatsapp: data.vendedor.whatsapp || data.dados.vendedor.whatsapp,
+                email: data.vendedor.email || data.dados.vendedor.email,
+                endereco: data.vendedor.endereco || data.dados.vendedor.endereco,
+              };
+            }
+            
+            data.valorImovel = data.valorImovel || data.dados.arras?.valorImovel || 0;
+            data.valorArras = data.valorArras || data.dados.arras?.valorArras || 0;
+            data.formaPagamentoArras = data.formaPagamentoArras || data.dados.arras?.formaPagamentoArras || "";
+            data.dataPagamentoArras = data.dataPagamentoArras || data.dados.arras?.dataPagamentoArras || "";
+            data.prazoContratoDefinitivo = data.prazoContratoDefinitivo || data.dados.arras?.prazoContratoDefinitivo || "";
+            data.prazoEscritura = data.prazoEscritura || data.dados.arras?.prazoEscritura || "";
+
+            data.dados.arras = {
+              ...data.dados.arras,
+              valorImovel: data.valorImovel,
+              valorArras: data.valorArras,
+              formaPagamentoArras: data.formaPagamentoArras,
+              dataPagamentoArras: data.dataPagamentoArras,
+              prazoContratoDefinitivo: data.prazoContratoDefinitivo,
+              prazoEscritura: data.prazoEscritura
+            };
+          }
+          setContract({ id: docSnap.id, ...data } as Contract);
         }
       } catch (error) {
         console.error("Error fetching contract:", error);
@@ -330,23 +457,53 @@ export default function AdminContractForm() {
 
   const handlePropertySelect = (property: Property) => {
     setSelectedProperty(property);
-    setContract(prev => ({
-      ...prev,
-      imovelId: property.id,
-      enderecoImovel: `${property.address}, ${property.number} - ${property.neighborhood}, ${property.city}`,
-      nomeVendedor: property.ownerName || '',
-      valor: prev.tipoContrato === 'proposta' ? (property.priceVenda || property.priceLocacao || 0) : prev.valor,
-      dados: {
+    setContract(prev => {
+      const isArras = prev.tipoContrato === 'arras_confirmatorios';
+      const defaultVal = isArras ? (property.priceVenda || 0) : (prev.tipoContrato === 'proposta' ? (property.priceVenda || property.priceLocacao || 0) : prev.valor);
+      
+      const updatedDados = {
         ...prev.dados,
         imovel: {
-          ...prev.dados.imovel,
-          matricula: '',
-          cri: '',
+          ...prev.dados?.imovel,
+          matricula: prev.dados?.imovel?.matricula || '',
+          cri: prev.dados?.imovel?.cri || '',
           tipo: property.propertyType,
-          descricao: property.shortDescription || property.title
+          descricao: property.shortDescription || property.title,
+          codigo: property.code || '',
+          titulo: property.title || '',
+          endereco: `${property.address}, ${property.number || ''}`,
+          bairro: property.neighborhood || '',
+          cidade: property.city || '',
+          estado: property.state || '',
+          valorVenda: property.priceVenda || 0
         }
+      };
+
+      if (isArras) {
+        if (!updatedDados.vendedor) updatedDados.vendedor = {};
+        updatedDados.vendedor = {
+          ...updatedDados.vendedor,
+          nome: property.ownerName || '',
+          telefone: property.ownerPhone || '',
+          email: property.ownerEmail || ''
+        };
+        if (!updatedDados.arras) updatedDados.arras = {};
+        updatedDados.arras = {
+          ...updatedDados.arras,
+          valorImovel: property.priceVenda || 0
+        };
       }
-    }));
+
+      return {
+        ...prev,
+        imovelId: property.id,
+        enderecoImovel: `${property.address}, ${property.number || ''} - ${property.neighborhood}, ${property.city}`,
+        nomeVendedor: property.ownerName || '',
+        valor: defaultVal,
+        valorImovel: isArras ? (property.priceVenda || 0) : undefined,
+        dados: updatedDados
+      };
+    });
   };
 
   const saveContract = async (finalizar = false) => {
@@ -368,13 +525,46 @@ export default function AdminContractForm() {
     }
 
     setLoading(true);
+    
+    // Clean data from undefined/NaN values to prevent Firestore crashes
+    const cleanFirestoreData = (obj: any): any => {
+      if (Array.isArray(obj)) {
+        return obj
+          .map(cleanFirestoreData)
+          .filter(item => item !== undefined);
+      }
+
+      if (obj && typeof obj === 'object') {
+        // Safe check for special Firestore FieldValue objects or custom SDK types
+        if (obj.constructor && obj.constructor.name !== 'Object' && obj.constructor.name !== 'Array') {
+          return obj;
+        }
+        
+        const cleaned: any = {};
+        Object.entries(obj).forEach(([key, value]) => {
+          if (value === undefined) return;
+          if (typeof value === 'number' && !Number.isFinite(value)) {
+            cleaned[key] = 0;
+            return;
+          }
+          if (value && typeof value === 'object') {
+            cleaned[key] = cleanFirestoreData(value);
+            return;
+          }
+          cleaned[key] = value;
+        });
+        return cleaned;
+      }
+      return obj;
+    };
+
     try {
       const dadosContrato = {
         ...contract,
         status: finalizar ? 'finalizado' : (contract.status || 'rascunho'),
         imovelId: contract.imovelId || selectedProperty?.id || '',
-        imovelCodigo: selectedProperty?.code || '',
-        imovelTitulo: selectedProperty?.title || '',
+        imovelCodigo: selectedProperty?.code || contract.imovelCodigo || '',
+        imovelTitulo: selectedProperty?.title || contract.imovelTitulo || '',
         locadorNome: contract.dados?.locador?.nome || contract.nomeVendedor || '',
         locadorDocumento: contract.dados?.locador?.cpf || '',
         locatarioNome: contract.nomeCliente || '',
@@ -385,22 +575,62 @@ export default function AdminContractForm() {
         clausulasAplicadas: contract.dados?.clausulasSelecionadas || [],
         atualizadoEm: serverTimestamp(),
         criadoPor: user?.uid || null
-      };
+      } as any;
+
+      if (contract.tipoContrato === 'arras_confirmatorios') {
+        const d = contract.dados || {};
+        const p = d.proponente || {};
+        const v = d.vendedor || {};
+        const a = d.arras || {};
+        
+        dadosContrato.tipoContratoLabel = "Arras Confirmatórios";
+        dadosContrato.valorImovel = Number(a.valorImovel || contract.valorImovel || contract.valor || 0);
+        dadosContrato.valorArras = Number(a.valorArras || 0);
+        dadosContrato.formaPagamentoArras = a.formaPagamentoArras || "";
+        dadosContrato.dataPagamentoArras = a.dataPagamentoArras || "";
+        dadosContrato.prazoContratoDefinitivo = a.prazoContratoDefinitivo || "";
+        dadosContrato.prazoEscritura = a.prazoEscritura || "";
+
+        dadosContrato.comprador = {
+          nome: contract.nomeCliente || "",
+          documento: p.cpf || p.cpfCnpj || p.documento || "",
+          rg: p.rg || "",
+          estadoCivil: p.estadoCivil || "",
+          profissao: p.profissao || "",
+          telefone: p.telefone || "",
+          whatsapp: p.whatsapp || "",
+          email: p.email || "",
+          endereco: p.endereco || ""
+        };
+
+        dadosContrato.vendedor = {
+          nome: contract.nomeVendedor || "",
+          documento: v.cpf || v.cpfCnpj || v.documento || "",
+          rg: v.rg || "",
+          estadoCivil: v.estadoCivil || "",
+          profissao: v.profissao || "",
+          telefone: v.telefone || "",
+          whatsapp: v.whatsapp || "",
+          email: v.email || "",
+          endereco: v.endereco || ""
+        };
+      }
 
       if (finalizar) {
         (dadosContrato as any).finalizadoEm = serverTimestamp();
       }
 
-      console.log("Salvando contrato final/rascunho no Firestore:", dadosContrato);
+      const cleanedData = cleanFirestoreData(dadosContrato);
+      console.log("Salvando contrato final/rascunho no Firestore:", cleanedData);
 
       let savedId = id;
       if (!id) {
-        (dadosContrato as any).criadoEm = serverTimestamp();
-        const docRef = await addDoc(collection(db, 'contratos'), dadosContrato);
+        cleanedData.criadoEm = serverTimestamp();
+        const docRef = await addDoc(collection(db, 'contratos'), cleanedData);
         savedId = docRef.id;
         console.log("Contrato novo criado com sucesso. ID gerado:", savedId);
       } else {
-        await updateDoc(doc(db, 'contratos', id), dadosContrato);
+        await updateDoc(doc(db, 'contratos', id), cleanedData);
         console.log("Contrato existente atualizado com sucesso. ID:", id);
       }
 
@@ -428,18 +658,28 @@ export default function AdminContractForm() {
   };
 
   const downloadPDF = async () => {
-    if (!printRef.current) return;
+    const element = document.getElementById("contrato-pdf") || printRef.current;
+    if (!element) {
+      console.error("Elemento #contrato-pdf não encontrado.");
+      showToast("Elemento do contrato não encontrado para gerar PDF.", "error");
+      return;
+    }
     
     setLoading(true);
     const companyName = settings?.empresa?.nome || 'Menta Negócios Imobiliários';
     const companyCnpj = settings?.empresa?.cnpj || '63.572.479/0001-50';
     const companyCreci = settings?.empresa?.creciPj || '11255PJ';
 
+    console.log("Iniciando geração do PDF do contrato...");
+    console.log("Contrato:", contract);
+    console.log("Dados do contrato:", contract?.dados);
+    console.log("Elemento PDF:", element);
+
     try {
       // Small timeout to ensure all components are fully rendered and styles applied
       await new Promise(resolve => setTimeout(resolve, 1500));
       
-      const canvas = await html2canvas(printRef.current, {
+      const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
         logging: false,
@@ -521,9 +761,11 @@ export default function AdminContractForm() {
       }
       
       pdf.save(`Contrato_${contract.nomeCliente || 'Pendente'}_${format(new Date(), 'dd_MM_yyyy')}.pdf`);
-    } catch (error) {
-      console.error("Error generating PDF:", error);
-      showToast('Erro ao gerar PDF do contrato.', 'error');
+    } catch (error: any) {
+      console.error("Erro real ao gerar PDF do contrato:", error);
+      console.error("Mensagem:", error?.message);
+      console.error("Stack:", error?.stack);
+      showToast(`Erro ao gerar PDF: ${error?.message || error}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -771,13 +1013,14 @@ export default function AdminContractForm() {
               initial="initial"
               animate="animate"
               exit="exit"
-              className="grid grid-cols-1 md:grid-cols-3 gap-8"
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
             >
               {[
                 { id: 'proposta', title: 'Proposta de Compra', icon: FileText, desc: 'Primeiro contato com oferta de valor e condições.' },
                 { id: 'contraproposta', title: 'Contraproposta', icon: AlertCircle, desc: 'Resposta do vendedor com novos termos.' },
                 { id: 'aceite', title: 'Aceite de Termos', icon: Check, desc: 'Formalização final do acordo entre as partes.' },
-                { id: 'locacao_temporaria', title: 'Locação Temporária', icon: Calendar, desc: 'Contrato para aluguéis de temporada e curtos períodos.' }
+                { id: 'locacao_temporaria', title: 'Locação Temporária', icon: Calendar, desc: 'Contrato para aluguéis de temporada e curtos períodos.' },
+                { id: 'arras_confirmatorios', title: 'Arras Confirmatórios', icon: CreditCard, desc: 'Instrumento para formalizar sinal de pagamento e compromisso entre comprador e vendedor.' }
               ].map((t) => (
                 <button
                   key={t.id}
@@ -892,7 +1135,17 @@ export default function AdminContractForm() {
                             </select>
                             <input type="text" className="input-field" placeholder="Profissão" value={contract.dados.locador?.profissao || ''} onChange={e => updateDados('locador', 'profissao', e.target.value)} />
                           </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <input type="text" className="input-field" placeholder="Telefone" value={contract.dados.locador?.telefone || ''} onChange={e => updateDados('locador', 'telefone', e.target.value)} />
+                            <input type="text" className="input-field" placeholder="WhatsApp" value={contract.dados.locador?.whatsapp || ''} onChange={e => updateDados('locador', 'whatsapp', e.target.value)} />
+                          </div>
+                          <input type="email" className="input-field" placeholder="E-mail" value={contract.dados.locador?.email || ''} onChange={e => updateDados('locador', 'email', e.target.value)} />
                           <input type="text" className="input-field" placeholder="Endereço Residencial" value={contract.dados.locador?.endereco || ''} onChange={e => updateDados('locador', 'endereco', e.target.value)} />
+                          <div className="grid grid-cols-3 gap-4">
+                            <input type="text" className="col-span-1 input-field" placeholder="CEP" value={contract.dados.locador?.cep || ''} onChange={e => updateDados('locador', 'cep', e.target.value)} />
+                            <input type="text" className="col-span-1 input-field" placeholder="Cidade" value={contract.dados.locador?.cidade || ''} onChange={e => updateDados('locador', 'cidade', e.target.value)} />
+                            <input type="text" className="col-span-1 input-field" placeholder="Estado" value={contract.dados.locador?.estado || ''} onChange={e => updateDados('locador', 'estado', e.target.value)} />
+                          </div>
                         </div>
                       </div>
 
@@ -915,7 +1168,50 @@ export default function AdminContractForm() {
                             </select>
                             <input type="text" className="input-field" placeholder="Profissão" value={contract.dados.locatario?.profissao || ''} onChange={e => updateDados('locatario', 'profissao', e.target.value)} />
                           </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <input type="text" className="input-field" placeholder="Telefone" value={contract.dados.locatario?.telefone || ''} onChange={e => updateDados('locatario', 'telefone', e.target.value)} />
+                            <input type="text" className="input-field" placeholder="WhatsApp" value={contract.dados.locatario?.whatsapp || ''} onChange={e => updateDados('locatario', 'whatsapp', e.target.value)} />
+                          </div>
+                          <input type="email" className="input-field" placeholder="E-mail" value={contract.dados.locatario?.email || ''} onChange={e => updateDados('locatario', 'email', e.target.value)} />
                           <input type="text" className="input-field" placeholder="Endereço Residencial" value={contract.dados.locatario?.endereco || ''} onChange={e => updateDados('locatario', 'endereco', e.target.value)} />
+                          <div className="grid grid-cols-3 gap-4">
+                            <input type="text" className="col-span-1 input-field" placeholder="CEP" value={contract.dados.locatario?.cep || ''} onChange={e => updateDados('locatario', 'cep', e.target.value)} />
+                            <input type="text" className="col-span-1 input-field" placeholder="Cidade" value={contract.dados.locatario?.cidade || ''} onChange={e => updateDados('locatario', 'cidade', e.target.value)} />
+                            <input type="text" className="col-span-1 input-field" placeholder="Estado" value={contract.dados.locatario?.estado || ''} onChange={e => updateDados('locatario', 'estado', e.target.value)} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Fiador (Opcional - Se Houver) */}
+                    <div className="border-t border-gray-100 pt-8 mt-8 space-y-6">
+                      <h4 className="text-xs font-black text-gold uppercase tracking-widest border-b border-gray-100 pb-2">Fiador (Opcional - Se Houver)</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Nome Completo do Fiador</label>
+                            <input type="text" className="input-field" placeholder="Nome Completo" value={contract.dados.fiador?.nome || ''} onChange={e => updateDados('fiador', 'nome', e.target.value)} />
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">CPF / CNPJ</label>
+                              <input type="text" className="input-field" placeholder="Documento" value={contract.dados.fiador?.cpfCnpj || ''} onChange={e => updateDados('fiador', 'cpfCnpj', e.target.value)} />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Telefone</label>
+                              <input type="text" className="input-field" placeholder="Telefone" value={contract.dados.fiador?.telefone || ''} onChange={e => updateDados('fiador', 'telefone', e.target.value)} />
+                            </div>
+                          </div>
+                        </div>
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">E-mail</label>
+                            <input type="email" className="input-field" placeholder="E-mail" value={contract.dados.fiador?.email || ''} onChange={e => updateDados('fiador', 'email', e.target.value)} />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Endereço Residencial do Fiador</label>
+                            <input type="text" className="input-field" placeholder="Endereço Completo" value={contract.dados.fiador?.endereco || ''} onChange={e => updateDados('fiador', 'endereco', e.target.value)} />
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1052,7 +1348,38 @@ export default function AdminContractForm() {
                               <input type="text" className="input-field" value={contract.dados.proponente?.profissao || ''} onChange={e => updateDados('proponente', 'profissao', e.target.value)} />
                             </div>
                           </div>
-                          <input type="text" className="input-field" placeholder="Endereço Residencial" value={contract.dados.proponente?.endereco || ''} onChange={e => updateDados('proponente', 'endereco', e.target.value)} />
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Telefone</label>
+                              <input type="text" className="input-field" value={contract.dados.proponente?.telefone || ''} onChange={e => updateDados('proponente', 'telefone', e.target.value)} />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">WhatsApp</label>
+                              <input type="text" className="input-field" value={contract.dados.proponente?.whatsapp || ''} onChange={e => updateDados('proponente', 'whatsapp', e.target.value)} />
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">E-mail</label>
+                            <input type="email" className="input-field" value={contract.dados.proponente?.email || ''} onChange={e => updateDados('proponente', 'email', e.target.value)} />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Endereço Residencial</label>
+                            <input type="text" className="input-field" value={contract.dados.proponente?.endereco || ''} onChange={e => updateDados('proponente', 'endereco', e.target.value)} />
+                          </div>
+                          <div className="grid grid-cols-3 gap-4">
+                            <div className="space-y-2 col-span-1">
+                              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">CEP</label>
+                              <input type="text" className="input-field" value={contract.dados.proponente?.cep || ''} onChange={e => updateDados('proponente', 'cep', e.target.value)} />
+                            </div>
+                            <div className="space-y-2 col-span-1">
+                              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Cidade</label>
+                              <input type="text" className="input-field" value={contract.dados.proponente?.cidade || ''} onChange={e => updateDados('proponente', 'cidade', e.target.value)} />
+                            </div>
+                            <div className="space-y-2 col-span-1">
+                              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Estado</label>
+                              <input type="text" className="input-field" value={contract.dados.proponente?.estado || ''} onChange={e => updateDados('proponente', 'estado', e.target.value)} />
+                            </div>
+                          </div>
                         </div>
                       </div>
 
@@ -1060,41 +1387,105 @@ export default function AdminContractForm() {
                       <div className="space-y-6">
                         <h4 className="text-sm font-black text-gold uppercase tracking-[0.2em] mb-4">Vendedor / Parte Aceitante</h4>
                         <div className="space-y-4">
-                          <input 
-                            type="text" 
-                            className="input-field" 
-                            placeholder="Nome Completo"
-                            value={contract.nomeVendedor} 
-                            onChange={e => setContract({...contract, nomeVendedor: e.target.value})} 
-                          />
-                          <div className="grid grid-cols-2 gap-4">
-                            <input type="text" className="input-field" placeholder="CPF" value={contract.dados.vendedor?.cpf || contract.dados.aceitante?.cpf || ''} onChange={e => {
-                              updateDados('vendedor', 'cpf', e.target.value);
-                              updateDados('aceitante', 'cpf', e.target.value);
-                            }} />
-                            <input type="text" className="input-field" placeholder="RG" value={contract.dados.vendedor?.rg || contract.dados.aceitante?.rg || ''} onChange={e => {
-                              updateDados('vendedor', 'rg', e.target.value);
-                              updateDados('aceitante', 'rg', e.target.value);
-                            }} />
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Nome Completo</label>
+                            <input 
+                              type="text" 
+                              className="input-field" 
+                              placeholder="Nome Completo"
+                              value={contract.nomeVendedor} 
+                              onChange={e => setContract({...contract, nomeVendedor: e.target.value})} 
+                            />
                           </div>
                           <div className="grid grid-cols-2 gap-4">
-                            <select className="input-field" value={contract.dados.vendedor?.estadoCivil || contract.dados.aceitante?.estadoCivil || 'Solteiro(a)'} onChange={e => {
-                              updateDados('vendedor', 'estadoCivil', e.target.value);
-                              updateDados('aceitante', 'estadoCivil', e.target.value);
-                            }}>
-                              <option value="Solteiro(a)">Solteiro(a)</option>
-                              <option value="Casado(a)">Casado(a)</option>
-                              <option value="Divorciado(a)">Divorciado(a)</option>
-                            </select>
-                            <input type="text" className="input-field" placeholder="Profissão" value={contract.dados.vendedor?.profissao || contract.dados.aceitante?.profissao || ''} onChange={e => {
-                              updateDados('vendedor', 'profissao', e.target.value);
-                              updateDados('aceitante', 'profissao', e.target.value);
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">CPF</label>
+                              <input type="text" className="input-field" placeholder="CPF" value={contract.dados.vendedor?.cpf || contract.dados.aceitante?.cpf || ''} onChange={e => {
+                                updateDados('vendedor', 'cpf', e.target.value);
+                                updateDados('aceitante', 'cpf', e.target.value);
+                              }} />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">RG</label>
+                              <input type="text" className="input-field" placeholder="RG" value={contract.dados.vendedor?.rg || contract.dados.aceitante?.rg || ''} onChange={e => {
+                                updateDados('vendedor', 'rg', e.target.value);
+                                updateDados('aceitante', 'rg', e.target.value);
+                              }} />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Estado Civil</label>
+                              <select className="input-field" value={contract.dados.vendedor?.estadoCivil || contract.dados.aceitante?.estadoCivil || 'Solteiro(a)'} onChange={e => {
+                                updateDados('vendedor', 'estadoCivil', e.target.value);
+                                updateDados('aceitante', 'estadoCivil', e.target.value);
+                              }}>
+                                <option value="Solteiro(a)">Solteiro(a)</option>
+                                <option value="Casado(a)">Casado(a)</option>
+                                <option value="Divorciado(a)">Divorciado(a)</option>
+                              </select>
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Profissão</label>
+                              <input type="text" className="input-field" placeholder="Profissão" value={contract.dados.vendedor?.profissao || contract.dados.aceitante?.profissao || ''} onChange={e => {
+                                updateDados('vendedor', 'profissao', e.target.value);
+                                updateDados('aceitante', 'profissao', e.target.value);
+                              }} />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Telefone</label>
+                              <input type="text" className="input-field" placeholder="Telefone" value={contract.dados.vendedor?.telefone || contract.dados.aceitante?.telefone || ''} onChange={e => {
+                                updateDados('vendedor', 'telefone', e.target.value);
+                                updateDados('aceitante', 'telefone', e.target.value);
+                              }} />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">WhatsApp</label>
+                              <input type="text" className="input-field" placeholder="WhatsApp" value={contract.dados.vendedor?.whatsapp || contract.dados.aceitante?.whatsapp || ''} onChange={e => {
+                                updateDados('vendedor', 'whatsapp', e.target.value);
+                                updateDados('aceitante', 'whatsapp', e.target.value);
+                              }} />
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">E-mail</label>
+                            <input type="email" className="input-field" placeholder="E-mail" value={contract.dados.vendedor?.email || contract.dados.aceitante?.email || ''} onChange={e => {
+                              updateDados('vendedor', 'email', e.target.value);
+                              updateDados('aceitante', 'email', e.target.value);
                             }} />
                           </div>
-                          <input type="text" className="input-field" placeholder="Endereço" value={contract.dados.vendedor?.endereco || contract.dados.aceitante?.endereco || ''} onChange={e => {
-                            updateDados('vendedor', 'endereco', e.target.value);
-                            updateDados('aceitante', 'endereco', e.target.value);
-                          }} />
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Endereço</label>
+                            <input type="text" className="input-field" placeholder="Endereço" value={contract.dados.vendedor?.endereco || contract.dados.aceitante?.endereco || ''} onChange={e => {
+                              updateDados('vendedor', 'endereco', e.target.value);
+                              updateDados('aceitante', 'endereco', e.target.value);
+                            }} />
+                          </div>
+                          <div className="grid grid-cols-3 gap-4">
+                            <div className="space-y-2 col-span-1">
+                              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">CEP</label>
+                              <input type="text" className="input-field" placeholder="CEP" value={contract.dados.vendedor?.cep || contract.dados.aceitante?.cep || ''} onChange={e => {
+                                updateDados('vendedor', 'cep', e.target.value);
+                                updateDados('aceitante', 'cep', e.target.value);
+                              }} />
+                            </div>
+                            <div className="space-y-2 col-span-1">
+                              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Cidade</label>
+                              <input type="text" className="input-field" placeholder="Cidade" value={contract.dados.vendedor?.cidade || contract.dados.aceitante?.cidade || ''} onChange={e => {
+                                updateDados('vendedor', 'cidade', e.target.value);
+                                updateDados('aceitante', 'cidade', e.target.value);
+                              }} />
+                            </div>
+                            <div className="space-y-2 col-span-1">
+                              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Estado</label>
+                              <input type="text" className="input-field" placeholder="Estado" value={contract.dados.vendedor?.estado || contract.dados.aceitante?.estado || ''} onChange={e => {
+                                updateDados('vendedor', 'estado', e.target.value);
+                                updateDados('aceitante', 'estado', e.target.value);
+                              }} />
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1259,74 +1650,203 @@ export default function AdminContractForm() {
                 </>
               ) : (
                 <>
-                  {/* ... Existing Pagamento Step for Proposta ... */}
-                  <div className="bg-white p-10 rounded-[2.5rem] shadow-xl border border-gray-100">
-                    <div className="flex items-center gap-4 mb-8">
-                      <div className="w-12 h-12 bg-primary-black text-gold rounded-2xl flex items-center justify-center shadow-lg">
-                        <CreditCard size={24} />
-                      </div>
-                      <div>
-                        <h3 className="text-xl font-display font-bold text-primary-black">Condições Financeiras</h3>
-                        <p className="text-sm text-gray-400">Detalhe como será efetuado o pagamento.</p>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-                      <div className="space-y-6">
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1 text-gold">Valor Total Negociado (R$)</label>
-                          <input 
-                            type="text" 
-                            className="w-full bg-gray-50 border border-transparent rounded-[1.5rem] py-5 px-7 text-2xl font-display font-bold text-primary-black focus:ring-4 focus:ring-gold/10 focus:border-gold/20 focus:bg-white outline-none transition-all"
-                            value={maskCurrency(contract.valor || '')}
-                            onChange={e => setContract({...contract, valor: parseCurrencyToNumber(e.target.value)})}
-                          />
+                  {contract.tipoContrato === 'arras_confirmatorios' ? (
+                    <div className="bg-white p-10 rounded-[2.5rem] shadow-xl border border-gray-100">
+                      <div className="flex items-center gap-4 mb-8">
+                        <div className="w-12 h-12 bg-primary-black text-gold rounded-2xl flex items-center justify-center shadow-lg">
+                          <CreditCard size={24} />
                         </div>
-
-                        <div className="space-y-4">
-                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Formas de Pagamento</label>
-                          <div className="grid grid-cols-2 gap-3">
-                            {['À vista', 'Financiamento', 'FGTS', 'Parcelamento Direto', 'Sinal', 'Permuta', 'Outras'].map(m => (
-                              <button
-                                key={m}
-                                onClick={() => toggleMetodo(contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos', m)}
-                                className={`py-3 px-4 rounded-xl text-xs font-bold transition-all border ${
-                                  (contract.dados[contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos'].metodos || []).includes(m)
-                                    ? 'bg-gold text-primary-black border-gold shadow-lg shadow-gold/20'
-                                    : 'bg-gray-50 text-gray-400 border-transparent hover:bg-gray-100'
-                                }`}
-                              >
-                                {m}
-                              </button>
-                            ))}
-                          </div>
+                        <div>
+                          <h3 className="text-xl font-display font-bold text-primary-black">Dados das Arras Confirmatórias</h3>
+                          <p className="text-sm text-gray-400">Preencha os valores, prazos e condições do sinal.</p>
                         </div>
                       </div>
 
-                      <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                         <div className="space-y-2">
-                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Valor por Extenso</label>
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Valor do Imóvel (R$)</label>
                           <input 
                             type="text" 
                             className="input-field" 
-                            value={contract.dados[contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos']?.valorExtenso || ''} 
-                            onChange={e => updateDados(contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos', 'valorExtenso', e.target.value)}
-                            placeholder="Ex: Quinhentos mil reais"
+                            value={maskCurrency(contract.dados?.arras?.valorImovel ?? contract.valorImovel ?? contract.valor ?? '')}
+                            onChange={e => {
+                              const num = parseCurrencyToNumber(e.target.value);
+                              setContract(prev => ({ ...prev, valor: num, valorImovel: num }));
+                              updateDados('arras', 'valorImovel', num);
+                            }}
                           />
                         </div>
+
                         <div className="space-y-2">
-                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Detalhes do Pagamento / Contraproposta</label>
-                          <textarea 
-                            rows={4}
-                            className="input-field py-4 min-h-[120px]" 
-                            value={contract.dados[contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos']?.outrasCondicoes || ''} 
-                            onChange={e => updateDados(contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos', 'outrasCondicoes', e.target.value)}
-                            placeholder="Descreva detalhadamente prazos, parcelas, ou termos da contraproposta..."
+                          <label className="text-[10px] font-black text-gold uppercase tracking-widest pl-1">Valor das Arras / Sinal (R$)</label>
+                          <input 
+                            type="text" 
+                            className="input-field" 
+                            value={maskCurrency(contract.dados?.arras?.valorArras ?? '')}
+                            onChange={e => updateDados('arras', 'valorArras', parseCurrencyToNumber(e.target.value))}
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Forma de Pagamento das Arras</label>
+                          <input 
+                            type="text" 
+                            className="input-field" 
+                            placeholder="Ex: PIX / Transferência"
+                            value={contract.dados?.arras?.formaPagamentoArras || ''}
+                            onChange={e => updateDados('arras', 'formaPagamentoArras', e.target.value)}
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Data do Pagamento das Arras</label>
+                          <input 
+                            type="text" 
+                            className="input-field" 
+                            placeholder="Ex: Até 05/06/2026 ou Na assinatura"
+                            value={contract.dados?.arras?.dataPagamentoArras || ''}
+                            onChange={e => updateDados('arras', 'dataPagamentoArras', e.target.value)}
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Prazo Contrato Definitivo</label>
+                          <input 
+                            type="text" 
+                            className="input-field" 
+                            placeholder="Ex: 30 dias"
+                            value={contract.dados?.arras?.prazoContratoDefinitivo || ''}
+                            onChange={e => updateDados('arras', 'prazoContratoDefinitivo', e.target.value)}
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Prazo para Escritura</label>
+                          <input 
+                            type="text" 
+                            className="input-field" 
+                            placeholder="Ex: 60 dias"
+                            value={contract.dados?.arras?.prazoEscritura || ''}
+                            onChange={e => updateDados('arras', 'prazoEscritura', e.target.value)}
                           />
                         </div>
                       </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-6">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Condições para Devolução</label>
+                          <textarea 
+                            rows={3}
+                            className="input-field py-4 min-h-[90px]" 
+                            placeholder="Condições para devolução do sinal..."
+                            value={contract.dados?.arras?.condicoesDevolucao || ''}
+                            onChange={e => updateDados('arras', 'condicoesDevolucao', e.target.value)}
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Desistência do Comprador</label>
+                          <textarea 
+                            rows={3}
+                            className="input-field py-4 min-h-[90px]" 
+                            placeholder="Condições em caso de desistência do comprador..."
+                            value={contract.dados?.arras?.condicoesDesistenciaComprador || ''}
+                            onChange={e => updateDados('arras', 'condicoesDesistenciaComprador', e.target.value)}
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Desistência do Vendedor</label>
+                          <textarea 
+                            rows={3}
+                            className="input-field py-4 min-h-[90px]" 
+                            placeholder="Condições em caso de desistência do vendedor..."
+                            value={contract.dados?.arras?.condicoesDesistenciaVendedor || ''}
+                            onChange={e => updateDados('arras', 'condicoesDesistenciaVendedor', e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 mt-6">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Observações Adicionais</label>
+                        <textarea 
+                          rows={2}
+                          className="input-field py-4 min-h-[60px]" 
+                          placeholder="Observações adicionais para o contrato..."
+                          value={contract.observacoes || ''}
+                          onChange={e => setContract(prev => ({ ...prev, observacoes: e.target.value }))}
+                        />
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="bg-white p-10 rounded-[2.5rem] shadow-xl border border-gray-100">
+                      <div className="flex items-center gap-4 mb-8">
+                        <div className="w-12 h-12 bg-primary-black text-gold rounded-2xl flex items-center justify-center shadow-lg">
+                          <CreditCard size={24} />
+                        </div>
+                        <div>
+                          <h3 className="text-xl font-display font-bold text-primary-black">Condições Financeiras</h3>
+                          <p className="text-sm text-gray-400">Detalhe como será efetuado o pagamento.</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                        <div className="space-y-6">
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1 text-gold">Valor Total Negociado (R$)</label>
+                            <input 
+                              type="text" 
+                              className="w-full bg-gray-50 border border-transparent rounded-[1.5rem] py-5 px-7 text-2xl font-display font-bold text-primary-black focus:ring-4 focus:ring-gold/10 focus:border-gold/20 focus:bg-white outline-none transition-all"
+                              value={maskCurrency(contract.valor || '')}
+                              onChange={e => setContract({...contract, valor: parseCurrencyToNumber(e.target.value)})}
+                            />
+                          </div>
+
+                          <div className="space-y-4">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Formas de Pagamento</label>
+                            <div className="grid grid-cols-2 gap-3">
+                              {['À vista', 'Financiamento', 'FGTS', 'Parcelamento Direto', 'Sinal', 'Permuta', 'Outras'].map(m => (
+                                <button
+                                  key={m}
+                                  onClick={() => toggleMetodo(contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos', m)}
+                                  className={`py-3 px-4 rounded-xl text-xs font-bold transition-all border ${
+                                    (contract.dados[contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos'].metodos || []).includes(m)
+                                      ? 'bg-gold text-primary-black border-gold shadow-lg shadow-gold/20'
+                                      : 'bg-gray-50 text-gray-400 border-transparent hover:bg-gray-100'
+                                  }`}
+                                >
+                                  {m}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Valor por Extenso</label>
+                            <input 
+                              type="text" 
+                              className="input-field" 
+                              value={contract.dados[contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos']?.valorExtenso || ''} 
+                              onChange={e => updateDados(contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos', 'valorExtenso', e.target.value)}
+                              placeholder="Ex: Quinhentos mil reais"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Detalhes do Pagamento / Contraproposta</label>
+                            <textarea 
+                              rows={4}
+                              className="input-field py-4 min-h-[120px]" 
+                              value={contract.dados[contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos']?.outrasCondicoes || ''} 
+                              onChange={e => updateDados(contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos', 'outrasCondicoes', e.target.value)}
+                              placeholder="Descreva detalhadamente prazos, parcelas, ou termos da contraproposta..."
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="bg-white p-10 rounded-[2.5rem] shadow-xl border border-gray-100">
                     <div className="flex items-center gap-4 mb-8">

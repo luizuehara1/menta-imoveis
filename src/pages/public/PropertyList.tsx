@@ -7,18 +7,67 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useSettings, useOptions } from '../../hooks/useSettings';
 import PageWrapper from '../../components/PageWrapper';
 import { SafeImage } from '../../components/ui/SafeImage';
-import { formatCurrency, isValidPublicProperty, cleanPhoneForWhatsapp, getSafeImageUrl, isImovelAlugado } from '../../lib/utils';
+import { formatCurrency, isValidPublicProperty, cleanPhoneForWhatsapp, getSafeImageUrl, isImovelAlugado, matchesQuickSearch, normalizeText } from '../../lib/utils';
 import { staggerContainer, slideUp, fadeIn } from '../../constants/animations';
 import { GoldenParticles } from '../../components/three/GoldenParticles';
 import { Canvas } from '@react-three/fiber';
+
+function isImovelPublico(imovel: any) {
+  return (
+    imovel?.excluido !== true &&
+    (
+      imovel?.publicadoNoSite === true ||
+      imovel?.publicado === true ||
+      imovel?.ativo === true
+    )
+  );
+}
+
+function normalizeTipoNegocio(tipo: any): "Venda" | "Locação" | "Venda e Locação" | "" {
+  const value = String(tipo || "").toLowerCase();
+
+  if (
+    (value.includes("venda") && value.includes("loca")) ||
+    value.includes("ambos") ||
+    value.includes("venda_locacao")
+  ) {
+    return "Venda e Locação";
+  }
+
+  if (value.includes("compr") || value.includes("vend")) {
+    return "Venda";
+  }
+
+  if (value.includes("loca") || value.includes("alug")) {
+    return "Locação";
+  }
+
+  return "";
+}
+
+function getImagemPrincipal(imovel: any): string {
+  if (!imovel) return "/placeholder-imovel.png";
+  if (imovel.imagemPrincipal) return imovel.imagemPrincipal;
+  if (imovel.mainImage) return imovel.mainImage;
+
+  const imagensList = imovel.imagens || imovel.images;
+  if (Array.isArray(imagensList) && imagensList.length > 0) {
+    const primeira = imagensList[0];
+
+    if (typeof primeira === "string") return primeira;
+    if (primeira?.url) return primeira.url;
+  }
+
+  return "/placeholder-imovel.png";
+}
 
 const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
   const { settings } = useSettings();
 
   const mainImageUnwrapped = React.useMemo(() => {
     const imgs = property?.images || property?.imagens || [];
-    const mainUrl = typeof property?.mainImage === 'string' ? property?.mainImage : property?.mainImage?.url;
-    if (!mainUrl) return { url: '', aplicarMarcaDagua: false };
+    const mainUrl = getImagemPrincipal(property);
+    if (!mainUrl || mainUrl === '/placeholder-imovel.png') return { url: '/placeholder-imovel.png', aplicarMarcaDagua: false };
     const match = imgs.find((img: any) => (typeof img === 'string' ? img : img.url) === mainUrl);
     if (match) {
       const isString = typeof match === 'string';
@@ -33,9 +82,18 @@ const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
     const cleanNumber = cleanPhoneForWhatsapp(rawPhone || '554188364069');
     // Prefix 55 if not already present
     const p = cleanNumber.startsWith('55') ? cleanNumber : `55${cleanNumber}`;
-    const message = `Olá, tenho interesse neste imóvel: ${property.title} - Código: ${property.code}. Pode me passar mais informações?`;
+    const displayTitle = property.titulo || property.title || property.tituloAnuncio || property.nome || "Imóvel";
+    const displayCode = property.codigo || property.code || property.codigoImovel || property.id;
+    const message = `Olá, tenho interesse neste imóvel: ${displayTitle} - Código: ${displayCode}. Pode me passar mais informações?`;
     return `https://wa.me/${p}?text=${encodeURIComponent(message)}`;
   };
+
+  const displayBairro = property.bairro || property.neighborhood || "";
+  const displayCidade = property.cidade || property.city || "";
+  const displayLocation = displayBairro && displayCidade ? `${displayBairro}, ${displayCidade}` : (displayBairro || displayCidade || "Localização não informada");
+  const displayCode = property.codigo || property.code || property.codigoImovel || "---";
+  const displayTitle = property.titulo || property.title || property.tituloAnuncio || property.nome || property.codigo || property.code || "Imóvel disponível";
+  const bizTypeNorm = normalizeTipoNegocio(property.businessType || property.tipoNegocio);
 
   return (
     <motion.div
@@ -45,8 +103,8 @@ const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
     >
       <Link to={`/imovel/:id`.replace(':id', property.id)} className="block relative h-64 overflow-hidden">
         <SafeImage
-          src={getSafeImageUrl(property.mainImage)}
-          alt={property.title}
+          src={getSafeImageUrl(getImagemPrincipal(property))}
+          alt={displayTitle}
           className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"
         />
         
@@ -65,11 +123,11 @@ const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
         <div className="absolute top-4 left-4 flex flex-col gap-2 z-10">
           <div className="flex flex-wrap gap-2">
             <span className="bg-primary-black/90 backdrop-blur-md text-white text-[9px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg border border-white/10 shadow-lg">
-              {property.businessType}
+              {bizTypeNorm || property.businessType || "Imóvel"}
             </span>
             {isImovelAlugado(property) && (
               <span className="bg-primary-black border border-gold text-gold text-[9px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg shadow-lg">
-                JÁ ALUGADO
+                JÁ ALUGADO / INDISPONÍVEL
               </span>
             )}
             {property.destaque && (
@@ -83,7 +141,7 @@ const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
         {/* Property Type Badge */}
         <div className="absolute bottom-4 right-4 z-10">
           <span className="bg-white/90 backdrop-blur-md text-primary-black text-[9px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg shadow-sm border border-gray-100">
-            {property.propertyType}
+            {property.propertyType || "Imóvel"}
           </span>
         </div>
       </Link>
@@ -93,30 +151,30 @@ const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
           <div className="flex items-center gap-1.5 text-gold">
             <MapPin size={14} className="shrink-0" />
             <span className="text-[10px] font-black uppercase tracking-wider truncate max-w-[180px]">
-              {property.neighborhood}, {property.city}
+              {displayLocation}
             </span>
           </div>
           <span className="text-[9px] font-bold text-gray-300 tracking-widest uppercase">
-            CÓD: {property.code}
+            CÓD: {displayCode}
           </span>
         </div>
         
         <Link to={`/imovel/${property.id}`}>
           <h3 className="font-display text-xl font-bold text-primary-black group-hover:text-gold transition-colors leading-tight line-clamp-2 mb-4 h-12">
-            {property.title}
+            {displayTitle}
           </h3>
         </Link>
         
         <div className="mb-6 bg-gray-50/50 rounded-2xl p-4 border border-gray-50">
           {isImovelAlugado(property) ? (
-            property.businessType === 'Venda e Locação' && property.priceVenda ? (
+            bizTypeNorm === 'Venda e Locação' && (property.priceVenda || property.valorVenda || property.valor_venda) ? (
               <div>
                 <p className="text-[9px] font-black text-emerald-700 uppercase tracking-widest mb-1">
                   Disponível para Venda
                 </p>
                 <div className="flex items-baseline gap-1">
                   <span className="text-2xl font-display font-black text-primary-green">
-                    {formatCurrency(property.priceVenda)}
+                    {formatCurrency(property.priceVenda || property.valorVenda || property.valor_venda)}
                   </span>
                 </div>
                 <p className="text-[9px] text-gray-500 mt-1 leading-tight">Imóvel alugado atualmente, disponível para venda</p>
@@ -127,29 +185,89 @@ const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
                   Status
                 </p>
                 <span className="text-lg font-display font-black text-primary-black uppercase tracking-wide">
-                  Já alugado
+                  Já alugado / Indisponível
                 </span>
               </div>
             )
           ) : (
             <>
-              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">
-                 Valor de {property.businessType === 'Locação' ? 'Locação' : 'Investimento'}
-              </p>
-              <div className="flex items-baseline gap-1">
-                <span className="text-2xl font-display font-black text-primary-green">
-                  {formatCurrency(property.businessType === 'Locação' ? property.priceLocacao : property.priceVenda)}
-                </span>
-                {property.businessType === 'Locação' && (
-                  <span className="text-xs font-bold text-gray-400">/mês</span>
-                )}
-              </div>
-              {(property.condoFee > 0 || property.iptu > 0) && (
+              {bizTypeNorm === 'Venda' ? (
+                <>
+                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">
+                     Valor de Venda (Investimento)
+                  </p>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-2xl font-display font-black text-primary-green">
+                      {formatCurrency(property.priceVenda || property.valorVenda || property.valor_venda)}
+                    </span>
+                  </div>
+                </>
+              ) : bizTypeNorm === 'Locação' ? (
+                <>
+                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">
+                     Valor de Locação
+                  </p>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-2xl font-display font-black text-primary-green">
+                      {formatCurrency(property.priceLocacao || property.valorAluguel || property.valor_aluguel || property.valorTotalMensal)}
+                    </span>
+                    {(property.priceLocacao || property.valorAluguel || property.valor_aluguel || property.valorTotalMensal) && <span className="text-xs font-bold text-gray-400">/mês</span>}
+                  </div>
+                </>
+              ) : bizTypeNorm === 'Venda e Locação' ? (
+                <div className="space-y-2">
+                  {(property.priceVenda || property.valorVenda || property.valor_venda) && (
+                    <div>
+                      <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-none mb-0.5">
+                         Valor de Venda
+                      </p>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-lg font-display font-black text-primary-green">
+                          {formatCurrency(property.priceVenda || property.valorVenda || property.valor_venda)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  {(property.priceLocacao || property.valorAluguel || property.valor_aluguel || property.valorTotalMensal) && (
+                    <div>
+                      <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-none mb-0.5">
+                         Valor de Locação
+                      </p>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-lg font-display font-black text-primary-green">
+                          {formatCurrency(property.priceLocacao || property.valorAluguel || property.valor_aluguel || property.valorTotalMensal)}
+                        </span>
+                        <span className="text-xs font-bold text-gray-400">/mês</span>
+                      </div>
+                    </div>
+                  )}
+                  {!(property.priceVenda || property.valorVenda || property.valor_venda) && !(property.priceLocacao || property.valorAluguel || property.valor_aluguel || property.valorTotalMensal) && (
+                    <div>
+                      <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">
+                         Valor
+                      </p>
+                      <span className="text-xl font-display font-black text-primary-green">
+                        Sob consulta
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">
+                     Valor
+                  </p>
+                  <span className="text-xl font-display font-black text-primary-green">
+                    Sob consulta
+                  </span>
+                </div>
+              )}
+              {((Number(property.condoFee || property.txCondominio || property.condominio) > 0) || (Number(property.iptu) > 0)) && (
                 <div className="flex gap-3 mt-2 pt-2 border-t border-gray-100">
-                   {property.condoFee > 0 && (
-                     <p className="text-[9px] font-bold text-gray-400">Cond: {formatCurrency(property.condoFee)}</p>
+                   {Number(property.condoFee || property.txCondominio || property.condominio) > 0 && (
+                     <p className="text-[9px] font-bold text-gray-400">Cond: {formatCurrency(property.condoFee || property.txCondominio || property.condominio)}</p>
                    )}
-                   {property.iptu > 0 && (
+                   {Number(property.iptu) > 0 && (
                      <p className="text-[9px] font-bold text-gray-400">IPTU: {formatCurrency(property.iptu)}</p>
                    )}
                 </div>
@@ -161,19 +279,19 @@ const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
         <div className="grid grid-cols-4 gap-2 mb-6 h-12">
           <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-gray-50/50 border border-transparent hover:border-gold/20 transition-all">
             <Bed size={14} className="text-primary-black mb-1" />
-            <span className="text-[10px] font-black text-primary-black">{property.bedrooms || 0}</span>
+            <span className="text-[10px] font-black text-primary-black">{property.bedrooms || property.dormitorios || 0}</span>
           </div>
           <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-gray-50/50 border border-transparent hover:border-gold/20 transition-all">
             <Bath size={14} className="text-primary-black mb-1" />
-            <span className="text-[10px] font-black text-primary-black">{property.bathrooms || 0}</span>
+            <span className="text-[10px] font-black text-primary-black">{property.bathrooms || property.banheiros || 0}</span>
           </div>
           <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-gray-50/50 border border-transparent hover:border-gold/20 transition-all">
             <Car size={14} className="text-primary-black mb-1" />
-            <span className="text-[10px] font-black text-primary-black">{property.garageSpaces || 0}</span>
+            <span className="text-[10px] font-black text-primary-black">{property.garageSpaces || property.vagas || property.vagasGaragem || 0}</span>
           </div>
           <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-gray-50/50 border border-transparent hover:border-gold/20 transition-all">
             <Maximize size={14} className="text-primary-black mb-1" />
-            <span className="text-[10px] font-black text-primary-black">{property.usefulArea || 0}m²</span>
+            <span className="text-[10px] font-black text-primary-black">{property.usefulArea || property.areaUtil || property.totalArea || property.areaTotal || 0}m²</span>
           </div>
         </div>
         
@@ -227,7 +345,7 @@ export default function PropertyList() {
 
   // Search Filters
   const [searchFilters, setSearchFilters] = useState<any>({
-    businessType: 'Venda',
+    businessType: 'Todos',
     propertyType: '',
     city: '',
     neighborhood: '',
@@ -239,14 +357,15 @@ export default function PropertyList() {
     minArea: '',
     maxArea: '',
     destaque: false,
-    leaseFilterStatus: 'disponiveis'
+    leaseFilterStatus: 'todos',
+    busca: ''
   });
 
   useEffect(() => {
     // Parse URL params
     const params = new URLSearchParams(location.search);
     const initialFilters = {
-      businessType: params.get('businessType') || 'Venda',
+      businessType: params.get('businessType') || 'Todos',
       propertyType: params.get('propertyType') || '',
       city: params.get('city') || '',
       neighborhood: params.get('neighborhood') || '',
@@ -258,7 +377,8 @@ export default function PropertyList() {
       minArea: params.get('minArea') || '',
       maxArea: params.get('maxArea') || '',
       destaque: params.get('destaque') === 'true',
-      leaseFilterStatus: params.get('leaseFilterStatus') || 'disponiveis'
+      leaseFilterStatus: params.get('leaseFilterStatus') || 'todos',
+      busca: params.get('busca') || ''
     };
     setSearchFilters(initialFilters);
     fetchProperties(initialFilters);
@@ -267,64 +387,88 @@ export default function PropertyList() {
   const fetchProperties = async (filters: any) => {
     setLoading(true);
     try {
-      // Normalization as requested
-      const normalize = (v: string) => v?.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim() || "";
-      const normalizedBType = normalize(filters.businessType);
+      let rawData: any[] = [];
+      try {
+        // Try getting the entire collection first (works if permission allows or for admin/local use)
+        const snap = await getDocs(query(collection(db, 'imoveis')));
+        rawData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+      } catch (err) {
+        console.log("Failed to fetch full collection, trying filtered queries in parallel...", err);
+        // Falls back to parallel queries permitted by public rules
+        const q1 = query(collection(db, 'imoveis'), where('publicado', '==', true));
+        const q2 = query(collection(db, 'imoveis'), where('publicadoNoSite', '==', true));
+        const q3 = query(collection(db, 'imoveis'), where('ativo', '==', true));
+        
+        const [snap1, snap2, snap3] = await Promise.all([
+          getDocs(q1).catch(e => { console.error(e); return { docs: [] }; }),
+          getDocs(q2).catch(e => { console.error(e); return { docs: [] }; }),
+          getDocs(q3).catch(e => { console.error(e); return { docs: [] }; })
+        ]);
 
-      // Fetch a broader set of published properties to allow complex filtering in JS
-      // This prevents "ghost properties" and ensures refresh consistency
-      // Using a wider status list to catch any variant including lowercase and untyped
-      // Note: "publicado" must be true for the query to pass rules for unauthenticated users
-      const q = query(
-        collection(db, 'imoveis'), 
-        where('publicado', '==', true)
-      );
+        const map = new Map();
+        [...snap1.docs, ...snap2.docs, ...snap3.docs].forEach(doc => {
+          map.set(doc.id, { id: doc.id, ...doc.data() as any });
+        });
+        rawData = Array.from(map.values());
+      }
 
-      const snap = await getDocs(q);
-      const rawData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+      console.log("Buscando imóveis públicos...");
+      const todosImoveis = rawData;
+      console.log("Total bruto Firestore:", todosImoveis.length);
+      console.log("Imóveis brutos:", todosImoveis);
 
-      // Debug as requested by user
-      const validData = rawData.filter(isValidPublicProperty);
-      const invalidData = rawData.filter(p => !isValidPublicProperty(p));
+      // Log those that are removed from being public
+      todosImoveis.forEach(imovel => {
+        if (!isImovelPublico(imovel)) {
+          console.log("Imóvel removido do público:", imovel.id, {
+            publicadoNoSite: imovel.publicadoNoSite,
+            publicado: imovel.publicado,
+            ativo: imovel.ativo,
+            excluido: imovel.excluido,
+            status: imovel.status,
+            tipoNegocio: imovel.tipoNegocio || imovel.businessType
+          });
+        }
+      });
 
-      // Extra check: if no properties are found but we have raw data, maybe status naming is mismatching
-      if (validData.length === 0 && rawData.length > 0) {
-        console.warn("ALERTA: Imóveis encontrados no DB, mas nenhum passou na validação pública.", {
-          rawCount: rawData.length,
-          statusExemplos: rawData.slice(0, 3).map(p => p.status),
-          publicadoExemplos: rawData.slice(0, 3).map(p => p.publicado)
+      const imoveisPublicos = todosImoveis.filter(isImovelPublico);
+      console.log("Total depois do filtro público:", imoveisPublicos.length);
+      console.log("Filtros ativos:", filters);
+
+      let data = imoveisPublicos;
+
+      // 1. Quick Search Filter
+      if (filters.busca) {
+        data = data.filter((p: any) => matchesQuickSearch(p, filters.busca));
+      }
+
+      // 2. Business Type Filter
+      const selectedBType = String(filters.businessType || 'Todos').trim();
+      if (selectedBType !== 'Todos' && selectedBType !== '') {
+        const normalizedSelected = normalizeTipoNegocio(selectedBType);
+        
+        data = data.filter((p: any) => {
+          const pType = normalizeTipoNegocio(p.businessType || p.tipoNegocio);
+          if (normalizedSelected === 'Venda') {
+            return pType === 'Venda' || pType === 'Venda e Locação';
+          }
+          if (normalizedSelected === 'Locação') {
+            return pType === 'Locação' || pType === 'Venda e Locação';
+          }
+          if (normalizedSelected === 'Venda e Locação') {
+            return pType === 'Venda e Locação';
+          }
+          return true;
         });
       }
 
-      console.group("DEBUG: Carregamento de Imóveis Público");
-      console.log("Variáveis de ambiente:", {
-        projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-        authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN
-      });
-      console.log("Recebidos do Firestore (Total):", rawData.length, rawData);
-      console.log("Válidos (Exibindo):", validData.length, validData);
-      console.log("Inválidos (Removidos pela validação):", invalidData.length, invalidData);
-      console.groupEnd();
-
-      let data = validData;
-
-      // 2. Business Type Filter
-      if (normalizedBType === 'venda' || normalizedBType === 'comprar') {
-        data = data.filter((p: any) => p.businessType === 'Venda' || p.businessType === 'Venda e Locação');
-      } else if (normalizedBType === 'locacao' || normalizedBType === 'alugar' || normalizedBType === 'aluguel') {
-        data = data.filter((p: any) => p.businessType === 'Locação' || p.businessType === 'Venda e Locação');
-      } else if (normalizedBType === 'venda_locacao' || normalizedBType === 'venda e locacao') {
-        data = data.filter((p: any) => p.businessType === 'Venda e Locação');
-      }
-
       // Filter by lease/rental status (Disponíveis, Alugados, Todos)
-      const leaseFilter = filters.leaseFilterStatus || 'disponiveis';
+      const leaseFilter = filters.leaseFilterStatus || 'todos';
       if (leaseFilter === 'alugados') {
         data = data.filter((p: any) => isImovelAlugado(p));
       } else if (leaseFilter === 'todos') {
         // Keep both
-      } else {
-        // default to "disponiveis"
+      } else if (leaseFilter === 'disponiveis') {
         data = data.filter((p: any) => !isImovelAlugado(p));
       }
 
@@ -336,36 +480,48 @@ export default function PropertyList() {
         data = data.filter((p: any) => p.city?.toLowerCase().includes(filters.city.toLowerCase()));
       }
       if (filters.neighborhood) {
-        data = data.filter((p: any) => p.neighborhood?.toLowerCase() === filters.neighborhood.toLowerCase());
+        data = data.filter((p: any) => (p.neighborhood || p.bairro || "").toLowerCase() === filters.neighborhood.toLowerCase());
       }
       
-      const priceField = (normalizedBType === 'locacao' || normalizedBType === 'alugar' || normalizedBType === 'aluguel') ? 'priceLocacao' : 'priceVenda';
+      const normalizedBTypeForPrice = normalizeTipoNegocio(filters.businessType);
+      const isRentalSearch = normalizedBTypeForPrice === 'Locação';
       
       if (filters.minPrice) {
-        data = data.filter((p: any) => (p[priceField] || 0) >= parseFloat(filters.minPrice));
+        data = data.filter((p: any) => {
+          const price = isRentalSearch 
+            ? (p.priceLocacao || p.valorAluguel || p.valor_aluguel || p.valorTotalMensal || 0) 
+            : (p.priceVenda || p.valorVenda || p.valor_venda || 0);
+          return Number(price) >= parseFloat(filters.minPrice);
+        });
       }
       if (filters.maxPrice) {
-        data = data.filter((p: any) => (p[priceField] || 0) <= parseFloat(filters.maxPrice));
+        data = data.filter((p: any) => {
+          const price = isRentalSearch 
+            ? (p.priceLocacao || p.valorAluguel || p.valor_aluguel || p.valorTotalMensal || 0) 
+            : (p.priceVenda || p.valorVenda || p.valor_venda || 0);
+          return Number(price) <= parseFloat(filters.maxPrice);
+        });
       }
       if (filters.bedrooms) {
-        data = data.filter((p: any) => (p.bedrooms || 0) >= parseInt(filters.bedrooms));
+        data = data.filter((p: any) => (p.bedrooms || p.dormitorios || 0) >= parseInt(filters.bedrooms));
       }
       if (filters.bathrooms) {
-        data = data.filter((p: any) => (p.bathrooms || 0) >= parseInt(filters.bathrooms));
+        data = data.filter((p: any) => (p.bathrooms || p.banheiros || 0) >= parseInt(filters.bathrooms));
       }
       if (filters.garageSpaces) {
-        data = data.filter((p: any) => (p.garageSpaces || 0) >= parseInt(filters.garageSpaces));
+        data = data.filter((p: any) => (p.garageSpaces || p.vagas || p.vagasGaragem || 0) >= parseInt(filters.garageSpaces));
       }
       if (filters.minArea) {
-        data = data.filter((p: any) => (p.usefulArea || p.totalArea || 0) >= parseFloat(filters.minArea));
+        data = data.filter((p: any) => (p.usefulArea || p.areaUtil || p.totalArea || p.areaTotal || 0) >= parseFloat(filters.minArea));
       }
       if (filters.maxArea) {
-        data = data.filter((p: any) => (p.usefulArea || p.totalArea || 0) <= parseFloat(filters.maxArea));
+        data = data.filter((p: any) => (p.usefulArea || p.areaUtil || p.totalArea || p.areaTotal || 0) <= parseFloat(filters.maxArea));
       }
       if (filters.destaque === true) {
         data = data.filter((p: any) => p.destaque === true);
       }
 
+      console.log("Total depois dos filtros:", data.length);
       setProperties(data);
     } catch (error) {
       console.error("Error fetching properties:", error);
@@ -379,12 +535,16 @@ export default function PropertyList() {
     if (sortBy === 'antigos') return (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0);
     
     // Choose price field based on current business type search
-    const isLocacao = searchFilters.businessType === 'Locação' || searchFilters.businessType === 'Alugar';
-    const priceA = isLocacao ? (a.priceLocacao || 0) : (a.priceVenda || 0);
-    const priceB = isLocacao ? (b.priceLocacao || 0) : (b.priceVenda || 0);
+    const isLocacao = normalizeTipoNegocio(searchFilters.businessType) === 'Locação';
+    const priceA = isLocacao 
+      ? (a.priceLocacao || a.valorAluguel || a.valor_aluguel || a.valorTotalMensal || 0) 
+      : (a.priceVenda || a.valorVenda || a.valor_venda || 0);
+    const priceB = isLocacao 
+      ? (b.priceLocacao || b.valorAluguel || b.valor_aluguel || b.valorTotalMensal || 0) 
+      : (b.priceVenda || b.valorVenda || b.valor_venda || 0);
     
-    if (sortBy === 'menor-preco') return priceA - priceB;
-    if (sortBy === 'maior-preco') return priceB - priceA;
+    if (sortBy === 'menor-preco') return Number(priceA) - Number(priceB);
+    if (sortBy === 'maior-preco') return Number(priceB) - Number(priceA);
     if (sortBy === 'destaque') return (b.destaque ? 1 : 0) - (a.destaque ? 1 : 0);
     
     return 0;
@@ -433,6 +593,26 @@ export default function PropertyList() {
             transition={{ delay: 0.3 }}
             className="bg-white p-4 md:p-8 rounded-[2.5rem] shadow-2xl border border-gray-100 mb-12"
           >
+            {/* Campo de Pesquisa Rápida Inteligente */}
+            <div className="mb-6 space-y-3">
+              <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest ml-1">
+                Pesquisa Rápida Inteligente
+              </label>
+              <div className="relative">
+                <Search size={18} className="absolute left-5 top-1/2 -translate-y-1/2 text-gold z-10" />
+                <input 
+                  type="text"
+                  className="w-full bg-gray-50 border border-gray-100 rounded-2xl pl-14 pr-5 py-4 text-sm font-medium text-primary-black placeholder-gray-400 outline-none focus:border-gold focus:ring-1 focus:ring-gold transition-all"
+                  placeholder="Busque por apartamento 2 quartos, casa no centro..."
+                  value={searchFilters.busca}
+                  onChange={(e) => setSearchFilters({...searchFilters, busca: e.target.value})}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') fetchProperties(searchFilters);
+                  }}
+                />
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
               {/* City & Neighborhood */}
               <div className="lg:col-span-5 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -464,16 +644,17 @@ export default function PropertyList() {
                 </div>
               </div>
 
-              {/* Business & Property type - visible on tablets/desktops */}
+               {/* Business & Property type - visible on tablets/desktops */}
               <div className="lg:col-span-4 grid grid-cols-2 gap-4">
                 <select 
                   className="bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 text-xs font-black uppercase tracking-widest outline-none cursor-pointer hover:bg-gray-100 transition-colors"
                   value={searchFilters.businessType}
                   onChange={(e) => setSearchFilters({...searchFilters, businessType: e.target.value})}
                 >
+                   <option value="Todos">Todos Negócios</option>
                    <option value="Venda">Venda</option>
                    <option value="Locação">Locação</option>
-                   <option value="Venda e Locação">Ambos</option>
+                   <option value="Venda e Locação">Venda e Locação</option>
                 </select>
                 <select 
                   className="bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 text-xs font-black uppercase tracking-widest outline-none cursor-pointer hover:bg-gray-100 transition-colors"
@@ -527,9 +708,16 @@ export default function PropertyList() {
                <div className="w-10 h-10 rounded-full bg-gold/10 flex items-center justify-center">
                   <Sparkles size={16} className="text-gold" />
                </div>
-               <p className="text-gray-400 font-bold text-[10px] uppercase tracking-[0.2em] leading-none">
-                 Mostrando <span className="text-primary-black text-lg ml-1 font-black">{sortedProperties.length}</span> imóveis ativos
-               </p>
+               <div className="flex flex-col">
+                 <p className="text-gray-400 font-bold text-[10px] uppercase tracking-[0.2em] leading-none">
+                   Mostrando <span className="text-primary-black text-lg ml-1 font-black">{sortedProperties.length}</span> imóveis ativos
+                 </p>
+                 {searchFilters.busca && (
+                   <p className="text-gold font-bold text-[10px] uppercase tracking-[0.2em] mt-2">
+                     Resultado para: <span className="text-primary-black font-black italic">"{searchFilters.busca}"</span>
+                   </p>
+                 )}
+               </div>
              </div>
              
              <div className="flex items-center gap-4 bg-white px-5 py-3 rounded-2xl border border-gray-100 shadow-sm">
@@ -563,11 +751,17 @@ export default function PropertyList() {
                <div className="w-24 h-24 bg-white rounded-[2rem] shadow-xl border border-gray-100 flex items-center justify-center mx-auto mb-8 animate-bounce">
                   <Search size={40} className="text-gold" />
                </div>
-               <h3 className="text-3xl font-display font-bold text-primary-black mb-3 tracking-tight">Nenhum imóvel disponível no momento</h3>
-               <p className="text-gray-400 font-medium mb-10 leading-relaxed text-sm">Não encontramos nenhum imóvel publicado que atenda aos critérios. Tente ajustar sua busca ou volte mais tarde.</p>
+               <h3 className="text-3xl font-display font-bold text-primary-black mb-3 tracking-tight">
+                 {searchFilters.busca ? "Nenhum imóvel encontrado para sua busca" : "Nenhum imóvel disponível no momento"}
+               </h3>
+               <p className="text-gray-400 font-medium mb-10 leading-relaxed text-sm">
+                 {searchFilters.busca 
+                   ? `Não encontramos nenhum imóvel publicado que atenda a "${searchFilters.busca}". Tente ajustar os termos da pesquisa rápida ou usar outros filtros.`
+                   : "Não encontramos nenhum imóvel publicado que atenda aos critérios. Tente ajustar sua busca ou volte mais tarde."}
+               </p>
                <button 
                   onClick={() => {
-                    const defaultFilters = { businessType: 'Venda', propertyType: '', city: '', neighborhood: '', minPrice: '', maxPrice: '', bedrooms: '', bathrooms: '', garageSpaces: '', minArea: '', maxArea: '', destaque: false, leaseFilterStatus: 'disponiveis' };
+                    const defaultFilters = { businessType: 'Todos', propertyType: '', city: '', neighborhood: '', minPrice: '', maxPrice: '', bedrooms: '', bathrooms: '', garageSpaces: '', minArea: '', maxArea: '', destaque: false, leaseFilterStatus: 'todos', busca: '' };
                     setSearchFilters(defaultFilters);
                     fetchProperties(defaultFilters);
                   }} 
@@ -628,9 +822,24 @@ export default function PropertyList() {
 
                 <div className="flex-grow overflow-y-auto p-10 space-y-12">
                   <div className="space-y-5">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Pesquisa Rápida Inteligente</label>
+                    <div className="relative group focus-within:ring-2 focus-within:ring-gold/20 rounded-2xl transition-all">
+                      <Search size={18} className="absolute left-5 top-1/2 -translate-y-1/2 text-gold z-10" />
+                      <input 
+                        type="text" 
+                        placeholder="Ex: apto 2 quartos no centro..." 
+                        className="w-full bg-gray-50 border-none rounded-2xl py-5 pl-14 pr-6 text-sm font-bold outline-none placeholder:text-gray-300"
+                        value={searchFilters.busca}
+                        onChange={(e) => setSearchFilters({...searchFilters, busca: e.target.value})}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-5">
                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Tipo de Negócio</label>
                     <div className="grid grid-cols-2 gap-4 bg-gray-50 p-2 rounded-2xl border border-gray-100">
                        {[
+                         { id: 'todos', nome: 'Todos', label: 'Todos' },
                          { id: 'venda', nome: 'Venda', label: 'Venda' },
                          { id: 'locacao', nome: 'Locação', label: 'Locação' },
                          { id: 'venda_locacao', nome: 'Venda e Locação', label: 'Venda e Locação' }

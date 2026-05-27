@@ -121,6 +121,7 @@ const SearchSection = ({ options }: { options: any }) => {
     city: '',
     neighborhood: '',
     maxPrice: '',
+    busca: '',
   });
 
   const normalizeText = (value: any) => {
@@ -152,6 +153,7 @@ const SearchSection = ({ options }: { options: any }) => {
     if (filters.city) queryParams.set('city', filters.city);
     if (filters.neighborhood) queryParams.set('neighborhood', filters.neighborhood);
     if (filters.maxPrice) queryParams.set('maxPrice', filters.maxPrice);
+    if (filters.busca) queryParams.set('busca', filters.busca);
     
     navigate(`/imoveis?${queryParams.toString()}`);
   };
@@ -197,6 +199,26 @@ const SearchSection = ({ options }: { options: any }) => {
                </button>
              );
            })}
+        </div>
+
+        {/* Campo de Pesquisa Rápida Inteligente */}
+        <div className="mb-6 space-y-3">
+          <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest ml-1">
+            Pesquisa Rápida Inteligente
+          </label>
+          <div className="relative">
+            <Search size={18} className="absolute left-5 top-1/2 -translate-y-1/2 text-gold z-10" />
+            <input 
+              type="text"
+              className="w-full bg-gray-50 border border-gray-100 rounded-2xl pl-14 pr-5 py-4 text-sm font-medium text-primary-black placeholder-gray-400 outline-none focus:border-gold focus:ring-1 focus:ring-gold transition-all"
+              placeholder="Busque por apartamento 2 quartos, casa no centro..."
+              value={filters.busca}
+              onChange={(e) => setFilters({...filters, busca: e.target.value})}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSearch();
+              }}
+            />
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">

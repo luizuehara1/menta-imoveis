@@ -242,9 +242,10 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
               <p><strong>RG/IE:</strong> {safeText(l.rgIe || l.rg)}</p>
             </div>
             <div className="flex gap-4">
-              <p><strong>Telefone:</strong> {safeText(l.telefone || l.phone)}</p>
+              <p><strong>Telefone:</strong> {safeText(l.telefone || l.phone)}{l.whatsapp ? ` / WhatsApp: ${safeText(l.whatsapp)}` : ''}</p>
               <p><strong>E-mail:</strong> {safeText(l.email)}</p>
             </div>
+            <p className="col-span-2"><strong>Endereço:</strong> {safeText(l.endereco || 'Não informado')}{l.cep ? ` - CEP: ${safeText(l.cep)}` : ''}{l.cidade ? ` - ${safeText(l.cidade)}/${safeText(l.estado || '')}` : ''}</p>
             <p className="col-span-2"><strong>Dados Bancários para Repasse:</strong> {safeText(l.dadosBancarios || l.banco || 'Não informado')}</p>
             <div className="flex gap-4">
               <p><strong>Comissão Imobiliária:</strong> {percComissao}% ({safeMoney(valorComissao)})</p>
@@ -267,16 +268,34 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
               <p><strong>RG:</strong> {safeText(t.rg)}</p>
             </div>
             <div className="flex gap-4">
-              <p><strong>Telefone:</strong> {safeText(t.telefone || t.celular || t.phone)}</p>
+              <p><strong>Telefone:</strong> {safeText(t.telefone || t.celular || t.phone)}{t.whatsapp ? ` / WhatsApp: ${safeText(t.whatsapp)}` : ''}</p>
               <p><strong>E-mail:</strong> {safeText(t.email)}</p>
             </div>
-            <p className="col-span-2"><strong>Endereço Residencial:</strong> {safeText(t.endereco || 'Não informado')}</p>
+            <p className="col-span-2"><strong>Endereço Residencial:</strong> {safeText(t.endereco || 'Não informado')}{t.cep ? ` - CEP: ${safeText(t.cep)}` : ''}{t.cidade ? ` - ${safeText(t.cidade)}/${safeText(t.estado || '')}` : ''}</p>
             <div className="flex gap-4">
               <p><strong>Status Pagamento Locatário:</strong> <span className="uppercase font-bold text-xs">{safeText(v.statusPagamentoLocatario || 'pendente')}</span></p>
               <p><strong>Saldo em Aberto Locatário:</strong> {safeMoney(v.saldoAbertoLocatario || 0)}</p>
             </div>
           </div>
         </section>
+
+        {/* SECTION II.1 - FIADOR (Opcional - Se Houver) */}
+        {dados.fiador?.nome && (
+          <section className="space-y-1">
+            <h3 className="font-bold uppercase bg-gray-50 px-2 py-0.5 border-l-2 border-primary-black text-[9px]">II.1 - Dados do Fiador</h3>
+            <div className="grid grid-cols-2 gap-y-0.5 gap-x-4 pl-2">
+              <p className="col-span-2"><strong>Nome Completo:</strong> {safeText(dados.fiador.nome)}</p>
+              <div className="flex gap-4">
+                <p><strong>CPF/CNPJ:</strong> {safeText(dados.fiador.cpfCnpj)}</p>
+                <p><strong>Telefone:</strong> {safeText(dados.fiador.telefone)}</p>
+              </div>
+              <div className="flex gap-4">
+                <p><strong>E-mail:</strong> {safeText(dados.fiador.email)}</p>
+                <p><strong>Endereço:</strong> {safeText(dados.fiador.endereco || 'Não informado')}</p>
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* SECTION III - IMÓVEL */}
         <section className="space-y-1">
@@ -380,9 +399,9 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
           <p><strong>RG:</strong> {dados.proponente?.rg}</p>
           <p><strong>Estado Civil:</strong> {dados.proponente?.estadoCivil}</p>
           <p><strong>Profissão:</strong> {dados.proponente?.profissao}</p>
-          <p><strong>Telefone:</strong> {dados.proponente?.telefone}</p>
-          <p className="col-span-2"><strong>Endereço:</strong> {dados.proponente?.endereco}</p>
-          <p className="col-span-2"><strong>E-mail:</strong> {dados.proponente?.email}</p>
+          <p><strong>Telefone:</strong> {dados.proponente?.telefone}{dados.proponente?.whatsapp ? ` / WhatsApp: ${dados.proponente?.whatsapp}` : ''}</p>
+          <p className="col-span-2"><strong>E-mail:</strong> {dados.proponente?.email || '---'}</p>
+          <p className="col-span-2"><strong>Endereço:</strong> {dados.proponente?.endereco || '---'}{dados.proponente?.cep ? ` - CEP: ${dados.proponente?.cep}` : ''}{dados.proponente?.cidade ? ` - ${dados.proponente?.cidade}/${dados.proponente?.estado || ''}` : ''}</p>
           
           {dados.proponente?.estadoCivil === 'Casado(a)' && (
             <>
@@ -463,8 +482,9 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
           <p><strong>RG:</strong> {dados.vendedor?.rg}</p>
           <p><strong>Estado Civil:</strong> {dados.vendedor?.estadoCivil}</p>
           <p><strong>Profissão:</strong> {dados.vendedor?.profissao}</p>
-          <p><strong>Telefone:</strong> {dados.vendedor?.telefone}</p>
-          <p className="col-span-2"><strong>Endereço:</strong> {dados.vendedor?.endereco}</p>
+          <p><strong>Telefone:</strong> {dados.vendedor?.telefone}{dados.vendedor?.whatsapp ? ` / WhatsApp: ${dados.vendedor?.whatsapp}` : ''}</p>
+          <p className="col-span-2"><strong>E-mail:</strong> {dados.vendedor?.email || '---'}</p>
+          <p className="col-span-2"><strong>Endereço:</strong> {dados.vendedor?.endereco || '---'}{dados.vendedor?.cep ? ` - CEP: ${dados.vendedor?.cep}` : ''}{dados.vendedor?.cidade ? ` - ${dados.vendedor?.cidade}/${dados.vendedor?.estado || ''}` : ''}</p>
         </div>
       </section>
 
@@ -526,10 +546,14 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
       <section className="section avoid-break">
         <h3 className="section-title">I - Identificação da Parte que Manifesta o Aceite</h3>
         <div className="grid grid-cols-2 gap-y-1.5 gap-x-6">
-          <p><strong>Nome Completo:</strong> {dados.aceitante?.nome}</p>
-          <p><strong>CPF:</strong> {dados.aceitante?.cpf}</p>
-          <p><strong>Telefone:</strong> {dados.aceitante?.telefone}</p>
-          <p className="col-span-2"><strong>Endereço Residencial:</strong> {dados.aceitante?.endereco}</p>
+          <p><strong>Nome Completo:</strong> {dados.aceitante?.nome || '---'}</p>
+          <p><strong>CPF:</strong> {dados.aceitante?.cpf || '---'}</p>
+          <p><strong>RG:</strong> {dados.aceitante?.rg || '---'}</p>
+          <p><strong>Estado Civil:</strong> {dados.aceitante?.estadoCivil || '---'}</p>
+          <p><strong>Profissão:</strong> {dados.aceitante?.profissao || '---'}</p>
+          <p><strong>Telefone:</strong> {dados.aceitante?.telefone || '---'}{dados.aceitante?.whatsapp ? ` / WhatsApp: ${dados.aceitante?.whatsapp}` : ''}</p>
+          <p className="col-span-2"><strong>E-mail:</strong> {dados.aceitante?.email || '---'}</p>
+          <p className="col-span-2"><strong>Endereço Residencial:</strong> {dados.aceitante?.endereco || '---'}{dados.aceitante?.cep ? ` - CEP: ${dados.aceitante?.cep}` : ''}{dados.aceitante?.cidade ? ` - ${dados.aceitante?.cidade}/${dados.aceitante?.estado || ''}` : ''}</p>
         </div>
       </section>
 
@@ -572,15 +596,117 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
     </div>
   );
 
+  const renderArrasConfirmatorios = () => {
+    const comp = dados.proponente || {};
+    const vend = dados.vendedor || (contract as any).vendedor || {};
+    const arr = dados.arras || {};
+    const imov = dados.imovel || {};
+
+    return (
+      <div className="pdf-compact-content relative z-10 w-full">
+        <div className="pdf-document-title font-display font-black text-black">
+          CONTRATO DE ARRAS CONFIRMATÓRIAS E COMPROMISSO DE COMPRA E VENDA
+        </div>
+
+        {/* COMPRADOR */}
+        <section className="section avoid-break">
+          <h3 className="section-title">I - Comprador / Proponente</h3>
+          <div className="grid grid-cols-2 gap-y-1 gap-x-6">
+            <p><strong>Nome:</strong> {safeText(contract.nomeCliente || comp.nome)}</p>
+            <p><strong>CPF/CNPJ:</strong> {safeText(comp.cpf || comp.cpfCnpj || (contract as any).comprador?.documento || "---")}</p>
+            <p><strong>RG:</strong> {safeText(comp.rg || (contract as any).comprador?.rg || "---")}</p>
+            <p><strong>Estado Civil:</strong> {safeText(comp.estadoCivil || (contract as any).comprador?.estadoCivil || "---")}</p>
+            <p><strong>Profissão:</strong> {safeText(comp.profissao || (contract as any).comprador?.profissao || "---")}</p>
+            <p><strong>Telefone:</strong> {safeText(comp.telefone || (contract as any).comprador?.telefone || "---")}{comp.whatsapp ? ` / WhatsApp: ${safeText(comp.whatsapp)}` : ''}</p>
+            <p className="col-span-2"><strong>E-mail:</strong> {safeText(comp.email || (contract as any).comprador?.email || "---")}</p>
+            <p className="col-span-2"><strong>Endereço:</strong> {safeText(comp.endereco || (contract as any).comprador?.endereco || "---")}{comp.cep ? ` - CEP: ${safeText(comp.cep)}` : ''}{comp.cidade ? ` - ${safeText(comp.cidade)}/${safeText(comp.estado || '')}` : ''}</p>
+          </div>
+        </section>
+
+        {/* VENDEDOR */}
+        <section className="section avoid-break">
+          <h3 className="section-title">II - Vendedor / Proprietário</h3>
+          <div className="grid grid-cols-2 gap-y-1 gap-x-6">
+            <p><strong>Nome:</strong> {safeText(contract.nomeVendedor || vend.nome)}</p>
+            <p><strong>CPF/CNPJ:</strong> {safeText(vend.cpf || vend.cpfCnpj || (contract as any).vendedor?.documento || "---")}</p>
+            <p><strong>RG:</strong> {safeText(vend.rg || (contract as any).vendedor?.rg || "---")}</p>
+            <p><strong>Estado Civil:</strong> {safeText(vend.estadoCivil || (contract as any).vendedor?.estadoCivil || "---")}</p>
+            <p><strong>Profissão:</strong> {safeText(vend.profissao || (contract as any).vendedor?.profissao || "---")}</p>
+            <p><strong>Telefone:</strong> {safeText(vend.telefone || (contract as any).vendedor?.telefone || "---")}{vend.whatsapp ? ` / WhatsApp: ${safeText(vend.whatsapp)}` : ''}</p>
+            <p className="col-span-2"><strong>E-mail:</strong> {safeText(vend.email || (contract as any).vendedor?.email || "---")}</p>
+            <p className="col-span-2"><strong>Endereço:</strong> {safeText(vend.endereco || (contract as any).vendedor?.endereco || "---")}{vend.cep ? ` - CEP: ${safeText(vend.cep)}` : ''}{vend.cidade ? ` - ${safeText(vend.cidade)}/${safeText(vend.estado || '')}` : ''}</p>
+          </div>
+        </section>
+
+        {/* IMÓVEL */}
+        <section className="section avoid-break">
+          <h3 className="section-title">III - Identificação do Imóvel</h3>
+          <div className="grid grid-cols-2 gap-y-1 gap-x-6">
+            <p className="col-span-2"><strong>Endereço:</strong> {safeText(contract.enderecoImovel || imov.endereco || "Não informado")}</p>
+            <p><strong>Matrícula nº:</strong> {safeText(imov.matricula || "Não informada")}</p>
+            <p><strong>CRI:</strong> {safeText(imov.cri || "Não informado")}</p>
+            <p><strong>Tipo:</strong> {safeText(imov.tipo || "Não informado")}</p>
+            <p className="col-span-2"><strong>Descrição:</strong> {safeText(imov.descricao || imov.titulo || "")}</p>
+          </div>
+        </section>
+
+        {/* DADOS DAS ARRAS */}
+        <section className="section avoid-break">
+          <h3 className="section-title">IV - Condições das Arras e do Negócio</h3>
+          <div className="grid grid-cols-2 gap-y-1 gap-x-6 bg-gray-50/50 p-2 rounded border border-gray-100">
+            <p><strong>Valor Total do Imóvel:</strong> {safeMoney(arr.valorImovel || contract.valorImovel || contract.valor)}</p>
+            <p><strong>Valor das Arras / Sinal:</strong> {safeMoney(arr.valorArras || (contract as any).valorArras)}</p>
+            <p><strong>Forma de Pagamento:</strong> {safeText(arr.formaPagamentoArras || (contract as any).formaPagamentoArras || "Não informada")}</p>
+            <p><strong>Data do Pagamento:</strong> {safeText(arr.dataPagamentoArras || (contract as any).dataPagamentoArras || "Não informada")}</p>
+            <p><strong>Prazo Contrato Definitivo:</strong> {safeText(arr.prazoContratoDefinitivo || (contract as any).prazoContratoDefinitivo || "Não informado")}</p>
+            <p><strong>Prazo para Escritura:</strong> {safeText(arr.prazoEscritura || (contract as any).prazoEscritura || "Não informado")}</p>
+            {arr.condicoesDevolucao && <p className="col-span-2"><strong>Condições para Devolução:</strong> {safeText(arr.condicoesDevolucao)}</p>}
+            {arr.condicoesDesistenciaComprador && <p className="col-span-2"><strong>Desistência do Comprador:</strong> {safeText(arr.condicoesDesistenciaComprador)}</p>}
+            {arr.condicoesDesistenciaVendedor && <p className="col-span-2"><strong>Desistência do Vendedor:</strong> {safeText(arr.condicoesDesistenciaVendedor)}</p>}
+            {contract.observacoes && <p className="col-span-2"><strong>Observações Adicionais:</strong> {safeText(contract.observacoes)}</p>}
+          </div>
+        </section>
+
+        {renderClausulasSelecionadas()}
+
+        <div className="mt-4 text-right font-bold text-[9.5px]">
+          {safeText(dados.local || 'Balneário Camboriú')}, {safeText(dados.data || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }))}
+        </div>
+
+        <div className="pdf-signatures shrink-0">
+          <div className="flex flex-col justify-end">
+            <div className="pdf-signature-line">
+              {safeText(contract.nomeCliente || comp.nome || 'COMPRADOR')}
+            </div>
+            <div className="pdf-signature-role">Comprador</div>
+          </div>
+          <div className="flex flex-col justify-end">
+            <div className="pdf-signature-line">
+              {safeText(contract.nomeVendedor || vend.nome || 'VENDEDOR')}
+            </div>
+            <div className="pdf-signature-role">Vendedor / Proprietário</div>
+          </div>
+          <div className="flex flex-col justify-end col-span-2 max-w-[200px] mx-auto w-full mt-2">
+            <div className="pdf-signature-line">
+              {safeText(empresa.nome)}
+            </div>
+            <div className="pdf-signature-role">Intermediadora / Testemunha</div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div 
+      id="contrato-pdf"
       ref={printRef}
-      className={`bg-white mx-auto print:shadow-none print:m-0 print:p-0 relative flex flex-col ${isCompact ? 'pdf-compact' : ''}`}
+      className={`pdf-export bg-white mx-auto print:shadow-none print:m-0 print:p-0 relative flex flex-col ${isCompact ? 'pdf-compact' : ''}`}
       style={{
         width: '210mm',
         minHeight: '297mm',
         padding: isCompact ? '28px 42px 36px 42px' : '14mm',
-        boxShadow: '0 0 40px rgba(0,0,0,0.1)',
+        boxShadow: 'none',
         boxSizing: 'border-box'
       }}
     >
@@ -592,6 +718,7 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
         {tipoContrato === 'contraproposta' && renderContraproposta()}
         {tipoContrato === 'aceite' && renderAceite()}
         {tipoContrato === 'locacao_temporaria' && renderLocacaoTemporaria()}
+        {tipoContrato === 'arras_confirmatorios' && renderArrasConfirmatorios()}
       </div>
 
       {isCompact ? renderCompactFooter(1) : renderFooter(1)}
