@@ -47,7 +47,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 const EXPENSE_CATEGORIES = [
-  'Anúncios', 'Comissão', 'Manutenção', 'Sistemas', 'Impostos', 'Escritório', 'Prestadores', 'Deslocamento', 'Outros'
+  'Anúncios', 'Comissão', 'Manutenção', 'Sistemas', 'Impostos', 'Escritório', 'Prestadores', 'Deslocamento', 'Operacional', 'Outros'
 ];
 
 const REVENUE_CATEGORIES = [
