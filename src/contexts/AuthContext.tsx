@@ -95,26 +95,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           
           // Check both collections as per requirement (Optimized with Promise.all)
           const [adminSnap1, adminSnap2] = await Promise.all([
-            getDoc(doc(db, "administradores", email)),
-            getDoc(doc(db, "admins", email))
+            getDoc(doc(db, "admins", email)),
+            getDoc(doc(db, "administradores", email))
           ]);
           
-          const adminData1 = adminSnap1.exists() ? adminSnap1.data() : null;
-          const adminData2 = adminSnap2.exists() ? adminSnap2.data() : null;
-          
           const adminValido = 
-            (adminData1?.ativo === true) || 
-            (adminData2?.ativo === true);
+            (adminSnap1.data()?.ativo === true) || 
+            (adminSnap2.data()?.ativo === true);
 
           // Required test logs
           console.log("Usuário logado:", currentUser.email);
           console.log("Email normalizado:", email);
-          console.log("Buscando em administradores:", `administradores/${email}`);
-          console.log("Buscando em admins:", `admins/${email}`);
-          console.log("Existe em administradores:", adminSnap1.exists());
-          console.log("Dados administradores:", adminData1);
-          console.log("Existe em admins:", adminSnap2.exists());
-          console.log("Dados admins:", adminData2);
+          console.log("Buscando admin em:", `admins/${email}`);
+          console.log("Buscando admin em:", `administradores/${email}`);
+          console.log("Existe em admins:", adminSnap1.exists());
+          console.log("Dados admins:", adminSnap1.data());
+          console.log("Existe em administradores:", adminSnap2.exists());
+          console.log("Dados administradores:", adminSnap2.data());
           console.log("Admin válido:", adminValido);
 
           const endTime = performance.now();

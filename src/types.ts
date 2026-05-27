@@ -352,6 +352,8 @@ export interface OptionItem {
   ordem: number;
   cidade?: string; // For neighborhoods
   tipo?: string; // For price ranges or other categorizations
+  label?: string; // Standard format for printed sheet
+  value?: string | number; // Standard format for printed sheet
 }
 
 export interface PropertyOptions {

@@ -99,7 +99,8 @@ export function useOptions() {
     const categories = [
       'tiposImovel', 'tiposNegocio', 'statusImovel', 'cidades', 
       'faixasPreco', 'caracteristicas', 'instalacoes', 'acabamentos', 
-      'lazer', 'localizacoes'
+      'lazer', 'localizacoes', 'ambientes', 'caracteristicasApartamento',
+      'caracteristicasEmpreendimento', 'localizacao'
     ];
 
     const unsubs = categories.map(category => {

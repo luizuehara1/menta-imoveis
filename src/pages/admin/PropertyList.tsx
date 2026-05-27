@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { collection, query, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+import { useAuth } from '../../contexts/AuthContext';
 import { 
   Plus, 
   Search, 
@@ -44,22 +45,32 @@ const SkeletonRow = () => (
 );
 
 export default function AdminPropertyList() {
+  const { user, isAdmin } = useAuth();
   const [properties, setProperties] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     fetchProperties();
-  }, []);
+  }, [user, isAdmin]);
 
   const fetchProperties = async () => {
     setLoading(true);
     try {
+      console.log("Usuário logado:", user?.email);
+      console.log("É admin:", isAdmin);
+      console.log("Buscando imóveis como:", isAdmin ? "ADMIN - TODOS" : "CORRETOR - FILTRADOS");
+
       // Don't use orderBy here to ensure ALL docs (even ghosts missing updatedAt) are fetched
       const q = query(collection(db, 'imoveis'));
       const snap = await getDocs(q);
       const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
       
+      console.log("Total de imóveis carregados:", data.length);
+      if (isAdmin && data.length === 0) {
+        console.error("ADMIN carregou 0 imóveis! Erro com o caminho de consulta Firestore da coleção 'imoveis'");
+      }
+
       // Sort in memory safely: Incomplete properties first, then by date
       data.sort((a, b) => {
         const aValid = isValidPublicProperty(a);
@@ -76,6 +87,7 @@ export default function AdminPropertyList() {
       setProperties(data);
     } catch (error) {
       console.error("Error fetching properties:", error);
+      console.log("Erro ao carregar imóveis. Caminho query: imoveis");
       setProperties([]);
     } finally {
       setLoading(false);

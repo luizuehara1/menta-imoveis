@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { collection, query, getDocs, addDoc, serverTimestamp, deleteDoc, doc, orderBy, where, updateDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+import { useAuth } from '../../contexts/AuthContext';
 import { 
   DollarSign, 
   TrendingUp, 
@@ -150,6 +151,7 @@ const calcularComissaoImobiliaria = (locacao: any) => {
 };
 
 export default function AdminFinance() {
+  const { isAdmin } = useAuth();
   const { settings } = useSettings();
   const empresa = (settings?.empresa || {}) as any;
   const [activeTab, setActiveTab] = useState<'todos' | 'entradas' | 'saidas'>('todos');
@@ -312,6 +314,10 @@ export default function AdminFinance() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAdmin) {
+      alert("Usuário sem permissão administrativa.");
+      return;
+    }
     setLoading(true);
     try {
       // 1. Prevent duplicate commission entries for this lease

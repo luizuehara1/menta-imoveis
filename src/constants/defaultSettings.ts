@@ -122,34 +122,51 @@ export const DEFAULT_OPTIONS: Record<string, OptionItem[]> = {
     { id: "loc-20k", nome: "Locação: Até R$ 20.000", valor: 20000, ativo: true, ordem: 11, tipo: 'locacao' }
   ],
   caracteristicas: [
-    "Área de Luz", "Box no banheiro", "Churrasqueira", "Copa", "Dependência de empregados", "Entrada lateral",
-    "Frente para o mar", "Imóvel de esquina", "Lavabo", "Mezanino", "Piscina", "Quintal", "Sala de jantar",
-    "SPA com Deck", "Varanda", "Área de serviço", "Bunker Subterrâneo", "Closet", "Cozinha", "Despensa",
-    "Escritório", "Geminada", "Jacuzzi", "Lavanderia", "Pé direito alto", "Ponto de ar condicionado nos quartos",
-    "Sala de almoço", "Sala de TV", "Suíte master", "WC de empregados", "Área Gourmet com Churrasqueira",
-    "Casa de esquina", "Closet Sr. e Closet Srt.", "Cozinha americana", "Edícula", "Espelho nos banheiros",
-    "Hidro", "Lareira", "Living with pé direito duplo", "Pintura with textura projetada", "Preparação para Boiler",
-    "Sala de estar", "Sala íntima", "Terraço"
-  ].map((nome, index) => ({ id: `feat-${index}`, nome, valor: nome, ativo: true, ordem: index })),
+    "Dormitórios", "Suítes", "Demi-suíte", "Master com closet", "Hidro", "Closet",
+    "Dependência de empregada", "WC empregada", "WC social", "Lavabo", "Escritório",
+    "Área de serviço", "Número de salas", "Quantidade de vagas privativas", "Box privativo",
+    "Vaga numerada", "Número de vagas", "Vazio", "Mobiliado", "Semi mobiliado",
+    "Alugado", "Desocupado", "Mora no local", "Financiamento", "Documentação", "Permuta",
+    "Vista total mar", "Vista parcial mar", "Piscina privativa", "Ar condicionado",
+    "Gás central", "Elevador", "Gerador", "Churrasqueira", "Sacada aberta", "Sacada integrada",
+    "Face do apartamento Norte", "Face do apartamento Sul", "Face do apartamento Leste", "Face do apartamento Oeste",
+    "Posição relativa do apartamento Frente", "Posição relativa do apartamento Lateral", "Posição relativa do apartamento Meio", "Posição relativa do apartamento Fundos"
+  ].map((nome, index) => ({ id: `feat-${index}`, nome, label: nome, valor: nome, value: nome, ativo: true, ordem: index })),
   instalacoes: [
-    "Acabamento da iluminação em LED", "Aquecedor de toalhas", "Aquecimento central", "Armário de cozinha",
-    "Canil", "Energia Fotovoltaica", "Fechadura Digital", "Hidromassagem", "Piscina", "Portão eletrônico",
-    "Sistema de alarme", "Telefone", "Torneira Monocomando na Cozinha", "Acesso para deficientes",
-    "Aquecedor nas torneiras", "Aquecimento de piso", "Armário embutido", "Cerca Elétrica",
-    "Fachada de Ripado em PVC", "Fechadura Eletrônica", "Infra para instalação de ar condicionado",
-    "Poço artesiano", "Recirculação de água quente", "Sistema de segurança", "Telefone DDR",
-    "Tratamento acústico", "Antena parabólica", "Aquecedor solar", "Ar condicionado", "Câmera de segurança",
-    "Desembaçador de espelho", "Fechadura biométrica", "Fogo de chão / Fireplace", "Móveis planejados",
-    "Porta de Ripado em Alumínio", "Sistema contra incêndio", "Suíte com chuveiro duplo para casal",
-    "Tomada para carro elétrico"
-  ].map((nome, index) => ({ id: `inst-${index}`, nome, valor: nome, ativo: true, ordem: index })),
-  acabamentos: [
-    "Carpete", "Decorado", "Mármore", "Piso frio", "Carpete de madeira", "Gesso", "Pintura Projetada",
-    "Piso laminado", "Cerâmica", "Granito", "Piso de madeira", "Porcelanato"
-  ].map((nome, index) => ({ id: `fin-${index}`, nome, valor: nome, ativo: true, ordem: index })),
+    "Ar condicionado", "Gás central", "Elevador", "Gerador", "Portaria 24h", "Bicicletário", "Box de praia"
+  ].map((nome, index) => ({ id: `inst-${index}`, nome, label: nome, valor: nome, value: nome, ativo: true, ordem: index })),
+  acabamentos: [],
   lazer: [
-    "Academia", "Churrasqueira", "Lago para pesca", "Playground", "Salão de festas", "Sauna seca",
-    "Área gourmet coletiva", "Espaço para pet", "Mercado Smart", "Quadra poliesportiva", "Salão de jogos",
-    "Campo Society", "Jardim", "Piscina", "Quintal", "Sauna à vapor"
-  ].map((nome, index) => ({ id: `leisure-${index}`, nome, valor: nome, ativo: true, ordem: index }))
+    "Salão de festa", "Sala de jogos", "Espaço gourmet", "Piscina adulta", "Piscina infantil",
+    "Sauna", "Spa", "Academia", "Cinema", "Quadra poliesportiva", "Brinquedoteca",
+    "Playground", "Bicicletário", "Portaria 24h", "Box de praia"
+  ].map((nome, index) => ({ id: `leisure-${index}`, nome, label: nome, valor: nome, value: nome, ativo: true, ordem: index })),
+  localizacoes: [
+    "Frente mar", "Quadra mar", "Barra Norte", "Barra Sul", "Centro", "Pioneiros",
+    "Nações", "Ariribá", "Entre Brasil e 3ª Av", "Entre Brasil e Estado", "Entre 3ª Av e 4ª Av",
+    "Entre Estados e M. Luther", "Entre 4ª Av e Marginal", "Entre M. Luther e Palestina"
+  ].map((nome, index) => ({ id: `locat-${index}`, nome, label: nome, valor: nome, value: nome, ativo: true, ordem: index })),
+  ambientes: [
+    "Dormitórios", "Suítes", "Demi-suíte", "Master com closet", "Hidro", "Closet",
+    "Dependência de empregada", "WC empregada", "WC social", "Lavabo", "Escritório",
+    "Área de serviço", "Número de salas", "Quantidade de vagas privativas", "Box privativo",
+    "Vaga numerada", "Número de vagas", "Vazio", "Mobiliado", "Semi mobiliado",
+    "Alugado", "Desocupado", "Mora no local", "Financiamento", "Documentação", "Permuta"
+  ].map((nome, index) => ({ id: `amb-${index}`, nome, label: nome, valor: nome, value: nome, ativo: true, ordem: index })),
+  caracteristicasApartamento: [
+    "Vista total mar", "Vista parcial mar", "Piscina privativa", "Ar condicionado",
+    "Gás central", "Elevador", "Gerador", "Churrasqueira", "Sacada aberta", "Sacada integrada",
+    "Face do apartamento Norte", "Face do apartamento Sul", "Face do apartamento Leste", "Face do apartamento Oeste",
+    "Posição relativa do apartamento Frente", "Posição relativa do apartamento Lateral", "Posição relativa do apartamento Meio", "Posição relativa do apartamento Fundos"
+  ].map((nome, index) => ({ id: `apt-${index}`, nome, label: nome, valor: nome, value: nome, ativo: true, ordem: index })),
+  caracteristicasEmpreendimento: [
+    "Salão de festa", "Sala de jogos", "Espaço gourmet", "Piscina adulta", "Piscina infantil",
+    "Sauna", "Spa", "Academia", "Cinema", "Quadra poliesportiva", "Brinquedoteca",
+    "Playground", "Bicicletário", "Portaria 24h", "Box de praia"
+  ].map((nome, index) => ({ id: `emp-${index}`, nome, label: nome, valor: nome, value: nome, ativo: true, ordem: index })),
+  localizacao: [
+    "Frente mar", "Quadra mar", "Barra Norte", "Barra Sul", "Centro", "Pioneiros",
+    "Nações", "Ariribá", "Entre Brasil e 3ª Av", "Entre Brasil e Estado", "Entre 3ª Av e 4ª Av",
+    "Entre Estados e M. Luther", "Entre 4ª Av e Marginal", "Entre M. Luther e Palestina"
+  ].map((nome, index) => ({ id: `loc-${index}`, nome, label: nome, valor: nome, value: nome, ativo: true, ordem: index }))
 };

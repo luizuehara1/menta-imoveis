@@ -56,7 +56,7 @@ export default function AdminContractForm() {
   const [searchParams] = useSearchParams();
   const isPreviewOnly = searchParams.get('preview') === 'true';
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const { settings } = useSettings();
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -350,6 +350,10 @@ export default function AdminContractForm() {
   };
 
   const saveContract = async (finalizar = false) => {
+    if (!isAdmin) {
+      showToast('Usuário sem permissão administrativa.', 'error');
+      return;
+    }
     if (!contract.nomeCliente || !contract.valor) {
       showToast('Por favor, preencha o nome do cliente e o valor.', 'error');
       return;

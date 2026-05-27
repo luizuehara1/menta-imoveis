@@ -17,6 +17,7 @@ import {
   db, 
   auth 
 } from '../../lib/firebase';
+import { useAuth } from '../../contexts/AuthContext';
 import { 
   Save, 
   ArrowLeft, 
@@ -170,6 +171,7 @@ function normalizeImages(imovel: any, aplicarPadrao = true): any[] {
 }
 
 export default function AdminPropertyForm() {
+  const { isAdmin } = useAuth();
   const { options, loading: optionsLoading } = useOptions();
   const { id } = useParams();
   const navigate = useNavigate();
@@ -676,6 +678,10 @@ export default function AdminPropertyForm() {
   }, [formValues, images, videos, mainImage, id, isDirty]);
 
   const onSubmit = async (data: any) => {
+    if (!isAdmin) {
+      triggerToast("Usuário sem permissão administrativa.", "error");
+      return;
+    }
     setLoading(true);
     try {
       console.log("Cloudinary cloud:", import.meta.env.VITE_CLOUDINARY_CLOUD_NAME);
@@ -1570,62 +1576,145 @@ export default function AdminPropertyForm() {
                </div>
             </div>
             
-            <div className="space-y-6">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-4">
-                <div>
-                  <h4 className="font-bold text-xl text-primary-black">Características</h4>
-                  <p className="text-sm text-gray-500">Selecione os atributos que melhor definem este imóvel.</p>
+            <div className="space-y-10">
+              {/* Seção 1: Ambientes */}
+              <div className="space-y-6">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-4">
+                  <div>
+                    <h4 className="font-bold text-xl text-primary-black">Ambientes</h4>
+                    <p className="text-sm text-gray-500">Marque os ambientes físicos presentes no imóvel.</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        const allAmb = (options.ambientes || []).map((o: any) => o.nome);
+                        const current = watch('caracteristicas') || [];
+                        const merged = Array.from(new Set([...current, ...allAmb]));
+                        setValue('caracteristicas', merged);
+                      }}
+                      className="text-xs font-bold px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gold/10 hover:border-gold transition-colors"
+                    >
+                      Selecionar Todos
+                    </button>
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        const allAmb = (options.ambientes || []).map((o: any) => o.nome);
+                        const current = watch('caracteristicas') || [];
+                        const remaining = current.filter((item: string) => !allAmb.includes(item));
+                        setValue('caracteristicas', remaining);
+                      }}
+                      className="text-xs font-bold px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gold/10 shadow-sm hover:border-gold transition-colors"
+                    >
+                      Limpar Ambientes
+                    </button>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <button 
-                    type="button" 
-                    onClick={() => selectAll('caracteristicas', 'caracteristicas')}
-                    className="text-xs font-bold px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
-                  >
-                    Selecionar tudo
-                  </button>
-                  <button 
-                    type="button" 
-                    onClick={() => clearAll('caracteristicas')}
-                    className="text-xs font-bold px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
-                  >
-                    Limpar seleção
-                  </button>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
+                  {(options.ambientes || []).map((opt: any, idx: number) => (
+                    <label 
+                      key={opt.id || `amb-${opt.nome}-${idx}`} 
+                      className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer group ${
+                        (watch('caracteristicas') || []).includes(opt.nome)
+                        ? 'border-gold bg-gold/5'
+                        : 'border-gray-100 hover:border-gray-200 bg-gray-50/30'
+                      }`}
+                    >
+                      <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
+                        (watch('caracteristicas') || []).includes(opt.nome)
+                        ? 'bg-gold border-gold text-primary-black'
+                        : 'bg-white border-gray-300 group-hover:border-gold'
+                      }`}>
+                        <input 
+                          type="checkbox" 
+                          value={opt.nome} 
+                          {...register('caracteristicas')} 
+                          className="hidden" 
+                        />
+                        {(watch('caracteristicas') || []).includes(opt.nome) && <Check size={14} strokeWidth={4} />}
+                      </div>
+                      <span className={`text-sm font-medium transition-colors ${
+                        (watch('caracteristicas') || []).includes(opt.nome)
+                        ? 'text-primary-black'
+                        : 'text-gray-600 group-hover:text-primary-black'
+                      }`}>
+                        {opt.nome}
+                      </span>
+                    </label>
+                  ))}
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
-                {(options.caracteristicas || []).map((opt, idx) => (
-                  <label 
-                    key={opt.id || `char-${opt.nome}-${idx}`} 
-                    className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer group ${
-                      (watch('caracteristicas') || []).includes(opt.nome)
-                      ? 'border-gold bg-gold/5'
-                      : 'border-gray-100 hover:border-gray-200 bg-gray-50/30'
-                    }`}
-                  >
-                    <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
-                      (watch('caracteristicas') || []).includes(opt.nome)
-                      ? 'bg-gold border-gold text-primary-black'
-                      : 'bg-white border-gray-300 group-hover:border-gold'
-                    }`}>
-                      <input 
-                        type="checkbox" 
-                        value={opt.nome} 
-                        {...register('caracteristicas')} 
-                        className="hidden" 
-                      />
-                      {(watch('caracteristicas') || []).includes(opt.nome) && <Check size={14} strokeWidth={4} />}
-                    </div>
-                    <span className={`text-sm font-medium transition-colors ${
-                      (watch('caracteristicas') || []).includes(opt.nome)
-                      ? 'text-primary-black'
-                      : 'text-gray-600 group-hover:text-primary-black'
-                    }`}>
-                      {opt.nome}
-                    </span>
-                  </label>
-                ))}
+              {/* Seção 2: Características do Apartamento */}
+              <div className="space-y-6 pt-6">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-4">
+                  <div>
+                    <h4 className="font-bold text-xl text-primary-black">Características do Apartamento</h4>
+                    <p className="text-sm text-gray-500">Atributos e diferenciais exclusivos da unidade.</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        const allApt = (options.caracteristicasApartamento || []).map((o: any) => o.nome);
+                        const current = watch('caracteristicas') || [];
+                        const merged = Array.from(new Set([...current, ...allApt]));
+                        setValue('caracteristicas', merged);
+                      }}
+                      className="text-xs font-bold px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gold/10 hover:border-gold transition-colors"
+                    >
+                      Selecionar Todas
+                    </button>
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        const allApt = (options.caracteristicasApartamento || []).map((o: any) => o.nome);
+                        const current = watch('caracteristicas') || [];
+                        const remaining = current.filter((item: string) => !allApt.includes(item));
+                        setValue('caracteristicas', remaining);
+                      }}
+                      className="text-xs font-bold px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gold/10 shadow-sm hover:border-gold transition-colors"
+                    >
+                      Limpar Características
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
+                  {(options.caracteristicasApartamento || []).map((opt: any, idx: number) => (
+                    <label 
+                      key={opt.id || `apt-${opt.nome}-${idx}`} 
+                      className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer group ${
+                        (watch('caracteristicas') || []).includes(opt.nome)
+                        ? 'border-gold bg-gold/5'
+                        : 'border-gray-100 hover:border-gray-200 bg-gray-50/30'
+                      }`}
+                    >
+                      <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
+                        (watch('caracteristicas') || []).includes(opt.nome)
+                        ? 'bg-gold border-gold text-primary-black'
+                        : 'bg-white border-gray-300 group-hover:border-gold'
+                      }`}>
+                        <input 
+                          type="checkbox" 
+                          value={opt.nome} 
+                          {...register('caracteristicas')} 
+                          className="hidden" 
+                        />
+                        {(watch('caracteristicas') || []).includes(opt.nome) && <Check size={14} strokeWidth={4} />}
+                      </div>
+                      <span className={`text-sm font-medium transition-colors ${
+                        (watch('caracteristicas') || []).includes(opt.nome)
+                        ? 'text-primary-black'
+                        : 'text-gray-600 group-hover:text-primary-black'
+                      }`}>
+                        {opt.nome}
+                      </span>
+                    </label>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -1821,8 +1910,8 @@ export default function AdminPropertyForm() {
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-4">
               <div>
-                <h4 className="font-bold text-xl text-primary-black">Lazer</h4>
-                <p className="text-sm text-gray-500">Áreas de convivência e infraestrutura recreativa.</p>
+                <h4 className="font-bold text-xl text-primary-black">Características do Empreendimento</h4>
+                <p className="text-sm text-gray-500">Áreas de lazer, conveniência e infraestrutura do condomínio.</p>
               </div>
               <div className="flex gap-2">
                 <button 

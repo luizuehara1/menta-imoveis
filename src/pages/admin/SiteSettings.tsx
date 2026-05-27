@@ -25,8 +25,10 @@ import { DEFAULT_SITE_CONFIG, DEFAULT_OPTIONS } from '../../constants/defaultSet
 import { motion, AnimatePresence } from 'motion/react';
 import { SafeImage } from '../../components/ui/SafeImage';
 import { isValidImageUrl } from '../../lib/utils';
+import { useAuth } from '../../contexts/AuthContext';
 
 const SiteSettings = () => {
+  const { user, isAdmin } = useAuth();
   const [activeTab, setActiveTab] = useState('home');
   const [settings, setSettings] = useState<SiteConfig>(DEFAULT_SITE_CONFIG);
   const [options, setOptions] = useState<Record<string, OptionItem[]>>(DEFAULT_OPTIONS);
@@ -115,7 +117,8 @@ const SiteSettings = () => {
       const categories = [
         'tiposImovel', 'tiposNegocio', 'statusImovel', 'cidades', 'bairros', 
         'faixasPreco', 'caracteristicas', 'instalacoes', 'acabamentos', 
-        'lazer', 'localizacoes'
+        'lazer', 'localizacoes', 'ambientes', 'caracteristicasApartamento', 
+        'caracteristicasEmpreendimento', 'localizacao'
       ];
 
       const optionsData: Record<string, OptionItem[]> = { ...DEFAULT_OPTIONS };
@@ -153,6 +156,10 @@ const SiteSettings = () => {
 
   const saveSettings = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (!isAdmin) {
+      setMessage({ type: 'error', text: 'Usuário sem permissão administrativa.' });
+      return;
+    }
     if (saving) return;
 
     setSaving(true);
@@ -259,18 +266,75 @@ const SiteSettings = () => {
   };
 
   const saveOptions = async (category: string, items: OptionItem[]) => {
+    console.log("Usuário atual:", user?.email);
+    console.log("É admin:", isAdmin);
+
+    if (!isAdmin) {
+      setMessage({ type: 'error', text: 'Você não tem permissão para salvar opções.' });
+      return;
+    }
     setSaving(true);
+
+    const normalizeOptionText = (text: any) => {
+      return String(text || "").trim();
+    };
+
+    const slugifyOption = (text: any) => {
+      return String(text || "")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "");
+    };
+
     try {
+      const opcoesNormalizadas = (items || [])
+        .filter(item => {
+          const val = item.label || item.nome || item.value || item.valor;
+          return val !== undefined && val !== null && normalizeOptionText(val) !== "";
+        })
+        .map((item, index) => {
+          const label = normalizeOptionText(item.label || item.nome || item.value || item.valor);
+          const value = item.value !== undefined && item.value !== null ? item.value : (item.valor !== undefined && item.valor !== null ? item.valor : slugifyOption(label));
+
+          const cleanItem: any = {
+            id: item.id || Math.random().toString(36).substr(2, 9),
+            nome: label,
+            label,
+            valor: value,
+            value,
+            ativo: item.ativo !== false,
+            ordem: index
+          };
+
+          if (item.cidade !== undefined && item.cidade !== null && item.cidade !== "") {
+            cleanItem.cidade = item.cidade;
+          }
+          if (item.tipo !== undefined && item.tipo !== null && item.tipo !== "") {
+            cleanItem.tipo = item.tipo;
+          }
+
+          return cleanItem;
+        });
+
+      console.log("Salvando opções...");
+      console.log("Categoria ativa:", category);
+      console.log("Caminho Firestore usado:", `opcoes_imoveis/${category}`);
+      console.log("Dados enviados:", opcoesNormalizadas);
+
       await setDoc(doc(db, 'opcoes_imoveis', category), {
-        itens: items,
-        updatedAt: serverTimestamp()
-      });
-      setOptions(prev => ({ ...prev, [category]: items }));
-      setMessage({ type: 'success', text: 'Opções atualizadas com sucesso!' });
+        itens: opcoesNormalizadas,
+        updatedAt: serverTimestamp(),
+        atualizadoEm: serverTimestamp()
+      }, { merge: true });
+
+      setOptions(prev => ({ ...prev, [category]: opcoesNormalizadas }));
+      setMessage({ type: 'success', text: 'Opções salvas com sucesso.' });
       setTimeout(() => setMessage(null), 3000);
-    } catch (error) {
-      console.error("Error saving options:", error);
-      setMessage({ type: 'error', text: 'Erro ao salvar opções.' });
+    } catch (error: any) {
+      console.error("Erro ao salvar opções:", error.code, error.message, error);
+      setMessage({ type: 'error', text: `Erro ao salvar opções: ${error.message}` });
     } finally {
       setSaving(false);
     }
@@ -1046,6 +1110,10 @@ const OptionsManager = ({ type, options, onSave, saving }: {
       { label: 'Instalações', key: 'instalacoes', items: options.instalacoes || [] },
       { label: 'Acabamentos', key: 'acabamentos', items: options.acabamentos || [] },
       { label: 'Lazer', key: 'lazer', items: options.lazer || [] },
+      { label: 'Ambientes', key: 'ambientes', items: options.ambientes || [] },
+      { label: 'Características do Apartamento', key: 'caracteristicasApartamento', items: options.caracteristicasApartamento || [] },
+      { label: 'Características do Empreendimento', key: 'caracteristicasEmpreendimento', items: options.caracteristicasEmpreendimento || [] },
+      { label: 'Localização (Ficha)', key: 'localizacao', items: options.localizacao || [] },
     ]
   };
 
