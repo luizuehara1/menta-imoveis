@@ -78,12 +78,12 @@ service cloud.firestore {
     }
 
     // Protected Collections
-    match /clausulasContratos/{id} { allow read, write: if isAdmin(); }
-    match /locacoes/{id} { allow read, write: if isAdmin(); }
-    match /contratos/{id} { allow read, write: if isAdmin(); }
-    match /financeiro/{id} { allow read, write: if isAdmin(); }
-    match /gastos/{id} { allow read, write: if isAdmin(); }
-    match /receitas/{id} { allow read, write: if isAdmin(); }
+    match /clausulasContratos/{document=**} { allow read: if true; allow write: if isAdmin(); }
+    match /locacoes/{document=**} { allow read, write: if isAdmin(); }
+    match /contratos/{document=**} { allow read, write: if isAdmin(); }
+    match /financeiro/{document=**} { allow read, write: if isAdmin(); }
+    match /gastos/{document=**} { allow read, write: if isAdmin(); }
+    match /receitas/{document=**} { allow read, write: if isAdmin(); }
     match /fichas_visita/{id} { allow read, write: if isAdmin(); }
 
     match /administradores/{email} {

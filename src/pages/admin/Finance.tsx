@@ -161,46 +161,64 @@ export default function AdminFinance() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const financeiroSnap = await getDocs(query(collection(db, 'financeiro'), orderBy('data', 'desc')));
-      const legacyGastosSnap = await getDocs(query(collection(db, 'gastos'), orderBy('date', 'desc')));
-      const legacyReceitasSnap = await getDocs(query(collection(db, 'receitas'), orderBy('date', 'desc')));
+      let financeiroData: Array<FinanceRecord & { sourceCollection: string }> = [];
+      let legacyGastos: Array<FinanceRecord & { sourceCollection: string }> = [];
+      let legacyReceitas: Array<FinanceRecord & { sourceCollection: string }> = [];
 
-      const financeiroData = financeiroSnap.docs.map(doc => ({ 
-        id: doc.id, 
-        ...doc.data(), 
-        sourceCollection: 'financeiro' 
-      } as FinanceRecord & { sourceCollection: string }));
-      
-      const legacyGastos = legacyGastosSnap.docs.map(doc => {
-        const d = doc.data();
-        return {
-          id: doc.id,
-          tipo: 'saida',
-          data: d.date || '',
-          valor: d.value || 0,
-          descricao: d.description || '',
-          categoria: d.category || 'Outros',
-          responsavel: d.responsible || 'Admin',
-          formaPagamento: d.paymentMethod || 'Outro',
-          status: 'confirmado',
-          sourceCollection: 'gastos'
-        } as FinanceRecord & { sourceCollection: string };
-      });
+      // 1. Fetch financeiro
+      try {
+        const financeiroSnap = await getDocs(query(collection(db, 'financeiro'), orderBy('data', 'desc')));
+        financeiroData = financeiroSnap.docs.map(doc => ({ 
+          id: doc.id, 
+          ...doc.data(), 
+          sourceCollection: 'financeiro' 
+        } as FinanceRecord & { sourceCollection: string }));
+      } catch (err: any) {
+        console.error("Erro ao ler collection 'financeiro' do Firestore (Caminho: financeiro):", err?.code, err?.message, err);
+      }
 
-      const legacyReceitas = legacyReceitasSnap.docs.map(doc => {
-        const d = doc.data();
-        return {
-          id: doc.id,
-          tipo: 'entrada',
-          data: d.date || '',
-          valor: d.value || 0,
-          descricao: d.description || '',
-          categoria: d.type || 'Outros',
-          status: 'confirmado',
-          responsavel: 'Admin',
-          sourceCollection: 'receitas'
-        } as FinanceRecord & { sourceCollection: string };
-      });
+      // 2. Fetch gastos (legacy)
+      try {
+        const legacyGastosSnap = await getDocs(query(collection(db, 'gastos'), orderBy('date', 'desc')));
+        legacyGastos = legacyGastosSnap.docs.map(doc => {
+          const d = doc.data();
+          return {
+            id: doc.id,
+            tipo: 'saida',
+            data: d.date || '',
+            valor: d.value || 0,
+            descricao: d.description || '',
+            categoria: d.category || 'Outros',
+            responsavel: d.responsible || 'Admin',
+            formaPagamento: d.paymentMethod || 'Outro',
+            status: 'confirmado',
+            sourceCollection: 'gastos'
+          } as FinanceRecord & { sourceCollection: string };
+        });
+      } catch (err: any) {
+        console.error("Erro ao ler collection legacy 'gastos' do Firestore (Caminho: gastos):", err?.code, err?.message, err);
+      }
+
+      // 3. Fetch receitas (legacy)
+      try {
+        const legacyReceitasSnap = await getDocs(query(collection(db, 'receitas'), orderBy('date', 'desc')));
+        legacyReceitas = legacyReceitasSnap.docs.map(doc => {
+          const d = doc.data();
+          return {
+            id: doc.id,
+            tipo: 'entrada',
+            data: d.date || '',
+            valor: d.value || 0,
+            descricao: d.description || '',
+            categoria: d.type || 'Outros',
+            status: 'confirmado',
+            responsavel: 'Admin',
+            sourceCollection: 'receitas'
+          } as FinanceRecord & { sourceCollection: string };
+        });
+      } catch (err: any) {
+        console.error("Erro ao ler collection legacy 'receitas' do Firestore (Caminho: receitas):", err?.code, err?.message, err);
+      }
 
       const allData = [...financeiroData, ...legacyGastos, ...legacyReceitas].sort((a,b) => b.data.localeCompare(a.data));
       setRecords(allData);

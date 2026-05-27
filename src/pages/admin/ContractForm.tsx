@@ -93,21 +93,119 @@ export default function AdminContractForm() {
     }
   });
 
+  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 5000);
+  };
+
+  const clausulasPadrao: Record<string, Array<{id: string, titulo: string, texto: string, ordem: number}>> = {
+    proposta: [
+      {
+        id: "fallback-prop-1",
+        titulo: "Do Objeto e Caráter Irretratável",
+        texto: "A presente proposta tem por objeto manifestar o interesse inequívoco na aquisição/locação do imóvel, em caráter irrevogável e irretratável após o aceite do vendedor/locador.",
+        ordem: 1
+      },
+      {
+        id: "fallback-prop-2",
+        titulo: "Da Validade da Proposta",
+        texto: "Esta proposta é válida por 5 (cinco) dias úteis a contar de sua assinatura, findo os quais decairá sem ônus adicionais se não aceita expressamente.",
+        ordem: 2
+      }
+    ],
+    temporada: [
+      {
+        id: "fallback-temp-1",
+        titulo: "Da Destinação do Imóvel",
+        texto: "O imóvel locado destinar-se exclusivamente para fins residenciais por temporada, sendo expressamente proibida a sublocação, cessão ou uso comercial.",
+        ordem: 1
+      },
+      {
+        id: "fallback-temp-2",
+        titulo: "Das Regras de Convivência e Danos",
+        texto: "O locatário compromete-se a respeitar as convenções de condomínio e devolver o imóvel nas mesmas condições recebidas, respondendo integralmente por eventuais avarias.",
+        ordem: 2
+      }
+    ],
+    aluguel: [
+      {
+        id: "fallback-alug-1",
+        titulo: "Da Vigência e Reajuste",
+        texto: "A locação residencial terá o prazo pactuado nas condições gerais, sendo o aluguel reajustado anualmente com base na variação positiva do IPCA/IBGE ou outro índice oficial.",
+        ordem: 1
+      },
+      {
+        id: "fallback-alug-2",
+        titulo: "Dos Encargos e Multas por Atraso",
+        texto: "O pagamento do aluguel após a data do vencimento ensejará multa moratória de 10% (dez por cento) acrescida de juros de 1% ao mês pró-rata.",
+        ordem: 2
+      }
+    ],
+    venda: [
+      {
+        id: "fallback-venda-1",
+        titulo: "Do Preço e Condições de Pagamento",
+        texto: "O preço certo e ajustado da transação imobiliária dar-se-á nos estritos termos pactuados, com quitação formal descrita nos métodos de pagamento aprovados.",
+        ordem: 1
+      },
+      {
+        id: "fallback-venda-2",
+        titulo: "Da Outorga da Escritura",
+        texto: "A escritura definitiva de compra e venda será outorgada em favor do comprador após a quitação integral do preço ora estabelecido.",
+        ordem: 2
+      }
+    ]
+  };
+
   const [allSysClauses, setAllSysClauses] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchSysClauses = async () => {
+      console.log("Carregando cláusulas de clausulasContratos...");
       try {
         const q = query(collection(db, 'clausulasContratos'), orderBy('ordem', 'asc'));
         const snap = await getDocs(q);
         const list = snap.docs.map(dSnapshot => ({ id: dSnapshot.id, ...dSnapshot.data() }));
-        setAllSysClauses(list);
-      } catch (e) {
-        console.error("Error loading system clauses:", e);
+        console.log("Cláusulas carregadas da collection oficial:", list.length);
+        
+        if (list.length === 0) {
+          console.log("Nenhuma cláusula cadastrada. Aplicando fallbacks padrão de cláusulas...");
+          const fallbacks = Object.entries(clausulasPadrao).flatMap(([tipo, clauses]) => 
+            clauses.map(c => ({
+              id: c.id,
+              titulo: c.titulo,
+              texto: c.texto,
+              ordem: c.ordem,
+              ativo: true,
+              obrigatorio: true,
+              tipo: tipo
+            }))
+          );
+          setAllSysClauses(fallbacks);
+        } else {
+          setAllSysClauses(list);
+        }
+      } catch (e: any) {
+        console.error("Erro ao carregar cláusulas de clausulasContratos (permissão ou falha):", e?.code, e?.message, e);
+        console.log("Aplicando fallbacks padrão devido à falha na leitura das cláusulas.");
+        const fallbacks = Object.entries(clausulasPadrao).flatMap(([tipo, clauses]) => 
+          clauses.map(c => ({
+            id: c.id,
+            titulo: c.titulo,
+            texto: c.texto,
+            ordem: c.ordem,
+            ativo: true,
+            obrigatorio: true,
+            tipo: tipo
+          }))
+        );
+        setAllSysClauses(fallbacks);
       }
     };
     fetchSysClauses();
-  }, []);
+  }, [contract.tipoContrato]);
 
   useEffect(() => {
     if (allSysClauses.length === 0) return;
@@ -253,53 +351,73 @@ export default function AdminContractForm() {
 
   const saveContract = async (finalizar = false) => {
     if (!contract.nomeCliente || !contract.valor) {
-      alert('Por favor, preencha o nome do cliente e o valor.');
+      showToast('Por favor, preencha o nome do cliente e o valor.', 'error');
       return;
     }
 
     if (contract.tipoContrato === 'locacao_temporaria') {
       const days = contract.dados?.prazo?.quantidadeDias || 0;
       if (days > 90) {
-        alert('A locação temporária não pode ultrapassar 90 dias.');
+        showToast('A locação temporária não pode ultrapassar 90 dias.', 'error');
         return;
       }
     }
 
     setLoading(true);
     try {
-      const dataToSave = {
+      const dadosContrato = {
         ...contract,
         status: finalizar ? 'finalizado' : (contract.status || 'rascunho'),
+        imovelId: contract.imovelId || selectedProperty?.id || '',
+        imovelCodigo: selectedProperty?.code || '',
+        imovelTitulo: selectedProperty?.title || '',
+        locadorNome: contract.dados?.locador?.nome || contract.nomeVendedor || '',
+        locadorDocumento: contract.dados?.locador?.cpf || '',
+        locatarioNome: contract.nomeCliente || '',
+        locatarioDocumento: contract.dados?.locatario?.cpf || contract.dados?.proponente?.cpf || '',
+        valorAluguel: contract.valor || 0,
+        valorTotalLocatario: contract.valor || 0,
+        valorRepasseLocador: contract.valor || 0,
+        clausulasAplicadas: contract.dados?.clausulasSelecionadas || [],
         atualizadoEm: serverTimestamp(),
-        criadoPor: user?.uid
+        criadoPor: user?.uid || null
       };
 
       if (finalizar) {
-        dataToSave.finalizadoEm = serverTimestamp();
+        (dadosContrato as any).finalizadoEm = serverTimestamp();
       }
 
+      console.log("Salvando contrato final/rascunho no Firestore:", dadosContrato);
+
+      let savedId = id;
       if (!id) {
-        dataToSave.criadoEm = serverTimestamp();
-        const docRef = await addDoc(collection(db, 'contratos'), dataToSave);
-        if (finalizar) {
-           alert('Contrato finalizado, salvo e PDF gerado com sucesso.');
-           // Wait a bit to ensure Firestore update is propagated if needed for preview
-           setTimeout(() => downloadPDF(), 500);
-        }
+        (dadosContrato as any).criadoEm = serverTimestamp();
+        const docRef = await addDoc(collection(db, 'contratos'), dadosContrato);
+        savedId = docRef.id;
+        console.log("Contrato novo criado com sucesso. ID gerado:", savedId);
       } else {
-        await updateDoc(doc(db, 'contratos', id), dataToSave);
-        if (finalizar) {
-           alert('Contrato finalizado, salvo e PDF gerado com sucesso.');
-           setTimeout(() => downloadPDF(), 500);
-        }
+        await updateDoc(doc(db, 'contratos', id), dadosContrato);
+        console.log("Contrato existente atualizado com sucesso. ID:", id);
       }
 
-      if (!finalizar) {
-        navigate('/admin/contratos');
+      showToast(finalizar ? 'Contrato finalizado e salvo com sucesso!' : 'Contrato salvo como rascunho com sucesso!', 'success');
+
+      if (finalizar) {
+         console.log("Iniciando geração automática do PDF pós salvamento...");
+         if (!id && savedId) {
+           navigate(`/admin/contratos/editar/${savedId}?preview=true`);
+         }
+         setTimeout(() => {
+           downloadPDF();
+         }, 1000);
+      } else {
+        setTimeout(() => {
+          navigate('/admin/contratos');
+        }, 1500);
       }
-    } catch (error) {
-      console.error("Error saving contract:", error);
-      alert('Erro ao salvar contrato.');
+    } catch (error: any) {
+      console.error("Erro ao salvar contrato no Firestore (Caminho: contratos):", error?.code, error?.message, error);
+      showToast(`Erro ao finalizar contrato: ${error?.message || error}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -328,14 +446,30 @@ export default function AdminContractForm() {
           elements.forEach((el) => {
             const htmlEl = el as HTMLElement;
             const style = window.getComputedStyle(el);
-            const bg = style.backgroundColor;
-            if (bg.includes("oklab") || bg.includes("oklch") || bg.includes("color-mix") || bg.includes("lab(") || bg.includes("lch(")) {
-              htmlEl.style.backgroundColor = "#ffffff";
-            }
-            const color = style.color;
-            if (color.includes("oklab") || color.includes("oklch") || color.includes("color-mix")) {
-              htmlEl.style.color = "#111827";
-            }
+            const properties = ['backgroundColor', 'color', 'borderColor', 'borderTopColor', 'borderBottomColor', 'borderLeftColor', 'borderRightColor', 'outlineColor', 'fill', 'stroke'];
+            
+            properties.forEach(prop => {
+              try {
+                const value = (style as any)[prop];
+                if (value && (
+                  value.includes("oklab") || 
+                  value.includes("oklch") || 
+                  value.includes("color-mix") || 
+                  value.includes("lab(") || 
+                  value.includes("lch(")
+                )) {
+                  if (prop.toLowerCase().includes('background')) {
+                    htmlEl.style.setProperty(prop, "#ffffff", "important");
+                  } else if (prop.toLowerCase().includes('color')) {
+                    htmlEl.style.setProperty(prop, "#111827", "important");
+                  } else if (prop.toLowerCase().includes('border')) {
+                    htmlEl.style.setProperty(prop, "#e5e7eb", "important");
+                  } else {
+                    htmlEl.style.setProperty(prop, "inherit", "important");
+                  }
+                }
+              } catch (e) {}
+            });
           });
         }
       });
@@ -382,10 +516,10 @@ export default function AdminContractForm() {
         currentPage++;
       }
       
-      pdf.save(`Contrato_${contract.nomeCliente}_${format(new Date(), 'dd_MM_yyyy')}.pdf`);
+      pdf.save(`Contrato_${contract.nomeCliente || 'Pendente'}_${format(new Date(), 'dd_MM_yyyy')}.pdf`);
     } catch (error) {
       console.error("Error generating PDF:", error);
-      alert('Erro ao gerar PDF. Tente novamente.');
+      showToast('Erro ao gerar PDF do contrato.', 'error');
     } finally {
       setLoading(false);
     }
@@ -522,7 +656,23 @@ export default function AdminContractForm() {
   }
 
   return (
-    <div className="space-y-10 pb-20">
+    <div className="space-y-10 pb-20 relative">
+      {/* Toast Notification */}
+      {notification && (
+        <div className={`fixed top-6 right-6 z-[9999] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-2xl border transition-all duration-300 ${
+          notification.type === 'success' 
+            ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
+            : 'bg-red-50 border-red-200 text-red-800'
+        }`}>
+          <div className={`w-5 h-5 rounded-full flex items-center justify-center ${
+            notification.type === 'success' ? 'bg-emerald-200 text-emerald-800' : 'bg-red-200 text-red-800'
+          }`}>
+            <Check size={12} />
+          </div>
+          <span className="font-semibold text-sm">{notification.message}</span>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 print:hidden">
         <div className="flex items-center gap-6">
