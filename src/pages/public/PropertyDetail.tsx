@@ -34,6 +34,65 @@ import PageWrapper from '../../components/PageWrapper';
 import { SafeImage } from '../../components/ui/SafeImage';
 import { formatCurrency, isValidPublicProperty, cleanPhoneForWhatsapp, getSafeImageUrl, isImovelAlugado } from '../../lib/utils';
 
+const formatCharacteristic = (char: string, property: any) => {
+  const ambientes = property?.ambientes || [];
+  
+  if (Array.isArray(ambientes)) {
+    const matched = ambientes.find(
+      (a: any) => String(a.label || '').trim().toLowerCase() === char.trim().toLowerCase()
+    );
+    if (matched && matched.quantidade !== undefined && matched.quantidade !== null && Number(matched.quantidade) > 0) {
+      const qty = Number(matched.quantidade);
+      if (qty <= 1) {
+        if (char === 'Dormitórios') return '1 Dormitório';
+        if (char === 'Suítes') return '1 Suíte';
+        if (char === 'Número de salas') return '1 Sala';
+        if (char === 'Número de vagas') return '1 Vaga';
+        if (char === 'Quantidade de vagas privativas') return '1 Vaga privativa';
+        if (char === 'Demi-suíte') return '1 Demi-suíte';
+        if (char === 'WC social') return '1 WC social';
+        if (char === 'WC empregada') return '1 WC empregada';
+        if (char === 'Dependência de empregada') return '1 Dependência de empregada';
+        if (char === 'Escritório') return '1 Escritório';
+        if (char === 'Lavabo') return '1 Lavabo';
+        if (char === 'Box privativo') return '1 Box privativo';
+      } else {
+        if (char === 'Número de salas') return `${qty} Salas`;
+        if (char === 'Número de vagas') return `${qty} Vagas`;
+        if (char === 'Quantidade de vagas privativas') return `${qty} Vagas privativas`;
+      }
+      return `${qty} ${char}`;
+    }
+  }
+
+  if (char === 'Dormitórios' && (property?.dormitorios || property?.bedrooms)) {
+    const qty = Number(property.dormitorios || property.bedrooms);
+    return qty > 1 ? `${qty} Dormitórios` : '1 Dormitório';
+  }
+  if (char === 'Suítes' && property?.suites) {
+    const qty = Number(property.suites);
+    return qty > 1 ? `${qty} Suítes` : '1 Suíte';
+  }
+  if (char === 'Número de salas' && property?.salas) {
+    const qty = Number(property.salas);
+    return qty > 1 ? `${qty} Salas` : '1 Sala';
+  }
+  if (char === 'Número de vagas' && (property?.vagas || property?.garageSpaces)) {
+    const qty = Number(property.vagas || property.garageSpaces);
+    return qty > 1 ? `${qty} Vagas` : '1 Vaga';
+  }
+  if (char === 'Lavabo' && (property?.lavabos || property?.lavabo)) {
+    const qty = Number(property.lavabos || property.lavabo);
+    return qty > 1 ? `${qty} Lavabos` : '1 Lavabo';
+  }
+  if (char === 'WC social' && property?.bathrooms) {
+    const qty = Number(property.bathrooms);
+    return qty > 1 ? `${qty} WC sociais` : '1 WC social';
+  }
+
+  return char;
+};
+
 export default function PropertyDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -579,7 +638,7 @@ export default function PropertyDetail() {
                                      {property.caracteristicas.map((char: string) => (
                                        <div key={char} className="flex items-start gap-2.5 text-xs text-slate-500 hover:text-slate-850 transition-colors">
                                           <Check size={14} className="text-gold shrink-0 mt-0.5" />
-                                          <span className="leading-tight">{char}</span>
+                                          <span className="leading-tight">{formatCharacteristic(char, property)}</span>
                                        </div>
                                      ))}
                                   </div>

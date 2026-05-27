@@ -71,7 +71,7 @@ export const DEFAULT_SITE_CONFIG: SiteConfig = {
 
 export const DEFAULT_OPTIONS: Record<string, OptionItem[]> = {
   tiposNegocio: [
-    { id: "venda", nome: "Comprar", valor: "venda", ativo: true, ordem: 1 },
+    { id: "venda", nome: "Venda", valor: "venda", ativo: true, ordem: 1 },
     { id: "locacao", nome: "Locação", valor: "locacao", ativo: true, ordem: 2 },
     { id: "venda_locacao", nome: "Venda e Locação", valor: "venda_locacao", ativo: true, ordem: 3 }
   ],

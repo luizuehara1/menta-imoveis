@@ -18,7 +18,8 @@ import {
   RefreshCcw,
   MessageSquare,
   ClipboardList,
-  EyeOff
+  EyeOff,
+  X
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -49,6 +50,20 @@ export default function AdminPropertyList() {
   const [properties, setProperties] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  const setImoveis = setProperties;
+
+  const triggerToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4500);
+  };
+
+  const toastObj = {
+    success: (msg: string) => triggerToast(msg, 'success'),
+    error: (msg: string) => triggerToast(msg, 'error')
+  };
 
   useEffect(() => {
     fetchProperties();
@@ -64,7 +79,9 @@ export default function AdminPropertyList() {
       // Don't use orderBy here to ensure ALL docs (even ghosts missing updatedAt) are fetched
       const q = query(collection(db, 'imoveis'));
       const snap = await getDocs(q);
-      const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+      const data = snap.docs
+        .map(doc => ({ id: doc.id, ...doc.data() as any }))
+        .filter(item => item.excluido !== true);
       
       console.log("Total de imóveis carregados:", data.length);
       if (isAdmin && data.length === 0) {
@@ -94,16 +111,44 @@ export default function AdminPropertyList() {
     }
   };
 
-  const handleDelete = async (id: string, code: string) => {
-    if (confirm(`Tem certeza que deseja excluir o imóvel ${code || 'sem código'}?`)) {
-      try {
-        await deleteDoc(doc(db, 'imoveis', id));
-        setProperties(properties.filter(p => p.id !== id));
-      } catch (error) {
-        console.error("Error deleting property:", error);
-      }
+  async function handleDeleteProperty(imovel: any) {
+    if (!isAdmin) {
+      toastObj.error("Você não tem permissão para excluir imóveis.");
+      return;
     }
-  };
+
+    if (!imovel?.id) {
+      toastObj.error("Imóvel inválido.");
+      return;
+    }
+
+    const confirmar = window.confirm(
+      `Deseja realmente excluir o imóvel ${imovel.code || imovel.codigo || imovel.title || imovel.titulo || imovel.id}?`
+    );
+
+    if (!confirmar) return;
+
+    try {
+      setDeletingId(imovel.id);
+
+      console.log("Usuário logado:", user?.email);
+      console.log("É admin:", isAdmin);
+      console.log("Tentando excluir imóvel:", imovel.id);
+      console.log("Caminho Firestore:", `imoveis/${imovel.id}`);
+      console.log("Dados do imóvel:", imovel);
+
+      await deleteDoc(doc(db, "imoveis", imovel.id));
+
+      setProperties((prev) => prev.filter((item) => item.id !== imovel.id));
+
+      toastObj.success("Imóvel excluído com sucesso.");
+    } catch (error: any) {
+      console.error("Erro real ao excluir imóvel:", error.code, error.message, error);
+      toastObj.error(`Erro ao excluir imóvel: ${error.message}`);
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   const toggleVisibility = async (property: any) => {
     try {
@@ -138,12 +183,31 @@ export default function AdminPropertyList() {
   };
 
   return (
-    <motion.div 
-      variants={staggerContainer}
-      initial="initial"
-      animate="animate"
-      className="space-y-10"
-    >
+    <>
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            className="fixed top-24 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-6 py-4 rounded-2xl text-white backdrop-blur-md shadow-2xl border"
+            style={{
+              backgroundColor: toast.type === 'success' ? '#14532d' : '#7f1d1d',
+              borderColor: toast.type === 'success' ? '#16a34a' : '#b91c1c',
+            }}
+          >
+            {toast.type === 'success' ? <CheckCircle size={20} className="text-emerald-300" /> : <X size={20} className="text-red-300" />}
+            <span className="font-bold text-sm tracking-wide">{toast.message}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <motion.div 
+        variants={staggerContainer}
+        initial="initial"
+        animate="animate"
+        className="space-y-10"
+      >
       <motion.div 
         variants={slideUp}
         className="flex flex-col xl:flex-row xl:items-center justify-between gap-6"
@@ -359,14 +423,18 @@ export default function AdminPropertyList() {
                           >
                             <Edit2 size={18} />
                           </Link>
-                          <motion.button 
-                            whileHover={{ color: '#ef4444' }}
-                            onClick={() => handleDelete(property.id, property.code)}
-                            className="p-3 bg-white text-gray-400 hover:bg-white hover:shadow-2xl hover:scale-110 rounded-xl border border-transparent hover:border-gray-100 transition-all cursor-pointer"
+                          <button 
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleDeleteProperty(property);
+                            }}
+                            disabled={deletingId === property.id}
+                            className="p-3 bg-white text-gray-400 hover:text-red-500 hover:bg-white hover:shadow-2xl hover:scale-110 rounded-xl border border-transparent hover:border-gray-100 transition-all cursor-pointer disabled:opacity-50"
                             title="Excluir"
                           >
                             <Trash2 size={18} />
-                          </motion.button>
+                          </button>
                         </div>
                       </td>
                     </motion.tr>
@@ -378,5 +446,6 @@ export default function AdminPropertyList() {
         </div>
       </motion.div>
     </motion.div>
+  </>
   );
 }

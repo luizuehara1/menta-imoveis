@@ -471,7 +471,7 @@ export default function PropertyList() {
                   value={searchFilters.businessType}
                   onChange={(e) => setSearchFilters({...searchFilters, businessType: e.target.value})}
                 >
-                   <option value="Venda">Comprar</option>
+                   <option value="Venda">Venda</option>
                    <option value="Locação">Locação</option>
                    <option value="Venda e Locação">Ambos</option>
                 </select>
@@ -631,7 +631,7 @@ export default function PropertyList() {
                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Tipo de Negócio</label>
                     <div className="grid grid-cols-2 gap-4 bg-gray-50 p-2 rounded-2xl border border-gray-100">
                        {[
-                         { id: 'venda', nome: 'Venda', label: 'Comprar' },
+                         { id: 'venda', nome: 'Venda', label: 'Venda' },
                          { id: 'locacao', nome: 'Locação', label: 'Locação' },
                          { id: 'venda_locacao', nome: 'Venda e Locação', label: 'Venda e Locação' }
                        ].map((o) => {

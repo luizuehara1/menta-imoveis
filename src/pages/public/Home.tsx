@@ -179,7 +179,7 @@ const SearchSection = ({ options }: { options: any }) => {
         <div className="flex flex-wrap items-center justify-center gap-4 mb-8">
            {['venda', 'locacao', 'venda_locacao'].map((val) => {
              const label = val === 'locacao' ? 'Locação' : 
-                          val === 'venda' ? 'Comprar' : 
+                          val === 'venda' ? 'Venda' : 
                           'Venda e Locação';
              
              // Check if this type exists in options or just use common ones

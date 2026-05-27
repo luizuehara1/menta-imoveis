@@ -110,7 +110,22 @@ export function useOptions() {
       const unsub = onSnapshot(docRef, async (docSnap) => {
         if (docSnap.exists()) {
           const data = docSnap.data();
-          const items = data.itens || [];
+          let items = data.itens || [];
+          if (category === 'tiposNegocio') {
+            items = items.map((item: any) => {
+              const labelLower = String(item.label || item.nome || '').trim().toLowerCase();
+              if (labelLower === 'comprar' || labelLower === 'venda') {
+                return {
+                  ...item,
+                  nome: 'Venda',
+                  label: 'Venda',
+                  valor: 'venda',
+                  value: 'venda'
+                };
+              }
+              return item;
+            });
+          }
           setOptions(prev => ({
             ...prev,
             [category]: items.length > 0 ? items : (DEFAULT_OPTIONS[category] || [])

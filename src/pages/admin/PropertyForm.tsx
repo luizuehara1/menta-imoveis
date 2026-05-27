@@ -321,6 +321,35 @@ export default function AdminPropertyForm() {
 
   const [aplicarMarcaDagua, setAplicarMarcaDagua] = useState(true);
   const [videoUrl, setVideoUrl] = useState('');
+  const QUANTITY_AMBIENTES_MAP: Record<string, string> = {
+    "Dormitórios": "dormitorios",
+    "Suítes": "suites",
+    "Demi-suíte": "demi_suite",
+    "Lavabo": "lavabo",
+    "WC social": "wc_social",
+    "WC empregada": "wc_empregada",
+    "Dependência de empregada": "dependencia_empregada",
+    "Escritório": "escritorio",
+    "Número de salas": "salas",
+    "Quantidade de vagas privativas": "vagas_privativas",
+    "Número de vagas": "vagas",
+    "Box privativo": "box_privativo"
+  };
+
+  const [quantidadesAmbientes, setQuantidadesAmbientes] = useState<Record<string, number>>({
+    dormitorios: 0,
+    suites: 0,
+    demi_suite: 0,
+    lavabo: 0,
+    wc_social: 0,
+    wc_empregada: 0,
+    dependencia_empregada: 0,
+    escritorio: 0,
+    salas: 0,
+    vagas_privativas: 0,
+    vagas: 0,
+    box_privativo: 0
+  });
   const [videos, setVideos] = useState<string[]>([]);
   const [mainImage, setMainImage] = useState('');
   const [brokers, setBrokers] = useState<Broker[]>([]);
@@ -550,6 +579,18 @@ export default function AdminPropertyForm() {
             Object.keys(data).forEach(key => {
               setValue(key, data[key]);
             });
+
+            // Normalize "Comprar" to "Venda" or variations
+            const loadedBType = String(data.businessType || 'Venda').toLowerCase();
+            let finalBType = 'Venda';
+            if (loadedBType.includes('loca') && (loadedBType.includes('compr') || loadedBType.includes('vend'))) {
+              finalBType = 'Venda e Locação';
+            } else if (loadedBType.includes('loca')) {
+              finalBType = 'Locação';
+            } else {
+              finalBType = 'Venda';
+            }
+            setValue('businessType', finalBType);
             
             // Normalize "Alugado" status for backwards compatibility
             const statusStr = String(data.status || "").toLowerCase();
@@ -564,6 +605,67 @@ export default function AdminPropertyForm() {
             const loadedTaxaGas = Number(data.valorTaxaGas ?? data.taxaGas ?? 0);
             setValue('valorTaxaLixo', loadedTaxaLixo);
             setValue('valorTaxaGas', loadedTaxaGas);
+
+            // Load quantities of custom environments
+            const initialQuantities: Record<string, number> = {
+              dormitorios: 0,
+              suites: 0,
+              demi_suite: 0,
+              lavabo: 0,
+              wc_social: 0,
+              wc_empregada: 0,
+              dependencia_empregada: 0,
+              escritorio: 0,
+              salas: 0,
+              vagas_privativas: 0,
+              vagas: 0,
+              box_privativo: 0
+            };
+
+            const dataAmbientes = data.ambientes || [];
+            if (Array.isArray(dataAmbientes)) {
+              dataAmbientes.forEach((item: any) => {
+                if (item.value && item.quantidade !== undefined && item.quantidade !== null) {
+                  initialQuantities[item.value] = Number(item.quantidade);
+                }
+              });
+            }
+
+            // Compatibility with old properties - use direct fields as fallback if they weren't loaded
+            const oldDormitorios = Number(data.dormitorios ?? data.bedrooms ?? 0);
+            const oldSuites = Number(data.suites ?? 0);
+            const oldLavabo = Number(data.lavabos ?? data.lavabo ?? 0);
+            const oldSalas = Number(data.salas ?? 0);
+            const oldVagas = Number(data.vagas ?? data.garageSpaces ?? 0);
+            const oldWcSocial = Number(data.bathrooms ?? 0);
+
+            if (oldDormitorios > 0 && !initialQuantities.dormitorios) initialQuantities.dormitorios = oldDormitorios;
+            if (oldSuites > 0 && !initialQuantities.suites) initialQuantities.suites = oldSuites;
+            if (oldLavabo > 0 && !initialQuantities.lavabo) initialQuantities.lavabo = oldLavabo;
+            if (oldSalas > 0 && !initialQuantities.salas) initialQuantities.salas = oldSalas;
+            if (oldVagas > 0 && !initialQuantities.vagas) initialQuantities.vagas = oldVagas;
+            if (oldWcSocial > 0 && !initialQuantities.wc_social) initialQuantities.wc_social = oldWcSocial;
+
+            setQuantidadesAmbientes(initialQuantities);
+
+            // Ensure checkboxes in caracteristicas are checked for anything that has quantity > 0
+            const currentFeatures = data.caracteristicas || [];
+            const newFeatures = [...currentFeatures];
+
+            if (initialQuantities.dormitorios > 0 && !newFeatures.includes("Dormitórios")) newFeatures.push("Dormitórios");
+            if (initialQuantities.suites > 0 && !newFeatures.includes("Suítes")) newFeatures.push("Suítes");
+            if (initialQuantities.demi_suite > 0 && !newFeatures.includes("Demi-suíte")) newFeatures.push("Demi-suíte");
+            if (initialQuantities.lavabo > 0 && !newFeatures.includes("Lavabo")) newFeatures.push("Lavabo");
+            if (initialQuantities.wc_social > 0 && !newFeatures.includes("WC social")) newFeatures.push("WC social");
+            if (initialQuantities.wc_empregada > 0 && !newFeatures.includes("WC empregada")) newFeatures.push("WC empregada");
+            if (initialQuantities.dependencia_empregada > 0 && !newFeatures.includes("Dependência de empregada")) newFeatures.push("Dependência de empregada");
+            if (initialQuantities.escritorio > 0 && !newFeatures.includes("Escritório")) newFeatures.push("Escritório");
+            if (initialQuantities.salas > 0 && !newFeatures.includes("Número de salas")) newFeatures.push("Número de salas");
+            if (initialQuantities.vagas_privativas > 0 && !newFeatures.includes("Quantidade de vagas privativas")) newFeatures.push("Quantidade de vagas privativas");
+            if (initialQuantities.vagas > 0 && !newFeatures.includes("Número de vagas")) newFeatures.push("Número de vagas");
+            if (initialQuantities.box_privativo > 0 && !newFeatures.includes("Box privativo")) newFeatures.push("Box privativo");
+
+            setValue('caracteristicas', Array.from(new Set(newFeatures)));
 
             setImages(normalizeImages(data));
             setVideos(data.videos || []);
@@ -742,8 +844,19 @@ export default function AdminPropertyForm() {
 
       const computedTotal = aluguel + condoFee + iptu + valLixo + valGas + fireInsurance + outrasTaxas;
 
+      const rawSaveBType = String(data.businessType || 'Venda').toLowerCase();
+      let normalizedSaveBType = 'Venda';
+      if (rawSaveBType.includes('loca') && (rawSaveBType.includes('compr') || rawSaveBType.includes('vend'))) {
+        normalizedSaveBType = 'Venda e Locação';
+      } else if (rawSaveBType.includes('loca')) {
+        normalizedSaveBType = 'Locação';
+      } else {
+        normalizedSaveBType = 'Venda';
+      }
+
       const propertyData: any = {
         ...data,
+        businessType: normalizedSaveBType,
         valorTaxaLixo: valLixo,
         valorTaxaGas: valGas,
         taxaLixo: valLixo,
@@ -758,6 +871,61 @@ export default function AdminPropertyForm() {
         updatedAt: serverTimestamp(),
         destaque: data.destaque === true
       };
+
+      const finalAmbientes = (data.caracteristicas || []).map((name: string) => {
+        const mapKey = QUANTITY_AMBIENTES_MAP[name];
+        if (mapKey) {
+          let qty = Number(quantidadesAmbientes[mapKey]);
+          if (!qty || qty < 1 || isNaN(qty)) {
+            qty = 1;
+          }
+          return {
+            label: name,
+            value: mapKey,
+            quantidade: qty,
+            ativo: true
+          };
+        } else {
+          const valueSlug = name.toLowerCase()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^a-z0-9_]/g, "_")
+            .replace(/_+/g, "_")
+            .replace(/^_+|_+$/g, "");
+          return {
+            label: name,
+            value: valueSlug,
+            quantidade: null,
+            ativo: true
+          };
+        }
+      });
+
+      propertyData.ambientes = finalAmbientes;
+
+      const isDormitoriosChecked = (data.caracteristicas || []).includes("Dormitórios");
+      const computedDormitorios = isDormitoriosChecked ? Number(quantidadesAmbientes.dormitorios || 1) : 0;
+      propertyData.dormitorios = computedDormitorios;
+      propertyData.bedrooms = computedDormitorios;
+
+      const isSuitesChecked = (data.caracteristicas || []).includes("Suítes");
+      propertyData.suites = isSuitesChecked ? Number(quantidadesAmbientes.suites || 1) : 0;
+
+      const isLavaboChecked = (data.caracteristicas || []).includes("Lavabo");
+      const computedLavabo = isLavaboChecked ? Number(quantidadesAmbientes.lavabo || 1) : 0;
+      propertyData.lavabos = computedLavabo;
+      propertyData.lavabo = computedLavabo;
+
+      const isSalasChecked = (data.caracteristicas || []).includes("Número de salas");
+      propertyData.salas = isSalasChecked ? Number(quantidadesAmbientes.salas || 1) : 0;
+
+      const isVagasChecked = (data.caracteristicas || []).includes("Número de vagas");
+      const isVagasPrivChecked = (data.caracteristicas || []).includes("Quantidade de vagas privativas");
+      const finalVagas = isVagasChecked ? Number(quantidadesAmbientes.vagas || 1) : (isVagasPrivChecked ? Number(quantidadesAmbientes.vagas_privativas || 1) : 0);
+      propertyData.vagas = finalVagas;
+      propertyData.garageSpaces = finalVagas;
+
+      const isWcSocialChecked = (data.caracteristicas || []).includes("WC social");
+      propertyData.bathrooms = isWcSocialChecked ? Number(quantidadesAmbientes.wc_social || 1) : 0;
 
       const statusValue = String(data.status || "").trim();
       const checkboxRented = data.rented === true;
@@ -1592,6 +1760,16 @@ export default function AdminPropertyForm() {
                         const current = watch('caracteristicas') || [];
                         const merged = Array.from(new Set([...current, ...allAmb]));
                         setValue('caracteristicas', merged);
+                        setQuantidadesAmbientes(prev => {
+                          const updated = { ...prev };
+                          Object.keys(QUANTITY_AMBIENTES_MAP).forEach(name => {
+                            const key = QUANTITY_AMBIENTES_MAP[name];
+                            if (!updated[key] || updated[key] < 1) {
+                              updated[key] = 1;
+                            }
+                          });
+                          return updated;
+                        });
                       }}
                       className="text-xs font-bold px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gold/10 hover:border-gold transition-colors"
                     >
@@ -1604,6 +1782,14 @@ export default function AdminPropertyForm() {
                         const current = watch('caracteristicas') || [];
                         const remaining = current.filter((item: string) => !allAmb.includes(item));
                         setValue('caracteristicas', remaining);
+                        setQuantidadesAmbientes(prev => {
+                          const updated = { ...prev };
+                          Object.keys(QUANTITY_AMBIENTES_MAP).forEach(name => {
+                            const key = QUANTITY_AMBIENTES_MAP[name];
+                            updated[key] = 0;
+                          });
+                          return updated;
+                        });
                       }}
                       className="text-xs font-bold px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gold/10 shadow-sm hover:border-gold transition-colors"
                     >
@@ -1613,37 +1799,90 @@ export default function AdminPropertyForm() {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
-                  {(options.ambientes || []).map((opt: any, idx: number) => (
-                    <label 
-                      key={opt.id || `amb-${opt.nome}-${idx}`} 
-                      className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer group ${
-                        (watch('caracteristicas') || []).includes(opt.nome)
-                        ? 'border-gold bg-gold/5'
-                        : 'border-gray-100 hover:border-gray-200 bg-gray-50/30'
-                      }`}
-                    >
-                      <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
-                        (watch('caracteristicas') || []).includes(opt.nome)
-                        ? 'bg-gold border-gold text-primary-black'
-                        : 'bg-white border-gray-300 group-hover:border-gold'
-                      }`}>
-                        <input 
-                          type="checkbox" 
-                          value={opt.nome} 
-                          {...register('caracteristicas')} 
-                          className="hidden" 
-                        />
-                        {(watch('caracteristicas') || []).includes(opt.nome) && <Check size={14} strokeWidth={4} />}
+                  {(options.ambientes || []).map((opt: any, idx: number) => {
+                    const isChecked = (watch('caracteristicas') || []).includes(opt.nome);
+                    const mapKey = QUANTITY_AMBIENTES_MAP[opt.nome];
+                    const hasQuantityField = !isEmpty(mapKey);
+
+                    function isEmpty(val: any) {
+                      return val === undefined || val === null || val === '';
+                    }
+
+                    return (
+                      <div 
+                        key={opt.id || `amb-${opt.nome}-${idx}`} 
+                        className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
+                          isChecked
+                          ? 'border-gold bg-gold/5'
+                          : 'border-gray-100 hover:border-gray-200 bg-gray-50/30'
+                        }`}
+                      >
+                        <label className="flex items-center gap-3 cursor-pointer group flex-1">
+                          <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
+                            isChecked
+                            ? 'bg-gold border-gold text-primary-black'
+                            : 'bg-white border-gray-300 group-hover:border-gold'
+                          }`}>
+                            <input 
+                              type="checkbox" 
+                              value={opt.nome} 
+                              checked={isChecked}
+                              onChange={(e) => {
+                                const current = watch('caracteristicas') || [];
+                                if (e.target.checked) {
+                                  setValue('caracteristicas', [...current, opt.nome]);
+                                  if (hasQuantityField) {
+                                    setQuantidadesAmbientes(prev => ({
+                                      ...prev,
+                                      [mapKey]: prev[mapKey] > 0 ? prev[mapKey] : 1
+                                    }));
+                                  }
+                                } else {
+                                  setValue('caracteristicas', current.filter((c: string) => c !== opt.nome));
+                                  if (hasQuantityField) {
+                                    setQuantidadesAmbientes(prev => ({
+                                      ...prev,
+                                      [mapKey]: 0
+                                    }));
+                                  }
+                                }
+                              }}
+                              className="hidden" 
+                            />
+                            {isChecked && <Check size={14} strokeWidth={4} />}
+                          </div>
+                          <span className={`text-sm font-medium transition-colors ${
+                            isChecked
+                            ? 'text-primary-black'
+                            : 'text-gray-600 group-hover:text-primary-black'
+                          }`}>
+                            {opt.nome}
+                          </span>
+                        </label>
+
+                        {hasQuantityField && isChecked && (
+                          <div className="flex items-center gap-2 pl-4 shrink-0" onClick={e => e.stopPropagation()}>
+                            <span className="text-[10px] font-bold text-gray-500 uppercase">Qtd:</span>
+                            <input
+                              type="number"
+                              min="1"
+                              value={quantidadesAmbientes[mapKey] || ''}
+                              onChange={(e) => {
+                                const valStr = e.target.value;
+                                if (valStr === '') {
+                                  setQuantidadesAmbientes(prev => ({ ...prev, [mapKey]: 1 }));
+                                } else {
+                                  const valNum = Math.max(1, parseInt(valStr) || 1);
+                                  setQuantidadesAmbientes(prev => ({ ...prev, [mapKey]: valNum }));
+                                }
+                              }}
+                              className="w-12 h-8 text-center text-sm font-bold bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold/30 focus:border-gold"
+                            />
+                          </div>
+                        )}
                       </div>
-                      <span className={`text-sm font-medium transition-colors ${
-                        (watch('caracteristicas') || []).includes(opt.nome)
-                        ? 'text-primary-black'
-                        : 'text-gray-600 group-hover:text-primary-black'
-                      }`}>
-                        {opt.nome}
-                      </span>
-                    </label>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 

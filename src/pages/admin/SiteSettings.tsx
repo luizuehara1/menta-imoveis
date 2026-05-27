@@ -130,7 +130,23 @@ const SiteSettings = () => {
         try {
           const optionDoc = await getDoc(doc(db, 'opcoes_imoveis', category));
           if (optionDoc.exists()) {
-            optionsData[category] = optionDoc.data().itens || [];
+            let loadedItems = optionDoc.data().itens || [];
+            if (category === 'tiposNegocio') {
+              loadedItems = loadedItems.map((item: any) => {
+                const labelLower = String(item.label || item.nome || '').trim().toLowerCase();
+                if (labelLower === 'comprar' || labelLower === 'venda') {
+                  return {
+                    ...item,
+                    nome: 'Venda',
+                    label: 'Venda',
+                    valor: 'venda',
+                    value: 'venda'
+                  };
+                }
+                return item;
+              });
+            }
+            optionsData[category] = loadedItems;
           } else {
             // Seed defaults if missing and we are in admin
             console.log(`[Seeding] Seeding missing category: ${category}`);
@@ -295,8 +311,16 @@ const SiteSettings = () => {
           return val !== undefined && val !== null && normalizeOptionText(val) !== "";
         })
         .map((item, index) => {
-          const label = normalizeOptionText(item.label || item.nome || item.value || item.valor);
-          const value = item.value !== undefined && item.value !== null ? item.value : (item.valor !== undefined && item.valor !== null ? item.valor : slugifyOption(label));
+          let label = normalizeOptionText(item.label || item.nome || item.value || item.valor);
+          let value = item.value !== undefined && item.value !== null ? item.value : (item.valor !== undefined && item.valor !== null ? item.valor : slugifyOption(label));
+
+          if (category === 'tiposNegocio') {
+            const labelLower = label.trim().toLowerCase();
+            if (labelLower === 'comprar' || labelLower === 'venda') {
+              label = 'Venda';
+              value = 'venda';
+            }
+          }
 
           const cleanItem: any = {
             id: item.id || Math.random().toString(36).substr(2, 9),
