@@ -207,7 +207,7 @@ export default function AdminPropertyForm() {
   const [pendingType, setPendingType] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [images, setImages] = useState<any[]>([]);
-  const [uploadingFiles, setUploadingFiles] = useState<{ id: string; name: string; previewUrl: string; error?: string }[]>([]);
+  const [uploadingFiles, setUploadingFiles] = useState<{ id: string; name: string; previewUrl: string; statusText?: string; error?: string }[]>([]);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
   const handleDragStart = (index: number) => {
@@ -240,20 +240,78 @@ export default function AdminPropertyForm() {
     setDraggedIndex(null);
   };
 
+  const compressImage = async (file: File, onStatusChange: (status: string) => void): Promise<File> => {
+    if (!file.type.startsWith("image/") || file.size < 400 * 1024) {
+      return file;
+    }
+    onStatusChange("Otimizando...");
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.src = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(img.src);
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(file);
+          return;
+        }
+        const maxDim = 2200;
+        let width = img.width;
+        let height = img.height;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              resolve(file);
+            } else {
+              resolve(new File([blob], file.name, { type: "image/jpeg", lastModified: Date.now() }));
+            }
+          },
+          "image/jpeg",
+          0.85
+        );
+      };
+      img.onerror = () => {
+        resolve(file);
+      };
+    });
+  };
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
     const fileList = Array.from(files);
     
+    const MAX_IMAGE_SIZE_MB = 100;
+    const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
+
     const validFiles: File[] = [];
     for (const file of fileList) {
+      console.log("Arquivo selecionado:", file.name);
+      console.log("Tipo:", file.type);
+      console.log("Tamanho MB:", file.size / 1024 / 1024);
+      console.log("Cloudinary cloud:", import.meta.env.VITE_CLOUDINARY_CLOUD_NAME);
+      console.log("Upload preset:", import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
+
       if (!file.type.startsWith('image/')) {
         alert(`O arquivo "${file.name}" não é uma imagem válida.`);
         continue;
       }
-      if (file.size > 10 * 1024 * 1024) {
-        alert(`A imagem "${file.name}" excede o limite máximo de 10MB.`);
+      if (file.size > MAX_IMAGE_SIZE_BYTES) {
+        alert(`A imagem "${file.name}" ultrapassa o limite de 100MB.`);
         continue;
       }
       validFiles.push(file);
@@ -265,37 +323,44 @@ export default function AdminPropertyForm() {
       id: Math.random().toString(36).substring(2, 9),
       name: file.name,
       previewUrl: URL.createObjectURL(file),
+      statusText: "Preparando...",
       file
     }));
 
-    setUploadingFiles(prev => [...prev, ...newUploads.map(item => ({ id: item.id, name: item.name, previewUrl: item.previewUrl }))]);
+    setUploadingFiles(prev => [...prev, ...newUploads.map(item => ({ id: item.id, name: item.name, previewUrl: item.previewUrl, statusText: item.statusText }))]);
 
     try {
-      // Upload images in parallel safely, tracking each one
       const uploadedResults = await Promise.all(
-        validFiles.map(async (file) => {
+        newUploads.map(async (uploadItem, index) => {
+          const { file, id } = uploadItem;
           try {
-            const uploadResult = await uploadImageToCloudinary(file);
+            const processedFile = await compressImage(file, (status) => {
+              setUploadingFiles(prev => prev.map(item => item.id === id ? { ...item, statusText: status } : item));
+            });
+
+            const orderLabel = `Enviando ${index + 1} de ${newUploads.length}`;
+            setUploadingFiles(prev => prev.map(item => item.id === id ? { ...item, statusText: orderLabel } : item));
+
+            const uploadResult = await uploadImageToCloudinary(processedFile);
             return {
               url: uploadResult.url,
               publicId: uploadResult.publicId,
               aplicarMarcaDagua: aplicarMarcaDagua
             };
-          } catch (error) {
-            console.error(`Erro no upload da imagem ${file.name}:`, error);
-            alert(`Houve um erro ao enviar a imagem "${file.name}".`);
+          } catch (error: any) {
+            console.error("Erro ao fazer upload da imagem:", error);
+            alert(`Erro ao enviar imagem "${file.name}": ${error.message || error}`);
             return null;
           }
         })
       );
 
-      // Filter out errors
       const successUploads = uploadedResults.filter(img => img !== null) as any[];
 
       if (successUploads.length > 0) {
         setImages(prev => {
           const updated = [...prev];
-          successUploads.forEach((img, index) => {
+          successUploads.forEach((img) => {
             updated.push({
               ...img,
               ordem: updated.length,
@@ -303,7 +368,6 @@ export default function AdminPropertyForm() {
             });
           });
 
-          // Re-sort / adjust indices to ensure sequential integers
           const finalized = updated.map((img, idx) => ({
             ...img,
             ordem: idx,
@@ -319,11 +383,10 @@ export default function AdminPropertyForm() {
 
         triggerToast("Imagens enviadas com sucesso.", "success");
       }
-    } catch (globalError) {
+    } catch (globalError: any) {
       console.error("Erro geral no upload das imagens:", globalError);
-      triggerToast("Erro ao processar o envio das imagens.", "error");
+      triggerToast(`Erro ao processar o envio das imagens: ${globalError.message || globalError}`, "error");
     } finally {
-      // Clear file list previewUrls and clean queue states
       for (const item of newUploads) {
         URL.revokeObjectURL(item.previewUrl);
       }
@@ -2341,7 +2404,7 @@ export default function AdminPropertyForm() {
                    <UploadCloud size={20} className="text-gold" /> Enviar Fotos do Computador
                  </h4>
                  <p className="text-xs text-gray-500 font-medium">
-                   Selecione uma ou mais fotos (JPG, PNG, WEBP) de até 10MB para fazer o upload automático para o Cloudinary.
+                   Selecione uma ou mais fotos (JPG, PNG, WEBP) de até 100MB por foto para fazer o upload automático para o Cloudinary.
                  </p>
                  
                  <label className="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-gray-300 hover:border-gold rounded-2xl cursor-pointer bg-white transition-all hover:bg-gold/5 group">
@@ -2525,7 +2588,7 @@ export default function AdminPropertyForm() {
                       <img src={file.previewUrl} alt="Uploading preview" className="absolute inset-0 w-full h-full object-cover opacity-40 blur-[1px]" />
                       <div className="relative z-10 flex flex-col items-center gap-2">
                         <div className="w-9 h-9 rounded-full border-4 border-gold border-t-transparent animate-spin" />
-                        <span className="text-[10px] font-black uppercase tracking-wider text-primary-black bg-white/80 px-2 py-0.5 rounded shadow">Enviando...</span>
+                        <span className="text-[10px] font-black uppercase tracking-wider text-primary-black bg-white/80 px-2 py-0.5 rounded shadow">{file.statusText || "Enviando..."}</span>
                       </div>
                     </div>
                   ))}
