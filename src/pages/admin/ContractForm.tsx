@@ -49,6 +49,77 @@ import { ContractA4Preview } from '../../components/admin/ContractA4Preview';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
+function isDomElement(value: any): boolean {
+  return (
+    typeof HTMLElement !== "undefined" &&
+    value instanceof HTMLElement
+  );
+}
+
+function isReactEvent(value: any): boolean {
+  return (
+    value &&
+    typeof value === "object" &&
+    ("nativeEvent" in value || "target" in value || "currentTarget" in value)
+  );
+}
+
+function cleanSerializableData(value: any): any {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+
+  if (isDomElement(value)) return undefined;
+  if (isReactEvent(value)) return undefined;
+
+  if (typeof value === "function") return undefined;
+  if (typeof value === "symbol") return undefined;
+
+  if (typeof File !== "undefined" && value instanceof File) return undefined;
+  if (typeof Blob !== "undefined" && value instanceof Blob) return undefined;
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .map(cleanSerializableData)
+      .filter((item) => item !== undefined);
+  }
+
+  if (typeof value === "object") {
+    if (value.constructor && value.constructor.name !== 'Object' && value.constructor.name !== 'Array') {
+      return value;
+    }
+
+    const cleaned: any = {};
+
+    Object.entries(value).forEach(([key, val]) => {
+      if (
+        key.startsWith("__react") ||
+        key === "_owner" ||
+        key === "ref" ||
+        key === "current" ||
+        key === "target" ||
+        key === "currentTarget" ||
+        key === "nativeEvent"
+      ) {
+        return;
+      }
+
+      const cleanedValue = cleanSerializableData(val);
+
+      if (cleanedValue !== undefined) {
+        cleaned[key] = cleanedValue;
+      }
+    });
+
+    return cleaned;
+  }
+
+  return value;
+}
+
 type Step = 'tipo' | 'dados' | 'pagamento' | 'revisao';
 
 export default function AdminContractForm() {
@@ -657,6 +728,82 @@ export default function AdminContractForm() {
     }
   };
 
+  const debugOklabColors = (el: HTMLElement) => {
+    const allElements = [el, ...Array.from(el.querySelectorAll("*"))];
+    allElements.forEach((elem) => {
+      const computed = window.getComputedStyle(elem);
+      const props = [
+        "color",
+        "backgroundColor",
+        "borderColor",
+        "borderTopColor",
+        "borderRightColor",
+        "borderBottomColor",
+        "borderLeftColor"
+      ];
+      props.forEach((prop) => {
+        const value = (computed as any)[prop];
+        if (
+          value &&
+          (
+            value.includes("oklab") ||
+            value.includes("oklch") ||
+            value.includes("color-mix")
+          )
+        ) {
+          console.warn("Cor incompatível encontrada no PDF:", {
+            tagName: elem.tagName,
+            id: elem.id,
+            prop,
+            value,
+            className: elem.className
+          });
+        }
+      });
+    });
+  };
+
+  const sanitizePdfColors = (el: HTMLElement) => {
+    if (!el) return;
+    const allElements = [el, ...Array.from(el.querySelectorAll("*"))];
+    allElements.forEach((elem) => {
+      const htmlEl = elem as HTMLElement;
+      htmlEl.style.color = "#111827";
+      htmlEl.style.backgroundColor = htmlEl.style.backgroundColor || "transparent";
+      htmlEl.style.borderColor = "#e5e7eb";
+      htmlEl.style.boxShadow = "none";
+
+      const computed = window.getComputedStyle(htmlEl);
+      const props = [
+        "color",
+        "backgroundColor",
+        "borderColor",
+        "borderTopColor",
+        "borderRightColor",
+        "borderBottomColor",
+        "borderLeftColor",
+        "outlineColor",
+        "textDecorationColor"
+      ];
+
+      props.forEach((prop) => {
+        const value = (computed as any)[prop];
+        if (
+          value &&
+          (
+            value.includes("oklab") ||
+            value.includes("oklch") ||
+            value.includes("color-mix")
+          )
+        ) {
+          (htmlEl.style as any)[prop] = prop === "backgroundColor"
+            ? "#ffffff"
+            : "#111827";
+        }
+      });
+    });
+  };
+
   const downloadPDF = async () => {
     const element = document.getElementById("contrato-pdf") || printRef.current;
     if (!element) {
@@ -671,14 +818,25 @@ export default function AdminContractForm() {
     const companyCreci = settings?.empresa?.creciPj || '11255PJ';
 
     console.log("Iniciando geração do PDF do contrato...");
-    console.log("Contrato:", contract);
-    console.log("Dados do contrato:", contract?.dados);
-    console.log("Elemento PDF:", element);
+    const safeContract = cleanSerializableData(contract);
+    console.log("Contrato:", safeContract);
+    console.log("Dados do contrato:", safeContract?.dados);
+    console.log("Elemento PDF encontrado:", !!element, "ID:", element?.id);
+
+    try {
+      JSON.stringify(safeContract);
+      console.log("Dados do contrato serializáveis OK");
+    } catch (err: any) {
+      console.error("Ainda existe estrutura circular em safeContract:", err);
+    }
 
     try {
       // Small timeout to ensure all components are fully rendered and styles applied
       await new Promise(resolve => setTimeout(resolve, 1500));
       
+      debugOklabColors(element);
+      sanitizePdfColors(element);
+
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
@@ -945,7 +1103,7 @@ export default function AdminContractForm() {
                 <span>Imprimir</span>
               </button>
               <button 
-                onClick={downloadPDF}
+                onClick={() => downloadPDF()}
                 disabled={loading}
                 className="flex items-center gap-2 px-6 py-4 bg-white text-gray-600 rounded-2xl font-bold border border-gray-100 shadow-sm hover:shadow-xl transition-all disabled:opacity-50"
               >

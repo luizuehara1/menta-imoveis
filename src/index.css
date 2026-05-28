@@ -256,6 +256,7 @@
 .pdf-export,
 .pdf-export * {
   color: #111827 !important;
+  background-color: transparent;
   border-color: #e5e7eb !important;
   box-shadow: none !important;
   text-shadow: none !important;
@@ -263,6 +264,46 @@
 
 .pdf-export {
   background: #ffffff !important;
+}
+
+.pdf-export .pdf-page {
+  background: #ffffff !important;
+  color: #111827 !important;
+}
+
+.pdf-export .pdf-title {
+  color: #111827 !important;
+}
+
+.pdf-export .pdf-muted {
+  color: #6b7280 !important;
+}
+
+.pdf-export .pdf-gold {
+  color: #c29b38 !important;
+}
+
+.pdf-export .pdf-header {
+  background: #ffffff !important;
+  color: #111827 !important;
+  border-bottom: 1px solid #e5e7eb !important;
+}
+
+.pdf-export table,
+.pdf-export th,
+.pdf-export td {
+  border-color: #d1d5db !important;
+  color: #111827 !important;
+}
+
+.pdf-export th {
+  background: #111827 !important;
+  color: #ffffff !important;
+}
+
+.pdf-export .watermark {
+  opacity: 0.06 !important;
+  pointer-events: none !important;
 }
 
 .pdf-title {

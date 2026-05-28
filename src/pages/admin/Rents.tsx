@@ -140,6 +140,18 @@ function normalizeTipoNegocio(tipo: any): string {
   return "";
 }
 
+const toNumber = (value: any): number => {
+  if (value === undefined || value === null) return 0;
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  const clean = String(value || "0")
+    .replace("R$", "")
+    .replace(/\./g, "")
+    .replace(",", ".")
+    .trim();
+  const number = Number(clean);
+  return Number.isFinite(number) ? number : 0;
+};
+
 export default function AdminRents() {
   const { settings } = useSettings();
   const empresa = (settings?.empresa || {}) as any;
@@ -235,9 +247,15 @@ export default function AdminRents() {
       const leaseSnap = await getDocs(
         query(collection(db, "locacoes"), orderBy("createdAt", "desc")),
       );
-      const leaseData = leaseSnap.docs.map(
-        (doc) => ({ id: doc.id, ...doc.data() }) as Lease,
-      );
+      const leaseData = leaseSnap.docs.map((doc) => {
+        const data = doc.data() as any;
+        return {
+          id: doc.id,
+          ...data,
+          valorTaxaAgua: toNumber(data.valorTaxaAgua ?? data.taxaAgua ?? data.taxaagua ?? 0),
+          valorTaxaLuz: toNumber(data.valorTaxaLuz ?? data.taxaLuz ?? data.taxaluz ?? 0),
+        } as Lease;
+      });
       setLeases(leaseData);
 
       const propSnap = await getDocs(
@@ -342,10 +360,10 @@ export default function AdminRents() {
               valorAluguel: property.priceLocacao || property.valorAluguel || 0,
               valorIptu: property.iptu || property.valorIptu || 0,
               valorCondominio: property.condoFee || property.valorCondominio || 0,
-              valorTaxaLixo: Number(property.valorTaxaLixo ?? property.taxaLixo ?? property.taxalixo ?? 0),
-              valorTaxaGas: Number(property.valorTaxaGas ?? property.taxaGas ?? property.taxagas ?? 0),
-              valorTaxaAgua: Number((property as any).valorTaxaAgua ?? (property as any).taxaAgua ?? (property as any).taxaagua ?? 0),
-              valorTaxaLuz: Number((property as any).valorTaxaLuz ?? (property as any).taxaLuz ?? (property as any).taxaluz ?? 0),
+              valorTaxaLixo: toNumber(property.valorTaxaLixo ?? property.taxaLixo ?? property.taxalixo ?? 0),
+              valorTaxaGas: toNumber(property.valorTaxaGas ?? property.taxaGas ?? property.taxagas ?? 0),
+              valorTaxaAgua: toNumber((property as any).valorTaxaAgua ?? (property as any).taxaAgua ?? (property as any).taxaagua ?? 0),
+              valorTaxaLuz: toNumber((property as any).valorTaxaLuz ?? (property as any).taxaLuz ?? (property as any).taxaluz ?? 0),
               valorSeguroIncendio: fireInsuranceVal,
               tenantName: (property as any).locatarioNome ?? "",
               tenantPhone: (property as any).locatarioTelefone ?? "",
@@ -447,10 +465,10 @@ export default function AdminRents() {
         valorAluguel: property.priceLocacao || property.valorAluguel || 0,
         valorIptu: property.iptu || property.valorIptu || 0,
         valorCondominio: property.condoFee || property.valorCondominio || 0,
-        valorTaxaLixo: Number(property.valorTaxaLixo ?? property.taxaLixo ?? property.taxalixo ?? 0),
-        valorTaxaGas: Number(property.valorTaxaGas ?? property.taxaGas ?? property.taxagas ?? 0),
-        valorTaxaAgua: Number((property as any).valorTaxaAgua ?? (property as any).taxaAgua ?? (property as any).taxaagua ?? 0),
-        valorTaxaLuz: Number((property as any).valorTaxaLuz ?? (property as any).taxaLuz ?? (property as any).taxaluz ?? 0),
+        valorTaxaLixo: toNumber(property.valorTaxaLixo ?? property.taxaLixo ?? property.taxalixo ?? 0),
+        valorTaxaGas: toNumber(property.valorTaxaGas ?? property.taxaGas ?? property.taxagas ?? 0),
+        valorTaxaAgua: toNumber((property as any).valorTaxaAgua ?? (property as any).taxaAgua ?? (property as any).taxaagua ?? 0),
+        valorTaxaLuz: toNumber((property as any).valorTaxaLuz ?? (property as any).taxaLuz ?? (property as any).taxaluz ?? 0),
         valorSeguroIncendio: fireInsuranceVal,
         tenantName: (property as any).locatarioNome ?? "",
         tenantPhone: (property as any).locatarioTelefone ?? "",
@@ -552,6 +570,8 @@ export default function AdminRents() {
       valorIptu: 0,
       valorTaxaLixo: 0,
       valorTaxaGas: 0,
+      valorTaxaAgua: 0,
+      valorTaxaLuz: 0,
       valorCondominio: 0,
       valorOutros: 0,
       valorDesconto: 0,
@@ -1315,6 +1335,8 @@ export default function AdminRents() {
               ["IPTU", safeMoney(lease.valorIptu)],
               ["Taxa de Lixo", safeMoney(lease.valorTaxaLixo)],
               ["Taxa de Gás", safeMoney((lease as any).valorTaxaGas || 0)],
+              ["Taxa de Água", safeMoney((lease as any).valorTaxaAgua || 0)],
+              ["Taxa de Luz", safeMoney((lease as any).valorTaxaLuz || 0)],
               ["Condomínio", safeMoney(lease.valorCondominio)],
               ...(fireInsuranceVal > 0
                 ? [["Seguro Incêndio", safeMoney(fireInsuranceVal)]]
@@ -1332,6 +1354,8 @@ export default function AdminRents() {
               ["IPTU", safeMoney(lease.valorIptu)],
               ["Taxa de Lixo", safeMoney(lease.valorTaxaLixo)],
               ["Taxa de Gás", safeMoney((lease as any).valorTaxaGas || 0)],
+              ["Taxa de Água", safeMoney((lease as any).valorTaxaAgua || 0)],
+              ["Taxa de Luz", safeMoney((lease as any).valorTaxaLuz || 0)],
               ["Condomínio", safeMoney(lease.valorCondominio)],
               ...(fireInsuranceVal > 0
                 ? [["Seguro Incêndio", safeMoney(fireInsuranceVal)]]
@@ -2027,6 +2051,42 @@ export default function AdminRents() {
                         </div>
                         <div className="space-y-2">
                           <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                            Taxa de Água (R$)
+                          </label>
+                          <input
+                            type="text"
+                            className="w-full bg-gray-50 border border-transparent rounded-2xl py-4 px-6 text-sm font-bold focus:ring-4 focus:ring-gold/10 outline-none transition-all"
+                            value={maskCurrency(leaseForm.valorTaxaAgua ?? "")}
+                            onChange={(e) =>
+                              setLeaseForm({
+                                ...leaseForm,
+                                valorTaxaAgua: parseCurrencyToNumber(
+                                  e.target.value,
+                                ),
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                            Taxa de Luz (R$)
+                          </label>
+                          <input
+                            type="text"
+                            className="w-full bg-gray-50 border border-transparent rounded-2xl py-4 px-6 text-sm font-bold focus:ring-4 focus:ring-gold/10 outline-none transition-all"
+                            value={maskCurrency(leaseForm.valorTaxaLuz ?? "")}
+                            onChange={(e) =>
+                              setLeaseForm({
+                                ...leaseForm,
+                                valorTaxaLuz: parseCurrencyToNumber(
+                                  e.target.value,
+                                ),
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
                             Condomínio (R$)
                           </label>
                           <input
@@ -2109,6 +2169,8 @@ export default function AdminRents() {
                               (leaseForm.valorIptu || 0) +
                               (leaseForm.valorTaxaLixo || 0) +
                               (leaseForm.valorTaxaGas || 0) +
+                              (leaseForm.valorTaxaAgua || 0) +
+                              (leaseForm.valorTaxaLuz || 0) +
                               (leaseForm.valorCondominio || 0) +
                               (leaseForm.valorOutros || 0) -
                               (leaseForm.valorDesconto || 0);
@@ -2155,6 +2217,18 @@ export default function AdminRents() {
                           <span className="text-gray-400">Taxa Gás:</span>
                           <span className="font-bold text-primary-black">
                             {formatCurrency(leaseForm.valorTaxaGas || 0)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-400">Taxa Água:</span>
+                          <span className="font-bold text-primary-black">
+                            {formatCurrency(leaseForm.valorTaxaAgua || 0)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-400">Taxa Luz:</span>
+                          <span className="font-bold text-primary-black">
+                            {formatCurrency(leaseForm.valorTaxaLuz || 0)}
                           </span>
                         </div>
                         <div className="flex justify-between text-sm">
@@ -2426,6 +2500,18 @@ export default function AdminRents() {
                       <span className="text-gray-400 text-xs">Taxa Gás</span>
                       <span className="font-bold text-primary-black">
                         {formatCurrency(selectedLease.valorTaxaGas ?? 0)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-b border-gray-50 pb-2">
+                      <span className="text-gray-400 text-xs">Taxa Água</span>
+                      <span className="font-bold text-primary-black">
+                        {formatCurrency(selectedLease.valorTaxaAgua ?? 0)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-b border-gray-50 pb-2">
+                      <span className="text-gray-400 text-xs">Taxa Luz</span>
+                      <span className="font-bold text-primary-black">
+                        {formatCurrency(selectedLease.valorTaxaLuz ?? 0)}
                       </span>
                     </div>
                   </div>

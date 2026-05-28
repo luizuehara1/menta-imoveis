@@ -2,7 +2,7 @@ import React from 'react';
 import { Visit, Property, SiteConfig } from '../../types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { getSafeImageUrl } from '../../lib/utils';
+import { getSafeImageUrl, formatOptionWithQuantity, pluralizeLabel } from '../../lib/utils';
 import { 
   User, 
   Phone, 
@@ -119,73 +119,51 @@ export const VisitPdfTemplate = React.forwardRef<HTMLDivElement, VisitPdfTemplat
   const p = property as any;
 
   const formatCharacteristicPDF = (char: string, property: any) => {
-    const ambientes = property?.ambientes || [];
-    
-    if (Array.isArray(ambientes)) {
-      const matched = ambientes.find(
-        (a: any) => String(a.label || '').trim().toLowerCase() === char.trim().toLowerCase()
-      );
-      if (matched && matched.quantidade !== undefined && matched.quantidade !== null && Number(matched.quantidade) > 0) {
-        const qty = Number(matched.quantidade);
-        if (qty <= 1) {
-          if (char === 'Dormitórios') return '1 Dormitório';
-          if (char === 'Suítes') return '1 Suíte';
-          if (char === 'Número de salas') return '1 Sala';
-          if (char === 'Número de vagas') return '1 Vaga';
-          if (char === 'Quantidade de vagas privativas') return '1 Vaga privativa';
-          if (char === 'Demi-suíte') return '1 Demi-suíte';
-          if (char === 'WC social') return '1 WC social';
-          if (char === 'WC empregada') return '1 WC empregada';
-          if (char === 'Dependência de empregada') return '1 Dependência de empregada';
-          if (char === 'Escritório') return '1 Escritório';
-          if (char === 'Lavabo') return '1 Lavabo';
-          if (char === 'Box privativo') return '1 Box privativo';
-        } else {
-          if (char === 'Número de salas') return `${qty} Salas`;
-          if (char === 'Número de vagas') return `${qty} Vagas`;
-          if (char === 'Quantidade de vagas privativas') return `${qty} Vagas privativas`;
-        }
-        return `${qty} ${char}`;
+    const allObjects = [
+      ...(property?.ambientes || []),
+      ...(property?.caracteristicasApartamento || []),
+      ...(property?.lazer_objects || []),
+      ...(property?.caracteristicasEmpreendimento || []),
+      ...(property?.instalacoes_objects || []),
+      ...(property?.acabamentos_objects || []),
+      ...(property?.localizacao || [])
+    ];
+
+    const matched = allObjects.find(
+      (o: any) => String(o.label || o.nome || '').trim().toLowerCase() === char.trim().toLowerCase()
+    );
+
+    if (matched && matched.quantidade !== undefined && matched.quantidade !== null) {
+      const qty = Number(matched.quantidade);
+      if (qty > 0) {
+        return formatOptionWithQuantity(matched);
       }
     }
 
-    const apts = property?.caracteristicasApartamento || [];
-    if (Array.isArray(apts)) {
-      const matched = apts.find(
-        (a: any) => String(a.label || '').trim().toLowerCase() === char.trim().toLowerCase()
-      );
-      if (matched && matched.quantidade !== undefined && matched.quantidade !== null && Number(matched.quantidade) > 0) {
-        const qty = Number(matched.quantidade);
-        if (qty <= 1) {
-          return char;
-        }
-        return `${qty}x ${char}`;
-      }
-    }
-
+    // Fallback to direct field matching
     if (char === 'Dormitórios' && (property?.dormitorios || property?.bedrooms)) {
       const qty = Number(property.dormitorios || property.bedrooms);
-      return qty > 1 ? `${qty} Dormitórios` : '1 Dormitório';
+      return formatOptionWithQuantity({ label: 'Dormitório', quantidade: qty });
     }
     if (char === 'Suítes' && property?.suites) {
       const qty = Number(property.suites);
-      return qty > 1 ? `${qty} Suítes` : '1 Suíte';
+      return formatOptionWithQuantity({ label: 'Suíte', quantidade: qty });
     }
     if (char === 'Número de salas' && property?.salas) {
       const qty = Number(property.salas);
-      return qty > 1 ? `${qty} Salas` : '1 Sala';
+      return formatOptionWithQuantity({ label: 'Sala', quantidade: qty });
     }
     if (char === 'Número de vagas' && (property?.vagas || property?.garageSpaces)) {
       const qty = Number(property.vagas || property.garageSpaces);
-      return qty > 1 ? `${qty} Vagas` : '1 Vaga';
+      return formatOptionWithQuantity({ label: 'Vaga', quantidade: qty });
     }
     if (char === 'Lavabo' && (property?.lavabos || property?.lavabo)) {
       const qty = Number(property.lavabos || property.lavabo);
-      return qty > 1 ? `${qty} Lavabos` : '1 Lavabo';
+      return formatOptionWithQuantity({ label: 'Lavabo', quantidade: qty });
     }
     if (char === 'WC social' && property?.bathrooms) {
       const qty = Number(property.bathrooms);
-      return qty > 1 ? `${qty} WC sociais` : '1 WC social';
+      return formatOptionWithQuantity({ label: 'WC social', quantidade: qty });
     }
 
     return char;
@@ -201,11 +179,10 @@ export const VisitPdfTemplate = React.forwardRef<HTMLDivElement, VisitPdfTemplat
   const allLeisure = rawLeisure.map((item) => {
     const qtyObj = (p?.lazer_objects || p?.caracteristicasEmpreendimento || []).find(
       (o: any) => (o.label || o.nome) === item.nome
-    );
-    const qty = qtyObj?.quantidade;
+    ) || item.nome;
     return {
       ...item,
-      nome: qty && qty > 1 ? `${item.nome} (${qty})` : item.nome
+      nome: formatOptionWithQuantity(qtyObj)
     };
   });
 
@@ -216,11 +193,10 @@ export const VisitPdfTemplate = React.forwardRef<HTMLDivElement, VisitPdfTemplat
   const allInstallations = rawInstallations.map((item) => {
     const qtyObj = (p?.instalacoes_objects || []).find(
       (o: any) => (o.label || o.nome) === item.nome
-    );
-    const qty = qtyObj?.quantidade;
+    ) || item.nome;
     return {
       ...item,
-      nome: qty && qty > 1 ? `${item.nome} (${qty})` : item.nome
+      nome: formatOptionWithQuantity(qtyObj)
     };
   });
 
@@ -232,7 +208,7 @@ export const VisitPdfTemplate = React.forwardRef<HTMLDivElement, VisitPdfTemplat
     const qty = qtyObj?.quantidade;
     return {
       ...item,
-      nome: qty && qty > 1 ? `${qty}x ${item.nome}` : item.nome
+      nome: formatOptionWithQuantity(qtyObj || { label: item.nome, quantidade: qty })
     };
   });
   

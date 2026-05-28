@@ -33,76 +33,65 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import PageWrapper from '../../components/PageWrapper';
 import { SafeImage } from '../../components/ui/SafeImage';
-import { formatCurrency, isValidPublicProperty, cleanPhoneForWhatsapp, getSafeImageUrl, isImovelAlugado, normalizeTipoNegocio } from '../../lib/utils';
+import { 
+  formatCurrency, 
+  isValidPublicProperty, 
+  isMockProperty,
+  cleanPhoneForWhatsapp, 
+  getSafeImageUrl, 
+  isImovelAlugado, 
+  normalizeTipoNegocio,
+  formatOptionWithQuantity,
+  pluralizeLabel,
+  buildPropertyWhatsAppMessage
+} from '../../lib/utils';
 
 const formatCharacteristic = (char: string, property: any) => {
-  const ambientes = property?.ambientes || [];
-  
-  if (Array.isArray(ambientes)) {
-    const matched = ambientes.find(
-      (a: any) => String(a.label || '').trim().toLowerCase() === char.trim().toLowerCase()
-    );
-    if (matched && matched.quantidade !== undefined && matched.quantidade !== null && Number(matched.quantidade) > 0) {
-      const qty = Number(matched.quantidade);
-      if (qty <= 1) {
-        if (char === 'Dormitórios') return '1 Dormitório';
-        if (char === 'Suítes') return '1 Suíte';
-        if (char === 'Número de salas') return '1 Sala';
-        if (char === 'Número de vagas') return '1 Vaga';
-        if (char === 'Quantidade de vagas privativas') return '1 Vaga privativa';
-        if (char === 'Demi-suíte') return '1 Demi-suíte';
-        if (char === 'WC social') return '1 WC social';
-        if (char === 'WC empregada') return '1 WC empregada';
-        if (char === 'Dependência de empregada') return '1 Dependência de empregada';
-        if (char === 'Escritório') return '1 Escritório';
-        if (char === 'Lavabo') return '1 Lavabo';
-        if (char === 'Box privativo') return '1 Box privativo';
-      } else {
-        if (char === 'Número de salas') return `${qty} Salas`;
-        if (char === 'Número de vagas') return `${qty} Vagas`;
-        if (char === 'Quantidade de vagas privativas') return `${qty} Vagas privativas`;
-      }
-      return `${qty} ${char}`;
+  const allObjects = [
+    ...(property?.ambientes || []),
+    ...(property?.caracteristicasApartamento || []),
+    ...(property?.lazer_objects || []),
+    ...(property?.caracteristicasEmpreendimento || []),
+    ...(property?.instalacoes_objects || []),
+    ...(property?.acabamentos_objects || []),
+    ...(property?.localizacao || [])
+  ];
+
+  const matched = allObjects.find(
+    (o: any) => String(o.label || o.nome || '').trim().toLowerCase() === char.trim().toLowerCase()
+  );
+
+  if (matched && matched.quantidade !== undefined && matched.quantidade !== null) {
+    const qty = Number(matched.quantidade);
+    if (qty > 0) {
+      return formatOptionWithQuantity(matched);
     }
   }
 
-  const apts = property?.caracteristicasApartamento || [];
-  if (Array.isArray(apts)) {
-    const matched = apts.find(
-      (a: any) => String(a.label || '').trim().toLowerCase() === char.trim().toLowerCase()
-    );
-    if (matched && matched.quantidade !== undefined && matched.quantidade !== null && Number(matched.quantidade) > 0) {
-      const qty = Number(matched.quantidade);
-      if (qty <= 1) {
-        return char;
-      }
-      return `${qty}x ${char}`;
-    }
-  }
-
+  // Fallback to direct field matching
   if (char === 'Dormitórios' && (property?.dormitorios || property?.bedrooms)) {
     const qty = Number(property.dormitorios || property.bedrooms);
-    return qty > 1 ? `${qty} Dormitórios` : '1 Dormitório';
+    return formatOptionWithQuantity({ label: 'Dormitório', quantidade: qty });
   }
   if (char === 'Suítes' && property?.suites) {
     const qty = Number(property.suites);
-    return qty > 1 ? `${qty} Suítes` : '1 Suíte';
+    return formatOptionWithQuantity({ label: 'Suíte', quantidade: qty });
   }
   if (char === 'Número de salas' && property?.salas) {
     const qty = Number(property.salas);
-    return qty > 1 ? `${qty} Salas` : '1 Sala';
+    return formatOptionWithQuantity({ label: 'Sala', quantidade: qty });
   }
   if (char === 'Número de vagas' && (property?.vagas || property?.garageSpaces)) {
     const qty = Number(property.vagas || property.garageSpaces);
-    return qty > 1 ? `${qty} Vagas` : '1 Vaga';
+    return formatOptionWithQuantity({ label: 'Vaga', quantidade: qty });
   }
   if (char === 'Lavabo' && (property?.lavabos || property?.lavabo)) {
     const qty = Number(property.lavabos || property.lavabo);
-    return qty > 1 ? `${qty} Lavabos` : '1 Lavabo';
+    return formatOptionWithQuantity({ label: 'Lavabo', quantidade: qty });
   }
   if (char === 'WC social' && property?.bathrooms) {
     const qty = Number(property.bathrooms);
-    return qty > 1 ? `${qty} WC sociais` : '1 WC social';
+    return formatOptionWithQuantity({ label: 'WC social', quantidade: qty });
   }
 
   return char;
@@ -150,6 +139,69 @@ export default function PropertyDetail() {
     lazer: false,
     instalacoes: false
   });
+  const [resolvedWhatsappPhone, setResolvedWhatsappPhone] = useState<string>('');
+
+  useEffect(() => {
+    if (property && settings) {
+      const fetchBrokerAndResolve = async () => {
+        // 1. imovel.corretorResponsavel.whatsapp
+        if (property.corretorResponsavel?.whatsapp) {
+          setResolvedWhatsappPhone(cleanPhoneForWhatsapp(property.corretorResponsavel.whatsapp));
+          return;
+        }
+        // 2. imovel.corretorResponsavel.telefone
+        if (property.corretorResponsavel?.telefone) {
+          setResolvedWhatsappPhone(cleanPhoneForWhatsapp(property.corretorResponsavel.telefone));
+          return;
+        }
+        // Fallbacks on flat property model
+        if (property.brokerWhatsapp) {
+          setResolvedWhatsappPhone(cleanPhoneForWhatsapp(property.brokerWhatsapp));
+          return;
+        }
+        if (property.brokerPhone) {
+          setResolvedWhatsappPhone(cleanPhoneForWhatsapp(property.brokerPhone));
+          return;
+        }
+        if (property.broker?.whatsapp) {
+          setResolvedWhatsappPhone(cleanPhoneForWhatsapp(property.broker.whatsapp));
+          return;
+        }
+        if (property.broker?.telefone) {
+          setResolvedWhatsappPhone(cleanPhoneForWhatsapp(property.broker.telefone));
+          return;
+        }
+
+        // 3. corretor vinculado em corretores/{id}
+        const brokerId = property.brokerId || property.corretorId || property.corretorResponsavel?.id || property.broker?.id;
+        if (brokerId) {
+          try {
+            const brokerRef = doc(db, 'corretores', brokerId);
+            const brokerSnap = await getDoc(brokerRef);
+            if (brokerSnap.exists()) {
+              const brokerData = brokerSnap.data();
+              if (brokerData) {
+                const brokerPhone = brokerData.whatsapp || brokerData.phone || brokerData.telefone;
+                if (brokerPhone) {
+                  setResolvedWhatsappPhone(cleanPhoneForWhatsapp(brokerPhone));
+                  return;
+                }
+              }
+            }
+          } catch (e) {
+            console.error("Error fetching broker from corretores:", e);
+          }
+        }
+
+        // 4. WhatsApp da empresa
+        if (settings?.empresa?.whatsapp) {
+          setResolvedWhatsappPhone(cleanPhoneForWhatsapp(settings.empresa.whatsapp));
+        }
+      };
+
+      fetchBrokerAndResolve();
+    }
+  }, [property, settings]);
 
   const toggleMobileSection = (section: string) => {
     setActiveMobileSections(prev => ({
@@ -251,13 +303,14 @@ export default function PropertyDetail() {
             // O imóvel público deve abrir se publicadoNoSite === true || publicado === true || ativo === true e excluido !== true.
             // Se o admin estiver logado, pode abrir mesmo se não estiver publicado.
             const isPublic = p.excluido !== true && (p.publicadoNoSite === true || p.publicado === true || p.ativo === true);
-            console.log("Verificação de visibilidade do imóvel:", { isPublic, isAdmin, excluido: p.excluido, publicadoNoSite: p.publicadoNoSite, publicado: p.publicado, ativo: p.ativo });
+            const isMock = isMockProperty(p);
+            console.log("Verificação de visibilidade do imóvel:", { isPublic, isMock, isAdmin, excluido: p.excluido, publicadoNoSite: p.publicadoNoSite, publicado: p.publicado, ativo: p.ativo });
 
-            if (isPublic || isAdmin) {
+            if ((isPublic || isAdmin) && !isMock) {
               setProperty(p);
               setNotFound(false);
             } else {
-              console.warn("Imóvel existe no banco de dados, mas não está público e o usuário atual não é Administrador.");
+              console.warn("Imóvel existe no banco de dados, mas não está público ou é mock e o usuário atual não é Administrador.");
               setNotFound(true);
             }
           } else {
@@ -331,11 +384,11 @@ export default function PropertyDetail() {
   }
 
   const getWhatsAppUrl = () => {
-    const rawPhone = property.brokerWhatsapp || settings.empresa.whatsapp;
+    const rawPhone = resolvedWhatsappPhone || property.brokerWhatsapp || settings.empresa.whatsapp;
     const cleanNumber = cleanPhoneForWhatsapp(rawPhone);
     // Use 55 as prefix if not already present
     const p = cleanNumber.startsWith('55') ? cleanNumber : `55${cleanNumber}`;
-    const message = `Olá, tenho interesse neste imóvel: ${property.title || property.titulo || "Imóvel"} - Código: ${property.code || property.codigo || ""}. Pode me passar mais informações?`;
+    const message = buildPropertyWhatsAppMessage(property);
     return `https://wa.me/${p}?text=${encodeURIComponent(message)}`;
   };
 
@@ -744,13 +797,8 @@ export default function PropertyDetail() {
 
                 {/* Features Accordion Panels / Details List */}
                 {(property.caracteristicas?.length > 0 || property.acabamentos?.length > 0 || property.lazer?.length > 0 || property.instalacoes?.length > 0) && (
-                  <div className="bg-white p-6 md:p-8 rounded-[2rem] border border-[#F1F5F9] shadow-sm space-y-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="w-1.5 h-4.5 bg-gold rounded-full" />
-                      <h2 className="font-display text-base font-bold text-[#0F172A] uppercase tracking-wider font-semibold">Cotejo Técnico e Diferenciais</h2>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10 pt-2">
+                  <div className="bg-white p-6 md:p-8 rounded-[2rem] border border-[#F1F5F9] shadow-sm">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10">
                        {/* Column 1: Características & Acabamentos */}
                        <div className="space-y-6 md:space-y-8">
                           {property.caracteristicas?.length > 0 && (
@@ -803,7 +851,7 @@ export default function PropertyDetail() {
                                        const qty = qtyObj?.quantidade;
                                        return (
                                          <span key={item} className="bg-slate-50 px-2.5 py-1 rounded-lg text-[10px] font-semibold text-slate-500 border border-slate-100 hover:border-gold hover:text-gold transition-all">
-                                            {qty && qty > 1 ? `${qty}x ` : ''}{item}
+                                            {formatOptionWithQuantity(qtyObj || { label: item, quantidade: qty })}
                                          </span>
                                        );
                                      })}
@@ -839,7 +887,7 @@ export default function PropertyDetail() {
                                         return (
                                           <div key={item} className="flex items-center gap-2 text-xs text-slate-500 hover:text-slate-850 transition-colors">
                                              <div className="w-1.5 h-1.5 rounded-full bg-gold/55 shrink-0" />
-                                             <span>{item}{qty && qty > 1 ? ` (${qty})` : ''}</span>
+                                             <span>{formatOptionWithQuantity(qtyObj || { label: item, quantidade: qty })}</span>
                                           </div>
                                         );
                                       })}
@@ -872,7 +920,7 @@ export default function PropertyDetail() {
                                         return (
                                           <div key={item} className="flex items-center gap-2 text-xs text-slate-500">
                                              <div className="w-1 h-1 bg-slate-300 rounded-full shrink-0" />
-                                             <span className="truncate">{item}{qty && qty > 1 ? ` (${qty})` : ''}</span>
+                                             <span className="truncate">{formatOptionWithQuantity(qtyObj || { label: item, quantidade: qty })}</span>
                                           </div>
                                         );
                                       })}

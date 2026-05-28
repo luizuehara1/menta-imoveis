@@ -56,7 +56,9 @@ import {
   isValidImageUrl, 
   maskCurrency, 
   parseCurrencyToNumber,
-  formatCurrency
+  formatCurrency,
+  pluralizeLabel,
+  formatOptionWithQuantity
 } from '../../lib/utils';
 import { useOptions } from '../../hooks/useSettings';
 import { Property, Owner, Broker } from '../../types';
@@ -1201,7 +1203,7 @@ export default function AdminPropertyForm() {
   };
 
   const selectAll = (field: string, category: string) => {
-    const allValues = (options[category] || []).map(o => o.nome);
+    const allValues = (options[category] || []).map((o: any) => o.nome);
     setValue(field, allValues);
   };
 
@@ -1214,8 +1216,7 @@ export default function AdminPropertyForm() {
     const { 
       propertyType, businessType, neighborhood, city, state,
       bedrooms, suites, bathrooms, garageSpaces, usefulArea, 
-      priceVenda, priceLocacao, condoFee, iptu, fireInsurance, taxes,
-      caracteristicas, lazer
+      priceVenda, priceLocacao, condoFee, iptu, fireInsurance, taxes
     } = values;
 
     const hasContent = values.title || values.shortDescription || values.fullDescription;
@@ -1225,18 +1226,82 @@ export default function AdminPropertyForm() {
       return;
     }
 
+    // Helper functions for normalization and deduplication
+    const getOptionNormalKey = (lbl: string): string => {
+      const norm = String(lbl || "").toLowerCase().trim()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, ""); // remove accents
+      
+      if (norm.includes("dormitorio") || norm.includes("quarto")) return "dormitorios";
+      if (norm.includes("suite")) return "suites";
+      if (norm.includes("banheiro")) return "banheiros";
+      if (norm.includes("vaga")) return "vagas";
+      
+      return norm;
+    };
+
+    const compileAllSelectedOptions = (): string[] => {
+      const listSources = [
+        values.caracteristicas,
+        values.lazer,
+        values.instalacoes,
+        values.acabamentos,
+        values.locationTags,
+        values.proximities,
+        // Any objects
+        values.ambientes,
+        values.caracteristicasApartamento,
+        values.caracteristicasEmpreendimento,
+        values.lazer_objects,
+        values.instalacoes_objects,
+        values.acabamentos_objects,
+        values.localizacao
+      ];
+
+      const allItems: string[] = [];
+
+      listSources.forEach(source => {
+        if (Array.isArray(source)) {
+          source.forEach(item => {
+            if (!item) return;
+            if (typeof item === 'string') {
+              allItems.push(item);
+            } else if (typeof item === 'object') {
+              const label = item.label || item.nome || item.value || item.descricao;
+              if (label && item.ativo !== false) {
+                allItems.push(String(label));
+              }
+            }
+          });
+        }
+      });
+
+      return allItems;
+    };
+
     // 1. Título
     let titulo = `${propertyType} `;
-    if (bedrooms) titulo += `${bedrooms} quartos `;
+    if (bedrooms) {
+      titulo += `${bedrooms} ${pluralizeLabel('quarto', Number(bedrooms))} `;
+    }
     titulo += `${businessType === 'Locação' ? 'para locação' : 'à venda'} `;
     if (neighborhood) titulo += `no ${neighborhood} `;
     if (city) titulo += `em ${city}`;
 
     // 2. Descrição Curta
     let descCurta = `${propertyType} ${businessType === 'Locação' ? 'para locação' : 'à venda'} no ${neighborhood || ''}${neighborhood ? ', ' : ''}${city}/${state}, `;
-    if (bedrooms) descCurta += `com ${bedrooms} quartos, `;
-    if (suites) descCurta += `suíte, `;
-    if (garageSpaces) descCurta += `${garageSpaces} vagas `;
+    if (bedrooms) {
+      const bedText = pluralizeLabel('quarto', Number(bedrooms));
+      descCurta += `com ${bedrooms} ${bedText}, `;
+    }
+    if (suites) {
+      const suiteText = pluralizeLabel('suíte', Number(suites));
+      descCurta += `${suites} ${suiteText}, `;
+    }
+    if (garageSpaces) {
+      const garageText = pluralizeLabel('vaga', Number(garageSpaces));
+      descCurta += `${garageSpaces} ${garageText} `;
+    }
     descCurta += `e excelente localização.`;
 
     // 3. Descrição Detalhada
@@ -1244,7 +1309,10 @@ export default function AdminPropertyForm() {
     if (businessType === 'Locação') {
       descCompleta = `Esta ${propertyType.toLowerCase()} para locação está localizada no bairro ${neighborhood || 'Bairro'} e oferece uma excelente opção para quem busca praticidade, conforto e boa localização.\n\n`;
       descCompleta += `O imóvel possui `;
-      if (bedrooms) descCompleta += `${bedrooms} quartos, `;
+      if (bedrooms) {
+        const bedText = pluralizeLabel('quarto', Number(bedrooms));
+        descCompleta += `${bedrooms} ${bedText}, `;
+      }
       descCompleta += `ambientes funcionais e está pronto para receber novos moradores.\n\n`;
       
       descCompleta += `Valores da locação:\n`;
@@ -1258,19 +1326,71 @@ export default function AdminPropertyForm() {
       descCompleta += `Valor total: ${formatCurrency(total)}\n\n`;
     } else {
       descCompleta = `Conheça este ${propertyType.toLowerCase()} à venda no ${neighborhood || 'Bairro'} de ${city || 'Cidade'} / ${state || 'UF'}. O imóvel conta com `;
-      if (bedrooms) descCompleta += `${bedrooms} quartos, `;
-      if (suites) descCompleta += `sendo ${suites} suíte, `;
-      if (bathrooms) descCompleta += `${bathrooms} banheiros, `;
-      if (garageSpaces) descCompleta += `${garageSpaces} vagas de garagem `;
+      if (bedrooms) {
+        const bedText = pluralizeLabel('quarto', Number(bedrooms));
+        descCompleta += `${bedrooms} ${bedText}, `;
+      }
+      if (suites) {
+        const suiteText = pluralizeLabel('suíte', Number(suites));
+        descCompleta += `sendo ${suites} ${suiteText}, `;
+      }
+      if (bathrooms) {
+        const bathText = pluralizeLabel('banheiro', Number(bathrooms));
+        descCompleta += `${bathrooms} ${bathText}, `;
+      }
+      if (garageSpaces) {
+        const garageText = pluralizeLabel('vaga', Number(garageSpaces));
+        descCompleta += `${garageSpaces} ${garageText} de garagem `;
+      }
       if (usefulArea) descCompleta += `e ${usefulArea}m² de área útil. `;
       descCompleta += `Ambientes bem distribuídos para oferecer conforto e praticidade no dia a dia.\n\n`;
       
       if (priceVenda) descCompleta += `Valor de investimento: ${formatCurrency(priceVenda)}\n\n`;
     }
 
-    const allFeatures = [...(caracteristicas || []), ...(lazer || [])];
-    if (allFeatures.length > 0) {
-      descCompleta += `Diferenciais do imóvel:\n- ${allFeatures.slice(0, 8).join('\n- ')}\n\n`;
+    // Build the Differentials List
+    const differentials: string[] = [];
+    const seenKeys = new Set<string>();
+
+    // Prioritize main fields
+    const mainItems: { label: string; qty: number; key: string }[] = [];
+    if (Number(bedrooms || 0) > 0) {
+      mainItems.push({ label: "Dormitório", qty: Number(bedrooms), key: "dormitorios" });
+    }
+    if (Number(suites || 0) > 0) {
+      mainItems.push({ label: "Suíte", qty: Number(suites), key: "suites" });
+    }
+    if (Number(bathrooms || 0) > 0) {
+      mainItems.push({ label: "Banheiro", qty: Number(bathrooms), key: "banheiros" });
+    }
+    if (Number(garageSpaces || 0) > 0) {
+      mainItems.push({ label: "Vaga de garagem", qty: Number(garageSpaces), key: "vagas" });
+    }
+
+    mainItems.forEach(item => {
+      seenKeys.add(item.key);
+      const text = formatOptionWithQuantity({ label: item.label, quantidade: item.qty });
+      if (text) {
+        differentials.push(`- ${text}`);
+      }
+    });
+
+    // Add all other checked/filled options
+    const checkedOptions = compileAllSelectedOptions();
+    checkedOptions.forEach(optName => {
+      const normKey = getOptionNormalKey(optName);
+      if (!seenKeys.has(normKey)) {
+        seenKeys.add(normKey);
+        const text = formatOptionWithQuantity(optName, optionQuantities);
+        // Exclude empty, zero-valued or weird strings from being added
+        if (text && !text.startsWith("0 ")) {
+          differentials.push(`- ${text}`);
+        }
+      }
+    });
+
+    if (differentials.length > 0) {
+      descCompleta += `Diferenciais do imóvel:\n${differentials.join('\n')}\n\n`;
     }
 
     descCompleta += `Localizado em uma região valorizada, o imóvel é ideal para quem busca morar bem ou investir com segurança.\n\n`;

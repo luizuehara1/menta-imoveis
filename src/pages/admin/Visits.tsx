@@ -99,6 +99,82 @@ export default function AdminVisits() {
     }
   };
 
+  const debugOklabColors = (el: HTMLElement) => {
+    const allElements = [el, ...Array.from(el.querySelectorAll("*"))];
+    allElements.forEach((elem) => {
+      const computed = window.getComputedStyle(elem);
+      const props = [
+        "color",
+        "backgroundColor",
+        "borderColor",
+        "borderTopColor",
+        "borderRightColor",
+        "borderBottomColor",
+        "borderLeftColor"
+      ];
+      props.forEach((prop) => {
+        const value = (computed as any)[prop];
+        if (
+          value &&
+          (
+            value.includes("oklab") ||
+            value.includes("oklch") ||
+            value.includes("color-mix")
+          )
+        ) {
+          console.warn("Cor incompatível encontrada no PDF:", {
+            tagName: elem.tagName,
+            id: elem.id,
+            prop,
+            value,
+            className: elem.className
+          });
+        }
+      });
+    });
+  };
+
+  const sanitizePdfColors = (el: HTMLElement) => {
+    if (!el) return;
+    const allElements = [el, ...Array.from(el.querySelectorAll("*"))];
+    allElements.forEach((elem) => {
+      const htmlEl = elem as HTMLElement;
+      htmlEl.style.color = "#111827";
+      htmlEl.style.backgroundColor = htmlEl.style.backgroundColor || "transparent";
+      htmlEl.style.borderColor = "#e5e7eb";
+      htmlEl.style.boxShadow = "none";
+
+      const computed = window.getComputedStyle(htmlEl);
+      const props = [
+        "color",
+        "backgroundColor",
+        "borderColor",
+        "borderTopColor",
+        "borderRightColor",
+        "borderBottomColor",
+        "borderLeftColor",
+        "outlineColor",
+        "textDecorationColor"
+      ];
+
+      props.forEach((prop) => {
+        const value = (computed as any)[prop];
+        if (
+          value &&
+          (
+            value.includes("oklab") ||
+            value.includes("oklch") ||
+            value.includes("color-mix")
+          )
+        ) {
+          (htmlEl.style as any)[prop] = prop === "backgroundColor"
+            ? "#ffffff"
+            : "#111827";
+        }
+      });
+    });
+  };
+
   const generatePDF = async (visit: Visit, action: 'download' | 'print' | 'preview' = 'download') => {
     setGeneratingPdf(visit.id || 'new');
 
@@ -130,6 +206,8 @@ export default function AdminVisits() {
       await new Promise(resolve => setTimeout(resolve, 1500));
 
       if (pdfRef.current) {
+        debugOklabColors(pdfRef.current);
+        sanitizePdfColors(pdfRef.current);
         try {
           const canvas = await html2canvas(pdfRef.current, {
             scale: 2, // Higher quality

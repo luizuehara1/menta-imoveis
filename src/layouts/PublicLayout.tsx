@@ -4,9 +4,11 @@ import { Phone, MessageCircle, Menu, X, Instagram, Mail, MapPin as MapPinIcon } 
 import { motion, AnimatePresence } from 'motion/react';
 import { SafeImage } from '../components/ui/SafeImage';
 import { useSettings } from '../hooks/useSettings';
-import { cleanPhoneForWhatsapp } from '../lib/utils';
+import { cleanPhoneForWhatsapp, buildPropertyWhatsAppMessage } from '../lib/utils';
+import { db } from '../lib/firebase';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 
-const Navbar = () => {
+const Navbar = ({ whatsappUrl: customWhatsappUrl }: { whatsappUrl?: string }) => {
   const [isOpen, setIsOpen] = React.useState(false);
   const [scrolled, setScrolled] = React.useState(false);
   const location = useLocation();
@@ -27,7 +29,7 @@ const Navbar = () => {
   ];
   
   const cleanNumber = cleanPhoneForWhatsapp(settings.empresa.whatsapp);
-  const whatsappUrl = `https://wa.me/55${cleanNumber}`;
+  const whatsappUrl = customWhatsappUrl || `https://wa.me/55${cleanNumber}`;
 
   // Analyze active route
   const isPropertyDetailPage = location.pathname.startsWith('/imovel/');
@@ -289,12 +291,124 @@ const Footer = () => {
 
 export default function PublicLayout() {
   const { settings } = useSettings();
-  const cleanNumber = cleanPhoneForWhatsapp(settings.empresa.whatsapp);
-  const whatsappUrl = `https://wa.me/55${cleanNumber}`;
+  const location = useLocation();
+
+  const isPropertyDetailPage = location.pathname.startsWith('/imovel/');
+  const pathParts = location.pathname.split('/');
+  const propertyId = pathParts[pathParts.length - 1];
+
+  const [activeProperty, setActiveProperty] = React.useState<any>(null);
+  const [resolvedBrokerWhatsapp, setResolvedBrokerWhatsapp] = React.useState<string>("");
+
+  React.useEffect(() => {
+    if (isPropertyDetailPage && propertyId && propertyId !== "imoveis") {
+      const getPropAndBroker = async () => {
+        try {
+          let p: any = null;
+          const docSnap = await getDoc(doc(db, 'imoveis', propertyId));
+          if (docSnap.exists()) {
+            p = { id: docSnap.id, ...docSnap.data() };
+          } else {
+            // queries fallback
+            const slugQuery = query(collection(db, 'imoveis'), where('slug', '==', propertyId));
+            const slugSnap = await getDocs(slugQuery);
+            if (!slugSnap.empty) {
+              const matchedDoc = slugSnap.docs[0];
+              p = { id: matchedDoc.id, ...matchedDoc.data() };
+            } else {
+              const codeQuery = query(collection(db, 'imoveis'), where('code', '==', propertyId));
+              const codeSnap = await getDocs(codeQuery);
+              if (!codeSnap.empty) {
+                const matchedDoc = codeSnap.docs[0];
+                p = { id: matchedDoc.id, ...matchedDoc.data() };
+              }
+            }
+          }
+
+          if (p) {
+            setActiveProperty(p);
+
+            // Fetch/Resolve Broker
+            // 1. imovel.corretorResponsavel.whatsapp
+            if (p.corretorResponsavel?.whatsapp) {
+              setResolvedBrokerWhatsapp(cleanPhoneForWhatsapp(p.corretorResponsavel.whatsapp));
+              return;
+            }
+            // 2. imovel.corretorResponsavel.telefone
+            if (p.corretorResponsavel?.telefone) {
+              setResolvedBrokerWhatsapp(cleanPhoneForWhatsapp(p.corretorResponsavel.telefone));
+              return;
+            }
+            // Fallbacks
+            if (p.brokerWhatsapp) {
+              setResolvedBrokerWhatsapp(cleanPhoneForWhatsapp(p.brokerWhatsapp));
+              return;
+            }
+            if (p.brokerPhone) {
+              setResolvedBrokerWhatsapp(cleanPhoneForWhatsapp(p.brokerPhone));
+              return;
+            }
+            if (p.broker?.whatsapp) {
+              setResolvedBrokerWhatsapp(cleanPhoneForWhatsapp(p.broker.whatsapp));
+              return;
+            }
+            if (p.broker?.telefone) {
+              setResolvedBrokerWhatsapp(cleanPhoneForWhatsapp(p.broker.telefone));
+              return;
+            }
+
+            // 3. corretor em corretores/{id}
+            const brokerId = p.brokerId || p.corretorId || p.corretorResponsavel?.id || p.broker?.id;
+            if (brokerId) {
+              try {
+                const brokerRef = doc(db, 'corretores', brokerId);
+                const brokerSnap = await getDoc(brokerRef);
+                if (brokerSnap.exists()) {
+                  const brokerData = brokerSnap.data();
+                  if (brokerData) {
+                    const bPhone = brokerData.whatsapp || brokerData.phone || brokerData.telefone;
+                    if (bPhone) {
+                      setResolvedBrokerWhatsapp(cleanPhoneForWhatsapp(bPhone));
+                      return;
+                    }
+                  }
+                }
+              } catch (e) {
+                console.error("Error fetching broker in layout:", e);
+              }
+            }
+          }
+        } catch (e) {
+          console.error("Error fetching and resolving layout property:", e);
+        }
+        
+        // Failsafe / 4. WhatsApp da empresa
+        setResolvedBrokerWhatsapp(cleanPhoneForWhatsapp(settings?.empresa?.whatsapp || ""));
+      };
+
+      getPropAndBroker();
+    } else {
+      setActiveProperty(null);
+      setResolvedBrokerWhatsapp("");
+    }
+  }, [isPropertyDetailPage, propertyId, settings]);
+
+  const cleanNumber = resolvedBrokerWhatsapp || cleanPhoneForWhatsapp(settings.empresa.whatsapp);
+  const p = cleanNumber.startsWith('55') ? cleanNumber : `55${cleanNumber}`;
+  
+  const getWhatsappUrl = () => {
+    if (activeProperty) {
+      const message = buildPropertyWhatsAppMessage(activeProperty);
+      return `https://wa.me/${p}?text=${encodeURIComponent(message)}`;
+    }
+    return `https://wa.me/${p}`;
+  };
+
+  const whatsappUrl = getWhatsappUrl();
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: settings.aparencia.corFundo, color: settings.aparencia.corTexto }}>
-      <Navbar />
+      <Navbar whatsappUrl={whatsappUrl} />
       <main className="flex-grow">
         <Outlet />
       </main>

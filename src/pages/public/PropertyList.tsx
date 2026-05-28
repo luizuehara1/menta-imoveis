@@ -1,18 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { Search, MapPin, Bed, Car, MessageCircle, Filter, X, Sparkles, Layers, Bath, Maximize, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSettings, useOptions } from '../../hooks/useSettings';
 import PageWrapper from '../../components/PageWrapper';
 import { SafeImage } from '../../components/ui/SafeImage';
-import { formatCurrency, isValidPublicProperty, cleanPhoneForWhatsapp, getSafeImageUrl, isImovelAlugado, matchesQuickSearch, normalizeText } from '../../lib/utils';
+import { formatCurrency, isValidPublicProperty, isMockProperty, cleanPhoneForWhatsapp, getSafeImageUrl, isImovelAlugado, matchesQuickSearch, normalizeText, buildPropertyWhatsAppMessage } from '../../lib/utils';
 import { staggerContainer, slideUp, fadeIn } from '../../constants/animations';
 import { GoldenParticles } from '../../components/three/GoldenParticles';
 import { Canvas } from '@react-three/fiber';
 
 function isImovelPublico(imovel: any) {
+  if (!imovel?.id) return false;
+  if (isMockProperty(imovel)) return false;
   return (
     imovel?.excluido !== true &&
     (
@@ -63,6 +65,66 @@ function getImagemPrincipal(imovel: any): string {
 
 const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
   const { settings } = useSettings();
+  const [resolvedPhone, setResolvedPhone] = useState<string>("");
+
+  useEffect(() => {
+    const fetchAndResolve = async () => {
+      // 1. imovel.corretorResponsavel.whatsapp
+      if (property.corretorResponsavel?.whatsapp) {
+        setResolvedPhone(cleanPhoneForWhatsapp(property.corretorResponsavel.whatsapp));
+        return;
+      }
+      // 2. imovel.corretorResponsavel.telefone
+      if (property.corretorResponsavel?.telefone) {
+        setResolvedPhone(cleanPhoneForWhatsapp(property.corretorResponsavel.telefone));
+        return;
+      }
+      // Fallbacks
+      if (property.brokerWhatsapp) {
+        setResolvedPhone(cleanPhoneForWhatsapp(property.brokerWhatsapp));
+        return;
+      }
+      if (property.brokerPhone) {
+        setResolvedPhone(cleanPhoneForWhatsapp(property.brokerPhone));
+        return;
+      }
+      if (property.broker?.whatsapp) {
+        setResolvedPhone(cleanPhoneForWhatsapp(property.broker.whatsapp));
+        return;
+      }
+      if (property.broker?.telefone) {
+        setResolvedPhone(cleanPhoneForWhatsapp(property.broker.telefone));
+        return;
+      }
+
+      // 3. corretor em corretores/{id}
+      const brokerId = property.brokerId || property.corretorId || property.corretorResponsavel?.id || property.broker?.id;
+      if (brokerId) {
+        try {
+          const brokerRef = doc(db, 'corretores', brokerId);
+          const brokerSnap = await getDoc(brokerRef);
+          if (brokerSnap.exists()) {
+            const brokerData = brokerSnap.data();
+            if (brokerData) {
+              const bPhone = brokerData.whatsapp || brokerData.phone || brokerData.telefone;
+              if (bPhone) {
+                setResolvedPhone(cleanPhoneForWhatsapp(bPhone));
+                return;
+              }
+            }
+          }
+        } catch (e) {
+          console.error("Error fetching broker from card:", e);
+        }
+      }
+
+      // 4. WhatsApp da empresa
+      const fallback = agencyWhatsApp || settings?.empresa?.whatsapp || "554188364069";
+      setResolvedPhone(cleanPhoneForWhatsapp(fallback));
+    };
+
+    fetchAndResolve();
+  }, [property, agencyWhatsApp, settings]);
 
   const mainImageUnwrapped = React.useMemo(() => {
     const imgs = property?.images || property?.imagens || [];
@@ -78,13 +140,11 @@ const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
   }, [property]);
 
   const getWhatsAppUrl = () => {
-    const rawPhone = property.brokerWhatsapp || agencyWhatsApp;
-    const cleanNumber = cleanPhoneForWhatsapp(rawPhone || '554188364069');
+    const rawPhone = resolvedPhone || property.brokerWhatsapp || agencyWhatsApp || settings?.empresa?.whatsapp || "554188364069";
+    const cleanNumber = cleanPhoneForWhatsapp(rawPhone);
     // Prefix 55 if not already present
     const p = cleanNumber.startsWith('55') ? cleanNumber : `55${cleanNumber}`;
-    const displayTitle = property.titulo || property.title || property.tituloAnuncio || property.nome || "Imóvel";
-    const displayCode = property.codigo || property.code || property.codigoImovel || property.id;
-    const message = `Olá, tenho interesse neste imóvel: ${displayTitle} - Código: ${displayCode}. Pode me passar mais informações?`;
+    const message = buildPropertyWhatsAppMessage(property);
     return `https://wa.me/${p}?text=${encodeURIComponent(message)}`;
   };
 
@@ -412,15 +472,15 @@ export default function PropertyList() {
         rawData = Array.from(map.values());
       }
 
-      console.log("Buscando imóveis públicos...");
+      console.log("Buscando imóveis do Firestore...");
       const todosImoveis = rawData;
       console.log("Total bruto Firestore:", todosImoveis.length);
-      console.log("Imóveis brutos:", todosImoveis);
+      console.log("Imóveis vindos do Firestore:", todosImoveis);
 
       // Log those that are removed from being public
       todosImoveis.forEach(imovel => {
         if (!isImovelPublico(imovel)) {
-          console.log("Imóvel removido do público:", imovel.id, {
+          console.log("Imóvel removido do público (pode ser mock ou inativo/excluído):", imovel.id, {
             publicadoNoSite: imovel.publicadoNoSite,
             publicado: imovel.publicado,
             ativo: imovel.ativo,
@@ -432,7 +492,7 @@ export default function PropertyList() {
       });
 
       const imoveisPublicos = todosImoveis.filter(isImovelPublico);
-      console.log("Total depois do filtro público:", imoveisPublicos.length);
+      console.log("Total imóveis públicos:", imoveisPublicos.length);
       console.log("Filtros ativos:", filters);
 
       let data = imoveisPublicos;

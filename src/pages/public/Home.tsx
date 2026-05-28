@@ -315,17 +315,50 @@ export default function Home() {
     const fetchFeatured = async () => {
       setFetchingProperties(true);
       try {
-        console.log("[Home] Buscando imóveis em destaque...");
-        const q = query(
-          collection(db, 'imoveis'), 
-          where('publicado', '==', true),
-          where('destaque', '==', true),
-          limit(20)
-        );
-        const snap = await getDocs(q);
-        const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
-        const filtered = data.filter(isValidPublicProperty).slice(0, 3);
-        setFeaturedProperties(filtered);
+        console.log("[Home] Buscando imóveis em destaque do Firestore...");
+        
+        let allDocs: any[] = [];
+        try {
+          // Attempt to get all to filter in-memory with maximum flexibility
+          const snap = await getDocs(collection(db, 'imoveis'));
+          allDocs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+        } catch (err) {
+          console.log("[Home] Falha ao ler coleção cheia, tentando consultas específicas paralelas...", err);
+          // Query fallbacks if full list read permissions are restricted
+          const q1 = query(collection(db, 'imoveis'), where('publicado', '==', true));
+          const q2 = query(collection(db, 'imoveis'), where('publicadoNoSite', '==', true));
+          const q3 = query(collection(db, 'imoveis'), where('ativo', '==', true));
+          
+          const [snap1, snap2, snap3] = await Promise.all([
+             getDocs(q1).catch(e => ({ docs: [] })),
+             getDocs(q2).catch(e => ({ docs: [] })),
+             getDocs(q3).catch(e => ({ docs: [] }))
+          ]);
+          
+          const map = new Map();
+          [...snap1.docs, ...snap2.docs, ...snap3.docs].forEach(d => {
+            map.set(d.id, { id: d.id, ...d.data() as any });
+          });
+          allDocs = Array.from(map.values());
+        }
+
+        // Filter out inactives and mocks
+        const publicImoveis = allDocs.filter(isValidPublicProperty);
+        
+        // Find highlighting ones (destaque === true || destaqueNaHome === true)
+        let featured = publicImoveis.filter((p: any) => p.destaque === true || p.destaqueNaHome === true);
+        
+        // If no highlit ones, fallback to most recent active ones
+        if (featured.length === 0) {
+          console.log("[Home] Nenhum imóvel marcado como destaque na Home. Usando os mais recentes.");
+          featured = [...publicImoveis].sort((a, b) => {
+            const dateA = a.createdAt?.seconds || 0;
+            const dateB = b.createdAt?.seconds || 0;
+            return dateB - dateA;
+          });
+        }
+        
+        setFeaturedProperties(featured.slice(0, 3));
       } catch (error) {
         console.error("[Home] Erro ao buscar imóveis em destaque:", error);
         setFeaturedProperties([]);

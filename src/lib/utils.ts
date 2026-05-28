@@ -53,6 +53,37 @@ export function isValidImageUrl(url: any): boolean {
   return trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('data:image/');
 }
 
+export function isMockProperty(p: any): boolean {
+  if (!p) return true;
+  const idStr = String(p.id || "").toLowerCase();
+  const codeStr = String(p.codigo || p.code || p.codigoImovel || "").toLowerCase();
+  const titleStr = String(p.titulo || p.title || p.tituloAnuncio || p.nome || "").toLowerCase();
+
+  const mockKeywords = [
+    "mock",
+    "demo",
+    "sample",
+    "fallback",
+    "teste",
+    "test",
+    "exemplo",
+    "apartamento alto padrao em balneario camboriu",
+    "apartamento alto padrão em balneário camboriú",
+    "menta001"
+  ];
+
+  if (mockKeywords.some(kw => idStr.includes(kw) || codeStr.includes(kw) || titleStr.includes(kw))) {
+    return true;
+  }
+
+  const resolvedTitle = String(p.titulo || p.title || p.tituloAnuncio || p.nome || "").trim();
+  if (!resolvedTitle) {
+    return true;
+  }
+
+  return false;
+}
+
 /**
  * Validates if a property is complete enough to be shown to the public.
  */
@@ -62,14 +93,16 @@ export function isValidPublicProperty(p: any): boolean {
   const hasId = !!p.id;
   const isPublished = p.publicado === true || p.publicadoNoSite === true || p.ativo === true;
   const isExcluded = p.excluido === true || String(p.status || "").toLowerCase().includes("excluid");
+  const isMock = isMockProperty(p);
 
-  const isValid = hasId && isPublished && !isExcluded;
+  const isValid = hasId && isPublished && !isExcluded && !isMock;
 
   if (!isValid && p.id) {
     console.warn(`[Property Validation] Imóvel ${p.id} INVÁLIDO. Motivos:`, {
        hasId,
        isPublished,
        isExcluded,
+       isMock,
        status: p.status,
        publicado: p.publicado,
        publicadoNoSite: p.publicadoNoSite,
@@ -397,5 +430,265 @@ export function matchesQuickSearch(imovel: any, searchTerm: string): boolean {
     const synonyms = expandSynonyms(word);
     return synonyms.some(syn => searchableText.includes(syn));
   });
+}
+
+export function pluralizeLabel(label: string, quantidade: number): string {
+  if (!label) return "";
+  const text = String(label || "").toLowerCase().trim();
+
+  // Mapping singular/plural pairs for standard options
+  const map: Record<string, [string, string]> = {
+    "dormitório": ["dormitório", "dormitórios"],
+    "dormitórios": ["dormitório", "dormitórios"],
+    "dormitorio": ["dormitório", "dormitórios"],
+    "dormitorios": ["dormitório", "dormitórios"],
+    "quarto": ["quarto", "quartos"],
+    "quartos": ["quarto", "quartos"],
+    "suíte": ["suíte", "suítes"],
+    "suítes": ["suíte", "suítes"],
+    "suite": ["suíte", "suítes"],
+    "suites": ["suíte", "suítes"],
+    "vaga": ["vaga", "vagas"],
+    "vagas": ["vaga", "vagas"],
+    "banheiro": ["banheiro", "banheiros"],
+    "banheiros": ["banheiro", "banheiros"],
+    "lavabo": ["lavabo", "lavabos"],
+    "lavabos": ["lavabo", "lavabos"],
+    "elevador": ["elevador", "elevadores"],
+    "elevadores": ["elevador", "elevadores"],
+    "piscina": ["piscina", "piscinas"],
+    "piscinas": ["piscina", "piscinas"],
+    "ar condicionado": ["ar-condicionado", "ar-condicionados"],
+    "ar-condicionado": ["ar-condicionado", "ar-condicionados"],
+    "ar condicionados": ["ar-condicionado", "ar-condicionados"],
+    "ar-condicionados": ["ar-condicionado", "ar-condicionados"],
+    "salão de festas": ["salão de festas", "salões de festas"],
+    "salões de festas": ["salão de festas", "salões de festas"],
+    "sala de jogos": ["sala de jogos", "salas de jogos"],
+    "salas de jogos": ["sala de jogos", "salas de jogos"],
+    "academia": ["academia", "academias"],
+    "academias": ["academia", "academias"],
+    "churrasqueira": ["churrasqueira", "churrasqueiras"],
+    "churrasqueiras": ["churrasqueira", "churrasqueiras"],
+    "sacada": ["sacada", "sacadas"],
+    "sacadas": ["sacada", "sacadas"],
+    "sacada integrada": ["sacada integrada", "sacadas integradas"],
+    "sacadas integradas": ["sacada integrada", "sacadas integradas"]
+  };
+
+  const found = map[text];
+
+  if (found) {
+    return quantidade === 1 ? found[0] : found[1];
+  }
+
+  // Fallback heuristic for pluralization in Portuguese if not found in list
+  if (quantidade !== 1) {
+    if (text.endsWith("r") || text.endsWith("s") || text.endsWith("z")) {
+      if (text.endsWith("es")) return label;
+      return `${label}es`;
+    }
+    if (text.endsWith("m")) {
+      return `${label.slice(0, -1)}ns`;
+    }
+    if (text.endsWith("al") || text.endsWith("el") || text.endsWith("ol") || text.endsWith("ul")) {
+      return `${label.slice(0, -2)}is`;
+    }
+    if (!text.endsWith("s")) {
+      return `${label}s`;
+    }
+  }
+
+  return label;
+}
+
+export function shouldShowQuantity(label: string): boolean {
+  const text = String(label || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  const quantityKeywords = [
+    "dormitorio",
+    "suite",
+    "demi-suite",
+    "banheiro",
+    "lavabo",
+    "wc",
+    "vaga",
+    "box privativo",
+    "sala",
+    "escritorio",
+    "dependencia",
+    "ar condicionado",
+    "elevador",
+    "piscina",
+    "churrasqueira",
+    "salao de festas",
+    "salao de jogos",
+    "academia",
+    "playground",
+    "quadra",
+    "brinquedoteca",
+    "bicicletario",
+    "box de praia",
+    "sauna",
+    "spa",
+    "area gourmet",
+    "espaco gourmet"
+  ];
+
+  const noQuantityKeywords = [
+    "mobiliado",
+    "semi mobiliado",
+    "vazio",
+    "alugado",
+    "desocupado",
+    "mora no local",
+    "financiamento",
+    "documentacao",
+    "permuta",
+    "area de servico",
+    "master com closet",
+    "hidro",
+    "closet",
+    "vista",
+    "sacada",
+    "gas central",
+    "gerador",
+    "portaria",
+    "fechadura",
+    "portao",
+    "sistema",
+    "moveis planejados",
+    "face do apartamento",
+    "posicao relativa",
+    "frente mar",
+    "quadra mar",
+    "centro",
+    "barra norte",
+    "barra sul",
+    "entre"
+  ];
+
+  if (noQuantityKeywords.some(keyword => text.includes(keyword))) {
+    return false;
+  }
+
+  return quantityKeywords.some(keyword => text.includes(keyword));
+}
+
+export function formatBooleanLabel(label: string): string {
+  const text = String(label || "").trim();
+
+  const normalized = text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  const map: Record<string, string> = {
+    "documentacao": "Documentação ok",
+    "financiamento": "Aceita financiamento",
+    "permuta": "Aceita permuta",
+    "mobiliado": "Mobiliado",
+    "semi mobiliado": "Semi mobiliado",
+    "vazio": "Imóvel vazio",
+    "desocupado": "Desocupado",
+    "mora no local": "Mora no local",
+    "area de servico": "Área de serviço",
+    "face do apartamento norte": "Face do apartamento: Norte",
+    "face do apartamento sul": "Face do apartamento: Sul",
+    "face do apartamento leste": "Face do apartamento: Leste",
+    "face do apartamento oeste": "Face do apartamento: Oeste",
+    "posicao relativa do apartamento frente": "Posição relativa: Frente",
+    "posicao relativa do apartamento lateral": "Posição relativa: Lateral",
+    "posicao relativa do apartamento meio": "Posição relativa: Meio",
+    "posicao relativa do apartamento fundos": "Posição relativa: Fundos"
+  };
+
+  return map[normalized] || text;
+}
+
+export function formatOptionDisplay(option: any): string {
+  if (!option) return "";
+
+  if (typeof option === "string") {
+    if (shouldShowQuantity(option)) {
+      return option;
+    }
+    return formatBooleanLabel(option);
+  }
+
+  const label = option.label || option.nome || option.value || "";
+  const quantidade = Number(option.quantidade || 0);
+
+  if (!label) return "";
+
+  if (shouldShowQuantity(label) && quantidade > 0) {
+    return `${quantidade} ${pluralizeLabel(label, quantidade)}`;
+  }
+
+  return formatBooleanLabel(label);
+}
+
+export function formatOptionWithQuantity(option: any, optionQuantities?: Record<string, number>): string {
+  if (!option) return "";
+
+  if (typeof option === "string") {
+    const qty = Number(optionQuantities?.[option] ?? 1);
+    if (!shouldShowQuantity(option)) {
+      return formatBooleanLabel(option);
+    }
+    const labelPluralized = pluralizeLabel(option, qty);
+    return qty > 0 ? `${qty} ${labelPluralized}` : option;
+  }
+
+  const label = option.label || option.nome || option.value || option.descricao || "";
+  if (!label) return "";
+
+  // Give priority to option.quantidade, fall back to optionQuantities map, then defaults to 1 or 0
+  const qty = Number(option.quantidade !== undefined ? option.quantidade : (optionQuantities?.[label] ?? 1));
+
+  if (shouldShowQuantity(label) && qty > 0) {
+    return `${qty} ${pluralizeLabel(label, qty)}`;
+  }
+
+  return formatBooleanLabel(label);
+}
+
+export function buildPropertyWhatsAppMessage(imovel: any): string {
+  if (!imovel) return "";
+  const publicUrl = `${window.location.origin}/imovel/${imovel.id}`;
+
+  const titulo = imovel.tituloAnuncio || imovel.titulo || imovel.nome || "Imóvel disponível";
+  const codigo = imovel.codigo || imovel.code || imovel.codigoImovel || "não informado";
+  const tipo = imovel.businessType || imovel.tipoNegocio || imovel.tipo || "não informado";
+
+  const bairro = imovel.bairro || imovel.neighborhood || "";
+  const cidade = imovel.cidade || imovel.city || "";
+  const estado = imovel.estado || imovel.state || "";
+
+  let localizacao = "não informada";
+  if (bairro || cidade || estado) {
+    const parts = [];
+    if (bairro) parts.push(bairro);
+    if (cidade) parts.push(cidade);
+    localizacao = parts.join(", ");
+    if (estado) {
+      localizacao += ` - ${estado}`;
+    }
+  }
+
+  return `Olá! Tenho interesse em agendar uma visita para este imóvel:
+
+Imóvel: ${titulo}
+Código: ${codigo}
+Tipo: ${tipo}
+Localização: ${localizacao}
+
+Link do imóvel:
+${publicUrl}
+
+Pode me passar mais informações?`;
 }
 

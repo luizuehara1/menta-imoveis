@@ -38,6 +38,7 @@ import {
 import { db } from '../../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { staggerContainer, slideUp, fadeIn, scaleIn } from '../../constants/animations';
+import { cleanPhoneForWhatsapp } from '../../lib/utils';
 
 interface VisitSchedulerProps {
   property: {
@@ -196,12 +197,50 @@ export default function VisitScheduler({ property }: VisitSchedulerProps) {
       
       // Redirect to WhatsApp
       const brokerPhone = property.brokerWhatsapp || "";
-      const cleanPhone = brokerPhone.replace(/\D/g, "");
-      const p = cleanPhone.length <= 11 ? `55${cleanPhone}` : cleanPhone;
+      const cleanPhone = cleanPhoneForWhatsapp(brokerPhone);
+      const p = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
       
-      if (p.length >= 10) {
-        const propertyUrl = `${window.location.origin}/imovel/${property.slug || property.id || property.code}`;
-        const message = `Olá! Acabei de solicitar uma visita pelo site para o imóvel ${property.code} - ${property.title}${property.businessType ? ` para ${property.businessType}` : ""}${property.city ? `, ${property.city}` : ""}${property.state ? ` / ${property.state}` : ""}.\n\n*Detalhes da Solicitação:*\n📅 Data: ${dateStr}\n🕒 Horário: ${selectedHour}\n👤 Nome: ${formData.nomeCliente}\n📞 Contato: ${formData.telefone}\n\n*Link do imóvel:*\n${propertyUrl}\n\nAguardo confirmação!`;
+      if (cleanPhone) {
+        const publicUrl = `${window.location.origin}/imovel/${property.id}`;
+        const pObj = property as any;
+
+        const titulo = pObj.tituloAnuncio || pObj.titulo || pObj.nome || "Imóvel disponível";
+        const codigo = pObj.codigo || pObj.code || pObj.codigoImovel || "não informado";
+        const tipo = pObj.businessType || pObj.tipoNegocio || pObj.tipo || "não informado";
+
+        const bairro = pObj.bairro || pObj.neighborhood || "";
+        const cidade = pObj.cidade || pObj.city || "";
+        const state = pObj.estado || pObj.state || "";
+
+        let localizacao = "não informada";
+        if (bairro || cidade || state) {
+          const parts = [];
+          if (bairro) parts.push(bairro);
+          if (cidade) parts.push(cidade);
+          localizacao = parts.join(", ");
+          if (state) {
+            localizacao += ` - ${state}`;
+          }
+        }
+
+        const message = `Olá! Tenho interesse em agendar uma visita para este imóvel:
+
+Imóvel: ${titulo}
+Código: ${codigo}
+Tipo: ${tipo}
+Localização: ${localizacao}
+
+Link do imóvel:
+${publicUrl}
+
+*Detalhes do Agendamento Solicitado:*
+📅 Data: ${dateStr}
+🕒 Horário: ${selectedHour}
+👤 Cliente: ${formData.nomeCliente}
+📞 Contato: ${formData.telefone}
+
+Pode me passar mais informações?`;
+
         const whatsappUrl = `https://wa.me/${p}?text=${encodeURIComponent(message)}`;
         
         // Brief delay to show success state before redirecting
