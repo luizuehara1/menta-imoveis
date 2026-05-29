@@ -43,7 +43,10 @@ import {
   normalizeTipoNegocio,
   formatOptionWithQuantity,
   pluralizeLabel,
-  buildPropertyWhatsAppMessage
+  buildPropertyWhatsAppMessage,
+  getIptuValue,
+  getValorTotalMensal,
+  toNumber
 } from '../../lib/utils';
 
 const formatCharacteristic = (char: string, property: any) => {
@@ -154,23 +157,6 @@ export default function PropertyDetail() {
           setResolvedWhatsappPhone(cleanPhoneForWhatsapp(property.corretorResponsavel.telefone));
           return;
         }
-        // Fallbacks on flat property model
-        if (property.brokerWhatsapp) {
-          setResolvedWhatsappPhone(cleanPhoneForWhatsapp(property.brokerWhatsapp));
-          return;
-        }
-        if (property.brokerPhone) {
-          setResolvedWhatsappPhone(cleanPhoneForWhatsapp(property.brokerPhone));
-          return;
-        }
-        if (property.broker?.whatsapp) {
-          setResolvedWhatsappPhone(cleanPhoneForWhatsapp(property.broker.whatsapp));
-          return;
-        }
-        if (property.broker?.telefone) {
-          setResolvedWhatsappPhone(cleanPhoneForWhatsapp(property.broker.telefone));
-          return;
-        }
 
         // 3. corretor vinculado em corretores/{id}
         const brokerId = property.brokerId || property.corretorId || property.corretorResponsavel?.id || property.broker?.id;
@@ -193,7 +179,33 @@ export default function PropertyDetail() {
           }
         }
 
-        // 4. WhatsApp da empresa
+        // 4. imovel.corretorWhatsapp / brokerWhatsapp / etc.
+        if (property.corretorWhatsapp) {
+          setResolvedWhatsappPhone(cleanPhoneForWhatsapp(property.corretorWhatsapp));
+          return;
+        }
+        if (property.corretorTelefone) {
+          setResolvedWhatsappPhone(cleanPhoneForWhatsapp(property.corretorTelefone));
+          return;
+        }
+        if (property.brokerWhatsapp) {
+          setResolvedWhatsappPhone(cleanPhoneForWhatsapp(property.brokerWhatsapp));
+          return;
+        }
+        if (property.brokerPhone) {
+          setResolvedWhatsappPhone(cleanPhoneForWhatsapp(property.brokerPhone));
+          return;
+        }
+        if (property.broker?.whatsapp) {
+          setResolvedWhatsappPhone(cleanPhoneForWhatsapp(property.broker.whatsapp));
+          return;
+        }
+        if (property.broker?.telefone) {
+          setResolvedWhatsappPhone(cleanPhoneForWhatsapp(property.broker.telefone));
+          return;
+        }
+
+        // 5. WhatsApp da imobiliária nas configurações do site
         if (settings?.empresa?.whatsapp) {
           setResolvedWhatsappPhone(cleanPhoneForWhatsapp(settings.empresa.whatsapp));
         }
@@ -382,6 +394,21 @@ export default function PropertyDetail() {
       </PageWrapper>
     );
   }
+
+  const isVendaOnly = property.businessType === 'Venda';
+  const isLocacaoOnly = property.businessType === 'Locação';
+  const isVendaAndLocacao = property.businessType === 'Venda e Locação';
+
+  const condoFeeVal = toNumber(property.condoFee || property.valorCondominio || 0);
+  const iptuVal = getIptuValue(property);
+  const fireInsuranceVal = toNumber(property.fireInsurance || property.valorSeguroIncendio || 0);
+  const taxaLixoVal = toNumber(property.valorTaxaLixo || property.taxaLixo || 0);
+  const taxaGasVal = toNumber(property.valorTaxaGas || property.taxaGas || 0);
+  const taxaAguaVal = toNumber(property.valorTaxaAgua || property.taxaAgua || 0);
+  const taxaLuzVal = toNumber(property.valorTaxaLuz || property.taxaLuz || 0);
+  const outrasTaxasVal = toNumber(property.valorOutrasTaxas || property.outrasTaxas || 0);
+
+  const totalMensalVal = getValorTotalMensal(property);
 
   const getWhatsAppUrl = () => {
     const rawPhone = resolvedWhatsappPhone || property.brokerWhatsapp || settings.empresa.whatsapp;
@@ -593,58 +620,97 @@ export default function PropertyDetail() {
                       )
                     ) : (
                       <>
-                        <div className="flex justify-between items-end">
-                           <div>
-                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-0.5 mb-1.5 bg-slate-100/10 inline-block rounded">
-                                {property.businessType === 'Locação' ? 'Valor da Mensalidade' : 'Valor de Investimento'}
-                              </p>
-                              <p className="text-3xl font-display font-black text-primary-black tracking-tight leading-none">
-                                {formatCurrency(property.businessType === 'Locação' ? property.priceLocacao : property.priceVenda)}
-                                {property.businessType === 'Locação' && <span className="text-xs font-semibold text-gray-400"> / mês</span>}
-                              </p>
-                           </div>
+                        <div className="space-y-3">
+                           {/* Venda / Venda e Locação - Valor de Venda */}
+                           {(isVendaOnly || isVendaAndLocacao) && (
+                             <div>
+                               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-0.5 mb-1 bg-slate-100/10 inline-block px-1.5 py-0.5 rounded leading-none">
+                                 Valor de Investimento / Venda
+                               </p>
+                               <p className="text-3xl font-display font-black text-primary-green tracking-tight leading-none">
+                                 {formatCurrency(property.priceVenda || property.valorVenda || 0)}
+                               </p>
+                             </div>
+                           )}
+
+                           {/* Locação / Venda e Locação - Valor de Aluguel */}
+                           {(isLocacaoOnly || isVendaAndLocacao) && (
+                             <div>
+                               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-0.5 mb-1 bg-slate-100/10 inline-block px-1.5 py-0.5 rounded leading-none">
+                                 {isVendaAndLocacao ? 'Valor do Aluguel' : 'Valor da Mensalidade'}
+                               </p>
+                               <p className="text-3xl font-display font-black text-[#0F172A] tracking-tight leading-none">
+                                 {formatCurrency(property.priceLocacao || property.valorAluguel || 0)}
+                                 <span className="text-xs font-semibold text-gray-400"> / mês</span>
+                               </p>
+                             </div>
+                           )}
                         </div>
 
-                        {property.businessType === 'Locação' && (property.totalMonthlyPrice || property.valorTotalMensal) && (
-                           <div className="p-3 bg-emerald-50/50 border border-emerald-100/55 rounded-xl flex items-center justify-between text-xs font-semibold text-emerald-800">
+                        {/* Package pricing (Locação) */}
+                        {(isLocacaoOnly || isVendaAndLocacao) && totalMensalVal > 0 && (
+                           <div className="p-3 bg-emerald-50/50 border border-emerald-100/55 rounded-xl flex items-center justify-between text-xs font-semibold text-emerald-800 mt-3">
                              <span>Pacote Comercial Mensal Total</span>
-                             <span className="font-black text-emerald-600 text-sm">{formatCurrency(property.totalMonthlyPrice || property.valorTotalMensal || 0)}</span>
+                             <span className="font-black text-emerald-600 text-sm">{formatCurrency(totalMensalVal || 0)}</span>
                            </div>
                         )}
 
                         {/* Breakdown on mobile */}
-                        {(property.condoFee || property.iptu || property.fireInsurance || property.valorTaxaLixo || property.taxaLixo || property.valorTaxaGas || property.taxaGas) && (
-                           <div className="bg-[#FAF9F6] p-4 rounded-xl border border-slate-100 space-y-2 text-[11px] text-slate-500 block">
-                              {property.condoFee && (
+                        {(condoFeeVal > 0 || iptuVal > 0 || fireInsuranceVal > 0 || taxaLixoVal > 0 || taxaGasVal > 0 || taxaAguaVal > 0 || taxaLuzVal > 0 || outrasTaxasVal > 0) && (
+                           <div className="bg-[#FAF9F6] p-4 rounded-xl border border-slate-100 space-y-2 text-[11px] text-slate-500 block mt-3">
+                              {condoFeeVal > 0 && (
                                 <div className="flex justify-between">
                                   <span>Taxa Condominial</span>
-                                  <span className="font-bold text-slate-700">{formatCurrency(property.condoFee)}</span>
+                                  <span className="font-bold text-slate-700">{formatCurrency(condoFeeVal)}</span>
                                 </div>
                               )}
-                              {property.iptu && (
+                              {iptuVal > 0 ? (
                                 <div className="flex justify-between">
-                                  <span>IPTU</span>
-                                  <span className="font-bold text-slate-700">{formatCurrency(property.iptu)}</span>
+                                  <span>IPTU Mensal</span>
+                                  <span className="font-bold text-slate-700">{formatCurrency(iptuVal)}</span>
+                                </div>
+                              ) : (
+                                <div className="flex justify-between">
+                                  <span>IPTU Mensal</span>
+                                  <span className="font-bold text-slate-700">Sob consulta</span>
                                 </div>
                               )}
-                              {(property.valorTaxaLixo || property.taxaLixo) ? (
+                              {taxaLixoVal > 0 && (
                                 <div className="flex justify-between">
                                   <span>Taxa de Lixo</span>
-                                  <span className="font-bold text-slate-700">{formatCurrency(property.valorTaxaLixo || property.taxaLixo || 0)}</span>
-                                </div>
-                              ) : null}
-                              {(property.valorTaxaGas || property.taxaGas) ? (
-                                <div className="flex justify-between">
-                                  <span>Taxa de Gás</span>
-                                  <span className="font-bold text-slate-700">{formatCurrency(property.valorTaxaGas || property.taxaGas || 0)}</span>
-                                </div>
-                              ) : null}
-                              {property.fireInsurance && (
-                                <div className="flex justify-between">
-                                  <span>Seguro Incêndio</span>
-                                  <span className="font-bold text-slate-700">{formatCurrency(property.fireInsurance)}</span>
+                                  <span className="font-bold text-slate-700">{formatCurrency(taxaLixoVal)}</span>
                                 </div>
                               )}
+                              {taxaGasVal > 0 && (
+                                <div className="flex justify-between">
+                                  <span>Taxa de Gás</span>
+                                  <span className="font-bold text-slate-700">{formatCurrency(taxaGasVal)}</span>
+                                </div>
+                              )}
+                              {taxaAguaVal > 0 && (
+                                <div className="flex justify-between">
+                                  <span>Taxa de Água</span>
+                                  <span className="font-bold text-slate-700">{formatCurrency(taxaAguaVal)}</span>
+                                </div>
+                              )}
+                              {taxaLuzVal > 0 && (
+                                <div className="flex justify-between">
+                                  <span>Taxa de Luz</span>
+                                  <span className="font-bold text-slate-700">{formatCurrency(taxaLuzVal)}</span>
+                                </div>
+                              )}
+                              {fireInsuranceVal > 0 && (
+                                <div className="flex justify-between">
+                                  <span>Seguro Incêndio</span>
+                                  <span className="font-bold text-slate-700">{formatCurrency(fireInsuranceVal)}</span>
+                                </div>
+                              )}
+                              {outrasTaxasVal > 0 && (
+                                <div className="flex justify-between">
+                                  <span>Outras Taxas</span>
+                                  <span className="font-bold text-slate-700">{formatCurrency(outrasTaxasVal)}</span>
+                                </div>
+                        )}
                            </div>
                         )}
 
@@ -1015,71 +1081,112 @@ export default function PropertyDetail() {
                              rel="noopener noreferrer"
                              className="flex items-center justify-center gap-2.5 bg-emerald-505 bg-emerald-500 text-white font-bold text-xs uppercase tracking-wider py-4.5 rounded-2xl shadow-md hover:bg-emerald-600 transition-all w-full"
                            >
-                             <MessageCircle size={20} />
-                             Falar na Administração
-                           </motion.a>
-                        </div>
-                      )
-                    ) : (
-                      <div className="space-y-6">
+                              <MessageCircle size={20} />
+                              Falar na Administração
+                            </motion.a>
+                         </div>
+                       )
+                     ) : (
+                       <div className="space-y-6">
                         {/* Standard pricing presentation */}
-                        <div>
-                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-0.5 mb-1.5 bg-slate-50 inline-block px-1.5 py-0.5 rounded leading-none">
-                             Custo de {property.businessType}
-                           </p>
-                           <h2 className="text-4xl font-display font-black text-[#0F172A] tracking-tight flex items-baseline leading-none pt-1">
-                             <span className="text-xl font-bold text-gold mr-1">R$</span>
-                             {formatCurrency(property.businessType === 'Locação' ? property.priceLocacao : property.priceVenda).replace('R$', '').trim()}
-                             {property.businessType === 'Locação' && <span className="text-xs font-semibold text-slate-400 ml-1"> / mês</span>}
-                           </h2>
+                        <div className="space-y-3">
+                           {/* Venda / Venda e Locação - Valor de Venda */}
+                           {(isVendaOnly || isVendaAndLocacao) && (
+                             <div>
+                               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-0.5 mb-1 bg-slate-100/10 inline-block px-1.5 py-0.5 rounded leading-none">
+                                 Valor de Investimento / Venda
+                               </p>
+                               <h2 className="text-3xl font-display font-black text-primary-green tracking-tight flex items-baseline leading-none pt-1">
+                                 <span className="text-lg font-bold text-gold mr-1">R$</span>
+                                 {formatCurrency(property.priceVenda || property.valorVenda || 0).replace('R$', '').trim()}
+                               </h2>
+                             </div>
+                           )}
+
+                           {/* Locação / Venda e Locação - Valor de Aluguel */}
+                           {(isLocacaoOnly || isVendaAndLocacao) && (
+                             <div>
+                               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-0.5 mb-1 bg-slate-100/10 inline-block px-1.5 py-0.5 rounded leading-none">
+                                 {isVendaAndLocacao ? 'Valor do Aluguel' : 'Valor da Mensalidade'}
+                               </p>
+                               <h2 className="text-3xl font-display font-black text-[#0F172A] tracking-tight flex items-baseline leading-none pt-1">
+                                 <span className="text-lg font-bold text-gold mr-1">R$</span>
+                                 {formatCurrency(property.priceLocacao || property.valorAluguel || 0).replace('R$', '').trim()}
+                                 <span className="text-xs font-semibold text-slate-400 ml-1"> / mês</span>
+                               </h2>
+                             </div>
+                           )}
                         </div>
                         
                         {/* Package pricing (Locação) */}
-                        {property.businessType === 'Locação' && (property.totalMonthlyPrice || property.valorTotalMensal) && (
+                        {(isLocacaoOnly || isVendaAndLocacao) && totalMensalVal > 0 && (
                           <div className="p-4 bg-emerald-50/50 border border-emerald-100 rounded-2xl flex items-center justify-between">
-                             <span className="text-[9px] font-bold text-emerald-800 uppercase tracking-wider">Valor do Pacote Mensal:</span>
+                             <span className="text-[9px] font-bold text-emerald-800 uppercase tracking-wider">Pacote Comercial Mensal Total:</span>
                              <span className="text-sm font-display font-black text-emerald-600 leading-none">
-                                {formatCurrency(property.totalMonthlyPrice || property.valorTotalMensal || 0)}
+                                {formatCurrency(totalMensalVal || 0)}
                              </span>
                           </div>
                         )}
 
                         {/* Cost breakdowns list */}
-                        {(property.condoFee || property.iptu || property.fireInsurance || property.valorTaxaLixo || property.taxaLixo || property.valorTaxaGas || property.taxaGas) && (
-                          <div className="bg-slate-50/50 rounded-2xl p-4.5 space-y-3 border border-slate-100 text-xs">
-                             {property.condoFee && (
-                               <div className="flex justify-between text-slate-500 font-medium">
+                        {(condoFeeVal > 0 || iptuVal > 0 || fireInsuranceVal > 0 || taxaLixoVal > 0 || taxaGasVal > 0 || taxaAguaVal > 0 || taxaLuzVal > 0 || outrasTaxasVal > 0) && (
+                          <div className="bg-slate-50/50 rounded-2xl p-4.5 space-y-3 border border-slate-100 text-xs text-slate-500 font-medium animate-none">
+                             {condoFeeVal > 0 && (
+                               <div className="flex justify-between text-slate-500 font-medium animate-none">
                                   <span>Taxa de Condomínio</span>
-                                  <span className="font-extrabold text-slate-700">{formatCurrency(property.condoFee)}</span>
+                                  <span className="font-extrabold text-slate-700">{formatCurrency(condoFeeVal)}</span>
                                </div>
                              )}
-                             {property.iptu && (
-                               <div className="flex justify-between text-slate-500 font-medium font-semibold">
-                                  <span>{property.businessType === 'Locação' ? 'IPTU (Mensal)' : 'IPTU (Anual)'}</span>
-                                  <span className="font-extrabold text-slate-700">{formatCurrency(property.iptu)}</span>
+                             {iptuVal > 0 ? (
+                               <div className="flex justify-between text-slate-500 font-medium animate-none">
+                                  <span>IPTU Mensal</span>
+                                  <span className="font-extrabold text-slate-700">{formatCurrency(iptuVal)}</span>
+                               </div>
+                             ) : (
+                               <div className="flex justify-between text-slate-500 font-medium animate-none">
+                                  <span>IPTU Mensal</span>
+                                  <span className="font-extrabold text-slate-700">Sob consulta</span>
                                </div>
                              )}
-                             {(property.valorTaxaLixo || property.taxaLixo) ? (
-                               <div className="flex justify-between text-slate-500 font-medium">
+                             {taxaLixoVal > 0 && (
+                               <div className="flex justify-between text-slate-500 font-medium animate-none">
                                   <span>Taxa de Lixo</span>
-                                  <span className="font-extrabold text-slate-700">{formatCurrency(property.valorTaxaLixo || property.taxaLixo || 0)}</span>
-                                </div>
-                             ) : null}
-                             {(property.valorTaxaGas || property.taxaGas) ? (
-                               <div className="flex justify-between text-slate-500 font-medium">
+                                  <span className="font-extrabold text-slate-700">{formatCurrency(taxaLixoVal)}</span>
+                               </div>
+                             )}
+                             {taxaGasVal > 0 && (
+                               <div className="flex justify-between text-slate-500 font-medium animate-none">
                                   <span>Taxa de Gás</span>
-                                  <span className="font-extrabold text-slate-700">{formatCurrency(property.valorTaxaGas || property.taxaGas || 0)}</span>
-                                </div>
-                             ) : null}
-                             {property.fireInsurance && (
-                               <div className="flex justify-between text-slate-500 font-medium">
+                                  <span className="font-extrabold text-slate-700">{formatCurrency(taxaGasVal)}</span>
+                               </div>
+                             )}
+                             {taxaAguaVal > 0 && (
+                               <div className="flex justify-between text-slate-500 font-medium animate-none">
+                                  <span>Taxa de Água</span>
+                                  <span className="font-extrabold text-slate-700">{formatCurrency(taxaAguaVal)}</span>
+                               </div>
+                             )}
+                             {taxaLuzVal > 0 && (
+                               <div className="flex justify-between text-slate-500 font-medium animate-none">
+                                  <span>Taxa de Luz</span>
+                                  <span className="font-extrabold text-slate-700">{formatCurrency(taxaLuzVal)}</span>
+                               </div>
+                             )}
+                             {fireInsuranceVal > 0 && (
+                               <div className="flex justify-between text-slate-500 font-medium animate-none">
                                   <span>Seguro de Incêndio</span>
-                                  <span className="font-extrabold text-slate-700">{formatCurrency(property.fireInsurance)}</span>
+                                  <span className="font-extrabold text-slate-700">{formatCurrency(fireInsuranceVal)}</span>
+                               </div>
+                             )}
+                             {outrasTaxasVal > 0 && (
+                               <div className="flex justify-between text-slate-500 font-medium animate-none">
+                                  <span>Outras Taxas</span>
+                                  <span className="font-extrabold text-slate-700">{formatCurrency(outrasTaxasVal)}</span>
                                </div>
                              )}
                           </div>
-                        )}
 
+                        )}
                         {/* CTA button cluster */}
                         <div className="space-y-3">
                            <motion.a 
@@ -1173,7 +1280,7 @@ export default function PropertyDetail() {
                <VisitScheduler 
                  property={{
                    ...property,
-                   brokerWhatsapp: property.brokerWhatsapp || settings.empresa.whatsapp
+                   brokerWhatsapp: resolvedWhatsappPhone || property.brokerWhatsapp || settings.empresa.whatsapp
                  }} 
                />
              </div>

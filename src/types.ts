@@ -23,6 +23,8 @@ export interface Property {
   taxaLuz?: number;
   valorTotalMensal?: number;
   leaseWarrantyType?: string;
+  valorGarantiaCaucao?: number;
+  garantiaLocaticia?: string;
   allowsPet?: 'Sim' | 'Não';
   furnishingStatus?: 'Mobiliado' | 'Parcialmente' | 'Não Mobiliado';
   minLeaseTerm?: string;
@@ -218,6 +220,9 @@ export interface Lease {
   valorOutros: number;
   valorDesconto: number;
   valorTotalPagar: number;
+  valorGarantiaCaucao?: number;
+  garantiaLocaticia?: string;
+  incluirCaucaoNoPrimeiroPagamento?: boolean;
   percentualComissaoImobiliaria?: number;
   valorComissaoImobiliaria?: number;
   valorRepassadoProprietario?: number;

@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useSettings, useOptions } from '../../hooks/useSettings';
 import PageWrapper from '../../components/PageWrapper';
 import { SafeImage } from '../../components/ui/SafeImage';
-import { formatCurrency, isValidPublicProperty, isMockProperty, cleanPhoneForWhatsapp, getSafeImageUrl, isImovelAlugado, matchesQuickSearch, normalizeText, buildPropertyWhatsAppMessage } from '../../lib/utils';
+import { formatCurrency, isValidPublicProperty, isMockProperty, cleanPhoneForWhatsapp, getSafeImageUrl, isImovelAlugado, matchesQuickSearch, normalizeText, buildPropertyWhatsAppMessage, getIptuValue, getValorTotalMensal } from '../../lib/utils';
 import { staggerContainer, slideUp, fadeIn } from '../../constants/animations';
 import { GoldenParticles } from '../../components/three/GoldenParticles';
 import { Canvas } from '@react-three/fiber';
@@ -79,23 +79,6 @@ const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
         setResolvedPhone(cleanPhoneForWhatsapp(property.corretorResponsavel.telefone));
         return;
       }
-      // Fallbacks
-      if (property.brokerWhatsapp) {
-        setResolvedPhone(cleanPhoneForWhatsapp(property.brokerWhatsapp));
-        return;
-      }
-      if (property.brokerPhone) {
-        setResolvedPhone(cleanPhoneForWhatsapp(property.brokerPhone));
-        return;
-      }
-      if (property.broker?.whatsapp) {
-        setResolvedPhone(cleanPhoneForWhatsapp(property.broker.whatsapp));
-        return;
-      }
-      if (property.broker?.telefone) {
-        setResolvedPhone(cleanPhoneForWhatsapp(property.broker.telefone));
-        return;
-      }
 
       // 3. corretor em corretores/{id}
       const brokerId = property.brokerId || property.corretorId || property.corretorResponsavel?.id || property.broker?.id;
@@ -118,7 +101,33 @@ const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
         }
       }
 
-      // 4. WhatsApp da empresa
+      // 4. imovel.corretorWhatsapp / brokerWhatsapp / etc.
+      if (property.corretorWhatsapp) {
+        setResolvedPhone(cleanPhoneForWhatsapp(property.corretorWhatsapp));
+        return;
+      }
+      if (property.corretorTelefone) {
+        setResolvedPhone(cleanPhoneForWhatsapp(property.corretorTelefone));
+        return;
+      }
+      if (property.brokerWhatsapp) {
+        setResolvedPhone(cleanPhoneForWhatsapp(property.brokerWhatsapp));
+        return;
+      }
+      if (property.brokerPhone) {
+        setResolvedPhone(cleanPhoneForWhatsapp(property.brokerPhone));
+        return;
+      }
+      if (property.broker?.whatsapp) {
+        setResolvedPhone(cleanPhoneForWhatsapp(property.broker.whatsapp));
+        return;
+      }
+      if (property.broker?.telefone) {
+        setResolvedPhone(cleanPhoneForWhatsapp(property.broker.telefone));
+        return;
+      }
+
+      // 5. WhatsApp da empresa nas configurações do site (or agencyWhatsApp if defined)
       const fallback = agencyWhatsApp || settings?.empresa?.whatsapp || "554188364069";
       setResolvedPhone(cleanPhoneForWhatsapp(fallback));
     };
@@ -269,9 +278,9 @@ const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
                   </p>
                   <div className="flex items-baseline gap-1">
                     <span className="text-2xl font-display font-black text-primary-green">
-                      {formatCurrency(property.priceLocacao || property.valorAluguel || property.valor_aluguel || property.valorTotalMensal)}
+                      {formatCurrency(getValorTotalMensal(property) || property.priceLocacao || property.valorAluguel || property.valor_aluguel)}
                     </span>
-                    {(property.priceLocacao || property.valorAluguel || property.valor_aluguel || property.valorTotalMensal) && <span className="text-xs font-bold text-gray-400">/mês</span>}
+                    {(property.priceLocacao || property.valorAluguel || property.valor_aluguel || getValorTotalMensal(property)) && <span className="text-xs font-bold text-gray-400">/mês</span>}
                   </div>
                 </>
               ) : bizTypeNorm === 'Venda e Locação' ? (
@@ -288,20 +297,20 @@ const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
                       </div>
                     </div>
                   )}
-                  {(property.priceLocacao || property.valorAluguel || property.valor_aluguel || property.valorTotalMensal) && (
+                  {(property.priceLocacao || property.valorAluguel || property.valor_aluguel || getValorTotalMensal(property)) && (
                     <div>
                       <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-none mb-0.5">
                          Valor de Locação
                       </p>
                       <div className="flex items-baseline gap-1">
                         <span className="text-lg font-display font-black text-primary-green">
-                          {formatCurrency(property.priceLocacao || property.valorAluguel || property.valor_aluguel || property.valorTotalMensal)}
+                          {formatCurrency(getValorTotalMensal(property) || property.priceLocacao || property.valorAluguel || property.valor_aluguel)}
                         </span>
                         <span className="text-xs font-bold text-gray-400">/mês</span>
                       </div>
                     </div>
                   )}
-                  {!(property.priceVenda || property.valorVenda || property.valor_venda) && !(property.priceLocacao || property.valorAluguel || property.valor_aluguel || property.valorTotalMensal) && (
+                  {!(property.priceVenda || property.valorVenda || property.valor_venda) && !(property.priceLocacao || property.valorAluguel || property.valor_aluguel || getValorTotalMensal(property)) && (
                     <div>
                       <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">
                          Valor
@@ -322,13 +331,15 @@ const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
                   </span>
                 </div>
               )}
-              {((Number(property.condoFee || property.txCondominio || property.condominio) > 0) || (Number(property.iptu) > 0)) && (
-                <div className="flex gap-3 mt-2 pt-2 border-t border-gray-100">
+              {((Number(property.condoFee || property.txCondominio || property.condominio) > 0) || (getIptuValue(property) > 0)) && (
+                <div className="flex gap-3 mt-2 pt-2 border-t border-gray-100 flex-wrap">
                    {Number(property.condoFee || property.txCondominio || property.condominio) > 0 && (
                      <p className="text-[9px] font-bold text-gray-400">Cond: {formatCurrency(property.condoFee || property.txCondominio || property.condominio)}</p>
                    )}
-                   {Number(property.iptu) > 0 && (
-                     <p className="text-[9px] font-bold text-gray-400">IPTU: {formatCurrency(property.iptu)}</p>
+                   {getIptuValue(property) > 0 ? (
+                     <p className="text-[9px] font-bold text-gray-400">IPTU: {formatCurrency(getIptuValue(property))}/mês</p>
+                   ) : (
+                     <p className="text-[9px] font-bold text-gray-400">IPTU: Sob consulta</p>
                    )}
                 </div>
               )}
@@ -549,7 +560,7 @@ export default function PropertyList() {
       if (filters.minPrice) {
         data = data.filter((p: any) => {
           const price = isRentalSearch 
-            ? (p.priceLocacao || p.valorAluguel || p.valor_aluguel || p.valorTotalMensal || 0) 
+            ? (getValorTotalMensal(p) || p.priceLocacao || p.valorAluguel || p.valor_aluguel || 0) 
             : (p.priceVenda || p.valorVenda || p.valor_venda || 0);
           return Number(price) >= parseFloat(filters.minPrice);
         });
@@ -557,7 +568,7 @@ export default function PropertyList() {
       if (filters.maxPrice) {
         data = data.filter((p: any) => {
           const price = isRentalSearch 
-            ? (p.priceLocacao || p.valorAluguel || p.valor_aluguel || p.valorTotalMensal || 0) 
+            ? (getValorTotalMensal(p) || p.priceLocacao || p.valorAluguel || p.valor_aluguel || 0) 
             : (p.priceVenda || p.valorVenda || p.valor_venda || 0);
           return Number(price) <= parseFloat(filters.maxPrice);
         });
@@ -597,10 +608,10 @@ export default function PropertyList() {
     // Choose price field based on current business type search
     const isLocacao = normalizeTipoNegocio(searchFilters.businessType) === 'Locação';
     const priceA = isLocacao 
-      ? (a.priceLocacao || a.valorAluguel || a.valor_aluguel || a.valorTotalMensal || 0) 
+      ? (getValorTotalMensal(a) || a.priceLocacao || a.valorAluguel || a.valor_aluguel || 0) 
       : (a.priceVenda || a.valorVenda || a.valor_venda || 0);
     const priceB = isLocacao 
-      ? (b.priceLocacao || b.valorAluguel || b.valor_aluguel || b.valorTotalMensal || 0) 
+      ? (getValorTotalMensal(b) || b.priceLocacao || b.valorAluguel || b.valor_aluguel || 0) 
       : (b.priceVenda || b.valorVenda || b.valor_venda || 0);
     
     if (sortBy === 'menor-preco') return Number(priceA) - Number(priceB);

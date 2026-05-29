@@ -10,7 +10,7 @@ import { PremiumHeroBackground } from '../../components/three/PremiumHeroBackgro
 import { LuxuryShapeCanvas } from '../../components/three/AbstractLuxuryShape';
 import { useSettings, useOptions } from '../../hooks/useSettings';
 import { DEFAULT_SITE_CONFIG } from '../../constants/defaultSettings';
-import { formatCurrency, isValidPublicProperty, getSafeImageUrl, isImovelAlugado } from '../../lib/utils';
+import { formatCurrency, isValidPublicProperty, getSafeImageUrl, isImovelAlugado, getIptuValue } from '../../lib/utils';
 
 import { SafeImage } from '../../components/ui/SafeImage';
 
@@ -492,9 +492,21 @@ export default function Home() {
                       <MapPin size={12} className="text-gold" />
                       <span>{property.neighborhood}, {property.city}</span>
                     </div>
-                    <h3 className="font-display text-xl font-bold text-primary-black mb-4 group-hover:text-gold transition-colors leading-tight line-clamp-2">
+                    <h3 className="font-display text-xl font-bold text-primary-black mb-2 group-hover:text-gold transition-colors leading-tight line-clamp-2">
                       {property.title}
                     </h3>
+                    {((Number(property.condoFee || property.txCondominio || property.condominio) > 0) || (getIptuValue(property) > 0)) && (
+                      <div className="flex gap-3 mb-4 flex-wrap">
+                         {Number(property.condoFee || property.txCondominio || property.condominio) > 0 && (
+                           <p className="text-[10px] font-bold text-gray-400">Cond: {formatCurrency(property.condoFee || property.txCondominio || property.condominio)}</p>
+                         )}
+                         {getIptuValue(property) > 0 ? (
+                           <p className="text-[10px] font-bold text-gray-400">IPTU: {formatCurrency(getIptuValue(property))}/mês</p>
+                         ) : (
+                           <p className="text-[10px] font-bold text-gray-400">IPTU: Sob consulta</p>
+                         )}
+                      </div>
+                    )}
                     <div className="flex items-center justify-between py-4 border-t border-gray-50">
                       <div className="flex items-center gap-1.5 transition-colors group-hover:text-gold">
                         <Bed size={16} />

@@ -223,12 +223,42 @@ export default function VisitScheduler({ property }: VisitSchedulerProps) {
           }
         }
 
-        const message = `Olá! Tenho interesse em agendar uma visita para este imóvel:
+        const isVenda = String(tipo).toLowerCase().includes("venda") || String(pObj.businessType || "").toLowerCase().includes("venda") || String(pObj.tipoNegocio || "").toLowerCase().includes("venda");
+        const isLocacao = String(tipo).toLowerCase().includes("locação") || String(tipo).toLowerCase().includes("locacao") || String(pObj.businessType || "").toLowerCase().includes("locacao") || String(pObj.tipoNegocio || "").toLowerCase().includes("locacao") || String(pObj.businessType || "").toLowerCase().includes("aluguel") || String(pObj.tipoNegocio || "").toLowerCase().includes("aluguel");
+
+        let valorTexto = "Sob consulta";
+        if (isVenda && isLocacao) {
+          const vVenda = pObj.priceVenda || pObj.valorVenda || 0;
+          const vLoc = pObj.priceLocacao || pObj.valorAluguel || pObj.valorTotalMensal || pObj.totalMonthlyPrice || 0;
+          const txtVenda = vVenda ? Number(vVenda).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "";
+          const txtLoc = vLoc ? Number(vLoc).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "";
+          if (txtVenda && txtLoc) {
+            valorTexto = `Venda: ${txtVenda} | Locação: ${txtLoc}/mês`;
+          } else if (txtVenda) {
+            valorTexto = txtVenda;
+          } else if (txtLoc) {
+            valorTexto = txtLoc + "/mês";
+          }
+        } else if (isVenda) {
+          const v = pObj.priceVenda || pObj.valorVenda || 0;
+          valorTexto = v ? Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "Sob consulta";
+        } else if (isLocacao) {
+          const v = pObj.priceLocacao || pObj.valorAluguel || pObj.valorTotalMensal || pObj.totalMonthlyPrice || 0;
+          valorTexto = v ? Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) + "/mês" : "Sob consulta";
+        } else {
+          const v = pObj.priceVenda || pObj.valorVenda || pObj.priceLocacao || pObj.valorAluguel || pObj.valorTotalMensal || pObj.totalMonthlyPrice;
+          if (v) {
+            valorTexto = Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+          }
+        }
+
+        const message = `Olá! Tenho interesse neste imóvel:
 
 Imóvel: ${titulo}
 Código: ${codigo}
 Tipo: ${tipo}
-Localização: ${localizacao}
+Localização: ${localizacao || "Não informada"}
+Valor: ${valorTexto}
 
 Link do imóvel:
 ${publicUrl}
@@ -239,7 +269,7 @@ ${publicUrl}
 👤 Cliente: ${formData.nomeCliente}
 📞 Contato: ${formData.telefone}
 
-Pode me passar mais informações?`;
+Gostaria de agendar esta visita.`;
 
         const whatsappUrl = `https://wa.me/${p}?text=${encodeURIComponent(message)}`;
         

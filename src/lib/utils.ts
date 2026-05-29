@@ -603,7 +603,10 @@ export function formatBooleanLabel(label: string): string {
     "posicao relativa do apartamento frente": "Posição relativa: Frente",
     "posicao relativa do apartamento lateral": "Posição relativa: Lateral",
     "posicao relativa do apartamento meio": "Posição relativa: Meio",
-    "posicao relativa do apartamento fundos": "Posição relativa: Fundos"
+    "posicao relativa do apartamento fundos": "Posição relativa: Fundos",
+    "portaria no edificio": "Portaria no edifício",
+    "portaria 24 horas": "Portaria 24 horas",
+    "portaria 24h": "Portaria 24 horas"
   };
 
   return map[normalized] || text;
@@ -658,37 +661,180 @@ export function formatOptionWithQuantity(option: any, optionQuantities?: Record<
 
 export function buildPropertyWhatsAppMessage(imovel: any): string {
   if (!imovel) return "";
-  const publicUrl = `${window.location.origin}/imovel/${imovel.id}`;
+  const linkImovel = `${window.location.origin}/imovel/${imovel.id}`;
 
-  const titulo = imovel.tituloAnuncio || imovel.titulo || imovel.nome || "Imóvel disponível";
-  const codigo = imovel.codigo || imovel.code || imovel.codigoImovel || "não informado";
-  const tipo = imovel.businessType || imovel.tipoNegocio || imovel.tipo || "não informado";
+  const titulo =
+    imovel.tituloAnuncio ||
+    imovel.titulo ||
+    imovel.title ||
+    imovel.nome ||
+    "Imóvel disponível";
+
+  const codigo =
+    imovel.codigo ||
+    imovel.codigoImovel ||
+    imovel.code ||
+    "Não informado";
+
+  const tipo =
+    imovel.tipoNegocio ||
+    imovel.businessType ||
+    "Não informado";
 
   const bairro = imovel.bairro || imovel.neighborhood || "";
   const cidade = imovel.cidade || imovel.city || "";
   const estado = imovel.estado || imovel.state || "";
 
-  let localizacao = "não informada";
-  if (bairro || cidade || estado) {
-    const parts = [];
-    if (bairro) parts.push(bairro);
-    if (cidade) parts.push(cidade);
-    localizacao = parts.join(", ");
-    if (estado) {
-      localizacao += ` - ${estado}`;
+  const localizacao = [bairro, cidade, estado]
+    .filter(Boolean)
+    .join(", ");
+
+  const isVenda = String(tipo).toLowerCase().includes("venda") || String(imovel.businessType || "").toLowerCase().includes("venda") || String(imovel.tipoNegocio || "").toLowerCase().includes("venda");
+  const isLocacao = String(tipo).toLowerCase().includes("locação") || String(tipo).toLowerCase().includes("locacao") || String(imovel.businessType || "").toLowerCase().includes("locacao") || String(imovel.tipoNegocio || "").toLowerCase().includes("locacao") || String(imovel.businessType || "").toLowerCase().includes("aluguel") || String(imovel.tipoNegocio || "").toLowerCase().includes("aluguel");
+
+  let valorTexto = "Sob consulta";
+  if (isVenda && isLocacao) {
+    const vVenda = imovel.priceVenda || imovel.valorVenda || 0;
+    const vLoc = getValorTotalMensal(imovel) || imovel.priceLocacao || imovel.valorAluguel || 0;
+    const txtVenda = vVenda ? Number(vVenda).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "";
+    const txtLoc = vLoc ? Number(vLoc).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "";
+    if (txtVenda && txtLoc) {
+      valorTexto = `Venda: ${txtVenda} | Locação: ${txtLoc}/mês`;
+    } else if (txtVenda) {
+      valorTexto = txtVenda;
+    } else if (txtLoc) {
+      valorTexto = txtLoc + "/mês";
+    }
+  } else if (isVenda) {
+    const v = imovel.priceVenda || imovel.valorVenda || 0;
+    valorTexto = v ? Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "Sob consulta";
+  } else if (isLocacao) {
+    const v = getValorTotalMensal(imovel) || imovel.priceLocacao || imovel.valorAluguel || 0;
+    valorTexto = v ? Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) + "/mês" : "Sob consulta";
+  } else {
+    const v = imovel.priceVenda || imovel.valorVenda || getValorTotalMensal(imovel) || imovel.priceLocacao || imovel.valorAluguel;
+    if (v) {
+      valorTexto = Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
     }
   }
 
-  return `Olá! Tenho interesse em agendar uma visita para este imóvel:
+  return `Olá! Tenho interesse neste imóvel:
 
 Imóvel: ${titulo}
 Código: ${codigo}
 Tipo: ${tipo}
-Localização: ${localizacao}
+Localização: ${localizacao || "Não informada"}
+Valor: ${valorTexto}
 
 Link do imóvel:
-${publicUrl}
+${linkImovel}
 
-Pode me passar mais informações?`;
+Gostaria de mais informações.`;
+}
+
+export function toNumber(value: any): number {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+
+  const clean = String(value || "0")
+    .replace("R$", "")
+    .replace(/\./g, "")
+    .replace(",", ".")
+    .trim();
+
+  const number = Number(clean);
+  return Number.isFinite(number) ? number : 0;
+}
+
+export function getIptuValue(imovel: any): number {
+  if (!imovel) return 0;
+  return toNumber(
+    imovel.valorIptu ||
+    imovel.valorIPTU ||
+    imovel.iptuMensal ||
+    imovel.valorIptuMensal ||
+    imovel.iptu ||
+    0
+  );
+}
+
+export function getValorTotalMensal(imovel: any): number {
+  if (!imovel) return 0;
+  
+  const aluguel = toNumber(imovel.priceLocacao || imovel.valorAluguel || 0);
+  const condominio = toNumber(imovel.condoFee || imovel.valorCondominio || imovel.condominio || 0);
+  const iptu = getIptuValue(imovel);
+  const taxaLixo = toNumber(imovel.valorTaxaLixo || imovel.taxaLixo || 0);
+  const taxaGas = toNumber(imovel.valorTaxaGas || imovel.taxaGas || 0);
+  const taxaAgua = toNumber(imovel.valorTaxaAgua || imovel.taxaAgua || 0);
+  const taxaLuz = toNumber(imovel.valorTaxaLuz || imovel.taxaLuz || 0);
+  const seguroIncendio = toNumber(imovel.fireInsurance || imovel.valorSeguroIncendio || 0);
+  const outrasTaxas = toNumber(imovel.outrasTaxas || imovel.outras || imovel.valorOutros || imovel.outrasTaxas || 0);
+  
+  const sum = aluguel + condominio + iptu + taxaLixo + taxaGas + taxaAgua + taxaLuz + seguroIncendio + outrasTaxas;
+  if (sum > 0) return sum;
+  return toNumber(imovel.totalMonthlyPrice || imovel.valorTotalMensal || 0);
+}
+
+export function slugify(text: string): string {
+  if (!text) return "";
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9_]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+export function normalizeOption(option: any): any {
+  if (!option) return null;
+
+  if (typeof option === "string") {
+    return {
+      label: option,
+      value: slugify(option),
+      ativo: true,
+      quantidade: shouldShowQuantity(option) ? 1 : 0,
+      tipo: shouldShowQuantity(option) ? "quantidade" : "boolean"
+    };
+  }
+
+  const label = option.label || option.nome || option.value || "";
+  const value = option.value || slugify(label);
+  const isCountable = shouldShowQuantity(label);
+
+  return {
+    label,
+    value,
+    ativo: option.ativo !== false,
+    quantidade: isCountable 
+      ? (Number.isFinite(Number(option.quantidade)) ? Number(option.quantidade) : 1)
+      : 0,
+    tipo: option.tipo || (isCountable ? "quantidade" : "boolean")
+  };
+}
+
+export function getOptionQuantity(options: any[], keys: string[]): number {
+  if (!Array.isArray(options)) return 0;
+
+  const normalizedKeys = keys.map((key) =>
+    String(key)
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+  );
+
+  const found = options.find((option) => {
+    const label = String(option.label || option.nome || option.value || option)
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
+    return normalizedKeys.some((key) => label.includes(key));
+  });
+
+  if (!found) return 0;
+  const normalized = normalizeOption(found);
+  return Number(normalized?.quantidade || 0);
 }
 

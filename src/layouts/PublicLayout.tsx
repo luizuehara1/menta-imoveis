@@ -339,23 +339,6 @@ export default function PublicLayout() {
               setResolvedBrokerWhatsapp(cleanPhoneForWhatsapp(p.corretorResponsavel.telefone));
               return;
             }
-            // Fallbacks
-            if (p.brokerWhatsapp) {
-              setResolvedBrokerWhatsapp(cleanPhoneForWhatsapp(p.brokerWhatsapp));
-              return;
-            }
-            if (p.brokerPhone) {
-              setResolvedBrokerWhatsapp(cleanPhoneForWhatsapp(p.brokerPhone));
-              return;
-            }
-            if (p.broker?.whatsapp) {
-              setResolvedBrokerWhatsapp(cleanPhoneForWhatsapp(p.broker.whatsapp));
-              return;
-            }
-            if (p.broker?.telefone) {
-              setResolvedBrokerWhatsapp(cleanPhoneForWhatsapp(p.broker.telefone));
-              return;
-            }
 
             // 3. corretor em corretores/{id}
             const brokerId = p.brokerId || p.corretorId || p.corretorResponsavel?.id || p.broker?.id;
@@ -377,12 +360,38 @@ export default function PublicLayout() {
                 console.error("Error fetching broker in layout:", e);
               }
             }
+
+            // 4. imovel.corretorWhatsapp / brokerWhatsapp / etc.
+            if (p.corretorWhatsapp) {
+              setResolvedBrokerWhatsapp(cleanPhoneForWhatsapp(p.corretorWhatsapp));
+              return;
+            }
+            if (p.corretorTelefone) {
+              setResolvedBrokerWhatsapp(cleanPhoneForWhatsapp(p.corretorTelefone));
+              return;
+            }
+            if (p.brokerWhatsapp) {
+              setResolvedBrokerWhatsapp(cleanPhoneForWhatsapp(p.brokerWhatsapp));
+              return;
+            }
+            if (p.brokerPhone) {
+              setResolvedBrokerWhatsapp(cleanPhoneForWhatsapp(p.brokerPhone));
+              return;
+            }
+            if (p.broker?.whatsapp) {
+              setResolvedBrokerWhatsapp(cleanPhoneForWhatsapp(p.broker.whatsapp));
+              return;
+            }
+            if (p.broker?.telefone) {
+              setResolvedBrokerWhatsapp(cleanPhoneForWhatsapp(p.broker.telefone));
+              return;
+            }
           }
         } catch (e) {
           console.error("Error fetching and resolving layout property:", e);
         }
         
-        // Failsafe / 4. WhatsApp da empresa
+        // 5. WhatsApp da imobiliária nas configurações do site
         setResolvedBrokerWhatsapp(cleanPhoneForWhatsapp(settings?.empresa?.whatsapp || ""));
       };
 

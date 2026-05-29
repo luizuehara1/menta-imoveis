@@ -347,6 +347,9 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
           <p><strong>Cláusula 3ª - Do Valor:</strong> O LOCATÁRIO pagará ao LOCADOR o valor total informado neste contrato, composto pelo valor da diária, quantidade de dias, taxas adicionais, caução, taxa de limpeza e eventuais descontos.</p>
           <p><strong>Cláusula 4ª - Da Conservação:</strong> O LOCATÁRIO declara receber o imóvel em boas condições de uso e conservação, comprometendo-se a devolvê-lo no mesmo estado, salvo desgastes naturais decorrente do uso normal.</p>
           <p><strong>Cláusula 5ª - Das Regras de Uso:</strong> O LOCATÁRIO compromete-se a respeitar as regras descritas neste contrato, incluindo limites de hóspedes, horários, regras de condomínio, proibição de eventos, animais ou outras condições específicas, quando aplicáveis.</p>
+          {Number(v.taxaCaucao) > 0 && (
+            <p><strong>Cláusula 6ª - Da Garantia Caução:</strong> Fica estipulada a garantia por depósito caução sob o valor de {safeMoney(v.taxaCaucao)}, de responsabilidade do LOCATÁRIO, a ser restituído ao final do contrato após a entrega das chaves e vistoria de saída satisfatória, resguardado o direito de retenção em caso de avarias ou inadimplementos.</p>
+          )}
         </div>
 
         {/* CUSTOM CLAUSES IF ANY */}

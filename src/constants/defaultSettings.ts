@@ -139,7 +139,7 @@ export const DEFAULT_OPTIONS: Record<string, OptionItem[]> = {
   lazer: [
     "Salão de festa", "Sala de jogos", "Espaço gourmet", "Piscina adulta", "Piscina infantil",
     "Sauna", "Spa", "Academia", "Cinema", "Quadra poliesportiva", "Brinquedoteca",
-    "Playground", "Bicicletário", "Portaria 24h", "Box de praia"
+    "Playground", "Bicicletário", "Portaria 24h", "Box de praia", "Portaria no edifício", "Portaria 24 horas"
   ].map((nome, index) => ({ id: `leisure-${index}`, nome, label: nome, valor: nome, value: nome, ativo: true, ordem: index })),
   localizacoes: [
     "Frente mar", "Quadra mar", "Barra Norte", "Barra Sul", "Centro", "Pioneiros",
@@ -162,7 +162,7 @@ export const DEFAULT_OPTIONS: Record<string, OptionItem[]> = {
   caracteristicasEmpreendimento: [
     "Salão de festa", "Sala de jogos", "Espaço gourmet", "Piscina adulta", "Piscina infantil",
     "Sauna", "Spa", "Academia", "Cinema", "Quadra poliesportiva", "Brinquedoteca",
-    "Playground", "Bicicletário", "Portaria 24h", "Box de praia"
+    "Playground", "Bicicletário", "Portaria 24h", "Box de praia", "Portaria no edifício", "Portaria 24 horas"
   ].map((nome, index) => ({ id: `emp-${index}`, nome, label: nome, valor: nome, value: nome, ativo: true, ordem: index })),
   localizacao: [
     "Frente mar", "Quadra mar", "Barra Norte", "Barra Sul", "Centro", "Pioneiros",

@@ -587,6 +587,14 @@ export default function AdminContractForm() {
       return;
     }
 
+    const propertyWarranty = selectedProperty?.leaseWarrantyType || (selectedProperty as any)?.garantiaLocaticia || contract.dados?.imovel?.leaseWarrantyType || contract.dados?.imovel?.garantiaLocaticia || '';
+    const isCaucao = propertyWarranty === 'Caução' || propertyWarranty === 'Depósito Caução' || propertyWarranty === 'Depósito antecipado';
+    const caucaoValue = Number(contract.dados?.valores?.taxaCaucao || 0);
+    if (isCaucao && caucaoValue <= 0) {
+      alert("Atenção: A modalidade de garantia do imóvel selecionado é Caução, mas o valor correspondente (Valor Caução) não foi preenchido!");
+      return;
+    }
+
     if (contract.tipoContrato === 'locacao_temporaria') {
       const days = contract.dados?.prazo?.quantidadeDias || 0;
       if (days > 90) {

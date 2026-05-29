@@ -191,6 +191,9 @@ export default function AdminRents() {
     percentualComissaoImobiliaria: 10,
     valorComissaoImobiliaria: 0,
     valorRepassadoProprietario: 0,
+    valorGarantiaCaucao: 0,
+    incluirCaucaoNoPrimeiroPagamento: false,
+    garantiaLocaticia: "",
     dueDay: 10,
     startDate: new Date().toISOString().split("T")[0],
     statusPagamento: "Pendente",
@@ -229,6 +232,9 @@ export default function AdminRents() {
     valorTotal: 0,
     valorComissaoImobiliaria: 0,
     valorRepassadoProprietario: 0,
+    valorGarantiaCaucao: 0,
+    incluirCaucaoNoPrimeiroPagamento: false,
+    garantiaLocaticia: "",
     dataPagamento: "",
     formaPagamento: "",
     observacoes: "",
@@ -349,6 +355,12 @@ export default function AdminRents() {
               ownerPhone,
             });
 
+            const pGarantiaVal = toNumber(
+              property.valorGarantiaCaucao ||
+              property.valorCaucao ||
+              0
+            );
+
             setLeaseForm((prev) => ({
               ...prev,
               propertyId: imovelIdParam,
@@ -365,6 +377,9 @@ export default function AdminRents() {
               valorTaxaAgua: toNumber((property as any).valorTaxaAgua ?? (property as any).taxaAgua ?? (property as any).taxaagua ?? 0),
               valorTaxaLuz: toNumber((property as any).valorTaxaLuz ?? (property as any).taxaLuz ?? (property as any).taxaluz ?? 0),
               valorSeguroIncendio: fireInsuranceVal,
+              valorGarantiaCaucao: pGarantiaVal,
+              garantiaLocaticia: property.leaseWarrantyType || property.garantiaLocaticia || "",
+              incluirCaucaoNoPrimeiroPagamento: false,
               tenantName: (property as any).locatarioNome ?? "",
               tenantPhone: (property as any).locatarioTelefone ?? "",
               tenantCpf: (property as any).locatarioCpf ?? "",
@@ -454,6 +469,12 @@ export default function AdminRents() {
           0,
       );
 
+      const pGarantiaVal = toNumber(
+        property.valorGarantiaCaucao ||
+        property.valorCaucao ||
+        0
+      );
+
       setLeaseForm((prev) => ({
         ...prev,
         propertyId,
@@ -470,6 +491,9 @@ export default function AdminRents() {
         valorTaxaAgua: toNumber((property as any).valorTaxaAgua ?? (property as any).taxaAgua ?? (property as any).taxaagua ?? 0),
         valorTaxaLuz: toNumber((property as any).valorTaxaLuz ?? (property as any).taxaLuz ?? (property as any).taxaluz ?? 0),
         valorSeguroIncendio: fireInsuranceVal,
+        valorGarantiaCaucao: pGarantiaVal,
+        garantiaLocaticia: property.leaseWarrantyType || property.garantiaLocaticia || "",
+        incluirCaucaoNoPrimeiroPagamento: false,
         tenantName: (property as any).locatarioNome ?? "",
         tenantPhone: (property as any).locatarioTelefone ?? "",
         tenantCpf: (property as any).locatarioCpf ?? "",
@@ -485,7 +509,10 @@ export default function AdminRents() {
       const payload = {
         ...leaseForm,
         value: leaseForm.valorTotalPagar, // Keep for compatibility
-        createdAt: isEditing ? leaseForm.createdAt : serverTimestamp(),
+        valorGarantiaCaucao: toNumber(leaseForm.valorGarantiaCaucao || 0),
+        incluirCaucaoNoPrimeiroPagamento: !!leaseForm.incluirCaucaoNoPrimeiroPagamento,
+        garantiaLocaticia: leaseForm.garantiaLocaticia || "",
+        createdAt: isEditing ? (leaseForm.createdAt || serverTimestamp()) : serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
 
@@ -579,6 +606,9 @@ export default function AdminRents() {
       percentualComissaoImobiliaria: 10,
       valorComissaoImobiliaria: 0,
       valorRepassadoProprietario: 0,
+      valorGarantiaCaucao: 0,
+      incluirCaucaoNoPrimeiroPagamento: false,
+      garantiaLocaticia: "",
       dueDay: 10,
       startDate: new Date().toISOString().split("T")[0],
       statusPagamento: "Pendente",
@@ -683,7 +713,7 @@ export default function AdminRents() {
   };
 
   const recalculateReceiptTotal = (form: any, type: "locatario" | "locador") => {
-    const totalPagoPeloLocatario = 
+    let totalPagoPeloLocatario = 
       (Number(form.valorAluguel) || 0) +
       (Number(form.valorCondominio) || 0) +
       (Number(form.valorIptu) || 0) +
@@ -694,6 +724,10 @@ export default function AdminRents() {
       (Number(form.valorSeguroIncendio) || 0) +
       (Number(form.valorOutros) || 0) -
       (Number(form.valorDesconto) || 0);
+
+    if (form.incluirCaucaoNoPrimeiroPagamento && Number(form.valorGarantiaCaucao) > 0) {
+      totalPagoPeloLocatario += Number(form.valorGarantiaCaucao);
+    }
 
     if (type === "locatario") {
       return {
@@ -725,7 +759,9 @@ export default function AdminRents() {
         field === "valorSeguroIncendio" ||
         field === "valorOutros" ||
         field === "valorDesconto" ||
-        field === "valorComissaoImobiliaria"
+        field === "valorComissaoImobiliaria" ||
+        field === "valorGarantiaCaucao" ||
+        field === "incluirCaucaoNoPrimeiroPagamento"
       ) {
         updated = recalculateReceiptTotal(updated, receiptType || "locatario");
       }
@@ -771,6 +807,9 @@ export default function AdminRents() {
         valorTotal: Number(savedDoc.dadosRecibo.valorTotal) || 0,
         valorComissaoImobiliaria: Number(savedDoc.dadosRecibo.valorComissaoImobiliaria) || 0,
         valorRepassadoProprietario: Number(savedDoc.dadosRecibo.valorRepassadoProprietario) || 0,
+        valorGarantiaCaucao: Number(savedDoc.dadosRecibo.valorGarantiaCaucao) || 0,
+        incluirCaucaoNoPrimeiroPagamento: !!savedDoc.dadosRecibo.incluirCaucaoNoPrimeiroPagamento,
+        garantiaLocaticia: savedDoc.dadosRecibo.garantiaLocaticia || "",
         dataPagamento: savedDoc.dadosRecibo.dataPagamento || lease.lastPaymentDate || new Date().toISOString().split("T")[0],
         formaPagamento: savedDoc.dadosRecibo.formaPagamento || "",
         observacoes: savedDoc.dadosRecibo.observacoes || lease.observacoes || "",
@@ -825,6 +864,9 @@ export default function AdminRents() {
         valorTotal: lease.valorTotalPagar || 0,
         valorComissaoImobiliaria: lease.valorComissaoImobiliaria || 0,
         valorRepassadoProprietario: lease.valorRepassadoProprietario || 0,
+        valorGarantiaCaucao: Number(lease.valorGarantiaCaucao) || 0,
+        incluirCaucaoNoPrimeiroPagamento: !!lease.incluirCaucaoNoPrimeiroPagamento,
+        garantiaLocaticia: lease.garantiaLocaticia || "",
         dataPagamento: lease.lastPaymentDate || new Date().toISOString().split("T")[0],
         formaPagamento: "",
         observacoes: lease.observacoes || "",
@@ -1039,50 +1081,61 @@ export default function AdminRents() {
 
       const tableHead = [["Dedução / Encargo do Aluguel", "Valor"]];
 
-      const tableBody =
-        type === "locatario"
-          ? [
-              ["Aluguel Mensal Base", safeMoney(receiptForm.valorAluguel)],
-              ["IPTU", safeMoney(receiptForm.valorIptu)],
-              ["Taxa de Lixo", safeMoney(receiptForm.valorTaxaLixo)],
-              ["Taxa de Gás", safeMoney(receiptForm.valorTaxaGas)],
-              ["Taxa de Água", safeMoney(receiptForm.valorTaxaAgua)],
-              ["Taxa de Luz", safeMoney(receiptForm.valorTaxaLuz)],
-              ["Condomínio", safeMoney(receiptForm.valorCondominio)],
-              ["Seguro Incêndio", safeMoney(receiptForm.valorSeguroIncendio)],
-              ["Outras Taxas / Serviços", safeMoney(receiptForm.valorOutros)],
-              ["Desconto Concedido", `- ${safeMoney(receiptForm.valorDesconto)}`],
-              ["TOTAL PAGO PELO LOCATÁRIO", safeMoney(receiptForm.valorTotal)],
-            ]
-          : [
-              ["Valor Recebido do Locatário", safeMoney(
-                (Number(receiptForm.valorAluguel) || 0) +
-                (Number(receiptForm.valorCondominio) || 0) +
-                (Number(receiptForm.valorIptu) || 0) +
-                (Number(receiptForm.valorTaxaLixo) || 0) +
-                (Number(receiptForm.valorTaxaGas) || 0) +
-                (Number(receiptForm.valorTaxaAgua) || 0) +
-                (Number(receiptForm.valorTaxaLuz) || 0) +
-                (Number(receiptForm.valorSeguroIncendio) || 0) +
-                (Number(receiptForm.valorOutros) || 0) -
-                (Number(receiptForm.valorDesconto) || 0)
-              )],
-              ["Aluguel Mensal Base", safeMoney(receiptForm.valorAluguel)],
-              ["IPTU", safeMoney(receiptForm.valorIptu)],
-              ["Condomínio", safeMoney(receiptForm.valorCondominio)],
-              ["Taxas (Lixo/Gás/Água/Luz/Outros)", safeMoney(
-                (Number(receiptForm.valorTaxaLixo) || 0) +
-                (Number(receiptForm.valorTaxaGas) || 0) +
-                (Number(receiptForm.valorTaxaAgua) || 0) +
-                (Number(receiptForm.valorTaxaLuz) || 0) +
-                (Number(receiptForm.valorSeguroIncendio) || 0) +
-                (Number(receiptForm.valorOutros) || 0)
-              )],
-              ["Comissão da Imobiliária", `-${safeMoney(receiptForm.valorComissaoImobiliaria)}`],
-              ["Desconto Concedido", `- ${safeMoney(receiptForm.valorDesconto)}`],
-              ["Valor Líquido Repassado ao Proprietário", safeMoney(receiptForm.valorRepassadoProprietario)],
-              ["TOTAL REPASSADO AO LOCADOR", safeMoney(receiptForm.valorTotal)],
-            ];
+      const hasCaucao = Number(receiptForm.valorGarantiaCaucao) > 0;
+      const tableBody: any[] = [];
+
+      if (type === "locatario") {
+        tableBody.push(["Aluguel Mensal Base", safeMoney(receiptForm.valorAluguel)]);
+        tableBody.push(["IPTU", safeMoney(receiptForm.valorIptu)]);
+        tableBody.push(["Taxa de Lixo", safeMoney(receiptForm.valorTaxaLixo)]);
+        tableBody.push(["Taxa de Gás", safeMoney(receiptForm.valorTaxaGas)]);
+        tableBody.push(["Taxa de Água", safeMoney(receiptForm.valorTaxaAgua)]);
+        tableBody.push(["Taxa de Luz", safeMoney(receiptForm.valorTaxaLuz)]);
+        tableBody.push(["Condomínio", safeMoney(receiptForm.valorCondominio)]);
+        tableBody.push(["Seguro Incêndio", safeMoney(receiptForm.valorSeguroIncendio)]);
+        tableBody.push(["Outras Taxas / Serviços", safeMoney(receiptForm.valorOutros)]);
+        tableBody.push(["Desconto Concedido", `- ${safeMoney(receiptForm.valorDesconto)}`]);
+        if (hasCaucao && receiptForm.incluirCaucaoNoPrimeiroPagamento) {
+          tableBody.push(["Valor da Garantia Caução", safeMoney(receiptForm.valorGarantiaCaucao)]);
+        }
+        tableBody.push(["TOTAL PAGO PELO LOCATÁRIO", safeMoney(receiptForm.valorTotal)]);
+      } else {
+        let totalRecebidoLocatario = 
+          (Number(receiptForm.valorAluguel) || 0) +
+          (Number(receiptForm.valorCondominio) || 0) +
+          (Number(receiptForm.valorIptu) || 0) +
+          (Number(receiptForm.valorTaxaLixo) || 0) +
+          (Number(receiptForm.valorTaxaGas) || 0) +
+          (Number(receiptForm.valorTaxaAgua) || 0) +
+          (Number(receiptForm.valorTaxaLuz) || 0) +
+          (Number(receiptForm.valorSeguroIncendio) || 0) +
+          (Number(receiptForm.valorOutros) || 0) -
+          (Number(receiptForm.valorDesconto) || 0);
+
+        if (hasCaucao && receiptForm.incluirCaucaoNoPrimeiroPagamento) {
+          totalRecebidoLocatario += Number(receiptForm.valorGarantiaCaucao);
+        }
+
+        tableBody.push(["Valor Recebido do Locatário", safeMoney(totalRecebidoLocatario)]);
+        tableBody.push(["Aluguel Mensal Base", safeMoney(receiptForm.valorAluguel)]);
+        tableBody.push(["IPTU", safeMoney(receiptForm.valorIptu)]);
+        tableBody.push(["Condomínio", safeMoney(receiptForm.valorCondominio)]);
+        tableBody.push(["Taxas (Lixo/Gás/Água/Luz/Outros)", safeMoney(
+          (Number(receiptForm.valorTaxaLixo) || 0) +
+          (Number(receiptForm.valorTaxaGas) || 0) +
+          (Number(receiptForm.valorTaxaAgua) || 0) +
+          (Number(receiptForm.valorTaxaLuz) || 0) +
+          (Number(receiptForm.valorSeguroIncendio) || 0) +
+          (Number(receiptForm.valorOutros) || 0)
+        )]);
+        if (hasCaucao && receiptForm.incluirCaucaoNoPrimeiroPagamento) {
+          tableBody.push(["Garantia Caução Recebida", safeMoney(receiptForm.valorGarantiaCaucao)]);
+        }
+        tableBody.push(["Comissão da Imobiliária", `-${safeMoney(receiptForm.valorComissaoImobiliaria)}`]);
+        tableBody.push(["Desconto Concedido", `- ${safeMoney(receiptForm.valorDesconto)}`]);
+        tableBody.push(["Valor Líquido Repassado ao Proprietário", safeMoney(receiptForm.valorRepassadoProprietario)]);
+        tableBody.push(["TOTAL REPASSADO AO LOCADOR", safeMoney(receiptForm.valorTotal)]);
+      }
 
       autoTable(doc, {
         startY: 92,
@@ -1095,6 +1148,14 @@ export default function AdminRents() {
       });
 
       let finalY = (doc as any).lastAutoTable.finalY + 12;
+
+      if (hasCaucao && !receiptForm.incluirCaucaoNoPrimeiroPagamento) {
+        doc.setFont("helvetica", "italic");
+        doc.setFontSize(8.5);
+        doc.setTextColor(190, 110, 20);
+        doc.text(`Garantia Locatícia: Caução sob o valor de ${safeMoney(receiptForm.valorGarantiaCaucao)} (não incluso no total deste pagamento).`, 20, finalY);
+        finalY += 8;
+      }
 
       if (receiptForm.observacoes || receiptForm.textoExtra) {
         doc.setFont("helvetica", "normal");
@@ -2159,6 +2220,42 @@ export default function AdminRents() {
                             }
                           />
                         </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-amber-500 uppercase tracking-widest pl-1">
+                            Valor da Garantia Caução (R$)
+                          </label>
+                          <input
+                            type="text"
+                            className="w-full bg-amber-50/50 border border-transparent rounded-2xl py-4 px-6 text-sm font-bold focus:ring-4 focus:ring-amber-400/10 outline-none transition-all"
+                            value={maskCurrency(leaseForm.valorGarantiaCaucao ?? "")}
+                            onChange={(e) =>
+                              setLeaseForm({
+                                ...leaseForm,
+                                valorGarantiaCaucao: parseCurrencyToNumber(
+                                  e.target.value,
+                                ),
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2 md:col-span-2 flex items-center pt-6 pl-2">
+                          <label className="flex items-center gap-3 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              className="w-5 h-5 rounded border-gray-300 text-gold focus:ring-gold bg-gray-50 focus:ring-2"
+                              checked={!!leaseForm.incluirCaucaoNoPrimeiroPagamento}
+                              onChange={(e) =>
+                                setLeaseForm({
+                                  ...leaseForm,
+                                  incluirCaucaoNoPrimeiroPagamento: e.target.checked,
+                                })
+                              }
+                            />
+                            <span className="text-sm font-bold text-gray-700">
+                              Incluir caução no primeiro pagamento
+                            </span>
+                          </label>
+                        </div>
                       </div>
                       <div className="flex justify-end pt-2">
                         <button
@@ -2251,6 +2348,22 @@ export default function AdminRents() {
                             </span>
                           </div>
                         )}
+                        {toNumber(leaseForm.valorGarantiaCaucao) > 0 && (
+                          <div className="flex justify-between text-sm text-amber-600 font-bold border-t border-dashed border-amber-200 pt-2 mt-2">
+                            <span>Garantia Caução:</span>
+                            <span>
+                              {formatCurrency(leaseForm.valorGarantiaCaucao || 0)}
+                            </span>
+                          </div>
+                        )}
+                        {leaseForm.incluirCaucaoNoPrimeiroPagamento && toNumber(leaseForm.valorGarantiaCaucao) > 0 && (
+                          <div className="flex justify-between text-sm text-indigo-600 font-bold border-t border-dashed border-indigo-200 pt-2 mt-2">
+                            <span>Primeiro pagamento (com caução):</span>
+                            <span>
+                              {formatCurrency((leaseForm.valorTotalPagar || 0) + toNumber(leaseForm.valorGarantiaCaucao))}
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       <div className="bg-white/50 rounded-2xl p-6 border border-gold/20 mb-8 mt-6">
@@ -2290,6 +2403,11 @@ export default function AdminRents() {
                           <h2 className="text-5xl font-display font-black text-primary-black">
                             {formatCurrency(leaseForm.valorTotalPagar || 0)}
                           </h2>
+                          {leaseForm.incluirCaucaoNoPrimeiroPagamento && toNumber(leaseForm.valorGarantiaCaucao) > 0 && (
+                            <p className="text-xs font-semibold text-gray-500 mt-2 text-center">
+                              Primeiro pagamento: <strong>{formatCurrency((leaseForm.valorTotalPagar || 0) + toNumber(leaseForm.valorGarantiaCaucao))}</strong>
+                            </p>
+                          )}
                         </div>
 
                         <div className="space-y-4">
@@ -2937,6 +3055,30 @@ export default function AdminRents() {
                         value={maskCurrency(receiptForm.valorDesconto)}
                         onChange={(e) => handleReceiptFieldChange("valorDesconto", parseCurrencyToNumber(e.target.value))}
                       />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-amber-500 uppercase tracking-widest pl-1">
+                        Valor da Garantia Caução (R$)
+                      </label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        value={maskCurrency((receiptForm as any).valorGarantiaCaucao ?? "")}
+                        onChange={(e) => handleReceiptFieldChange("valorGarantiaCaucao", parseCurrencyToNumber(e.target.value))}
+                      />
+                    </div>
+                    <div className="space-y-2 flex items-center pt-6 pl-1">
+                      <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          className="w-4.5 h-4.5 rounded border-gray-300 text-gold focus:ring-gold bg-gray-50 focus:ring-1"
+                          checked={!!(receiptForm as any).incluirCaucaoNoPrimeiroPagamento}
+                          onChange={(e) => handleReceiptFieldChange("incluirCaucaoNoPrimeiroPagamento", e.target.checked)}
+                        />
+                        <span className="text-[11px] font-bold text-gray-600">
+                          Incluir caução no total deste recibo
+                        </span>
+                      </label>
                     </div>
 
                     {receiptType === "locador" && (
