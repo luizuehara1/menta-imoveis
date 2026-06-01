@@ -2,12 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import { Search, MapPin, Bed, Car, MessageCircle, Filter, X, Sparkles, Layers, Bath, Maximize, Check } from 'lucide-react';
+import { Search, MapPin, Bed, Car, MessageCircle, Filter, X, Sparkles, Layers, Bath, Maximize, Check, Armchair } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSettings, useOptions } from '../../hooks/useSettings';
 import PageWrapper from '../../components/PageWrapper';
 import { SafeImage } from '../../components/ui/SafeImage';
 import { formatCurrency, isValidPublicProperty, isMockProperty, cleanPhoneForWhatsapp, getSafeImageUrl, isImovelAlugado, matchesQuickSearch, normalizeText, buildPropertyWhatsAppMessage, getIptuValue, getValorTotalMensal, getValorMensal } from '../../lib/utils';
+import { PropertyPriceBadge } from '../../components/public/PropertyPriceBadge';
+import { PropertyCardCosts } from '../../components/public/PropertyCardCosts';
 import { staggerContainer, slideUp, fadeIn } from '../../constants/animations';
 import { GoldenParticles } from '../../components/three/GoldenParticles';
 import { Canvas } from '@react-three/fiber';
@@ -214,42 +216,7 @@ const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
           </span>
         </div>
 
-        {/* Floating Price Badge */}
-        <div className="absolute bottom-4 left-4 bg-white/95 text-primary-black text-xs font-bold px-4 py-2.5 rounded-lg backdrop-blur-md shadow-lg border border-gold/20 z-10 max-w-[80%]">
-          {isImovelAlugado(property) ? (
-            bizTypeNorm === 'Venda e Locação' && (property.priceVenda || property.valorVenda || property.valor_venda) ? (
-              <div className="space-y-0.5">
-                <span className="text-emerald-700 font-extrabold uppercase text-[9px] block">Venda: {formatCurrency(property.priceVenda || property.valorVenda || property.valor_venda)}</span>
-                <span className="text-gray-500 text-[8px] leading-tight block">Imóvel alugado atualmente, disponível para venda</span>
-              </div>
-            ) : (
-              <span className="text-primary-black font-extrabold uppercase tracking-wide text-[10px]">Já alugado</span>
-            )
-          ) : (
-            <div className="flex flex-col gap-0.5 text-[11px]">
-              {bizTypeNorm === 'Venda' && (
-                <span className="text-primary-black font-extrabold block">
-                  VENDA: {formatCurrency(property.priceVenda || property.valorVenda || property.valor_venda)}
-                </span>
-              )}
-              {bizTypeNorm === 'Locação' && (
-                <span className="text-primary-black font-extrabold block">
-                  MENSAL: {formatCurrency(getValorMensal(property))}/mês
-                </span>
-              )}
-              {bizTypeNorm === 'Venda e Locação' && (
-                <>
-                  <span className="text-primary-black font-extrabold leading-none block">
-                    VENDA: {formatCurrency(property.priceVenda || property.valorVenda || property.valor_venda)}
-                  </span>
-                  <span className="text-primary-black font-extrabold leading-none mt-1 block">
-                    MENSAL: {formatCurrency(getValorMensal(property))}/mês
-                  </span>
-                </>
-              )}
-            </div>
-          )}
-        </div>
+        <PropertyPriceBadge imovel={property} />
       </Link>
       
       <div className="p-6 flex-grow flex flex-col">
@@ -368,34 +335,29 @@ const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
                   </span>
                 </div>
               )}
-              {((Number(property.condoFee || property.txCondominio || property.condominio) > 0) || (getIptuValue(property) > 0)) && (
-                <div className="flex gap-3 mt-2 pt-2 border-t border-gray-100 flex-wrap">
-                   {Number(property.condoFee || property.txCondominio || property.condominio) > 0 && (
-                     <p className="text-[9px] font-bold text-gray-400">Cond: {formatCurrency(property.condoFee || property.txCondominio || property.condominio)}</p>
-                   )}
-                   {getIptuValue(property) > 0 && (
-                     <p className="text-[9px] font-bold text-gray-400">IPTU: {formatCurrency(getIptuValue(property))}/mês</p>
-                   )}
-                </div>
-              )}
             </>
           )}
+          <PropertyCardCosts imovel={property} />
         </div>
 
-        <div className="grid grid-cols-4 gap-2 mb-6 h-12">
-          <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-gray-50/50 border border-transparent hover:border-gold/20 transition-all">
+        <div className="grid grid-cols-5 gap-1.5 mb-6 h-12">
+          <div className="flex flex-col items-center justify-center p-1 rounded-xl bg-gray-50/50 border border-transparent hover:border-gold/20 transition-all" title="Dormitórios">
             <Bed size={14} className="text-primary-black mb-1" />
             <span className="text-[10px] font-black text-primary-black">{property.bedrooms || property.dormitorios || 0}</span>
           </div>
-          <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-gray-50/50 border border-transparent hover:border-gold/20 transition-all">
+          <div className="flex flex-col items-center justify-center p-1 rounded-xl bg-gray-50/50 border border-transparent hover:border-gold/20 transition-all" title="Banheiros">
             <Bath size={14} className="text-primary-black mb-1" />
             <span className="text-[10px] font-black text-primary-black">{property.bathrooms || property.banheiros || 0}</span>
           </div>
-          <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-gray-50/50 border border-transparent hover:border-gold/20 transition-all">
+          <div className="flex flex-col items-center justify-center p-1 rounded-xl bg-gray-50/50 border border-transparent hover:border-gold/20 transition-all" title="Salas">
+            <Armchair size={14} className="text-primary-black mb-1" />
+            <span className="text-[10px] font-black text-primary-black">{property.salas || 0}</span>
+          </div>
+          <div className="flex flex-col items-center justify-center p-1 rounded-xl bg-gray-50/50 border border-transparent hover:border-gold/20 transition-all" title="Vagas">
             <Car size={14} className="text-primary-black mb-1" />
             <span className="text-[10px] font-black text-primary-black">{property.garageSpaces || property.vagas || property.vagasGaragem || 0}</span>
           </div>
-          <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-gray-50/50 border border-transparent hover:border-gold/20 transition-all">
+          <div className="flex flex-col items-center justify-center p-1 rounded-xl bg-gray-50/50 border border-transparent hover:border-gold/20 transition-all" title="Área Útil">
             <Maximize size={14} className="text-primary-black mb-1" />
             <span className="text-[10px] font-black text-primary-black">{property.usefulArea || property.areaUtil || property.totalArea || property.areaTotal || 0}m²</span>
           </div>
@@ -575,7 +537,18 @@ export default function PropertyList() {
       } else if (leaseFilter === 'todos') {
         // Keep both
       } else if (leaseFilter === 'disponiveis') {
-        data = data.filter((p: any) => !isImovelAlugado(p));
+        data = data.filter((p: any) => {
+          const pType = normalizeTipoNegocio(p.businessType || p.tipoNegocio);
+          if (pType === 'Venda') return true;
+          if (pType === 'Venda e Locação') {
+            const isRented = isImovelAlugado(p);
+            if (normalizeTipoNegocio(selectedBType) === 'Locação') {
+              return !isRented;
+            }
+            return true;
+          }
+          return !isImovelAlugado(p);
+        });
       }
 
       // 3. Other Filters

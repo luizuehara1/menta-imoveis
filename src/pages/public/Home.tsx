@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Search, MapPin, Bed, Car, Check, Sparkles } from 'lucide-react';
+import { Search, MapPin, Bed, Car, Check, Sparkles, Armchair } from 'lucide-react';
 import { motion } from 'motion/react';
 import { collection, query, where, limit, getDocs } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
@@ -11,6 +11,8 @@ import { LuxuryShapeCanvas } from '../../components/three/AbstractLuxuryShape';
 import { useSettings, useOptions } from '../../hooks/useSettings';
 import { DEFAULT_SITE_CONFIG } from '../../constants/defaultSettings';
 import { formatCurrency, isValidPublicProperty, getSafeImageUrl, isImovelAlugado, getIptuValue, getValorMensal, normalizeTipoNegocio } from '../../lib/utils';
+import { PropertyPriceBadge } from '../../components/public/PropertyPriceBadge';
+import { PropertyCardCosts } from '../../components/public/PropertyCardCosts';
 
 import { SafeImage } from '../../components/ui/SafeImage';
 
@@ -477,41 +479,7 @@ export default function Home() {
                         </div>
                       )}
                     </div>
-                    <div className="absolute bottom-4 left-4 bg-white/95 text-primary-black text-xs font-bold px-4 py-2.5 rounded-lg backdrop-blur-md shadow-lg border border-gold/20 z-10 max-w-[85%]">
-                      {isImovelAlugado(property) ? (
-                        normalizeTipoNegocio(property.businessType || property.tipoNegocio) === 'Venda e Locação' && property.priceVenda ? (
-                          <div className="space-y-0.5">
-                            <span className="text-emerald-700 font-extrabold uppercase text-[9px] block">Venda: {formatCurrency(property.priceVenda)}</span>
-                            <span className="text-gray-500 text-[8px] leading-tight block">Imóvel alugado atualmente, disponível para venda</span>
-                          </div>
-                        ) : (
-                          <span className="text-primary-black font-extrabold uppercase tracking-wide text-[10px]">Já alugado</span>
-                        )
-                      ) : (
-                        <div className="flex flex-col gap-0.5 text-[11px]">
-                          {normalizeTipoNegocio(property.businessType || property.tipoNegocio) === 'Venda' && (
-                            <span className="text-primary-black font-extrabold block">
-                              VENDA: {formatCurrency(property.priceVenda)}
-                            </span>
-                          )}
-                          {normalizeTipoNegocio(property.businessType || property.tipoNegocio) === 'Locação' && (
-                            <span className="text-primary-black font-extrabold block">
-                              MENSAL: {formatCurrency(getValorMensal(property))}/mês
-                            </span>
-                          )}
-                          {normalizeTipoNegocio(property.businessType || property.tipoNegocio) === 'Venda e Locação' && (
-                            <>
-                              <span className="text-primary-black font-extrabold leading-none block">
-                                VENDA: {formatCurrency(property.priceVenda)}
-                              </span>
-                              <span className="text-primary-black font-extrabold leading-none mt-1 block">
-                                MENSAL: {formatCurrency(getValorMensal(property))}/mês
-                              </span>
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                    <PropertyPriceBadge imovel={property} />
                   </Link>
                   <div className="p-6">
                     <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">
@@ -521,28 +489,27 @@ export default function Home() {
                     <h3 className="font-display text-xl font-bold text-primary-black mb-2 group-hover:text-gold transition-colors leading-tight line-clamp-2">
                       {property.title}
                     </h3>
-                    {((Number(property.condoFee || property.txCondominio || property.condominio) > 0) || (getIptuValue(property) > 0)) && (
-                      <div className="flex gap-3 mb-4 flex-wrap">
-                         {Number(property.condoFee || property.txCondominio || property.condominio) > 0 && (
-                           <p className="text-[10px] font-bold text-gray-400">Cond: {formatCurrency(property.condoFee || property.txCondominio || property.condominio)}</p>
-                         )}
-                         {getIptuValue(property) > 0 && (
-                           <p className="text-[10px] font-bold text-gray-400">IPTU: {formatCurrency(getIptuValue(property))}/mês</p>
-                         )}
+                    <PropertyCardCosts imovel={property} className="mb-4" />
+                    <div className="flex items-center justify-between py-4 border-t border-gray-50 text-gray-400 gap-1">
+                      <div className="flex items-center gap-1 transition-colors group-hover:text-gold" title="Dormitórios">
+                        <Bed size={15} />
+                        <span className="text-[11px] font-bold uppercase tracking-tighter text-[#1E293B]">{property.bedrooms || 0} Dorms</span>
                       </div>
-                    )}
-                    <div className="flex items-center justify-between py-4 border-t border-gray-50">
-                      <div className="flex items-center gap-1.5 transition-colors group-hover:text-gold">
-                        <Bed size={16} />
-                        <span className="text-xs font-bold uppercase tracking-tighter">{property.bedrooms} Dorms</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 transition-colors group-hover:text-gold">
-                        <Sparkles size={16} />
-                        <span className="text-xs font-bold uppercase tracking-tighter">{property.suites} Suítes</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 transition-colors group-hover:text-gold">
-                        <Car size={16} />
-                        <span className="text-xs font-bold uppercase tracking-tighter">{property.garageSpaces} Vagas</span>
+                      {Number(property.suites || 0) > 0 && (
+                        <div className="flex items-center gap-1 transition-colors group-hover:text-gold" title="Suítes">
+                          <Sparkles size={15} />
+                          <span className="text-[11px] font-bold uppercase tracking-tighter text-[#1E293B]">{property.suites} Suítes</span>
+                        </div>
+                      )}
+                      {Number(property.salas || 0) > 0 && (
+                        <div className="flex items-center gap-1 transition-colors group-hover:text-gold" title="Salas">
+                          <Armchair size={15} />
+                          <span className="text-[11px] font-bold uppercase tracking-tighter text-[#1E293B]">{property.salas} {property.salas === 1 ? 'Sala' : 'Salas'}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1 transition-colors group-hover:text-gold" title="Vagas">
+                        <Car size={15} />
+                        <span className="text-[11px] font-bold uppercase tracking-tighter text-[#1E293B]">{property.garageSpaces || 0} Vagas</span>
                       </div>
                     </div>
                     <Link to={`/imovel/${property.id}`} className="w-full mt-2 block text-center btn-gold !py-3 !text-xs !bg-transparent !text-primary-black !border !border-gold/30 hover:!bg-gold hover:!text-primary-black !rounded-xl">

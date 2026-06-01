@@ -669,7 +669,7 @@ export default function PropertyDetail() {
                               {iptuVal > 0 && (
                                 <div className="flex justify-between">
                                   <span>IPTU Mensal</span>
-                                  <span className="font-bold text-slate-700">{formatCurrency(iptuVal)}</span>
+                                  <span className="font-bold text-slate-700">{formatCurrency(iptuVal)}/mês</span>
                                 </div>
                               )}
                               {taxaLixoVal > 0 && (
@@ -768,12 +768,13 @@ export default function PropertyDetail() {
               <div className="space-y-6 md:space-y-8">
                 {/* Metric Cards Grid */}
                 <div className="bg-white p-6 md:p-8 rounded-[2rem] border border-[#F1F5F9] shadow-sm">
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 md:gap-4">
                      {[
                        { icon: Maximize, value: property.usefulArea ? `${property.usefulArea}m²` : '-', label: 'Área Útil' },
                        { icon: Grid, value: property.areaConstruida ? `${property.areaConstruida}m²` : '-', label: 'Área Privada' },
                        { icon: Bed, value: property.bedrooms || '-', label: 'Dormitórios' },
                        { icon: Bath, value: property.bathrooms || property.suites || '-', label: 'Banheiros' },
+                       { icon: Armchair, value: property.salas || '-', label: 'Salas' },
                        { icon: Car, value: property.garageSpaces || '-', label: 'Vagas' },
                        { 
                          icon: Layers, 
@@ -1017,21 +1018,21 @@ export default function PropertyDetail() {
                 
                 <div className="relative z-10 space-y-6">
                     {isImovelAlugado(property) ? (
-                      property.businessType === 'Venda e Locação' && property.priceVenda ? (
+                      (isVendaAndLocacao || normBusiness === "Venda e Locação") && (property.priceVenda || property.valorVenda) ? (
                         <div className="space-y-6">
                            <div>
-                              <span className="bg-emerald-50 text-emerald-800 border border-emerald-100 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider inline-block mb-3.5">
-                                 Disponível para Venda
+                              <span className="bg-amber-500 text-white px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider inline-block mb-3.5">
+                                 Alugado atualmente
                               </span>
                               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-0.5 mb-1">
-                                 Oportunidade de Investimento
+                                 Venda
                               </p>
                               <h2 className="text-4xl font-display font-black text-[#0F172A] tracking-tight flex items-baseline">
                                 <span className="text-xl font-bold text-gold mr-1">R$</span>
-                                {formatCurrency(property.priceVenda).replace('R$', '').trim()}
+                                {formatCurrency(property.priceVenda || property.valorVenda || 0).replace('R$', '').trim()}
                               </h2>
                               <p className="text-xs text-slate-500 mt-3 leading-relaxed font-semibold">
-                                Este imóvel encontra-se sob administração e alugado atualmente. Visitas e agendamentos aceitos exclusivamente para fins de aquisição patrimonial (venda).
+                                Este imóvel encontra-se alugado atualmente, porém permanece disponível para aquisição.
                               </p>
                            </div>
 
@@ -1048,15 +1049,17 @@ export default function PropertyDetail() {
                                 <MessageCircle size={20} />
                                 Proposta de Compra
                               </motion.a>
-                              <motion.button 
+                              <motion.a 
                                 whileHover={{ scale: 1.01, y: -1 }}
                                 whileTap={{ scale: 0.99 }}
-                                onClick={scrollToScheduler}
+                                href={whatsappUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
                                 className="flex items-center justify-center gap-2.5 bg-[#0F172A] text-white font-bold text-xs uppercase tracking-wider py-4.5 rounded-2xl shadow-md hover:bg-slate-800 transition-all w-full"
                               >
-                                <Calendar size={18} className="text-gold" />
-                                Agendar Visita Compra
-                              </motion.button>
+                                <MessageCircle size={20} className="text-gold" />
+                                Falar no WhatsApp
+                              </motion.a>
                            </div>
                         </div>
                       ) : (

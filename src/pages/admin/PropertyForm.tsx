@@ -456,6 +456,7 @@ export default function AdminPropertyForm() {
       bedrooms: 0,
       suites: 0,
       bathrooms: 0,
+      salas: 0,
       garageSpaces: 0,
       cep: '',
       city: '',
@@ -1097,8 +1098,8 @@ export default function AdminPropertyForm() {
       propertyData.lavabos = computedLavabo;
       propertyData.lavabo = computedLavabo;
 
-      const computedSalas = getQtyByName("Número de salas");
-      propertyData.salas = computedSalas;
+      const computedSalas = Number(data.salas ?? 0) || getQtyByName("Número de salas") || getQtyByName("Salas");
+      propertyData.salas = Math.floor(computedSalas);
 
       const computedElevadores = getQtyByName("Elevador") || getQtyByName("Elevadores");
       if (computedElevadores > 0) {
@@ -1277,7 +1278,7 @@ export default function AdminPropertyForm() {
     const values = watch();
     const { 
       propertyType, businessType, neighborhood, city, state,
-      bedrooms, suites, bathrooms, garageSpaces, usefulArea, 
+      bedrooms, suites, bathrooms, salas, garageSpaces, usefulArea, 
       priceVenda, priceLocacao, condoFee, iptu, fireInsurance, taxes
     } = values;
 
@@ -1360,6 +1361,10 @@ export default function AdminPropertyForm() {
       const suiteText = pluralizeLabel('suíte', Number(suites));
       descCurta += `${suites} ${suiteText}, `;
     }
+    if (salas) {
+      const salaText = pluralizeLabel('sala', Number(salas));
+      descCurta += `${salas} ${salaText}, `;
+    }
     if (garageSpaces) {
       const garageText = pluralizeLabel('vaga', Number(garageSpaces));
       descCurta += `${garageSpaces} ${garageText} `;
@@ -1374,6 +1379,10 @@ export default function AdminPropertyForm() {
       if (bedrooms) {
         const bedText = pluralizeLabel('quarto', Number(bedrooms));
         descCompleta += `${bedrooms} ${bedText}, `;
+      }
+      if (salas) {
+        const salaText = pluralizeLabel('sala', Number(salas));
+        descCompleta += `${salas} ${salaText}, `;
       }
       descCompleta += `ambientes funcionais e está pronto para receber novos moradores.\n\n`;
       
@@ -1400,6 +1409,10 @@ export default function AdminPropertyForm() {
         const bathText = pluralizeLabel('banheiro', Number(bathrooms));
         descCompleta += `${bathrooms} ${bathText}, `;
       }
+      if (salas) {
+        const salaText = pluralizeLabel('sala', Number(salas));
+        descCompleta += `${salas} ${salaText}, `;
+      }
       if (garageSpaces) {
         const garageText = pluralizeLabel('vaga', Number(garageSpaces));
         descCompleta += `${garageSpaces} ${garageText} de garagem `;
@@ -1424,6 +1437,9 @@ export default function AdminPropertyForm() {
     }
     if (Number(bathrooms || 0) > 0) {
       mainItems.push({ label: "Banheiro", qty: Number(bathrooms), key: "banheiros" });
+    }
+    if (Number(salas || 0) > 0) {
+      mainItems.push({ label: "Sala", qty: Number(salas), key: "salas" });
     }
     if (Number(garageSpaces || 0) > 0) {
       mainItems.push({ label: "Vaga de garagem", qty: Number(garageSpaces), key: "vagas" });
@@ -2177,6 +2193,7 @@ export default function AdminPropertyForm() {
                 { n: 'bedrooms', l: 'Dormitórios' },
                 { n: 'suites', l: 'Suítes' },
                 { n: 'bathrooms', l: 'Banheiros' },
+                { n: 'salas', l: 'Salas' },
                 { n: 'garageSpaces', l: 'Vagas' },
               ].map(item => (
                 <div key={item.n} className="space-y-2">
