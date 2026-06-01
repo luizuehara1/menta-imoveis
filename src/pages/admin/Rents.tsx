@@ -370,7 +370,16 @@ export default function AdminRents() {
               propertyNeighborhood: property.neighborhood || property.bairro || "",
               propertyCity: property.city || property.cidade || "",
               valorAluguel: property.priceLocacao || property.valorAluguel || 0,
-              valorIptu: property.iptu || property.valorIptu || 0,
+              valorIptu: (() => {
+                const rawIptu = toNumber(
+                  property.valorIptuAnual ||
+                  property.iptuAnual ||
+                  property.iptu ||
+                  property.valorIptu ||
+                  0
+                );
+                return property.valorIptuMensal || property.iptuMensal || (rawIptu > 0 ? rawIptu / 12 : 0);
+              })(),
               valorCondominio: property.condoFee || property.valorCondominio || 0,
               valorTaxaLixo: toNumber(property.valorTaxaLixo ?? property.taxaLixo ?? property.taxalixo ?? 0),
               valorTaxaGas: toNumber(property.valorTaxaGas ?? property.taxaGas ?? property.taxagas ?? 0),
@@ -484,7 +493,16 @@ export default function AdminRents() {
         propertyNeighborhood: property.neighborhood || property.bairro || "",
         propertyCity: property.city || property.cidade || "",
         valorAluguel: property.priceLocacao || property.valorAluguel || 0,
-        valorIptu: property.iptu || property.valorIptu || 0,
+        valorIptu: (() => {
+          const rawIptu = toNumber(
+            property.valorIptuAnual ||
+            property.iptuAnual ||
+            property.iptu ||
+            property.valorIptu ||
+            0
+          );
+          return property.valorIptuMensal || property.iptuMensal || (rawIptu > 0 ? rawIptu / 12 : 0);
+        })(),
         valorCondominio: property.condoFee || property.valorCondominio || 0,
         valorTaxaLixo: toNumber(property.valorTaxaLixo ?? property.taxaLixo ?? property.taxalixo ?? 0),
         valorTaxaGas: toNumber(property.valorTaxaGas ?? property.taxaGas ?? property.taxagas ?? 0),
@@ -1086,7 +1104,7 @@ export default function AdminRents() {
 
       if (type === "locatario") {
         tableBody.push(["Aluguel Mensal Base", safeMoney(receiptForm.valorAluguel)]);
-        tableBody.push(["IPTU", safeMoney(receiptForm.valorIptu)]);
+        tableBody.push(["IPTU Mensal", safeMoney(receiptForm.valorIptu)]);
         tableBody.push(["Taxa de Lixo", safeMoney(receiptForm.valorTaxaLixo)]);
         tableBody.push(["Taxa de Gás", safeMoney(receiptForm.valorTaxaGas)]);
         tableBody.push(["Taxa de Água", safeMoney(receiptForm.valorTaxaAgua)]);
@@ -1118,7 +1136,7 @@ export default function AdminRents() {
 
         tableBody.push(["Valor Recebido do Locatário", safeMoney(totalRecebidoLocatario)]);
         tableBody.push(["Aluguel Mensal Base", safeMoney(receiptForm.valorAluguel)]);
-        tableBody.push(["IPTU", safeMoney(receiptForm.valorIptu)]);
+        tableBody.push(["IPTU Mensal", safeMoney(receiptForm.valorIptu)]);
         tableBody.push(["Condomínio", safeMoney(receiptForm.valorCondominio)]);
         tableBody.push(["Taxas (Lixo/Gás/Água/Luz/Outros)", safeMoney(
           (Number(receiptForm.valorTaxaLixo) || 0) +
@@ -1393,7 +1411,7 @@ export default function AdminRents() {
         type === "locatario"
           ? [
               ["Aluguel Mensal Base", safeMoney(lease.valorAluguel)],
-              ["IPTU", safeMoney(lease.valorIptu)],
+              ["IPTU Mensal", safeMoney(lease.valorIptu)],
               ["Taxa de Lixo", safeMoney(lease.valorTaxaLixo)],
               ["Taxa de Gás", safeMoney((lease as any).valorTaxaGas || 0)],
               ["Taxa de Água", safeMoney((lease as any).valorTaxaAgua || 0)],
@@ -1412,7 +1430,7 @@ export default function AdminRents() {
             ]
           : [
               ["Aluguel Mensal Base", safeMoney(lease.valorAluguel)],
-              ["IPTU", safeMoney(lease.valorIptu)],
+              ["IPTU Mensal", safeMoney(lease.valorIptu)],
               ["Taxa de Lixo", safeMoney(lease.valorTaxaLixo)],
               ["Taxa de Gás", safeMoney((lease as any).valorTaxaGas || 0)],
               ["Taxa de Água", safeMoney((lease as any).valorTaxaAgua || 0)],
@@ -2073,6 +2091,11 @@ export default function AdminRents() {
                               })
                             }
                           />
+                          {(leaseForm.valorIptu || 0) > 0 && (
+                            <p className="text-[10px] text-gray-500 mt-1 pl-1">
+                              <strong>IPTU Anual:</strong> {formatCurrency(toNumber(leaseForm.valorIptu) * 12)} | <strong>IPTU Mensal:</strong> {formatCurrency(leaseForm.valorIptu)}
+                            </p>
+                          )}
                         </div>
                         <div className="space-y-2">
                           <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
@@ -2299,7 +2322,7 @@ export default function AdminRents() {
                           </span>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span className="text-gray-400">IPTU:</span>
+                          <span className="text-gray-400">IPTU Mensal:</span>
                           <span className="font-bold text-primary-black">
                             {formatCurrency(leaseForm.valorIptu || 0)}
                           </span>
@@ -2597,7 +2620,7 @@ export default function AdminRents() {
                       </span>
                     </div>
                     <div className="flex justify-between border-b border-gray-50 pb-2">
-                      <span className="text-gray-400 text-xs">IPTU</span>
+                      <span className="text-gray-400 text-xs">IPTU Mensal</span>
                       <span className="font-bold text-primary-black">
                         {formatCurrency(selectedLease.valorIptu)}
                       </span>
@@ -2970,7 +2993,7 @@ export default function AdminRents() {
                     </div>
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
-                        IPTU (R$)
+                        IPTU Mensal (R$)
                       </label>
                       <input
                         type="text"

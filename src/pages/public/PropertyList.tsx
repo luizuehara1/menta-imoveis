@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useSettings, useOptions } from '../../hooks/useSettings';
 import PageWrapper from '../../components/PageWrapper';
 import { SafeImage } from '../../components/ui/SafeImage';
-import { formatCurrency, isValidPublicProperty, isMockProperty, cleanPhoneForWhatsapp, getSafeImageUrl, isImovelAlugado, matchesQuickSearch, normalizeText, buildPropertyWhatsAppMessage, getIptuValue, getValorTotalMensal } from '../../lib/utils';
+import { formatCurrency, isValidPublicProperty, isMockProperty, cleanPhoneForWhatsapp, getSafeImageUrl, isImovelAlugado, matchesQuickSearch, normalizeText, buildPropertyWhatsAppMessage, getIptuValue, getValorTotalMensal, getValorMensal } from '../../lib/utils';
 import { staggerContainer, slideUp, fadeIn } from '../../constants/animations';
 import { GoldenParticles } from '../../components/three/GoldenParticles';
 import { Canvas } from '@react-three/fiber';
@@ -213,6 +213,43 @@ const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
             {property.propertyType || "Imóvel"}
           </span>
         </div>
+
+        {/* Floating Price Badge */}
+        <div className="absolute bottom-4 left-4 bg-white/95 text-primary-black text-xs font-bold px-4 py-2.5 rounded-lg backdrop-blur-md shadow-lg border border-gold/20 z-10 max-w-[80%]">
+          {isImovelAlugado(property) ? (
+            bizTypeNorm === 'Venda e Locação' && (property.priceVenda || property.valorVenda || property.valor_venda) ? (
+              <div className="space-y-0.5">
+                <span className="text-emerald-700 font-extrabold uppercase text-[9px] block">Venda: {formatCurrency(property.priceVenda || property.valorVenda || property.valor_venda)}</span>
+                <span className="text-gray-500 text-[8px] leading-tight block">Imóvel alugado atualmente, disponível para venda</span>
+              </div>
+            ) : (
+              <span className="text-primary-black font-extrabold uppercase tracking-wide text-[10px]">Já alugado</span>
+            )
+          ) : (
+            <div className="flex flex-col gap-0.5 text-[11px]">
+              {bizTypeNorm === 'Venda' && (
+                <span className="text-primary-black font-extrabold block">
+                  VENDA: {formatCurrency(property.priceVenda || property.valorVenda || property.valor_venda)}
+                </span>
+              )}
+              {bizTypeNorm === 'Locação' && (
+                <span className="text-primary-black font-extrabold block">
+                  MENSAL: {formatCurrency(getValorMensal(property))}/mês
+                </span>
+              )}
+              {bizTypeNorm === 'Venda e Locação' && (
+                <>
+                  <span className="text-primary-black font-extrabold leading-none block">
+                    VENDA: {formatCurrency(property.priceVenda || property.valorVenda || property.valor_venda)}
+                  </span>
+                  <span className="text-primary-black font-extrabold leading-none mt-1 block">
+                    MENSAL: {formatCurrency(getValorMensal(property))}/mês
+                  </span>
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </Link>
       
       <div className="p-6 flex-grow flex flex-col">
@@ -278,9 +315,9 @@ const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
                   </p>
                   <div className="flex items-baseline gap-1">
                     <span className="text-2xl font-display font-black text-primary-green">
-                      {formatCurrency(getValorTotalMensal(property) || property.priceLocacao || property.valorAluguel || property.valor_aluguel)}
+                      {formatCurrency(getValorMensal(property))}
                     </span>
-                    {(property.priceLocacao || property.valorAluguel || property.valor_aluguel || getValorTotalMensal(property)) && <span className="text-xs font-bold text-gray-400">/mês</span>}
+                    <span className="text-xs font-bold text-gray-400">/mês</span>
                   </div>
                 </>
               ) : bizTypeNorm === 'Venda e Locação' ? (
@@ -297,14 +334,14 @@ const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
                       </div>
                     </div>
                   )}
-                  {(property.priceLocacao || property.valorAluguel || property.valor_aluguel || getValorTotalMensal(property)) && (
+                  {(property.priceLocacao || property.valorAluguel || property.valor_aluguel || getValorMensal(property) > 0) && (
                     <div>
                       <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-none mb-0.5">
                          Valor de Locação
                       </p>
                       <div className="flex items-baseline gap-1">
                         <span className="text-lg font-display font-black text-primary-green">
-                          {formatCurrency(getValorTotalMensal(property) || property.priceLocacao || property.valorAluguel || property.valor_aluguel)}
+                          {formatCurrency(getValorMensal(property))}
                         </span>
                         <span className="text-xs font-bold text-gray-400">/mês</span>
                       </div>
@@ -336,10 +373,8 @@ const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
                    {Number(property.condoFee || property.txCondominio || property.condominio) > 0 && (
                      <p className="text-[9px] font-bold text-gray-400">Cond: {formatCurrency(property.condoFee || property.txCondominio || property.condominio)}</p>
                    )}
-                   {getIptuValue(property) > 0 ? (
+                   {getIptuValue(property) > 0 && (
                      <p className="text-[9px] font-bold text-gray-400">IPTU: {formatCurrency(getIptuValue(property))}/mês</p>
-                   ) : (
-                     <p className="text-[9px] font-bold text-gray-400">IPTU: Sob consulta</p>
                    )}
                 </div>
               )}

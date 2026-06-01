@@ -10,7 +10,7 @@ import { PremiumHeroBackground } from '../../components/three/PremiumHeroBackgro
 import { LuxuryShapeCanvas } from '../../components/three/AbstractLuxuryShape';
 import { useSettings, useOptions } from '../../hooks/useSettings';
 import { DEFAULT_SITE_CONFIG } from '../../constants/defaultSettings';
-import { formatCurrency, isValidPublicProperty, getSafeImageUrl, isImovelAlugado, getIptuValue } from '../../lib/utils';
+import { formatCurrency, isValidPublicProperty, getSafeImageUrl, isImovelAlugado, getIptuValue, getValorMensal, normalizeTipoNegocio } from '../../lib/utils';
 
 import { SafeImage } from '../../components/ui/SafeImage';
 
@@ -158,7 +158,15 @@ const SearchSection = ({ options }: { options: any }) => {
     navigate(`/imoveis?${queryParams.toString()}`);
   };
 
-  const businessTypes = (options.tiposNegocio || []).filter((o: any) => o.ativo);
+  const businessTypes = (() => {
+    const rawTypes = (options.tiposNegocio || []).filter((o: any) => o.ativo).map((o: any) => {
+      const normName = o.nome === 'Comprar' ? 'Venda' : o.nome;
+      return { ...o, nome: normName, label: normName, value: normName.toLowerCase() };
+    });
+    const uniqueMap = new Map();
+    rawTypes.forEach((item: any) => uniqueMap.set(item.nome, item));
+    return Array.from(uniqueMap.values());
+  })();
   const propertyTypes = (options.tiposImovel || []).filter((o: any) => o.ativo);
   const cities = (options.cidades || []).filter((o: any) => o.ativo);
   const neighborhoods = (options.bairros || []).filter((o: any) => o.ativo);
@@ -471,7 +479,7 @@ export default function Home() {
                     </div>
                     <div className="absolute bottom-4 left-4 bg-white/95 text-primary-black text-xs font-bold px-4 py-2.5 rounded-lg backdrop-blur-md shadow-lg border border-gold/20 z-10 max-w-[85%]">
                       {isImovelAlugado(property) ? (
-                        property.businessType === 'Venda e Locação' && property.priceVenda ? (
+                        normalizeTipoNegocio(property.businessType || property.tipoNegocio) === 'Venda e Locação' && property.priceVenda ? (
                           <div className="space-y-0.5">
                             <span className="text-emerald-700 font-extrabold uppercase text-[9px] block">Venda: {formatCurrency(property.priceVenda)}</span>
                             <span className="text-gray-500 text-[8px] leading-tight block">Imóvel alugado atualmente, disponível para venda</span>
@@ -480,9 +488,27 @@ export default function Home() {
                           <span className="text-primary-black font-extrabold uppercase tracking-wide text-[10px]">Já alugado</span>
                         )
                       ) : (
-                        <div>
-                          {formatCurrency(property.businessType === 'Locação' ? property.priceLocacao : property.priceVenda)}
-                          {property.businessType === 'Locação' && ' / mês'}
+                        <div className="flex flex-col gap-0.5 text-[11px]">
+                          {normalizeTipoNegocio(property.businessType || property.tipoNegocio) === 'Venda' && (
+                            <span className="text-primary-black font-extrabold block">
+                              VENDA: {formatCurrency(property.priceVenda)}
+                            </span>
+                          )}
+                          {normalizeTipoNegocio(property.businessType || property.tipoNegocio) === 'Locação' && (
+                            <span className="text-primary-black font-extrabold block">
+                              MENSAL: {formatCurrency(getValorMensal(property))}/mês
+                            </span>
+                          )}
+                          {normalizeTipoNegocio(property.businessType || property.tipoNegocio) === 'Venda e Locação' && (
+                            <>
+                              <span className="text-primary-black font-extrabold leading-none block">
+                                VENDA: {formatCurrency(property.priceVenda)}
+                              </span>
+                              <span className="text-primary-black font-extrabold leading-none mt-1 block">
+                                MENSAL: {formatCurrency(getValorMensal(property))}/mês
+                              </span>
+                            </>
+                          )}
                         </div>
                       )}
                     </div>
@@ -500,10 +526,8 @@ export default function Home() {
                          {Number(property.condoFee || property.txCondominio || property.condominio) > 0 && (
                            <p className="text-[10px] font-bold text-gray-400">Cond: {formatCurrency(property.condoFee || property.txCondominio || property.condominio)}</p>
                          )}
-                         {getIptuValue(property) > 0 ? (
+                         {getIptuValue(property) > 0 && (
                            <p className="text-[10px] font-bold text-gray-400">IPTU: {formatCurrency(getIptuValue(property))}/mês</p>
-                         ) : (
-                           <p className="text-[10px] font-bold text-gray-400">IPTU: Sob consulta</p>
                          )}
                       </div>
                     )}

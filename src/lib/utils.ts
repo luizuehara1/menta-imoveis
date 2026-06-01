@@ -747,14 +747,20 @@ export function toNumber(value: any): number {
 
 export function getIptuValue(imovel: any): number {
   if (!imovel) return 0;
-  return toNumber(
+  const valorIptuTotal = toNumber(
     imovel.valorIptu ||
     imovel.valorIPTU ||
-    imovel.iptuMensal ||
-    imovel.valorIptuMensal ||
     imovel.iptu ||
+    imovel.valorIptuAnual ||
+    imovel.iptuAnual ||
     0
   );
+
+  return valorIptuTotal > 0 ? valorIptuTotal / 12 : 0;
+}
+
+export function getIptuMensal(imovel: any): number {
+  return getIptuValue(imovel);
 }
 
 export function getValorTotalMensal(imovel: any): number {
@@ -768,11 +774,48 @@ export function getValorTotalMensal(imovel: any): number {
   const taxaAgua = toNumber(imovel.valorTaxaAgua || imovel.taxaAgua || 0);
   const taxaLuz = toNumber(imovel.valorTaxaLuz || imovel.taxaLuz || 0);
   const seguroIncendio = toNumber(imovel.fireInsurance || imovel.valorSeguroIncendio || 0);
-  const outrasTaxas = toNumber(imovel.outrasTaxas || imovel.outras || imovel.valorOutros || imovel.outrasTaxas || 0);
+  const outrasTaxas = toNumber(imovel.outrasTaxas || imovel.outras || imovel.valorOutros || imovel.taxes || 0);
   
   const sum = aluguel + condominio + iptu + taxaLixo + taxaGas + taxaAgua + taxaLuz + seguroIncendio + outrasTaxas;
   if (sum > 0) return sum;
   return toNumber(imovel.totalMonthlyPrice || imovel.valorTotalMensal || 0);
+}
+
+export function getValorMensal(imovel: any): number {
+  if (!imovel) return 0;
+
+  const vTotal = toNumber(imovel.valorTotalMensal || imovel.totalMonthlyPrice || 0);
+  if (vTotal > 0) return vTotal;
+
+  const aluguel = toNumber(imovel.valorAluguel || imovel.priceLocacao || 0);
+  const condominio = toNumber(imovel.valorCondominio || imovel.condoFee || imovel.condominio || 0);
+  const iptuAnual = toNumber(
+    imovel.valorIptu ||
+    imovel.valorIPTU ||
+    imovel.iptu ||
+    imovel.valorIptuAnual ||
+    imovel.iptuAnual ||
+    0
+  );
+  const iptuMensal = iptuAnual > 0 ? iptuAnual / 12 : 0;
+  const taxaLixo = toNumber(imovel.valorTaxaLixo || imovel.taxaLixo || 0);
+  const taxaGas = toNumber(imovel.valorTaxaGas || imovel.taxaGas || 0);
+  const taxaAgua = toNumber(imovel.valorTaxaAgua || imovel.taxaAgua || 0);
+  const taxaLuz = toNumber(imovel.valorTaxaLuz || imovel.taxaLuz || 0);
+  const seguroIncendio = toNumber(imovel.valorSeguroIncendio || imovel.fireInsurance || 0);
+  const taxasAdicionais = toNumber(imovel.taxasAdicionais || imovel.outrasTaxas || imovel.taxes || imovel.valorOutros || 0);
+
+  return (
+    aluguel +
+    condominio +
+    iptuMensal +
+    taxaLixo +
+    taxaGas +
+    taxaAgua +
+    taxaLuz +
+    seguroIncendio +
+    taxasAdicionais
+  );
 }
 
 export function slugify(text: string): string {

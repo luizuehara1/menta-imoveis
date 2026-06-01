@@ -551,7 +551,7 @@ export default function AdminPropertyForm() {
   useEffect(() => {
     const total = toNumber(priceLocacao) + 
                   toNumber(condoFee) + 
-                  toNumber(iptu) + 
+                  (toNumber(iptu) > 0 ? toNumber(iptu) / 12 : 0) + 
                   toNumber(valorTaxaLixo) + 
                   toNumber(valorTaxaGas) + 
                   toNumber(valorTaxaAgua) + 
@@ -952,10 +952,11 @@ export default function AdminPropertyForm() {
       const aluguel = toNumber(data.priceLocacao);
       const condoFee = toNumber(data.condoFee);
       const iptu = toNumber(data.iptu);
+      const iptuMensal = iptu > 0 ? iptu / 12 : 0;
       const fireInsurance = toNumber(data.fireInsurance);
       const outrasTaxas = toNumber(data.taxes);
 
-      const computedTotal = aluguel + condoFee + iptu + valLixo + valGas + valAgua + valLuz + fireInsurance + outrasTaxas;
+      const computedTotal = aluguel + condoFee + iptuMensal + valLixo + valGas + valAgua + valLuz + fireInsurance + outrasTaxas;
 
       const rawSaveBType = String(data.businessType || 'Venda').toLowerCase();
       let normalizedSaveBType = 'Venda';
@@ -978,6 +979,12 @@ export default function AdminPropertyForm() {
         taxaGas: valGas,
         taxaAgua: valAgua,
         taxaLuz: valLuz,
+        iptu: iptu,
+        valorIptu: iptu,
+        valorIptuAnual: iptu,
+        iptuAnual: iptu,
+        iptuMensal: iptuMensal,
+        valorIptuMensal: iptuMensal,
         valorTotalMensal: computedTotal,
         totalMonthlyPrice: computedTotal,
         images: finalImagesOrdered,
@@ -1071,19 +1078,20 @@ export default function AdminPropertyForm() {
         return isChecked ? Math.max(1, Number(optionQuantities[name] ?? 1)) : 0;
       };
 
-      const computedDormitorios = getOptionQuantity(propertyData.ambientes, ["dormitorios", "dormitórios", "quartos"]);
+      const computedDormitorios = getQtyByName("Dormitórios") || getOptionQuantity(propertyData.ambientes, ["dormitorios", "dormitórios", "quartos"]);
       propertyData.dormitorios = computedDormitorios;
       propertyData.bedrooms = computedDormitorios;
 
-      const computedSuites = getOptionQuantity(propertyData.ambientes, ["suites", "suítes"]);
+      const computedSuites = getQtyByName("Suítes") || getOptionQuantity(propertyData.ambientes, ["suites", "suítes"]);
       propertyData.suites = computedSuites;
 
-      const computedVagas = getOptionQuantity(propertyData.ambientes, ["vagas", "numero_de_vagas", "vaga", "vagas privativas", "quantidade de vagas", "número de vagas"]);
+      const computedVagas = getQtyByName("Número de vagas") || getOptionQuantity(propertyData.ambientes, ["vagas", "numero_de_vagas", "vaga", "vagas privativas", "quantidade de vagas", "número de vagas"]);
       propertyData.vagas = computedVagas;
       propertyData.garageSpaces = computedVagas;
 
-      const computedBathrooms = getOptionQuantity(propertyData.ambientes, ["banheiros", "wc social", "wc_social", "banheiro"]);
+      const computedBathrooms = getQtyByName("WC social") || getOptionQuantity(propertyData.ambientes, ["banheiros", "wc social", "wc_social", "banheiro"]);
       propertyData.bathrooms = computedBathrooms;
+      propertyData.banheiros = computedBathrooms;
 
       const computedLavabo = getQtyByName("Lavabo");
       propertyData.lavabos = computedLavabo;
@@ -1691,9 +1699,17 @@ export default function AdminPropertyForm() {
             <div className="space-y-2">
               <label className="text-sm font-bold text-gray-700">Tipo de Negócio</label>
               <select {...register('businessType')} className="input-field">
-                {(options.tiposNegocio || []).filter(o => o.ativo).map(o => (
-                  <option key={o.id} value={o.nome}>{o.nome}</option>
-                ))}
+                {(() => {
+                  const items = (options.tiposNegocio || []).filter(o => o.ativo).map(o => {
+                    const normName = o.nome === 'Comprar' ? 'Venda' : o.nome;
+                    return { id: o.id, nome: normName };
+                  });
+                  const uniqueMap = new Map();
+                  items.forEach(item => uniqueMap.set(item.nome, item));
+                  return Array.from(uniqueMap.values()).map(o => (
+                    <option key={o.id} value={o.nome}>{o.nome}</option>
+                  ));
+                })()}
               </select>
             </div>
             <div className="space-y-2">
@@ -1780,7 +1796,7 @@ export default function AdminPropertyForm() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-gray-700">Valor do IPTU (R$)</label>
+                    <label className="text-sm font-bold text-gray-700">Valor do IPTU Anual (R$)</label>
                     <Controller
                       name="iptu"
                       control={control}
@@ -1794,6 +1810,11 @@ export default function AdminPropertyForm() {
                         />
                       )}
                     />
+                    {toNumber(iptu) > 0 && (
+                      <p className="text-xs text-blue-600 font-semibold bg-blue-50 border border-blue-100 rounded-lg p-2 mt-1">
+                        IPTU Mensal calculado: {formatCurrency(toNumber(iptu) / 12)}
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-2">

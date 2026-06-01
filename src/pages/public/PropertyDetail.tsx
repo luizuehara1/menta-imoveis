@@ -46,6 +46,7 @@ import {
   buildPropertyWhatsAppMessage,
   getIptuValue,
   getValorTotalMensal,
+  getValorMensal,
   toNumber
 } from '../../lib/utils';
 
@@ -395,9 +396,10 @@ export default function PropertyDetail() {
     );
   }
 
-  const isVendaOnly = property.businessType === 'Venda';
-  const isLocacaoOnly = property.businessType === 'Locação';
-  const isVendaAndLocacao = property.businessType === 'Venda e Locação';
+  const normBusiness = normalizeTipoNegocio(property.businessType || property.tipoNegocio || '');
+  const isVendaOnly = normBusiness === 'Venda';
+  const isLocacaoOnly = normBusiness === 'Locação';
+  const isVendaAndLocacao = normBusiness === 'Venda e Locação';
 
   const condoFeeVal = toNumber(property.condoFee || property.valorCondominio || 0);
   const iptuVal = getIptuValue(property);
@@ -408,7 +410,7 @@ export default function PropertyDetail() {
   const taxaLuzVal = toNumber(property.valorTaxaLuz || property.taxaLuz || 0);
   const outrasTaxasVal = toNumber(property.valorOutrasTaxas || property.outrasTaxas || 0);
 
-  const totalMensalVal = getValorTotalMensal(property);
+  const totalMensalVal = getValorMensal(property);
 
   const getWhatsAppUrl = () => {
     const rawPhone = resolvedWhatsappPhone || property.brokerWhatsapp || settings.empresa.whatsapp;
@@ -637,7 +639,7 @@ export default function PropertyDetail() {
                            {(isLocacaoOnly || isVendaAndLocacao) && (
                              <div>
                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-0.5 mb-1 bg-slate-100/10 inline-block px-1.5 py-0.5 rounded leading-none">
-                                 {isVendaAndLocacao ? 'Valor do Aluguel' : 'Valor da Mensalidade'}
+                                 {isVendaAndLocacao ? 'Valor Mensal' : 'Valor Mensal'}
                                </p>
                                <p className="text-3xl font-display font-black text-[#0F172A] tracking-tight leading-none">
                                  {formatCurrency(property.priceLocacao || property.valorAluguel || 0)}
@@ -664,15 +666,10 @@ export default function PropertyDetail() {
                                   <span className="font-bold text-slate-700">{formatCurrency(condoFeeVal)}</span>
                                 </div>
                               )}
-                              {iptuVal > 0 ? (
+                              {iptuVal > 0 && (
                                 <div className="flex justify-between">
                                   <span>IPTU Mensal</span>
                                   <span className="font-bold text-slate-700">{formatCurrency(iptuVal)}</span>
-                                </div>
-                              ) : (
-                                <div className="flex justify-between">
-                                  <span>IPTU Mensal</span>
-                                  <span className="font-bold text-slate-700">Sob consulta</span>
                                 </div>
                               )}
                               {taxaLixoVal > 0 && (
@@ -1107,11 +1104,11 @@ export default function PropertyDetail() {
                            {(isLocacaoOnly || isVendaAndLocacao) && (
                              <div>
                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-0.5 mb-1 bg-slate-100/10 inline-block px-1.5 py-0.5 rounded leading-none">
-                                 {isVendaAndLocacao ? 'Valor do Aluguel' : 'Valor da Mensalidade'}
+                                 {isVendaAndLocacao ? 'Valor Mensal' : 'Valor Mensal'}
                                </p>
                                <h2 className="text-3xl font-display font-black text-[#0F172A] tracking-tight flex items-baseline leading-none pt-1">
                                  <span className="text-lg font-bold text-gold mr-1">R$</span>
-                                 {formatCurrency(property.priceLocacao || property.valorAluguel || 0).replace('R$', '').trim()}
+                                 {formatCurrency(totalMensalVal).replace('R$', '').trim()}
                                  <span className="text-xs font-semibold text-slate-400 ml-1"> / mês</span>
                                </h2>
                              </div>
@@ -1137,15 +1134,10 @@ export default function PropertyDetail() {
                                   <span className="font-extrabold text-slate-700">{formatCurrency(condoFeeVal)}</span>
                                </div>
                              )}
-                             {iptuVal > 0 ? (
+                             {iptuVal > 0 && (
                                <div className="flex justify-between text-slate-500 font-medium animate-none">
                                   <span>IPTU Mensal</span>
                                   <span className="font-extrabold text-slate-700">{formatCurrency(iptuVal)}</span>
-                               </div>
-                             ) : (
-                               <div className="flex justify-between text-slate-500 font-medium animate-none">
-                                  <span>IPTU Mensal</span>
-                                  <span className="font-extrabold text-slate-700">Sob consulta</span>
                                </div>
                              )}
                              {taxaLixoVal > 0 && (
