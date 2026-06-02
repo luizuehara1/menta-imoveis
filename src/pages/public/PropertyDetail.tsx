@@ -48,7 +48,8 @@ import {
   getValorTotalMensal,
   getValorMensal,
   toNumber,
-  getCardStats
+  getCardStats,
+  getPropertyStats
 } from '../../lib/utils';
 
 const formatCharacteristic = (char: string, property: any) => {
@@ -145,6 +146,21 @@ export default function PropertyDetail() {
     instalacoes: false
   });
   const [resolvedWhatsappPhone, setResolvedWhatsappPhone] = useState<string>('');
+
+  if (property) {
+    console.log("Imóvel carregado:", property);
+    console.log("Stats calculadas:", getPropertyStats(property));
+    console.log("Campos principais:", {
+      dormitorios: property.dormitorios,
+      quartos: property.quartos,
+      suites: property.suites,
+      banheiros: property.banheiros,
+      salas: property.salas,
+      vagas: property.vagas,
+      areaUtil: property.areaUtil,
+      areaTotal: property.areaTotal
+    });
+  }
 
   useEffect(() => {
     if (property && settings) {
@@ -771,7 +787,7 @@ export default function PropertyDetail() {
                 <div className="bg-white p-6 md:p-8 rounded-[2rem] border border-[#F1F5F9] shadow-sm">
                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 md:gap-4">
                      {(() => {
-                       const stats = getCardStats(property);
+                       const stats = getPropertyStats(property);
                        return [
                          { icon: Maximize, value: stats.area ? `${stats.area}m²` : '-', label: 'Área' },
                          { icon: Bed, value: stats.dormitorios || '-', label: 'Dormitórios' },
@@ -781,9 +797,26 @@ export default function PropertyDetail() {
                          { icon: Car, value: stats.vagas || '-', label: 'Vagas' },
                          { 
                            icon: Layers, 
-                           value: property.businessType === 'Locação' 
-                             ? (property.valorMetroQuadradoLocacao > 0 ? `${formatCurrency(property.valorMetroQuadradoLocacao)}/m²` : '-')
-                             : (property.valorMetroQuadrado > 0 ? `${formatCurrency(property.valorMetroQuadrado)}/m²` : '-'), 
+                           value: (() => {
+                             if (stats.area <= 0) return "-";
+                             const isVenda = property.businessType === 'Venda' || property.businessType === 'Venda e Locação';
+                             const isLocacao = property.businessType === 'Locação';
+                             
+                             let baseValue = 0;
+                             if (isVenda) {
+                               baseValue = toNumber(property.priceVenda || property.valorVenda);
+                             } else if (isLocacao) {
+                               baseValue = toNumber(property.priceLocacao || property.valorAluguel || property.valorTotalMensal);
+                             } else {
+                               baseValue = toNumber(property.priceVenda || property.valorVenda || property.priceLocacao || property.valorAluguel || property.valorTotalMensal);
+                             }
+
+                             if (baseValue > 0) {
+                               const valorPorM2 = baseValue / stats.area;
+                               return `${formatCurrency(valorPorM2)}/m²`;
+                             }
+                             return "-";
+                           })(), 
                            label: 'Valor por m²' 
                          },
                        ].map((item, i) => (

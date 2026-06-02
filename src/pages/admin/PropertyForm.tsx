@@ -1091,18 +1091,18 @@ export default function AdminPropertyForm() {
         return isChecked ? Math.max(1, Number(optionQuantities[name] ?? 1)) : 0;
       };
 
-      const computedDormitorios = Number(data.bedrooms ?? data.dormitorios ?? 0) || getQtyByName("Dormitórios") || getOptionQuantity(propertyData.ambientes, ["dormitorios", "dormitórios", "quartos"]);
+      const computedDormitorios = toNumber(data.bedrooms ?? data.dormitorios ?? 0) || getQtyByName("Dormitórios") || getOptionQuantity(propertyData.ambientes, ["dormitorios", "dormitórios", "quartos"]);
       propertyData.dormitorios = computedDormitorios;
       propertyData.bedrooms = computedDormitorios;
 
-      const computedSuites = Number(data.suites ?? 0) || getQtyByName("Suítes") || getOptionQuantity(propertyData.ambientes, ["suites", "suítes"]);
+      const computedSuites = toNumber(data.suites ?? 0) || getQtyByName("Suítes") || getOptionQuantity(propertyData.ambientes, ["suites", "suítes"]);
       propertyData.suites = computedSuites;
 
-      const computedVagas = Number(data.garageSpaces ?? data.vagas ?? 0) || getQtyByName("Número de vagas") || getOptionQuantity(propertyData.ambientes, ["vagas", "numero_de_vagas", "vaga", "vagas privativas", "quantidade de vagas", "número de vagas"]);
+      const computedVagas = toNumber(data.garageSpaces ?? data.vagas ?? 0) || getQtyByName("Número de vagas") || getOptionQuantity(propertyData.ambientes, ["vagas", "numero_de_vagas", "vaga", "vagas privativas", "quantidade de vagas", "número de vagas"]);
       propertyData.vagas = computedVagas;
       propertyData.garageSpaces = computedVagas;
 
-      const computedBathrooms = Number(data.bathrooms ?? data.banheiros ?? 0) || getQtyByName("WC social") || getOptionQuantity(propertyData.ambientes, ["banheiros", "wc social", "wc_social", "banheiro"]);
+      const computedBathrooms = toNumber(data.bathrooms ?? data.banheiros ?? 0) || getQtyByName("WC social") || getOptionQuantity(propertyData.ambientes, ["banheiros", "wc social", "wc_social", "banheiro"]);
       propertyData.bathrooms = computedBathrooms;
       propertyData.banheiros = computedBathrooms;
 
@@ -1110,8 +1110,14 @@ export default function AdminPropertyForm() {
       propertyData.lavabos = computedLavabo;
       propertyData.lavabo = computedLavabo;
 
-      const computedSalas = Number(data.salas ?? 0) || getQtyByName("Número de salas") || getQtyByName("Salas");
+      const computedSalas = toNumber(data.salas ?? 0) || getQtyByName("Número de salas") || getQtyByName("Salas");
       propertyData.salas = Math.floor(computedSalas);
+
+      // Core areas forced as real numbers:
+      propertyData.areaUtil = toNumber(data.usefulArea ?? data.areaUtil ?? 0);
+      propertyData.usefulArea = toNumber(data.usefulArea ?? data.areaUtil ?? 0);
+      propertyData.areaTotal = toNumber(data.totalArea ?? data.areaTotal ?? 0);
+      propertyData.totalArea = toNumber(data.totalArea ?? data.areaTotal ?? 0);
 
       const computedElevadores = getQtyByName("Elevador") || getQtyByName("Elevadores");
       if (computedElevadores > 0) {

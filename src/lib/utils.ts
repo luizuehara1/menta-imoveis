@@ -861,8 +861,7 @@ export function normalizeOption(option: any): any {
 }
 
 export function getNumberValue(value: any): number {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : 0;
+  return toNumber(value);
 }
 
 export function getOptionQuantity(options: any[], keywords: string[]): number {
@@ -889,13 +888,13 @@ export function getOptionQuantity(options: any[], keywords: string[]): number {
   if (!found) return 0;
   
   if (typeof found === "string") {
-    return 1; // standard fallback if string matched
+    return 1;
   }
 
-  return getNumberValue(found.quantidade !== undefined ? found.quantidade : found.qtd);
+  return toNumber(found.quantidade !== undefined ? found.quantidade : found.qtd);
 }
 
-export function getAllOptions(imovel: any): any[] {
+export function getAllPropertyOptions(imovel: any): any[] {
   if (!imovel) return [];
   return [
     ...(Array.isArray(imovel.ambientes) ? imovel.ambientes : []),
@@ -907,45 +906,46 @@ export function getAllOptions(imovel: any): any[] {
   ];
 }
 
-export function getCardStats(imovel: any) {
-  if (!imovel) {
-    return { dormitorios: 0, suites: 0, banheiros: 0, salas: 0, vagas: 0, area: 0 };
-  }
-  const options = getAllOptions(imovel);
+export function getAllOptions(imovel: any): any[] {
+  return getAllPropertyOptions(imovel);
+}
+
+export function getPropertyStats(imovel: any) {
+  const options = getAllPropertyOptions(imovel);
 
   const dormitorios =
-    getNumberValue(imovel.dormitorios) ||
-    getNumberValue(imovel.quartos) ||
-    getNumberValue(imovel.bedrooms) ||
+    toNumber(imovel?.dormitorios) ||
+    toNumber(imovel?.quartos) ||
+    toNumber(imovel?.bedrooms) ||
     getOptionQuantity(options, ["dormitorio", "dormitório", "quarto", "quartos"]);
 
   const suites =
-    getNumberValue(imovel.suites) ||
+    toNumber(imovel?.suites) ||
     getOptionQuantity(options, ["suite", "suíte", "suites", "suítes"]);
 
   const banheiros =
-    getNumberValue(imovel.banheiros) ||
-    getNumberValue(imovel.bathrooms) ||
+    toNumber(imovel?.banheiros) ||
+    toNumber(imovel?.bathrooms) ||
     getOptionQuantity(options, ["banheiro", "banheiros", "wc social"]);
 
   const salas =
-    getNumberValue(imovel.salas) ||
+    toNumber(imovel?.salas) ||
     getOptionQuantity(options, ["sala", "salas", "numero de salas", "número de salas"]);
 
   const vagas =
-    getNumberValue(imovel.vagas) ||
-    getNumberValue(imovel.numeroVagas) ||
-    getNumberValue(imovel.garageSpaces) ||
-    getNumberValue(imovel.vagasGaragem) ||
+    toNumber(imovel?.vagas) ||
+    toNumber(imovel?.numeroVagas) ||
+    toNumber(imovel?.garageSpaces) ||
+    toNumber(imovel?.vagasGaragem) ||
     getOptionQuantity(options, ["vaga", "vagas", "numero de vagas", "número de vagas"]);
 
   const area =
-    getNumberValue(imovel.usefulArea) ||
-    getNumberValue(imovel.areaUtil) ||
-    getNumberValue(imovel.areaTotal) ||
-    getNumberValue(imovel.areaPrivada) ||
-    getNumberValue(imovel.areaConstruida) ||
-    getNumberValue(imovel.totalArea);
+    toNumber(imovel?.usefulArea) ||
+    toNumber(imovel?.areaUtil) ||
+    toNumber(imovel?.areaTotal) ||
+    toNumber(imovel?.areaPrivada) ||
+    toNumber(imovel?.areaConstruida) ||
+    toNumber(imovel?.totalArea);
 
   return {
     dormitorios,
@@ -955,5 +955,9 @@ export function getCardStats(imovel: any) {
     vagas,
     area
   };
+}
+
+export function getCardStats(imovel: any) {
+  return getPropertyStats(imovel);
 }
 
