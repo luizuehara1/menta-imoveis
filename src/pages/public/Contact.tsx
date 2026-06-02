@@ -1,8 +1,14 @@
 import React from 'react';
 import { Mail, Phone, MapPin, MessageCircle } from 'lucide-react';
 import { SafeImage } from '../../components/ui/SafeImage';
+import { useSEO } from '../../hooks/useSEO';
 
 export default function Contact() {
+  useSEO({
+    title: "Fale Conosco | Menta Imóveis",
+    description: "Fale com a Menta Negócios Imobiliários. Estamos à disposição para tirar suas dúvidas sobre compra, venda ou locação de imóveis em Balneário Camboriú."
+  });
+
   return (
     <div className="bg-white min-h-screen">
       <div className="max-w-7xl mx-auto px-8 py-24">

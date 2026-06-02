@@ -4,8 +4,15 @@ import { LogIn, ShieldAlert } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { SafeImage } from '../../components/ui/SafeImage';
 import { useSettings } from '../../hooks/useSettings';
+import { useSEO } from '../../hooks/useSEO';
 
 export default function AdminLogin() {
+  useSEO({
+    title: "Login Administrativo | Menta Imóveis",
+    description: "Faça login para acessar o painel administrativo da Menta Imóveis.",
+    noIndex: true
+  });
+
   const { login, logout, user, isAdmin, loading } = useAuth();
   const navigate = useNavigate();
   const { settings } = useSettings();

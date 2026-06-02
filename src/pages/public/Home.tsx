@@ -13,6 +13,7 @@ import { DEFAULT_SITE_CONFIG } from '../../constants/defaultSettings';
 import { formatCurrency, isValidPublicProperty, getSafeImageUrl, isImovelAlugado, getIptuValue, getValorMensal, normalizeTipoNegocio, getCardStats } from '../../lib/utils';
 import { PropertyPriceBadge } from '../../components/public/PropertyPriceBadge';
 import { PropertyCardCosts } from '../../components/public/PropertyCardCosts';
+import { useSEO } from '../../hooks/useSEO';
 
 import { SafeImage } from '../../components/ui/SafeImage';
 
@@ -300,6 +301,11 @@ const SearchSection = ({ options }: { options: any }) => {
 };
 
 export default function Home() {
+  useSEO({
+    title: "Menta Imóveis | Imobiliária em Balneário Camboriú",
+    description: "Encontre imóveis à venda e para locação em Balneário Camboriú com a Menta Imóveis. Apartamentos, casas e oportunidades exclusivas."
+  });
+
   const { settings, loading: settingsLoading } = useSettings();
   const { options, loading: optionsLoading } = useOptions();
   const [featuredProperties, setFeaturedProperties] = useState<any[]>([]);

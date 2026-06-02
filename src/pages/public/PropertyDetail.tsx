@@ -51,6 +51,7 @@ import {
   getCardStats,
   getPropertyStats
 } from '../../lib/utils';
+import { useSEO } from '../../hooks/useSEO';
 
 const formatCharacteristic = (char: string, property: any) => {
   const allObjects = [
@@ -135,6 +136,44 @@ export default function PropertyDetail() {
   const { settings } = useSettings();
   const { isAdmin } = useAuth();
   const [property, setProperty] = useState<any>(null);
+
+  const jsonLd = property ? {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "name": property.titulo || property.tituloAnuncio || "Imóvel",
+    "description": property.descricao || property.description || "Detalhes do imóvel",
+    "image": getSafeImageUrl(property.imagemPrincipal) || "",
+    "url": window.location.href,
+    "address": {
+      "@type": "PostalAddress",
+      "addressLocality": property.cidade || "Balneário Camboriú",
+      "addressRegion": "SC",
+      "addressCountry": "BR"
+    },
+    "offers": {
+      "@type": "Offer",
+      "price": property.valorVenda || property.priceVenda || property.valorLocacao || property.priceLocacao || 0,
+      "priceCurrency": "BRL"
+    },
+    "seller": {
+      "@type": "RealEstateAgent",
+      "name": "Menta Imóveis",
+      "url": "https://mentaimoveis.com"
+    }
+  } : null;
+
+  useSEO({
+    title: property ? `${property.titulo || "Imóvel"} | Menta Imóveis` : "Carregando... | Menta Imóveis",
+    description: property 
+      ? `${property.tipoImovel || "Imóvel"} em ${property.bairro || "Bairro"}, ${property.cidade || "Cidade"}. Valor, condomínio, IPTU mensal, dormitórios, suítes, vagas e detalhes completos.`
+      : "Detalhes do imóvel | Menta Imóveis",
+    ogTitle: property ? `${property.titulo || "Imóvel"} | Menta Imóveis` : undefined,
+    ogDescription: property ? property.descricao || property.description : undefined,
+    ogImage: property ? getSafeImageUrl(property.imagemPrincipal) : undefined,
+    ogType: 'article',
+    jsonLdData: jsonLd
+  });
+
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [activeImage, setActiveImage] = useState(0);

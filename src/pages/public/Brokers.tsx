@@ -3,8 +3,14 @@ import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { Instagram, MessageCircle, Phone, Mail } from 'lucide-react';
 import { cleanPhoneForWhatsapp } from '../../lib/utils';
+import { useSEO } from '../../hooks/useSEO';
 
 export default function Brokers() {
+  useSEO({
+    title: "Corretores Especialistas | Menta Imóveis",
+    description: "Conheça nossa equipe de corretores imobiliários parceiros e especialistas prontos para ajudar você a encontrar o imóvel ideal em Balneário Camboriú e região."
+  });
+
   const [brokers, setBrokers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 

@@ -21,6 +21,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { SafeImage } from '../components/ui/SafeImage';
 import { useSettings } from '../hooks/useSettings';
 import { staggerContainer, slideUp, fadeIn } from '../constants/animations';
+import { useSEO } from '../hooks/useSEO';
 
 const Sidebar = ({ onClose }: { onClose?: () => void }) => {
   const location = useLocation();
@@ -151,6 +152,12 @@ const Sidebar = ({ onClose }: { onClose?: () => void }) => {
 };
 
 export default function AdminLayout() {
+  useSEO({
+    title: "Painel Administrativo | Menta Imóveis",
+    description: "Painel de controle administrativo.",
+    noIndex: true
+  });
+
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
   const { user } = useAuth();
   const location = useLocation();

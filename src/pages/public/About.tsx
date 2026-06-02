@@ -3,8 +3,14 @@ import { Check, Mail, Phone, MapPin } from 'lucide-react';
 import { PremiumHeroBackground } from '../../components/three/PremiumHeroBackground';
 import { LuxuryShapeCanvas } from '../../components/three/AbstractLuxuryShape';
 import { SafeImage } from '../../components/ui/SafeImage';
+import { useSEO } from '../../hooks/useSEO';
 
 export default function About() {
+  useSEO({
+    title: "Sobre Nós | Menta Imóveis",
+    description: "A Menta Negócios Imobiliários nasceu com o propósito de transformar o mercado imobiliário em Balneário Camboriú através de um atendimento Boutique e Exclusivo."
+  });
+
   return (
     <div className="bg-white">
       <section className="bg-primary-green py-32 text-white text-center relative overflow-hidden">

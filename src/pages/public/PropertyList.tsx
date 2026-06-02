@@ -10,6 +10,7 @@ import { SafeImage } from '../../components/ui/SafeImage';
 import { formatCurrency, isValidPublicProperty, isMockProperty, cleanPhoneForWhatsapp, getSafeImageUrl, isImovelAlugado, matchesQuickSearch, normalizeText, buildPropertyWhatsAppMessage, getIptuValue, getValorTotalMensal, getValorMensal, getCardStats } from '../../lib/utils';
 import { PropertyPriceBadge } from '../../components/public/PropertyPriceBadge';
 import { PropertyCardCosts } from '../../components/public/PropertyCardCosts';
+import { useSEO } from '../../hooks/useSEO';
 import { staggerContainer, slideUp, fadeIn } from '../../constants/animations';
 import { GoldenParticles } from '../../components/three/GoldenParticles';
 import { Canvas } from '@react-three/fiber';
@@ -423,6 +424,11 @@ const SkeletonCard = () => (
 );
 
 export default function PropertyList() {
+  useSEO({
+    title: "Imóveis à venda e locação em Balneário Camboriú | Menta Imóveis",
+    description: "Veja apartamentos, casas e imóveis disponíveis para venda e locação em Balneário Camboriú. Consulte valores, localização e fale com um corretor."
+  });
+
   const location = useLocation();
   const { settings, loading: settingsLoading } = useSettings();
   const { options, loading: optionsLoading } = useOptions();
