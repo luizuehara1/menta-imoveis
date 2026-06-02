@@ -286,7 +286,7 @@ export default function PropertyDetail() {
         setLoading(true);
         setNotFound(false);
         console.log("ID recebido da URL:", id);
-        console.log("Buscando Firestore em:", `imoveis/${id}`);
+        console.log("Buscando imóvel:", `imoveis/${id}`);
         try {
           const docSnap = await getDoc(doc(db, 'imoveis', id));
           console.log("Documento existe:", docSnap.exists());

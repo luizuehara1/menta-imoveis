@@ -450,7 +450,9 @@ export default function PropertyList() {
   });
 
   useEffect(() => {
-    console.log("Entrou na página /imoveis");
+    console.log("Origem atual:", window.location.origin);
+    console.log("URL atual:", window.location.href);
+    console.log("Entrou em /imoveis");
     // Parse URL params
     const params = new URLSearchParams(location.search);
     const initialFilters = {
@@ -501,10 +503,11 @@ export default function PropertyList() {
         rawData = Array.from(map.values());
       }
 
-      console.log("Buscando imóveis do Firestore...");
+      console.log("Buscando imóveis no Firestore...");
+      const lista = rawData;
       const todosImoveis = rawData;
-      console.log("Total bruto:", todosImoveis.length);
-      console.log("Lista bruta:", todosImoveis);
+      console.log("Total bruto:", lista.length);
+      console.log("Imóveis brutos:", lista);
 
       // Log those that are removed from being public
       todosImoveis.forEach(imovel => {
@@ -520,9 +523,10 @@ export default function PropertyList() {
         }
       });
 
-      const imoveisPublicos = todosImoveis.filter(isImovelPublico);
-      console.log("Total públicos:", imoveisPublicos.length);
-      console.log("Imóveis públicos:", imoveisPublicos);
+      const publicos = todosImoveis.filter(isImovelPublico);
+      const imoveisPublicos = publicos;
+      console.log("Total públicos:", publicos.length);
+      console.log("Imóveis públicos:", publicos);
       console.log("Filtros ativos:", filters);
 
       let data = imoveisPublicos;
