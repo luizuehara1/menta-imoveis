@@ -47,7 +47,8 @@ import {
   getIptuValue,
   getValorTotalMensal,
   getValorMensal,
-  toNumber
+  toNumber,
+  getCardStats
 } from '../../lib/utils';
 
 const formatCharacteristic = (char: string, property: any) => {
@@ -769,27 +770,30 @@ export default function PropertyDetail() {
                 {/* Metric Cards Grid */}
                 <div className="bg-white p-6 md:p-8 rounded-[2rem] border border-[#F1F5F9] shadow-sm">
                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 md:gap-4">
-                     {[
-                       { icon: Maximize, value: property.usefulArea ? `${property.usefulArea}m²` : '-', label: 'Área Útil' },
-                       { icon: Grid, value: property.areaConstruida ? `${property.areaConstruida}m²` : '-', label: 'Área Privada' },
-                       { icon: Bed, value: property.bedrooms || '-', label: 'Dormitórios' },
-                       { icon: Bath, value: property.bathrooms || property.suites || '-', label: 'Banheiros' },
-                       { icon: Armchair, value: property.salas || '-', label: 'Salas' },
-                       { icon: Car, value: property.garageSpaces || '-', label: 'Vagas' },
-                       { 
-                         icon: Layers, 
-                         value: property.businessType === 'Locação' 
-                           ? (property.valorMetroQuadradoLocacao > 0 ? `${formatCurrency(property.valorMetroQuadradoLocacao)}/m²` : '-')
-                           : (property.valorMetroQuadrado > 0 ? `${formatCurrency(property.valorMetroQuadrado)}/m²` : '-'), 
-                         label: 'Valor por m²' 
-                       },
-                     ].map((item, i) => (
-                       <div key={i} className="flex flex-col items-center justify-center text-center p-4 rounded-xl bg-[#FAF9F6]/50 border border-slate-100 hover:border-gold/30 hover:bg-white hover:shadow-md transition-all duration-300">
-                         <item.icon size={22} className="text-gold mb-2.5 shrink-0" />
-                         <span className="text-base font-display font-black text-[#1E293B] mb-0.5">{item.value}</span>
-                         <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-none text-center">{item.label}</span>
-                       </div>
-                     ))}
+                     {(() => {
+                       const stats = getCardStats(property);
+                       return [
+                         { icon: Maximize, value: stats.area ? `${stats.area}m²` : '-', label: 'Área' },
+                         { icon: Bed, value: stats.dormitorios || '-', label: 'Dormitórios' },
+                         { icon: Sparkles, value: stats.suites || '-', label: 'Suítes' },
+                         { icon: Bath, value: stats.banheiros || '-', label: 'Banheiros' },
+                         { icon: Armchair, value: stats.salas || '-', label: 'Salas' },
+                         { icon: Car, value: stats.vagas || '-', label: 'Vagas' },
+                         { 
+                           icon: Layers, 
+                           value: property.businessType === 'Locação' 
+                             ? (property.valorMetroQuadradoLocacao > 0 ? `${formatCurrency(property.valorMetroQuadradoLocacao)}/m²` : '-')
+                             : (property.valorMetroQuadrado > 0 ? `${formatCurrency(property.valorMetroQuadrado)}/m²` : '-'), 
+                           label: 'Valor por m²' 
+                         },
+                       ].map((item, i) => (
+                         <div key={i} className="flex flex-col items-center justify-center text-center p-4 rounded-xl bg-[#FAF9F6]/50 border border-slate-100 hover:border-gold/30 hover:bg-white hover:shadow-md transition-all duration-300">
+                           <item.icon size={22} className="text-gold mb-2.5 shrink-0" />
+                           <span className="text-base font-display font-black text-[#1E293B] mb-0.5">{item.value}</span>
+                           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-none text-center">{item.label}</span>
+                         </div>
+                       ));
+                     })()}
                   </div>
                 </div>
 

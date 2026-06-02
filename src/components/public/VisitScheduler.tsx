@@ -145,8 +145,26 @@ export default function VisitScheduler({ property }: VisitSchedulerProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedDate || !selectedHour) {
-      setError("Por favor, selecione uma data e horário.");
+
+    // 8. FORM VALIDATION
+    if (!formData.nomeCliente || !formData.nomeCliente.trim()) {
+      setError("Por favor, preencha o seu nome.");
+      return;
+    }
+    if (!formData.telefone || !formData.telefone.trim()) {
+      setError("Por favor, preencha o seu telefone.");
+      return;
+    }
+    if (!selectedDate) {
+      setError("Por favor, selecione uma data.");
+      return;
+    }
+    if (!selectedHour) {
+      setError("Por favor, selecione um horário.");
+      return;
+    }
+    if (!property || !property.id) {
+      setError("Erro interno: ID do imóvel é obrigatório.");
       return;
     }
 
@@ -155,121 +173,95 @@ export default function VisitScheduler({ property }: VisitSchedulerProps) {
 
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
 
+    // 5. IMÓVEL LINK
+    const linkImovel = `${window.location.origin}/imovel/${property.id}`;
+    const brokerId = (property as any).brokerId || (property as any).corretorId || (property as any).corretorResponsavel?.id || (property as any).broker?.id || "";
+    const brokerName = (property as any).brokerName || (property as any).corretorResponsavel?.nome || (property as any).corretorNome || "";
+
+    // 4. VISIT DATA
+    const visitData: any = {
+      // Standard local fields
+      nomeCliente: formData.nomeCliente.trim(),
+      telefone: formData.telefone.trim(),
+      email: formData.email?.trim() || "",
+      imovelId: property.id,
+      codigoImovel: property.code || (property as any).codigo || "",
+      tituloImovel: property.title || (property as any).nome || "Imóvel",
+      cidade: property.city || "",
+      bairro: property.neighborhood || "",
+      data: dateStr,
+      horario: selectedHour,
+      mensagem: formData.mensagem?.trim() || "",
+      status: "Pendente",
+      createdAt: serverTimestamp(),
+
+      // Explicitly requested simple fields
+      imovelTitulo: property.title || (property as any).nome || "Imóvel",
+      imovelCodigo: property.code || (property as any).codigo || "",
+      linkImovel: linkImovel,
+      corretorId: brokerId,
+      corretorNome: brokerName,
+      clienteNome: formData.nomeCliente.trim(),
+      clienteTelefone: formData.telefone.trim(),
+      clienteEmail: formData.email?.trim() || "",
+      dataVisita: dateStr,
+      horarioVisita: selectedHour,
+      observacao: formData.mensagem?.trim() || "",
+      origem: "site",
+      criadoEm: serverTimestamp()
+    };
+
+    if (property.address) {
+      visitData.endereco = property.address;
+    }
+
     try {
-      // Check if already booked (simple check, no transaction on query)
-      const q = query(
-        collection(db, 'visitas'),
-        where('imovelId', '==', property.id),
-        where('data', '==', dateStr),
-        where('horario', '==', selectedHour)
-      );
-      
-      const existingDocs = await getDocs(q);
-      const isAlreadyBooked = existingDocs.docs.some(doc => doc.data().status !== 'cancelada');
+      // Check if already booked (wrapped in try/catch to gracefully handle limited public read permissions)
+      let isAlreadyBooked = false;
+      try {
+        const q = query(
+          collection(db, 'visitas'),
+          where('imovelId', '==', property.id),
+          where('data', '==', dateStr),
+          where('horario', '==', selectedHour)
+        );
+        const existingDocs = await getDocs(q);
+        isAlreadyBooked = existingDocs.docs.some(doc => doc.data().status !== 'cancelada');
+      } catch (readErr) {
+        console.warn("Could not check duplicate bookings due to restricted read permissions. Proceeding anyway.", readErr);
+      }
       
       if (isAlreadyBooked) {
         throw new Error("Esse horário acabou de ser reservado. Escolha outro horário.");
       }
 
-      const visitData: any = {
-        nomeCliente: formData.nomeCliente,
-        telefone: formData.telefone,
-        email: formData.email,
-        imovelId: property.id,
-        codigoImovel: property.code,
-        tituloImovel: property.title,
-        cidade: property.city,
-        bairro: property.neighborhood,
-        data: dateStr,
-        horario: selectedHour,
-        mensagem: formData.mensagem,
-        status: "pendente",
-        createdAt: serverTimestamp()
-      };
-
-      if (property.address) {
-        visitData.endereco = property.address;
-      }
+      // 9. LOG ATTEMPT TO SAVE
+      console.log("Tentando salvar visita:", visitData);
 
       await addDoc(collection(db, 'visitas'), visitData);
 
       setSuccess(true);
       
-      // Redirect to WhatsApp
+      // 6. WHATSAPP REDIRECT AFTER SAVING SUCCESS
       const brokerPhone = property.brokerWhatsapp || "";
       const cleanPhone = cleanPhoneForWhatsapp(brokerPhone);
       const p = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
       
       if (cleanPhone) {
-        const publicUrl = `${window.location.origin}/imovel/${property.id}`;
-        const pObj = property as any;
+        const message = `Olá! Solicitei uma visita para este imóvel:
 
-        const titulo = pObj.tituloAnuncio || pObj.titulo || pObj.nome || "Imóvel disponível";
-        const codigo = pObj.codigo || pObj.code || pObj.codigoImovel || "não informado";
-        const tipo = pObj.businessType || pObj.tipoNegocio || pObj.tipo || "não informado";
-
-        const bairro = pObj.bairro || pObj.neighborhood || "";
-        const cidade = pObj.cidade || pObj.city || "";
-        const state = pObj.estado || pObj.state || "";
-
-        let localizacao = "não informada";
-        if (bairro || cidade || state) {
-          const parts = [];
-          if (bairro) parts.push(bairro);
-          if (cidade) parts.push(cidade);
-          localizacao = parts.join(", ");
-          if (state) {
-            localizacao += ` - ${state}`;
-          }
-        }
-
-        const isVenda = String(tipo).toLowerCase().includes("venda") || String(pObj.businessType || "").toLowerCase().includes("venda") || String(pObj.tipoNegocio || "").toLowerCase().includes("venda");
-        const isLocacao = String(tipo).toLowerCase().includes("locação") || String(tipo).toLowerCase().includes("locacao") || String(pObj.businessType || "").toLowerCase().includes("locacao") || String(pObj.tipoNegocio || "").toLowerCase().includes("locacao") || String(pObj.businessType || "").toLowerCase().includes("aluguel") || String(pObj.tipoNegocio || "").toLowerCase().includes("aluguel");
-
-        let valorTexto = "Sob consulta";
-        if (isVenda && isLocacao) {
-          const vVenda = pObj.priceVenda || pObj.valorVenda || 0;
-          const vLoc = pObj.priceLocacao || pObj.valorAluguel || pObj.valorTotalMensal || pObj.totalMonthlyPrice || 0;
-          const txtVenda = vVenda ? Number(vVenda).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "";
-          const txtLoc = vLoc ? Number(vLoc).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "";
-          if (txtVenda && txtLoc) {
-            valorTexto = `Venda: ${txtVenda} | Locação: ${txtLoc}/mês`;
-          } else if (txtVenda) {
-            valorTexto = txtVenda;
-          } else if (txtLoc) {
-            valorTexto = txtLoc + "/mês";
-          }
-        } else if (isVenda) {
-          const v = pObj.priceVenda || pObj.valorVenda || 0;
-          valorTexto = v ? Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "Sob consulta";
-        } else if (isLocacao) {
-          const v = pObj.priceLocacao || pObj.valorAluguel || pObj.valorTotalMensal || pObj.totalMonthlyPrice || 0;
-          valorTexto = v ? Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) + "/mês" : "Sob consulta";
-        } else {
-          const v = pObj.priceVenda || pObj.valorVenda || pObj.priceLocacao || pObj.valorAluguel || pObj.valorTotalMensal || pObj.totalMonthlyPrice;
-          if (v) {
-            valorTexto = Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-          }
-        }
-
-        const message = `Olá! Tenho interesse neste imóvel:
-
-Imóvel: ${titulo}
-Código: ${codigo}
-Tipo: ${tipo}
-Localização: ${localizacao || "Não informada"}
-Valor: ${valorTexto}
+Imóvel: ${property.title || "Imóvel"}
+Código: ${property.code || "Não informado"}
+Data: ${dateStr}
+Horário: ${selectedHour}
 
 Link do imóvel:
-${publicUrl}
+${linkImovel}
 
-*Detalhes do Agendamento Solicitado:*
-📅 Data: ${dateStr}
-🕒 Horário: ${selectedHour}
-👤 Cliente: ${formData.nomeCliente}
-📞 Contato: ${formData.telefone}
-
-Gostaria de agendar esta visita.`;
+Meus dados:
+Nome: ${formData.nomeCliente.trim()}
+Telefone: ${formData.telefone.trim()}
+E-mail: ${formData.email?.trim() || "Não informado"}`;
 
         const whatsappUrl = `https://wa.me/${p}?text=${encodeURIComponent(message)}`;
         
@@ -283,8 +275,13 @@ Gostaria de agendar esta visita.`;
       setSelectedDate(null);
       setSelectedHour(null);
     } catch (err: any) {
-      console.error("Submission error:", err);
-      setError(err.message || "Não foi possível solicitar a visita. Tente novamente.");
+      // 9. CLEAR ERRORS IN THE CONSOLE
+      console.error("Erro ao salvar visita:", err);
+      if (err && typeof err === 'object') {
+        console.error("Código:", err.code);
+        console.error("Mensagem:", err.message);
+      }
+      setError("Erro ao solicitar visita. Tente novamente ou chame no WhatsApp.");
     } finally {
       setSubmitting(false);
     }

@@ -860,27 +860,100 @@ export function normalizeOption(option: any): any {
   };
 }
 
-export function getOptionQuantity(options: any[], keys: string[]): number {
+export function getNumberValue(value: any): number {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
+export function getOptionQuantity(options: any[], keywords: string[]): number {
   if (!Array.isArray(options)) return 0;
 
-  const normalizedKeys = keys.map((key) =>
-    String(key)
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-  );
+  const normalizedKeywords = keywords.map(kw => normalizeText(kw));
 
   const found = options.find((option) => {
-    const label = String(option.label || option.nome || option.value || option)
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "");
+    if (!option) return false;
 
-    return normalizedKeys.some((key) => label.includes(key));
+    const label = normalizeText(
+      typeof option === "string"
+        ? option
+        : option.label || option.nome || option.value || ""
+    );
+
+    const ativo = typeof option === "string" ? true : option.ativo !== false;
+
+    if (!ativo) return false;
+
+    return normalizedKeywords.some((keyword) => label.includes(keyword));
   });
 
   if (!found) return 0;
-  const normalized = normalizeOption(found);
-  return Number(normalized?.quantidade || 0);
+  
+  if (typeof found === "string") {
+    return 1; // standard fallback if string matched
+  }
+
+  return getNumberValue(found.quantidade !== undefined ? found.quantidade : found.qtd);
+}
+
+export function getAllOptions(imovel: any): any[] {
+  if (!imovel) return [];
+  return [
+    ...(Array.isArray(imovel.ambientes) ? imovel.ambientes : []),
+    ...(Array.isArray(imovel.caracteristicas) ? imovel.caracteristicas : []),
+    ...(Array.isArray(imovel.caracteristicasApartamento) ? imovel.caracteristicasApartamento : []),
+    ...(Array.isArray(imovel.caracteristicasEmpreendimento) ? imovel.caracteristicasEmpreendimento : []),
+    ...(Array.isArray(imovel.instalacoes) ? imovel.instalacoes : []),
+    ...(Array.isArray(imovel.lazer) ? imovel.lazer : [])
+  ];
+}
+
+export function getCardStats(imovel: any) {
+  if (!imovel) {
+    return { dormitorios: 0, suites: 0, banheiros: 0, salas: 0, vagas: 0, area: 0 };
+  }
+  const options = getAllOptions(imovel);
+
+  const dormitorios =
+    getNumberValue(imovel.dormitorios) ||
+    getNumberValue(imovel.quartos) ||
+    getNumberValue(imovel.bedrooms) ||
+    getOptionQuantity(options, ["dormitorio", "dormitório", "quarto", "quartos"]);
+
+  const suites =
+    getNumberValue(imovel.suites) ||
+    getOptionQuantity(options, ["suite", "suíte", "suites", "suítes"]);
+
+  const banheiros =
+    getNumberValue(imovel.banheiros) ||
+    getNumberValue(imovel.bathrooms) ||
+    getOptionQuantity(options, ["banheiro", "banheiros", "wc social"]);
+
+  const salas =
+    getNumberValue(imovel.salas) ||
+    getOptionQuantity(options, ["sala", "salas", "numero de salas", "número de salas"]);
+
+  const vagas =
+    getNumberValue(imovel.vagas) ||
+    getNumberValue(imovel.numeroVagas) ||
+    getNumberValue(imovel.garageSpaces) ||
+    getNumberValue(imovel.vagasGaragem) ||
+    getOptionQuantity(options, ["vaga", "vagas", "numero de vagas", "número de vagas"]);
+
+  const area =
+    getNumberValue(imovel.usefulArea) ||
+    getNumberValue(imovel.areaUtil) ||
+    getNumberValue(imovel.areaTotal) ||
+    getNumberValue(imovel.areaPrivada) ||
+    getNumberValue(imovel.areaConstruida) ||
+    getNumberValue(imovel.totalArea);
+
+  return {
+    dormitorios,
+    suites,
+    banheiros,
+    salas,
+    vagas,
+    area
+  };
 }
 

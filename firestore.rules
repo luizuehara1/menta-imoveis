@@ -74,9 +74,18 @@ service cloud.firestore {
     }
 
     match /visitas/{id} {
-      allow read: if isAdmin();
       allow create: if true;
-      allow update, delete: if isAdmin();
+      allow read, update, delete: if isAdmin();
+    }
+
+    match /agendamentos/{id} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+
+    match /solicitacoesVisita/{id} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
     }
 
     // Protected Collections
@@ -87,7 +96,10 @@ service cloud.firestore {
     match /financeiro/{document=**} { allow read, write: if isAdmin(); }
     match /gastos/{document=**} { allow read, write: if isAdmin(); }
     match /receitas/{document=**} { allow read, write: if isAdmin(); }
-    match /fichas_visita/{id} { allow read, write: if isAdmin(); }
+    match /fichas_visita/{id} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
     match /recibos/{document=**} { allow read, write: if isAdmin(); }
     match /recibosEditaveis/{document=**} { allow read, write: if isAdmin(); }
 

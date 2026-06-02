@@ -10,7 +10,7 @@ import { PremiumHeroBackground } from '../../components/three/PremiumHeroBackgro
 import { LuxuryShapeCanvas } from '../../components/three/AbstractLuxuryShape';
 import { useSettings, useOptions } from '../../hooks/useSettings';
 import { DEFAULT_SITE_CONFIG } from '../../constants/defaultSettings';
-import { formatCurrency, isValidPublicProperty, getSafeImageUrl, isImovelAlugado, getIptuValue, getValorMensal, normalizeTipoNegocio } from '../../lib/utils';
+import { formatCurrency, isValidPublicProperty, getSafeImageUrl, isImovelAlugado, getIptuValue, getValorMensal, normalizeTipoNegocio, getCardStats } from '../../lib/utils';
 import { PropertyPriceBadge } from '../../components/public/PropertyPriceBadge';
 import { PropertyCardCosts } from '../../components/public/PropertyCardCosts';
 
@@ -490,28 +490,41 @@ export default function Home() {
                       {property.title}
                     </h3>
                     <PropertyCardCosts imovel={property} className="mb-4" />
-                    <div className="flex items-center justify-between py-4 border-t border-gray-50 text-gray-400 gap-1">
-                      <div className="flex items-center gap-1 transition-colors group-hover:text-gold" title="Dormitórios">
-                        <Bed size={15} />
-                        <span className="text-[11px] font-bold uppercase tracking-tighter text-[#1E293B]">{property.bedrooms || 0} Dorms</span>
-                      </div>
-                      {Number(property.suites || 0) > 0 && (
-                        <div className="flex items-center gap-1 transition-colors group-hover:text-gold" title="Suítes">
-                          <Sparkles size={15} />
-                          <span className="text-[11px] font-bold uppercase tracking-tighter text-[#1E293B]">{property.suites} Suítes</span>
+                    {(() => {
+                      const stats = getCardStats(property);
+                      return (
+                        <div className="flex items-center justify-between py-4 border-t border-gray-50 text-gray-400 gap-1">
+                          <div className="flex items-center gap-1 transition-colors group-hover:text-gold" title="Dormitórios">
+                            <Bed size={15} />
+                            <span className="text-[11px] font-bold uppercase tracking-tighter text-[#1E293B]">
+                              {stats.dormitorios === 1 ? '1 Dorm' : `${stats.dormitorios} Dorms`}
+                            </span>
+                          </div>
+                          {stats.suites > 0 && (
+                            <div className="flex items-center gap-1 transition-colors group-hover:text-gold" title="Suítes">
+                              <Sparkles size={15} />
+                              <span className="text-[11px] font-bold uppercase tracking-tighter text-[#1E293B]">
+                                {stats.suites === 1 ? '1 Suíte' : `${stats.suites} Suítes`}
+                              </span>
+                            </div>
+                          )}
+                          {stats.salas > 0 && (
+                            <div className="flex items-center gap-1 transition-colors group-hover:text-gold" title="Salas">
+                              <Armchair size={15} />
+                              <span className="text-[11px] font-bold uppercase tracking-tighter text-[#1E293B]">
+                                {stats.salas === 1 ? '1 Sala' : `${stats.salas} Salas`}
+                              </span>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-1 transition-colors group-hover:text-gold" title="Vagas">
+                            <Car size={15} />
+                            <span className="text-[11px] font-bold uppercase tracking-tighter text-[#1E293B]">
+                              {stats.vagas === 1 ? '1 Vaga' : `${stats.vagas} Vagas`}
+                            </span>
+                          </div>
                         </div>
-                      )}
-                      {Number(property.salas || 0) > 0 && (
-                        <div className="flex items-center gap-1 transition-colors group-hover:text-gold" title="Salas">
-                          <Armchair size={15} />
-                          <span className="text-[11px] font-bold uppercase tracking-tighter text-[#1E293B]">{property.salas} {property.salas === 1 ? 'Sala' : 'Salas'}</span>
-                        </div>
-                      )}
-                      <div className="flex items-center gap-1 transition-colors group-hover:text-gold" title="Vagas">
-                        <Car size={15} />
-                        <span className="text-[11px] font-bold uppercase tracking-tighter text-[#1E293B]">{property.garageSpaces || 0} Vagas</span>
-                      </div>
-                    </div>
+                      );
+                    })()}
                     <Link to={`/imovel/${property.id}`} className="w-full mt-2 block text-center btn-gold !py-3 !text-xs !bg-transparent !text-primary-black !border !border-gold/30 hover:!bg-gold hover:!text-primary-black !rounded-xl">
                       Ver Detalhes
                     </Link>

@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useSettings, useOptions } from '../../hooks/useSettings';
 import PageWrapper from '../../components/PageWrapper';
 import { SafeImage } from '../../components/ui/SafeImage';
-import { formatCurrency, isValidPublicProperty, isMockProperty, cleanPhoneForWhatsapp, getSafeImageUrl, isImovelAlugado, matchesQuickSearch, normalizeText, buildPropertyWhatsAppMessage, getIptuValue, getValorTotalMensal, getValorMensal } from '../../lib/utils';
+import { formatCurrency, isValidPublicProperty, isMockProperty, cleanPhoneForWhatsapp, getSafeImageUrl, isImovelAlugado, matchesQuickSearch, normalizeText, buildPropertyWhatsAppMessage, getIptuValue, getValorTotalMensal, getValorMensal, getCardStats } from '../../lib/utils';
 import { PropertyPriceBadge } from '../../components/public/PropertyPriceBadge';
 import { PropertyCardCosts } from '../../components/public/PropertyCardCosts';
 import { staggerContainer, slideUp, fadeIn } from '../../constants/animations';
@@ -340,28 +340,48 @@ const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
           <PropertyCardCosts imovel={property} />
         </div>
 
-        <div className="grid grid-cols-5 gap-1.5 mb-6 h-12">
-          <div className="flex flex-col items-center justify-center p-1 rounded-xl bg-gray-50/50 border border-transparent hover:border-gold/20 transition-all" title="Dormitórios">
-            <Bed size={14} className="text-primary-black mb-1" />
-            <span className="text-[10px] font-black text-primary-black">{property.bedrooms || property.dormitorios || 0}</span>
-          </div>
-          <div className="flex flex-col items-center justify-center p-1 rounded-xl bg-gray-50/50 border border-transparent hover:border-gold/20 transition-all" title="Banheiros">
-            <Bath size={14} className="text-primary-black mb-1" />
-            <span className="text-[10px] font-black text-primary-black">{property.bathrooms || property.banheiros || 0}</span>
-          </div>
-          <div className="flex flex-col items-center justify-center p-1 rounded-xl bg-gray-50/50 border border-transparent hover:border-gold/20 transition-all" title="Salas">
-            <Armchair size={14} className="text-primary-black mb-1" />
-            <span className="text-[10px] font-black text-primary-black">{property.salas || 0}</span>
-          </div>
-          <div className="flex flex-col items-center justify-center p-1 rounded-xl bg-gray-50/50 border border-transparent hover:border-gold/20 transition-all" title="Vagas">
-            <Car size={14} className="text-primary-black mb-1" />
-            <span className="text-[10px] font-black text-primary-black">{property.garageSpaces || property.vagas || property.vagasGaragem || 0}</span>
-          </div>
-          <div className="flex flex-col items-center justify-center p-1 rounded-xl bg-gray-50/50 border border-transparent hover:border-gold/20 transition-all" title="Área Útil">
-            <Maximize size={14} className="text-primary-black mb-1" />
-            <span className="text-[10px] font-black text-primary-black">{property.usefulArea || property.areaUtil || property.totalArea || property.areaTotal || 0}m²</span>
-          </div>
-        </div>
+        {(() => {
+          const stats = getCardStats(property);
+          return (
+            <div className="grid grid-cols-5 gap-1.5 mb-6 h-12">
+              <div 
+                className="flex flex-col items-center justify-center p-1 rounded-xl bg-gray-50/50 border border-transparent hover:border-gold/20 transition-all" 
+                title={stats.dormitorios === 1 ? "1 Dormitório" : `${stats.dormitorios} Dormitórios`}
+              >
+                <Bed size={14} className="text-primary-black mb-1" />
+                <span className="text-[10px] font-black text-primary-black">{stats.dormitorios}</span>
+              </div>
+              <div 
+                className="flex flex-col items-center justify-center p-1 rounded-xl bg-gray-50/50 border border-transparent hover:border-gold/20 transition-all" 
+                title={stats.banheiros === 1 ? "1 Banheiro" : `${stats.banheiros} Banheiros`}
+              >
+                <Bath size={14} className="text-primary-black mb-1" />
+                <span className="text-[10px] font-black text-primary-black">{stats.banheiros}</span>
+              </div>
+              <div 
+                className="flex flex-col items-center justify-center p-1 rounded-xl bg-gray-50/50 border border-transparent hover:border-gold/20 transition-all" 
+                title={stats.salas === 1 ? "1 Sala" : `${stats.salas} Salas`}
+              >
+                <Armchair size={14} className="text-primary-black mb-1" />
+                <span className="text-[10px] font-black text-primary-black">{stats.salas}</span>
+              </div>
+              <div 
+                className="flex flex-col items-center justify-center p-1 rounded-xl bg-gray-50/50 border border-transparent hover:border-gold/20 transition-all" 
+                title={stats.vagas === 1 ? "1 Vaga" : `${stats.vagas} Vagas`}
+              >
+                <Car size={14} className="text-primary-black mb-1" />
+                <span className="text-[10px] font-black text-primary-black">{stats.vagas}</span>
+              </div>
+              <div 
+                className="flex flex-col items-center justify-center p-1 rounded-xl bg-gray-50/50 border border-transparent hover:border-gold/20 transition-all" 
+                title="Área Útil"
+              >
+                <Maximize size={14} className="text-primary-black mb-1" />
+                <span className="text-[10px] font-black text-primary-black">{stats.area}m²</span>
+              </div>
+            </div>
+          );
+        })()}
         
         <div className="flex items-center gap-3">
           <Link 

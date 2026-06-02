@@ -60,7 +60,8 @@ import {
   pluralizeLabel,
   formatOptionWithQuantity,
   shouldShowQuantity,
-  getOptionQuantity
+  getOptionQuantity,
+  getCardStats
 } from '../../lib/utils';
 import { useOptions } from '../../hooks/useSettings';
 import { Property, Owner, Broker } from '../../types';
@@ -638,6 +639,17 @@ export default function AdminPropertyForm() {
               setValue(key, data[key]);
             });
 
+            // Parse stats using getCardStats and pre-fill flat field inputs
+            const stats = getCardStats(data);
+            setValue('bedrooms', data.dormitorios ?? data.bedrooms ?? stats.dormitorios ?? 0);
+            setValue('dormitorios', data.dormitorios ?? data.bedrooms ?? stats.dormitorios ?? 0);
+            setValue('suites', data.suites ?? stats.suites ?? 0);
+            setValue('salas', data.salas ?? stats.salas ?? 0);
+            setValue('bathrooms', data.banheiros ?? data.bathrooms ?? stats.banheiros ?? 0);
+            setValue('banheiros', data.banheiros ?? data.bathrooms ?? stats.banheiros ?? 0);
+            setValue('garageSpaces', data.vagas ?? data.garageSpaces ?? stats.vagas ?? 0);
+            setValue('vagas', data.vagas ?? data.garageSpaces ?? stats.vagas ?? 0);
+
             // Normalize "Comprar" to "Venda" or variations
             const loadedBType = String(data.businessType || 'Venda').toLowerCase();
             let finalBType = 'Venda';
@@ -1079,18 +1091,18 @@ export default function AdminPropertyForm() {
         return isChecked ? Math.max(1, Number(optionQuantities[name] ?? 1)) : 0;
       };
 
-      const computedDormitorios = getQtyByName("Dormitórios") || getOptionQuantity(propertyData.ambientes, ["dormitorios", "dormitórios", "quartos"]);
+      const computedDormitorios = Number(data.bedrooms ?? data.dormitorios ?? 0) || getQtyByName("Dormitórios") || getOptionQuantity(propertyData.ambientes, ["dormitorios", "dormitórios", "quartos"]);
       propertyData.dormitorios = computedDormitorios;
       propertyData.bedrooms = computedDormitorios;
 
-      const computedSuites = getQtyByName("Suítes") || getOptionQuantity(propertyData.ambientes, ["suites", "suítes"]);
+      const computedSuites = Number(data.suites ?? 0) || getQtyByName("Suítes") || getOptionQuantity(propertyData.ambientes, ["suites", "suítes"]);
       propertyData.suites = computedSuites;
 
-      const computedVagas = getQtyByName("Número de vagas") || getOptionQuantity(propertyData.ambientes, ["vagas", "numero_de_vagas", "vaga", "vagas privativas", "quantidade de vagas", "número de vagas"]);
+      const computedVagas = Number(data.garageSpaces ?? data.vagas ?? 0) || getQtyByName("Número de vagas") || getOptionQuantity(propertyData.ambientes, ["vagas", "numero_de_vagas", "vaga", "vagas privativas", "quantidade de vagas", "número de vagas"]);
       propertyData.vagas = computedVagas;
       propertyData.garageSpaces = computedVagas;
 
-      const computedBathrooms = getQtyByName("WC social") || getOptionQuantity(propertyData.ambientes, ["banheiros", "wc social", "wc_social", "banheiro"]);
+      const computedBathrooms = Number(data.bathrooms ?? data.banheiros ?? 0) || getQtyByName("WC social") || getOptionQuantity(propertyData.ambientes, ["banheiros", "wc social", "wc_social", "banheiro"]);
       propertyData.bathrooms = computedBathrooms;
       propertyData.banheiros = computedBathrooms;
 
