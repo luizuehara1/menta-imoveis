@@ -9,6 +9,7 @@ interface SEOProps {
   ogImage?: string;
   ogType?: 'website' | 'article' | 'product';
   jsonLdData?: any;
+  canonicalUrl?: string;
 }
 
 export function useSEO({
@@ -19,7 +20,8 @@ export function useSEO({
   ogDescription,
   ogImage,
   ogType = 'website',
-  jsonLdData
+  jsonLdData,
+  canonicalUrl
 }: SEOProps) {
   useEffect(() => {
     // 1. Set Title
@@ -60,13 +62,14 @@ export function useSEO({
     // 4. Canonical URL (Canonical domain without www redirect issues)
     const canonicalLink = getOrCreateElement('link', 'rel', 'canonical');
     const currentPath = window.location.pathname;
-    canonicalLink.setAttribute('href', `https://mentaimoveis.com${currentPath}`);
+    const finalCanonical = canonicalUrl || `https://mentaimoveis.com${currentPath}`;
+    canonicalLink.setAttribute('href', finalCanonical);
 
     // 5. Open Graph Meta Tags
     setMetaTag('property', 'og:title', ogTitle || title);
     setMetaTag('property', 'og:description', ogDescription || description);
     setMetaTag('property', 'og:type', ogType);
-    setMetaTag('property', 'og:url', `https://mentaimoveis.com${currentPath}`);
+    setMetaTag('property', 'og:url', finalCanonical);
 
     if (ogImage) {
       setMetaTag('property', 'og:image', ogImage);

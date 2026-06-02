@@ -130,6 +130,65 @@ function getPropertyImages(imovel: any): string[] {
   return uniqueImages.length ? uniqueImages : ["/placeholder-imovel.png"];
 }
 
+async function buscarImovelPorCodigoOuId(codigoOuId: string): Promise<any | null> {
+  const imoveisRef = collection(db, "imoveis");
+
+  // 1. Try query by 'codigo'
+  const q1 = query(imoveisRef, where("codigo", "==", codigoOuId));
+  const snap1 = await getDocs(q1);
+  if (!snap1.empty) {
+    const docSnap = snap1.docs[0];
+    return {
+      id: docSnap.id,
+      ...docSnap.data()
+    };
+  }
+
+  // 2. Try query by 'codigoImovel'
+  const q2 = query(imoveisRef, where("codigoImovel", "==", codigoOuId));
+  const snap2 = await getDocs(q2);
+  if (!snap2.empty) {
+    const docSnap = snap2.docs[0];
+    return {
+      id: docSnap.id,
+      ...docSnap.data()
+    };
+  }
+
+  // 3. Try query by 'code' as fallback
+  const q3 = query(imoveisRef, where("code", "==", codigoOuId));
+  const snap3 = await getDocs(q3);
+  if (!snap3.empty) {
+    const docSnap = snap3.docs[0];
+    return {
+      id: docSnap.id,
+      ...docSnap.data()
+    };
+  }
+
+  // 4. Try query by 'slug' as fallback
+  const q4 = query(imoveisRef, where("slug", "==", codigoOuId));
+  const snap4 = await getDocs(q4);
+  if (!snap4.empty) {
+    const docSnap = snap4.docs[0];
+    return {
+      id: docSnap.id,
+      ...docSnap.data()
+    };
+  }
+
+  // 5. Try document ID directly
+  const docSnap = await getDoc(doc(db, "imoveis", codigoOuId));
+  if (docSnap.exists()) {
+    return {
+      id: docSnap.id,
+      ...docSnap.data()
+    };
+  }
+
+  return null;
+}
+
 export default function PropertyDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -162,16 +221,27 @@ export default function PropertyDetail() {
     }
   } : null;
 
+  const dynamicTitle = property
+    ? `${property.tituloAnuncio || property.titulo || property.title || "Imóvel"} | Menta Imóveis`
+    : "Carregando... | Menta Imóveis";
+
+  const dynamicDesc = property
+    ? `${property.tipoImovel || "Imóvel"} em ${property.bairro || "Bairro"}, ${property.cidade || "Balneário Camboriú"}. Imóvel com ${property.dormitorios || property.quartos || property.bedrooms || 0} dormitórios, ${property.suites || 0} suítes, ${property.vagas || property.vagasGaragem || property.garageSpaces || 0} vagas. Consulte detalhes, valores e fale com um corretor.`
+    : "Detalhes do imóvel | Menta Imóveis";
+
+  const dynamicCanonicalUrl = property
+    ? `https://mentaimoveis.com/imovel/${property.codigoImovel || property.codigo || property.id}`
+    : `https://mentaimoveis.com/imovel/${id}`;
+
   useSEO({
-    title: property ? `${property.titulo || "Imóvel"} | Menta Imóveis` : "Carregando... | Menta Imóveis",
-    description: property 
-      ? `${property.tipoImovel || "Imóvel"} em ${property.bairro || "Bairro"}, ${property.cidade || "Cidade"}. Valor, condomínio, IPTU mensal, dormitórios, suítes, vagas e detalhes completos.`
-      : "Detalhes do imóvel | Menta Imóveis",
-    ogTitle: property ? `${property.titulo || "Imóvel"} | Menta Imóveis` : undefined,
-    ogDescription: property ? property.descricao || property.description : undefined,
+    title: dynamicTitle,
+    description: dynamicDesc,
+    ogTitle: dynamicTitle,
+    ogDescription: dynamicDesc,
     ogImage: property ? getSafeImageUrl(property.imagemPrincipal) : undefined,
     ogType: 'article',
-    jsonLdData: jsonLd
+    jsonLdData: jsonLd,
+    canonicalUrl: dynamicCanonicalUrl
   });
 
   const [loading, setLoading] = useState(true);
@@ -325,53 +395,16 @@ export default function PropertyDetail() {
         setLoading(true);
         setNotFound(false);
         console.log("ID recebido da URL:", id);
-        console.log("Buscando imóvel:", `imoveis/${id}`);
+        console.log("Buscando imóvel...", id);
         try {
-          const docSnap = await getDoc(doc(db, 'imoveis', id));
-          console.log("Documento existe:", docSnap.exists());
-          if (docSnap.exists()) {
-             console.log("Dados do imóvel:", docSnap.data());
-          }
-
-          let p: any = null;
-          if (docSnap.exists()) {
-            p = { id: docSnap.id, ...docSnap.data() };
-          } else {
-            console.log("Documento primário não encontrado via ID. Iniciando buscas de fallback...");
-            
-            // Try query by 'slug'
-            const slugQuery = query(collection(db, 'imoveis'), where('slug', '==', id));
-            const slugSnap = await getDocs(slugQuery);
-            if (!slugSnap.empty) {
-              const matchedDoc = slugSnap.docs[0];
-              p = { id: matchedDoc.id, ...matchedDoc.data() };
-              console.log("Encontrado por fallback (slug):", p);
-            } else {
-              // Try query by 'code'
-              const codeQuery = query(collection(db, 'imoveis'), where('code', '==', id));
-              const codeSnap = await getDocs(codeQuery);
-              if (!codeSnap.empty) {
-                const matchedDoc = codeSnap.docs[0];
-                p = { id: matchedDoc.id, ...matchedDoc.data() };
-                console.log("Encontrado por fallback (code):", p);
-              } else {
-                // Try query by 'codigo'
-                const codigoQuery = query(collection(db, 'imoveis'), where('codigo', '==', id));
-                const codigoSnap = await getDocs(codigoQuery);
-                if (!codigoSnap.empty) {
-                  const matchedDoc = codigoSnap.docs[0];
-                  p = { id: matchedDoc.id, ...matchedDoc.data() };
-                  console.log("Encontrado por fallback (codigo):", p);
-                }
-              }
-            }
-          }
+          console.log("Iniciando busca do imóvel para identificador:", id);
+          const p = await buscarImovelPorCodigoOuId(id);
 
           if (p) {
             // Rule 8: REGRAS DE VISIBILIDADE
             // O imóvel público deve abrir se publicadoNoSite === true || publicado === true || ativo === true e excluido !== true.
             // Se o admin estiver logado, pode abrir mesmo se não estiver publicado.
-            const isPublic = p.excluido !== true && (p.publicadoNoSite === true || p.publicado === true || p.ativo === true);
+            const isPublic = p.excluido !== true && (p.publicadoNoSite === true || p.publicado === true || p.ativo === true || p.visivelNoSite === true);
             const isMock = isMockProperty(p);
             console.log("Verificação de visibilidade do imóvel:", { isPublic, isMock, isAdmin, excluido: p.excluido, publicadoNoSite: p.publicadoNoSite, publicado: p.publicado, ativo: p.ativo });
 

@@ -54,10 +54,7 @@ service cloud.firestore {
     match /corretores/{document=**} { allow read: if true; allow write: if isAdmin(); }
 
     match /imoveis/{id} {
-      allow read: if (resource.data.get('publicado', false) == true) 
-                  || (resource.data.get('publicadoNoSite', false) == true)
-                  || (resource.data.get('ativo', false) == true)
-                  || isAdmin();
+      allow read: if true;
       allow write: if isAdmin();
       
       match /privado/{details=**} {
@@ -66,10 +63,7 @@ service cloud.firestore {
     }
 
     match /properties/{id} {
-      allow read: if (resource.data.get('publicado', false) == true) 
-                  || (resource.data.get('publicadoNoSite', false) == true)
-                  || (resource.data.get('ativo', false) == true)
-                  || isAdmin();
+      allow read: if true;
       allow write: if isAdmin();
     }
 

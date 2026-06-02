@@ -920,14 +920,25 @@ export default function AdminPropertyForm() {
       console.log("Imagens antes de salvar:", images);
 
       // Check for duplicate code
-      const codeQ = query(collection(db, 'imoveis'), where('code', '==', data.code));
-      const codeSnap = await getDocs(codeQ);
-      const isDuplicate = codeSnap.docs.some(doc => doc.id !== id);
+      let finalCode = data.code || '';
+      let codeQ = query(collection(db, 'imoveis'), where('code', '==', finalCode));
+      let codeSnap = await getDocs(codeQ);
+      let isDuplicate = codeSnap.docs.some(doc => doc.id !== id);
       
       if (isDuplicate) {
-        alert(`Este código de imóvel (${data.code}) já está em uso. Por favor, gere ou insira outro código.`);
-        setLoading(false);
-        return;
+        const match = finalCode.match(/^([A-Za-z]+)\d+$/);
+        const prefix = match ? match[1] : 'IM';
+        let tries = 0;
+        while (isDuplicate && tries < 10) {
+          finalCode = await generateNextCode(prefix);
+          codeQ = query(collection(db, 'imoveis'), where('code', '==', finalCode));
+          codeSnap = await getDocs(codeQ);
+          isDuplicate = codeSnap.docs.some(doc => doc.id !== id);
+          tries++;
+        }
+        alert(`O código de imóvel (${data.code}) já estava em uso. Geramos e usamos o próximo código disponível de forma única: ${finalCode}`);
+        setValue('code', finalCode);
+        data.code = finalCode;
       }
 
       if (uploadingFiles.length > 0) {
@@ -1166,6 +1177,8 @@ export default function AdminPropertyForm() {
         propertyData.publicadoNoSite = true;
         propertyData.publicado = true;
         propertyData.ativo = true;
+        propertyData.visivelNoSite = true;
+        propertyData.excluido = false;
         propertyData.rented = true;
       } else {
         propertyData.imovelAlugado = false;
@@ -1174,9 +1187,18 @@ export default function AdminPropertyForm() {
           propertyData.status = "Disponível";
         }
         propertyData.disponivelParaVisita = data.availableForVisit !== "Não";
-        propertyData.publicadoNoSite = data.publicado === true;
-        propertyData.publicado = data.publicado === true;
-        propertyData.ativo = data.publicado === true;
+        if (data.publicado === true) {
+          propertyData.publicadoNoSite = true;
+          propertyData.publicado = true;
+          propertyData.ativo = true;
+          propertyData.visivelNoSite = true;
+          propertyData.excluido = false;
+        } else {
+          propertyData.publicadoNoSite = false;
+          propertyData.publicado = false;
+          propertyData.ativo = false;
+          propertyData.visivelNoSite = false;
+        }
       }
 
       console.log("[PropertyForm] Salvando na coleção 'imoveis' do projeto:", auth.app.options.projectId);
@@ -1212,7 +1234,7 @@ export default function AdminPropertyForm() {
 
       let propertyId = id;
 
-      const linkImovel = `${window.location.origin}/imovel/${propertyId || ''}`;
+      const linkImovel = `${window.location.origin}/imovel/${data.code || propertyId || ''}`;
       propertyData.linkImovel = linkImovel;
 
       // 1. SALVAMENTO PRINCIPAL DO IMÓVEL (Must not trigger fake errors if secondary steps fail)
@@ -1234,7 +1256,7 @@ export default function AdminPropertyForm() {
       // Secondary: Update with correct ID link after creation
       if (!id && propertyId) {
         try {
-          const finalLink = `${window.location.origin}/imovel/${propertyId}`;
+          const finalLink = `${window.location.origin}/imovel/${data.code || propertyId}`;
           console.log("[PropertyForm] Atualizando link público do imóvel...");
           await updateDoc(doc(db, 'imoveis', propertyId), { linkImovel: finalLink });
         } catch (linkError: any) {
@@ -3040,7 +3062,7 @@ export default function AdminPropertyForm() {
     </div>
   );
 
-  const propertyLink = id ? `${window.location.origin}/imovel/${id}` : '';
+  const propertyLink = id ? `${window.location.origin}/imovel/${watch('code') || watch('codigo') || watch('codigoImovel') || id}` : '';
 
   if (id) {
     console.log("Gerando link público do imóvel:");

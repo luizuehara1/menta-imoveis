@@ -20,7 +20,8 @@ import {
   ClipboardList,
   EyeOff,
   X,
-  Key
+  Key,
+  Wrench
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -74,12 +75,46 @@ export default function AdminPropertyList() {
   const [searchTerm, setSearchTerm] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [migrating, setMigrating] = useState(false);
 
   const setImoveis = setProperties;
 
   const triggerToast = (message: string, type: 'success' | 'error') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4500);
+  };
+
+  const handleMigrateOldProperties = async () => {
+    if (migrating) return;
+    setMigrating(true);
+    try {
+      console.log("Iniciando migração de imóveis antigos...");
+      const snap = await getDocs(collection(db, 'imoveis'));
+      let count = 0;
+      for (const docSnap of snap.docs) {
+        const data = docSnap.data();
+        const hasPublicadoFields = 
+          data.publicadoNoSite !== undefined &&
+          data.ativo !== undefined &&
+          data.excluido !== undefined;
+
+        if (!hasPublicadoFields) {
+          await updateDoc(doc(db, 'imoveis', docSnap.id), {
+            publicadoNoSite: data.publicadoNoSite ?? true,
+            ativo: data.ativo ?? true,
+            excluido: data.excluido ?? false
+          });
+          count++;
+        }
+      }
+      triggerToast(`Migração concluída! ${count} imóveis antigos foram atualizados na coleção 'imoveis'.`, 'success');
+      fetchProperties();
+    } catch (err: any) {
+      console.error("Erro ao migrar imóveis:", err);
+      triggerToast(`Erro na migração: ${err.message || err}`, 'error');
+    } finally {
+      setMigrating(false);
+    }
   };
 
   const toastObj = {
@@ -199,7 +234,8 @@ export default function AdminPropertyList() {
   };
 
   const shareWhatsApp = (property: any) => {
-    const link = `${window.location.origin}/imovel/${property.id}`;
+    const codigoPublico = property.codigoImovel || property.codigo || property.code || property.id;
+    const link = `${window.location.origin}/imovel/${codigoPublico}`;
     const message = `Olá! Segue o link deste imóvel incrível:\n\n*${property.title}*\n\n🏡 Confira os detalhes completos aqui:\n${link}\n\nCódigo: *${property.code}*`;
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
   };
@@ -270,6 +306,19 @@ export default function AdminPropertyList() {
             />
           </div>
           <div className="flex items-center gap-3">
+            {isAdmin && (
+              <motion.button 
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={handleMigrateOldProperties}
+                disabled={migrating}
+                className="flex items-center gap-3 px-6 py-5 bg-amber-50 border border-amber-200 hover:border-amber-400 text-amber-800 rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-sm disabled:opacity-50"
+                title="Migrar/Corrigir Imóveis Antigos para aparecerem no site público"
+              >
+                <Wrench size={18} className={migrating ? "animate-spin" : ""} />
+                {migrating ? "Corrigindo..." : "Corrigir Antigos"}
+              </motion.button>
+            )}
             <motion.button 
               whileHover={{ rotate: 180 }}
               onClick={fetchProperties}
@@ -417,7 +466,10 @@ export default function AdminPropertyList() {
                       <td className="p-8 pr-12 text-right">
                         <div className="flex items-center justify-end gap-2 opacity-40 group-hover:opacity-100 transition-opacity translate-x-2 group-hover:translate-x-0">
                           <button 
-                            onClick={() => copyToClipboard(`${window.location.origin}/imovel/${property.id}`)}
+                            onClick={() => {
+                              const codigoPublico = property.codigoImovel || property.codigo || property.code || property.id;
+                              copyToClipboard(`${window.location.origin}/imovel/${codigoPublico}`);
+                            }}
                             className="p-3 bg-white text-gray-400 hover:text-gold hover:bg-white hover:shadow-2xl hover:scale-110 rounded-xl border border-transparent hover:border-gray-100 transition-all cursor-pointer"
                             title="Copiar Link"
                           >
@@ -431,7 +483,7 @@ export default function AdminPropertyList() {
                             <MessageSquare size={18} />
                           </button>
                           <Link 
-                            to={`/imovel/${property.id}`} 
+                            to={`/imovel/${property.codigoImovel || property.codigo || property.code || property.id}`} 
                             target="_blank"
                             className="p-3 bg-white text-gray-400 hover:text-primary-black hover:bg-white hover:shadow-2xl hover:scale-110 rounded-xl border border-transparent hover:border-gray-100 transition-all cursor-pointer"
                             title="Ver no site"

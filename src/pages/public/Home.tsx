@@ -303,7 +303,8 @@ const SearchSection = ({ options }: { options: any }) => {
 export default function Home() {
   useSEO({
     title: "Menta Imóveis | Imobiliária em Balneário Camboriú",
-    description: "Encontre imóveis à venda e para locação em Balneário Camboriú com a Menta Imóveis. Apartamentos, casas e oportunidades exclusivas."
+    description: "Encontre imóveis à venda e para locação em Balneário Camboriú com a Menta Imóveis. Apartamentos, casas e oportunidades exclusivas.",
+    canonicalUrl: "https://mentaimoveis.com/"
   });
 
   const { settings, loading: settingsLoading } = useSettings();
@@ -330,44 +331,40 @@ export default function Home() {
   useEffect(() => {
     const fetchFeatured = async () => {
       setFetchingProperties(true);
+      console.log("Buscando imóveis da coleção imoveis...");
       try {
-        console.log("[Home] Buscando imóveis em destaque do Firestore...");
-        
-        let allDocs: any[] = [];
-        try {
-          // Attempt to get all to filter in-memory with maximum flexibility
-          const snap = await getDocs(collection(db, 'imoveis'));
-          allDocs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
-        } catch (err) {
-          console.log("[Home] Falha ao ler coleção cheia, tentando consultas específicas paralelas...", err);
-          // Query fallbacks if full list read permissions are restricted
-          const q1 = query(collection(db, 'imoveis'), where('publicado', '==', true));
-          const q2 = query(collection(db, 'imoveis'), where('publicadoNoSite', '==', true));
-          const q3 = query(collection(db, 'imoveis'), where('ativo', '==', true));
-          
-          const [snap1, snap2, snap3] = await Promise.all([
-             getDocs(q1).catch(e => ({ docs: [] })),
-             getDocs(q2).catch(e => ({ docs: [] })),
-             getDocs(q3).catch(e => ({ docs: [] }))
-          ]);
-          
-          const map = new Map();
-          [...snap1.docs, ...snap2.docs, ...snap3.docs].forEach(d => {
-            map.set(d.id, { id: d.id, ...d.data() as any });
-          });
-          allDocs = Array.from(map.values());
-        }
+        const snap = await getDocs(collection(db, 'imoveis'));
+        const lista = snap.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data() as any
+        }));
 
-        // Filter out inactives and mocks
-        const publicImoveis = allDocs.filter(isValidPublicProperty);
+        console.log("Total bruto:", lista.length);
+        console.log("Imóveis brutos:", lista);
+
+        const isImovelPublico = (imovel: any) => {
+          return (
+            imovel?.excluido !== true &&
+            (
+              imovel?.publicadoNoSite === true ||
+              imovel?.publicado === true ||
+              imovel?.ativo === true ||
+              imovel?.visivelNoSite === true
+            )
+          );
+        };
+
+        const publicos = lista.filter(isImovelPublico);
+        console.log("Total públicos:", publicos.length);
+        console.log("Imóveis públicos:", publicos);
         
         // Find highlighting ones (destaque === true || destaqueNaHome === true)
-        let featured = publicImoveis.filter((p: any) => p.destaque === true || p.destaqueNaHome === true);
+        let featured = publicos.filter((p: any) => p.destaque === true || p.destaqueNaHome === true);
         
         // If no highlit ones, fallback to most recent active ones
         if (featured.length === 0) {
           console.log("[Home] Nenhum imóvel marcado como destaque na Home. Usando os mais recentes.");
-          featured = [...publicImoveis].sort((a, b) => {
+          featured = [...publicos].sort((a, b) => {
             const dateA = a.createdAt?.seconds || 0;
             const dateB = b.createdAt?.seconds || 0;
             return dateB - dateA;
@@ -375,18 +372,18 @@ export default function Home() {
         }
         
         setFeaturedProperties(featured.slice(0, 3));
-      } catch (error) {
-        console.error("[Home] Erro ao buscar imóveis em destaque:", error);
+      } catch (error: any) {
+        console.error("Erro ao carregar imóveis:", error);
+        console.error("Código:", error?.code);
+        console.error("Mensagem:", error?.message);
         setFeaturedProperties([]);
       } finally {
         setFetchingProperties(false);
       }
     };
 
-    if (!initialLoading) {
-      fetchFeatured();
-    }
-  }, [initialLoading]);
+    fetchFeatured();
+  }, []);
 
   // Use local fallback if settings is empty for some reason (rare but possible after timeout)
   const homeSettings = settings || DEFAULT_SITE_CONFIG;
@@ -440,7 +437,7 @@ export default function Home() {
                   whileHover={{ y: -12 }}
                   className="group bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-[0_40px_80px_-15px_rgba(0,0,0,0.1)] transition-all duration-500"
                 >
-                  <Link to={`/imovel/${property.id}`} className="block relative h-64 overflow-hidden">
+                  <Link to={`/imovel/${property.codigoImovel || property.codigo || property.id}`} className="block relative h-64 overflow-hidden">
                     <SafeImage
                       src={property.mainImage}
                       alt={property.title}
@@ -531,7 +528,7 @@ export default function Home() {
                         </div>
                       );
                     })()}
-                    <Link to={`/imovel/${property.id}`} className="w-full mt-2 block text-center btn-gold !py-3 !text-xs !bg-transparent !text-primary-black !border !border-gold/30 hover:!bg-gold hover:!text-primary-black !rounded-xl">
+                    <Link to={`/imovel/${property.codigoImovel || property.codigo || property.id}`} className="w-full mt-2 block text-center btn-gold !py-3 !text-xs !bg-transparent !text-primary-black !border !border-gold/30 hover:!bg-gold hover:!text-primary-black !rounded-xl">
                       Ver Detalhes
                     </Link>
                   </div>

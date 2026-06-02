@@ -283,7 +283,20 @@ const Footer = () => {
           />
           <p>© {new Date().getFullYear()} {settings.empresa.nome}. Todos os direitos reservados.</p>
         </div>
-        <Link to="/admin/login" className="hover:text-gold transition-colors">Acesso Restrito</Link>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => {
+              localStorage.clear();
+              sessionStorage.clear();
+              window.location.reload();
+            }}
+            className="hover:text-white transition-colors cursor-pointer"
+          >
+            Limpar Cache (Teste)
+          </button>
+          <span className="opacity-30">|</span>
+          <Link to="/admin/login" className="hover:text-gold transition-colors">Acesso Restrito</Link>
+        </div>
       </div>
     </footer>
   );
@@ -305,23 +318,50 @@ export default function PublicLayout() {
       const getPropAndBroker = async () => {
         try {
           let p: any = null;
-          const docSnap = await getDoc(doc(db, 'imoveis', propertyId));
-          if (docSnap.exists()) {
-            p = { id: docSnap.id, ...docSnap.data() };
-          } else {
-            // queries fallback
+
+          // 1. Try query by 'codigo'
+          const codigoQuery = query(collection(db, 'imoveis'), where('codigo', '==', propertyId));
+          const codigoSnap = await getDocs(codigoQuery);
+          if (!codigoSnap.empty) {
+            const matchedDoc = codigoSnap.docs[0];
+            p = { id: matchedDoc.id, ...matchedDoc.data() };
+          }
+
+          // 2. Try query by 'codigoImovel' if not found
+          if (!p) {
+            const codigoImovelQuery = query(collection(db, 'imoveis'), where('codigoImovel', '==', propertyId));
+            const codigoImovelSnap = await getDocs(codigoImovelQuery);
+            if (!codigoImovelSnap.empty) {
+              const matchedDoc = codigoImovelSnap.docs[0];
+              p = { id: matchedDoc.id, ...matchedDoc.data() };
+            }
+          }
+
+          // 3. Try query by 'code' if not found
+          if (!p) {
+            const codeQuery = query(collection(db, 'imoveis'), where('code', '==', propertyId));
+            const codeSnap = await getDocs(codeQuery);
+            if (!codeSnap.empty) {
+              const matchedDoc = codeSnap.docs[0];
+              p = { id: matchedDoc.id, ...matchedDoc.data() };
+            }
+          }
+
+          // 4. Try query by 'slug' if not found
+          if (!p) {
             const slugQuery = query(collection(db, 'imoveis'), where('slug', '==', propertyId));
             const slugSnap = await getDocs(slugQuery);
             if (!slugSnap.empty) {
               const matchedDoc = slugSnap.docs[0];
               p = { id: matchedDoc.id, ...matchedDoc.data() };
-            } else {
-              const codeQuery = query(collection(db, 'imoveis'), where('code', '==', propertyId));
-              const codeSnap = await getDocs(codeQuery);
-              if (!codeSnap.empty) {
-                const matchedDoc = codeSnap.docs[0];
-                p = { id: matchedDoc.id, ...matchedDoc.data() };
-              }
+            }
+          }
+
+          // 5. Fallback: Try getDoc by document ID
+          if (!p) {
+            const docSnap = await getDoc(doc(db, 'imoveis', propertyId));
+            if (docSnap.exists()) {
+              p = { id: docSnap.id, ...docSnap.data() };
             }
           }
 

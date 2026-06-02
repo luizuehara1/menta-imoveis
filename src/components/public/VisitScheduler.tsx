@@ -174,7 +174,8 @@ export default function VisitScheduler({ property }: VisitSchedulerProps) {
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
 
     // 5. IMÓVEL LINK
-    const linkImovel = `${window.location.origin}/imovel/${property.id}`;
+    const codigoPublico = (property as any).codigoImovel || property.code || (property as any).codigo || property.id;
+    const linkImovel = `${window.location.origin}/imovel/${codigoPublico}`;
     const brokerId = (property as any).brokerId || (property as any).corretorId || (property as any).corretorResponsavel?.id || (property as any).broker?.id || "";
     const brokerName = (property as any).brokerName || (property as any).corretorResponsavel?.nome || (property as any).corretorNome || "";
 

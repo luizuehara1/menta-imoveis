@@ -14,6 +14,7 @@ import PropertyDetail from './pages/public/PropertyDetail';
 import About from './pages/public/About';
 import Brokers from './pages/public/Brokers';
 import Contact from './pages/public/Contact';
+import NotFound from './pages/public/NotFound';
 
 // Admin Pages
 import AdminDashboard from './pages/admin/Dashboard';
@@ -92,6 +93,7 @@ function AppRoutes() {
           <Route path="/sobre" element={<About />} />
           <Route path="/corretores" element={<Brokers />} />
           <Route path="/contato" element={<Contact />} />
+          <Route path="*" element={<NotFound />} />
         </Route>
 
         {/* Admin Login */}

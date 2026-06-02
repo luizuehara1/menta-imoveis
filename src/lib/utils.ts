@@ -66,10 +66,7 @@ export function isMockProperty(p: any): boolean {
     "fallback",
     "teste",
     "test",
-    "exemplo",
-    "apartamento alto padrao em balneario camboriu",
-    "apartamento alto padrão em balneário camboriú",
-    "menta001"
+    "exemplo"
   ];
 
   if (mockKeywords.some(kw => idStr.includes(kw) || codeStr.includes(kw) || titleStr.includes(kw))) {
@@ -84,33 +81,25 @@ export function isMockProperty(p: any): boolean {
   return false;
 }
 
+export function isImovelPublico(imovel: any): boolean {
+  if (!imovel?.id) return false;
+  if (isMockProperty(imovel)) return false;
+  return (
+    imovel?.excluido !== true &&
+    (
+      imovel?.publicadoNoSite === true ||
+      imovel?.publicado === true ||
+      imovel?.ativo === true ||
+      imovel?.visivelNoSite === true
+    )
+  );
+}
+
 /**
  * Validates if a property is complete enough to be shown to the public.
  */
 export function isValidPublicProperty(p: any): boolean {
-  if (!p || typeof p !== 'object') return false;
-
-  const hasId = !!p.id;
-  const isPublished = p.publicado === true || p.publicadoNoSite === true || p.ativo === true;
-  const isExcluded = p.excluido === true || String(p.status || "").toLowerCase().includes("excluid");
-  const isMock = isMockProperty(p);
-
-  const isValid = hasId && isPublished && !isExcluded && !isMock;
-
-  if (!isValid && p.id) {
-    console.warn(`[Property Validation] Imóvel ${p.id} INVÁLIDO. Motivos:`, {
-       hasId,
-       isPublished,
-       isExcluded,
-       isMock,
-       status: p.status,
-       publicado: p.publicado,
-       publicadoNoSite: p.publicadoNoSite,
-       ativo: p.ativo
-    });
-  }
-
-  return isValid;
+  return isImovelPublico(p);
 }
 
 /**
@@ -666,7 +655,8 @@ export function formatOptionWithQuantity(option: any, optionQuantities?: Record<
 
 export function buildPropertyWhatsAppMessage(imovel: any): string {
   if (!imovel) return "";
-  const linkImovel = `${window.location.origin}/imovel/${imovel.id}`;
+  const codigoPublico = imovel.codigoImovel || imovel.codigo || imovel.id;
+  const linkImovel = `${window.location.origin}/imovel/${codigoPublico}`;
 
   const titulo =
     imovel.tituloAnuncio ||

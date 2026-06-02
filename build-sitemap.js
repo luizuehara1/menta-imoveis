@@ -64,14 +64,15 @@ async function generateSitemap() {
       };
 
       try {
-        const [docs1, docs2, docs3] = await Promise.all([
+        const [docs1, docs2, docs3, docs4] = await Promise.all([
           fetchQuery('publicado').catch(e => { console.error('[Sitemap] Query "publicado" failed:', e); return []; }),
           fetchQuery('publicadoNoSite').catch(e => { console.error('[Sitemap] Query "publicadoNoSite" failed:', e); return []; }),
-          fetchQuery('ativo').catch(e => { console.error('[Sitemap] Query "ativo" failed:', e); return []; })
+          fetchQuery('ativo').catch(e => { console.error('[Sitemap] Query "ativo" failed:', e); return []; }),
+          fetchQuery('visivelNoSite').catch(e => { console.error('[Sitemap] Query "visivelNoSite" failed:', e); return []; })
         ]);
 
         const map = new Map();
-        [...docs1, ...docs2, ...docs3].forEach(doc => {
+        [...docs1, ...docs2, ...docs3, ...docs4].forEach(doc => {
           if (doc && doc.name) {
             const id = doc.name.split('/').pop();
             map.set(id, doc);
@@ -126,7 +127,8 @@ async function generateSitemap() {
         (
           p.publicadoNoSite === true ||
           p.publicado === true ||
-          p.ativo === true
+          p.ativo === true ||
+          p.visivelNoSite === true
         )
       );
     };
@@ -158,8 +160,9 @@ async function generateSitemap() {
 
     // Dynamic Property URLs
     publicProperties.forEach(p => {
+      const codigoPublico = p.codigoImovel || p.codigo || p.id;
       xml += '  <url>\n';
-      xml += `    <loc>${baseUrl}/imovel/${p.id}</loc>\n`;
+      xml += `    <loc>${baseUrl}/imovel/${codigoPublico}</loc>\n`;
       xml += '    <changefreq>weekly</changefreq>\n';
       xml += '    <priority>0.8</priority>\n';
       xml += '  </url>\n';

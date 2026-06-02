@@ -7,26 +7,13 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useSettings, useOptions } from '../../hooks/useSettings';
 import PageWrapper from '../../components/PageWrapper';
 import { SafeImage } from '../../components/ui/SafeImage';
-import { formatCurrency, isValidPublicProperty, isMockProperty, cleanPhoneForWhatsapp, getSafeImageUrl, isImovelAlugado, matchesQuickSearch, normalizeText, buildPropertyWhatsAppMessage, getIptuValue, getValorTotalMensal, getValorMensal, getCardStats } from '../../lib/utils';
+import { formatCurrency, isValidPublicProperty, isMockProperty, cleanPhoneForWhatsapp, getSafeImageUrl, isImovelAlugado, matchesQuickSearch, normalizeText, buildPropertyWhatsAppMessage, getIptuValue, getValorTotalMensal, getValorMensal, getCardStats, isImovelPublico } from '../../lib/utils';
 import { PropertyPriceBadge } from '../../components/public/PropertyPriceBadge';
 import { PropertyCardCosts } from '../../components/public/PropertyCardCosts';
 import { useSEO } from '../../hooks/useSEO';
 import { staggerContainer, slideUp, fadeIn } from '../../constants/animations';
 import { GoldenParticles } from '../../components/three/GoldenParticles';
 import { Canvas } from '@react-three/fiber';
-
-function isImovelPublico(imovel: any) {
-  if (!imovel?.id) return false;
-  if (isMockProperty(imovel)) return false;
-  return (
-    imovel?.excluido !== true &&
-    (
-      imovel?.publicadoNoSite === true ||
-      imovel?.publicado === true ||
-      imovel?.ativo === true
-    )
-  );
-}
 
 function normalizeTipoNegocio(tipo: any): "Venda" | "Locação" | "Venda e Locação" | "" {
   const value = String(tipo || "").toLowerCase();
@@ -173,7 +160,7 @@ const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
       whileHover={{ y: -8 }}
       className="group bg-white rounded-3xl overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-500 border border-gray-100 flex flex-col h-full"
     >
-      <Link to={`/imovel/:id`.replace(':id', property.id)} className="block relative h-64 overflow-hidden">
+      <Link to={`/imovel/:id`.replace(':id', property.codigoImovel || property.codigo || property.id)} className="block relative h-64 overflow-hidden">
         <SafeImage
           src={getSafeImageUrl(getImagemPrincipal(property))}
           alt={displayTitle}
@@ -233,7 +220,7 @@ const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
           </span>
         </div>
         
-        <Link to={`/imovel/${property.id}`}>
+        <Link to={`/imovel/${property.codigoImovel || property.codigo || property.id}`}>
           <h3 className="font-display text-xl font-bold text-primary-black group-hover:text-gold transition-colors leading-tight line-clamp-2 mb-4 h-12">
             {displayTitle}
           </h3>
@@ -386,7 +373,7 @@ const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
         
         <div className="flex items-center gap-3">
           <Link 
-            to={`/imovel/${property.id}`} 
+            to={`/imovel/${property.codigoImovel || property.codigo || property.id}`} 
             className="flex-grow py-3 px-4 bg-primary-black text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-gold hover:text-primary-black transition-all text-center shadow-lg shadow-black/5"
           >
             Ver Detalhes
@@ -426,7 +413,8 @@ const SkeletonCard = () => (
 export default function PropertyList() {
   useSEO({
     title: "Imóveis à venda e locação em Balneário Camboriú | Menta Imóveis",
-    description: "Veja apartamentos, casas e imóveis disponíveis para venda e locação em Balneário Camboriú. Consulte valores, localização e fale com um corretor."
+    description: "Veja apartamentos, casas e imóveis disponíveis para venda e locação em Balneário Camboriú. Consulte valores, localização e fale com um corretor.",
+    canonicalUrl: "https://mentaimoveis.com/imoveis"
   });
 
   const location = useLocation();
@@ -483,59 +471,23 @@ export default function PropertyList() {
 
   const fetchProperties = async (filters: any) => {
     setLoading(true);
+    console.log("Buscando imóveis da coleção imoveis...");
     try {
-      let rawData: any[] = [];
-      try {
-        // Try getting the entire collection first (works if permission allows or for admin/local use)
-        const snap = await getDocs(query(collection(db, 'imoveis')));
-        rawData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
-      } catch (err) {
-        console.log("Failed to fetch full collection, trying filtered queries in parallel...", err);
-        // Falls back to parallel queries permitted by public rules
-        const q1 = query(collection(db, 'imoveis'), where('publicado', '==', true));
-        const q2 = query(collection(db, 'imoveis'), where('publicadoNoSite', '==', true));
-        const q3 = query(collection(db, 'imoveis'), where('ativo', '==', true));
-        
-        const [snap1, snap2, snap3] = await Promise.all([
-          getDocs(q1).catch(e => { console.error(e); return { docs: [] }; }),
-          getDocs(q2).catch(e => { console.error(e); return { docs: [] }; }),
-          getDocs(q3).catch(e => { console.error(e); return { docs: [] }; })
-        ]);
+      const snap = await getDocs(collection(db, 'imoveis'));
+      const lista = snap.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data() as any
+      }));
 
-        const map = new Map();
-        [...snap1.docs, ...snap2.docs, ...snap3.docs].forEach(doc => {
-          map.set(doc.id, { id: doc.id, ...doc.data() as any });
-        });
-        rawData = Array.from(map.values());
-      }
-
-      console.log("Buscando imóveis no Firestore...");
-      const lista = rawData;
-      const todosImoveis = rawData;
       console.log("Total bruto:", lista.length);
       console.log("Imóveis brutos:", lista);
 
-      // Log those that are removed from being public
-      todosImoveis.forEach(imovel => {
-        if (!isImovelPublico(imovel)) {
-          console.log("Imóvel removido do público (pode ser mock ou inativo/excluído):", imovel.id, {
-            publicadoNoSite: imovel.publicadoNoSite,
-            publicado: imovel.publicado,
-            ativo: imovel.ativo,
-            excluido: imovel.excluido,
-            status: imovel.status,
-            tipoNegocio: imovel.tipoNegocio || imovel.businessType
-          });
-        }
-      });
-
-      const publicos = todosImoveis.filter(isImovelPublico);
-      const imoveisPublicos = publicos;
+      const publicos = lista.filter(isImovelPublico);
       console.log("Total públicos:", publicos.length);
       console.log("Imóveis públicos:", publicos);
       console.log("Filtros ativos:", filters);
 
-      let data = imoveisPublicos;
+      let data = publicos;
 
       // 1. Quick Search Filter
       if (filters.busca) {
@@ -635,9 +587,9 @@ export default function PropertyList() {
       console.log("Total depois dos filtros:", data.length);
       setProperties(data);
     } catch (error: any) {
-      console.error("Erro ao carregar imóveis do catálogo:", error);
-      console.error("Código:", error?.code);
-      console.error("Mensagem:", error?.message);
+      console.error("Erro ao carregar imóveis:", error);
+      console.error("Código:", error.code);
+      console.error("Mensagem:", error.message);
     } finally {
       setLoading(false);
     }
