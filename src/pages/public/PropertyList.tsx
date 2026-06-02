@@ -413,7 +413,7 @@ const SkeletonCard = () => (
 export default function PropertyList() {
   useSEO({
     title: "Imóveis à venda e locação em Balneário Camboriú | Menta Imóveis",
-    description: "Veja apartamentos, casas e imóveis disponíveis para venda e locação em Balneário Camboriú. Consulte valores, localização e fale com um corretor.",
+    description: "Veja imóveis à venda e para locação em Balneário Camboriú com a Menta Imóveis. Apartamentos, casas e oportunidades exclusivas no Centro, Nações e região.",
     canonicalUrl: "https://mentaimoveis.com/imoveis"
   });
 
@@ -766,6 +766,13 @@ export default function PropertyList() {
               </div>
             </div>
           </motion.div>
+
+          {/* SEO Text Block */}
+          <div className="mb-12 bg-white px-8 py-6 rounded-[2rem] border-l-4 border-l-gold border-y border-r border-gray-100 shadow-sm">
+            <p className="text-gray-600 font-medium text-sm md:text-base leading-relaxed">
+              Encontre imóveis à venda e para locação em Balneário Camboriú. A <strong>Menta Imóveis</strong> reúne apartamentos, casas e oportunidades exclusivas para quem deseja comprar, vender ou alugar com segurança.
+            </p>
+          </div>
 
           {/* Results Info */}
           <div className="mb-10 flex flex-col md:flex-row items-center justify-between gap-6">
