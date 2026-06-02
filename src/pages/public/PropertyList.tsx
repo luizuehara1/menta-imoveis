@@ -450,6 +450,7 @@ export default function PropertyList() {
   });
 
   useEffect(() => {
+    console.log("Entrou na página /imoveis");
     // Parse URL params
     const params = new URLSearchParams(location.search);
     const initialFilters = {
@@ -502,8 +503,8 @@ export default function PropertyList() {
 
       console.log("Buscando imóveis do Firestore...");
       const todosImoveis = rawData;
-      console.log("Total bruto Firestore:", todosImoveis.length);
-      console.log("Imóveis vindos do Firestore:", todosImoveis);
+      console.log("Total bruto:", todosImoveis.length);
+      console.log("Lista bruta:", todosImoveis);
 
       // Log those that are removed from being public
       todosImoveis.forEach(imovel => {
@@ -520,7 +521,8 @@ export default function PropertyList() {
       });
 
       const imoveisPublicos = todosImoveis.filter(isImovelPublico);
-      console.log("Total imóveis públicos:", imoveisPublicos.length);
+      console.log("Total públicos:", imoveisPublicos.length);
+      console.log("Imóveis públicos:", imoveisPublicos);
       console.log("Filtros ativos:", filters);
 
       let data = imoveisPublicos;
@@ -622,8 +624,10 @@ export default function PropertyList() {
 
       console.log("Total depois dos filtros:", data.length);
       setProperties(data);
-    } catch (error) {
-      console.error("Error fetching properties:", error);
+    } catch (error: any) {
+      console.error("Erro ao carregar imóveis do catálogo:", error);
+      console.error("Código:", error?.code);
+      console.error("Mensagem:", error?.message);
     } finally {
       setLoading(false);
     }
