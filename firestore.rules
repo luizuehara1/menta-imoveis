@@ -54,9 +54,8 @@ service cloud.firestore {
     match /corretores/{document=**} { allow read: if true; allow write: if isAdmin(); }
 
     match /imoveis/{id} {
-      allow read: if resource.data.publicadoNoSite == true
-                  || resource.data.publicado == true
-                  || isAdmin();
+      // Regras de leitura pública total: permite consulta geral (getDocs) sem erros de 'permission-denied' na listagem pública
+      allow read: if true;
 
       allow create, update, delete: if isAdmin();
       

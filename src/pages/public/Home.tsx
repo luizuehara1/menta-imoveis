@@ -4,6 +4,7 @@ import { Search, MapPin, Bed, Car, Check, Sparkles, Armchair } from 'lucide-reac
 import { motion } from 'motion/react';
 import { collection, query, where, limit, getDocs } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+import { fetchPublicImoveis } from '../../lib/propertyService';
 import PageWrapper from '../../components/PageWrapper';
 import { staggerContainer, slideUp } from '../../constants/animations';
 import { PremiumHeroBackground } from '../../components/three/PremiumHeroBackground';
@@ -336,30 +337,11 @@ export default function Home() {
         console.log("URL atual:", window.location.href);
         console.log("Buscando imóveis da coleção imoveis...");
 
-        const snap = await getDocs(collection(db, "imoveis"));
+        const publicos = await fetchPublicImoveis();
 
-        const lista = snap.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data() as any
-        }));
-
-        const isImovelPublico = (imovel: any) => {
-          return (
-            imovel?.publicadoNoSite === true ||
-            imovel?.publicado === true
-          );
-        };
-
-        const publicos = lista.filter(isImovelPublico);
-
-        console.log("Origem atual:", window.location.origin);
-        console.log("Buscando imóveis da coleção imoveis...");
-        console.log("Total bruto Firestore:", lista.length);
-        console.log("Imóveis brutos:", lista);
         console.log("Total imóveis publicados:", publicos.length);
         console.log("Imóveis públicos:", publicos);
 
-        console.log("HOME - Total bruto:", lista.length);
         console.log("HOME - Total públicos:", publicos.length);
         console.log("HOME - Imóveis públicos:", publicos);
 

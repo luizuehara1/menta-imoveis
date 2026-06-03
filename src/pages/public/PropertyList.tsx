@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+import { fetchPublicImoveis } from '../../lib/propertyService';
 import { Search, MapPin, Bed, Car, MessageCircle, Filter, X, Sparkles, Layers, Bath, Maximize, Check, Armchair } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSettings, useOptions } from '../../hooks/useSettings';
@@ -475,18 +476,8 @@ export default function PropertyList() {
     console.log("URL atual:", window.location.href);
     console.log("Buscando imóveis da coleção imoveis...");
     try {
-      const snap = await getDocs(collection(db, 'imoveis'));
-      const lista = snap.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data() as any
-      }));
+      const publicos = await fetchPublicImoveis();
 
-      const publicos = lista.filter(isImovelPublico);
-
-      console.log("Origem atual:", window.location.origin);
-      console.log("Buscando imóveis da coleção imoveis...");
-      console.log("Total bruto Firestore:", lista.length);
-      console.log("Imóveis brutos:", lista);
       console.log("Total imóveis publicados:", publicos.length);
       console.log("Imóveis públicos:", publicos);
       console.log("Filtros ativos:", filters);
