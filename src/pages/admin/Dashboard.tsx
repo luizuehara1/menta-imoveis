@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { collection, query, getDocs, where, limit, orderBy } from 'firebase/firestore';
+import { collection, query, getDocs, where, limit, orderBy, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { 
   Home, 
@@ -45,6 +45,33 @@ export default function AdminDashboard() {
   const [dataCharts, setDataCharts] = useState<any[]>([]);
   const [categoryData, setCategoryData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [migrationLoading, setMigrationLoading] = useState(false);
+  const [migrationResult, setMigrationResult] = useState<string | null>(null);
+
+  const handleMigration = async () => {
+    try {
+      setMigrationLoading(true);
+      setMigrationResult(null);
+      const snap = await getDocs(collection(db, 'imoveis'));
+      let updatedCount = 0;
+      for (const firebaseDoc of snap.docs) {
+        const item = firebaseDoc.data();
+        const dataToUpdate: any = {};
+        dataToUpdate.publicadoNoSite = item.publicadoNoSite !== undefined ? item.publicadoNoSite : true;
+        dataToUpdate.publicado = item.publicado !== undefined ? item.publicado : true;
+
+        await updateDoc(doc(db, "imoveis", firebaseDoc.id), dataToUpdate);
+        updatedCount++;
+      }
+      setMigrationResult(`Sucesso! ${updatedCount} imóveis verificados e atualizados.`);
+    } catch (error: any) {
+      console.error("Erro na migração:", error);
+      setMigrationResult(`Erro: ${error.message || error}`);
+    } finally {
+      setMigrationLoading(false);
+    }
+  };
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -244,6 +271,39 @@ export default function AdminDashboard() {
               <span className="uppercase text-xs tracking-[0.2em] font-black">Novo Imóvel</span>
             </Link>
           </motion.div>
+        </div>
+      </motion.div>
+
+      {/* Bloco de Correção/Sincronização de Visibilidade de Imóveis Antigos */}
+      <motion.div 
+        variants={slideUp}
+        className="bg-amber-50/80 border border-amber-200 rounded-[2rem] p-8 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6"
+      >
+        <div className="space-y-2">
+          <h3 className="text-xl font-display font-black text-amber-950 tracking-tight flex items-center gap-2">
+            ⚠️ Correção de Imóveis Antigos (Visitantes Novos)
+          </h3>
+          <p className="text-sm text-amber-800 leading-relaxed max-w-3xl font-medium">
+            Muitos imóveis antigos no banco de dados podem não conter os campos de visualização pública (<code>publicado</code> e <code>publicadoNoSite</code>), impedindo que novos visitantes os vejam. Use este botão para padronizar e corrigir todos de forma segura.
+          </p>
+          {migrationResult && (
+            <p className={`text-sm font-black uppercase tracking-wider ${migrationResult.startsWith('Sucesso') ? 'text-emerald-700' : 'text-rose-700'}`}>
+              {migrationResult}
+            </p>
+          )}
+        </div>
+        <div>
+          <button 
+            disabled={migrationLoading}
+            onClick={handleMigration}
+            className={`px-8 py-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+              migrationLoading 
+                ? 'bg-amber-300 text-amber-700 cursor-not-allowed' 
+                : 'bg-primary-black hover:bg-amber-600 text-white shadow-xl hover:text-white'
+            }`}
+          >
+            {migrationLoading ? 'Atualizando...' : 'Corrigir Imóveis'}
+          </button>
         </div>
       </motion.div>
 

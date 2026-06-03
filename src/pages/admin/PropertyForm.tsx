@@ -1169,37 +1169,23 @@ export default function AdminPropertyForm() {
       const checkboxRented = data.rented === true;
       const isAlugado = checkboxRented || statusValue.toLowerCase().includes("alugado") || statusValue.toLowerCase().includes("locado");
 
+      propertyData.imovelAlugado = isAlugado;
+      propertyData.rented = isAlugado;
       if (isAlugado) {
         propertyData.status = "Alugado";
-        propertyData.imovelAlugado = true;
         propertyData.disponivelParaVisita = false;
         propertyData.availableForVisit = "Não";
-        propertyData.publicadoNoSite = true;
-        propertyData.publicado = true;
-        propertyData.ativo = true;
-        propertyData.visivelNoSite = true;
-        propertyData.excluido = false;
-        propertyData.rented = true;
       } else {
-        propertyData.imovelAlugado = false;
-        propertyData.rented = false;
         if (propertyData.status === "Alugado" || propertyData.status === "Locado") {
           propertyData.status = "Disponível";
         }
         propertyData.disponivelParaVisita = data.availableForVisit !== "Não";
-        if (data.publicado === true) {
-          propertyData.publicadoNoSite = true;
-          propertyData.publicado = true;
-          propertyData.ativo = true;
-          propertyData.visivelNoSite = true;
-          propertyData.excluido = false;
-        } else {
-          propertyData.publicadoNoSite = false;
-          propertyData.publicado = false;
-          propertyData.ativo = false;
-          propertyData.visivelNoSite = false;
-        }
       }
+
+      // 8. AO SALVAR IMÓVEL NOVO OU EDITADO: garantir apenas as propriedades especificadas
+      const isPublicado = data.publicado === true;
+      propertyData.publicadoNoSite = isPublicado;
+      propertyData.publicado = isPublicado;
 
       console.log("[PropertyForm] Salvando na coleção 'imoveis' do projeto:", auth.app.options.projectId);
 

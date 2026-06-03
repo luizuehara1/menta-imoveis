@@ -329,39 +329,45 @@ export default function Home() {
   }, [settingsLoading, optionsLoading]);
 
   useEffect(() => {
-    const fetchFeatured = async () => {
-      setFetchingProperties(true);
-      console.log("Buscando imóveis da coleção imoveis...");
+    async function carregarImoveis() {
       try {
-        const snap = await getDocs(collection(db, 'imoveis'));
+        setFetchingProperties(true);
+        console.log("Origem atual:", window.location.origin);
+        console.log("URL atual:", window.location.href);
+        console.log("Buscando imóveis da coleção imoveis...");
+
+        const snap = await getDocs(collection(db, "imoveis"));
+
         const lista = snap.docs.map((doc) => ({
           id: doc.id,
           ...doc.data() as any
         }));
 
-        console.log("Total bruto:", lista.length);
-        console.log("Imóveis brutos:", lista);
-
         const isImovelPublico = (imovel: any) => {
           return (
-            imovel?.excluido !== true &&
-            (
-              imovel?.publicadoNoSite === true ||
-              imovel?.publicado === true ||
-              imovel?.ativo === true ||
-              imovel?.visivelNoSite === true
-            )
+            imovel?.publicadoNoSite === true ||
+            imovel?.publicado === true
           );
         };
 
         const publicos = lista.filter(isImovelPublico);
-        console.log("Total públicos:", publicos.length);
+
+        console.log("Origem atual:", window.location.origin);
+        console.log("Buscando imóveis da coleção imoveis...");
+        console.log("Total bruto Firestore:", lista.length);
+        console.log("Imóveis brutos:", lista);
+        console.log("Total imóveis publicados:", publicos.length);
         console.log("Imóveis públicos:", publicos);
-        
-        // Find highlighting ones (destaque === true || destaqueNaHome === true)
+
+        console.log("HOME - Total bruto:", lista.length);
+        console.log("HOME - Total públicos:", publicos.length);
+        console.log("HOME - Imóveis públicos:", publicos);
+
+        // 9. HOME - DESTAQUES
+        // 1. buscar todos os imóveis públicos;
+        // 2. filtrar destaqueNaHome ou destaque;
+        // 3. se não tiver destaque, mostrar imóveis públicos mais recentes.
         let featured = publicos.filter((p: any) => p.destaque === true || p.destaqueNaHome === true);
-        
-        // If no highlit ones, fallback to most recent active ones
         if (featured.length === 0) {
           console.log("[Home] Nenhum imóvel marcado como destaque na Home. Usando os mais recentes.");
           featured = [...publicos].sort((a, b) => {
@@ -370,19 +376,20 @@ export default function Home() {
             return dateB - dateA;
           });
         }
-        
+
         setFeaturedProperties(featured.slice(0, 3));
       } catch (error: any) {
         console.error("Erro ao carregar imóveis:", error);
         console.error("Código:", error?.code);
         console.error("Mensagem:", error?.message);
+        console.error("Erro ao carregar imóveis na Home:", error);
         setFeaturedProperties([]);
       } finally {
         setFetchingProperties(false);
       }
-    };
+    }
 
-    fetchFeatured();
+    carregarImoveis();
   }, []);
 
   // Use local fallback if settings is empty for some reason (rare but possible after timeout)

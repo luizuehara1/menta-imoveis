@@ -95,14 +95,12 @@ export default function AdminPropertyList() {
         const data = docSnap.data();
         const hasPublicadoFields = 
           data.publicadoNoSite !== undefined &&
-          data.ativo !== undefined &&
-          data.excluido !== undefined;
+          data.publicado !== undefined;
 
         if (!hasPublicadoFields) {
           await updateDoc(doc(db, 'imoveis', docSnap.id), {
             publicadoNoSite: data.publicadoNoSite ?? true,
-            ativo: data.ativo ?? true,
-            excluido: data.excluido ?? false
+            publicado: data.publicado ?? true
           });
           count++;
         }
@@ -137,8 +135,7 @@ export default function AdminPropertyList() {
       const q = query(collection(db, 'imoveis'));
       const snap = await getDocs(q);
       const data = snap.docs
-        .map(doc => ({ id: doc.id, ...doc.data() as any }))
-        .filter(item => item.excluido !== true);
+        .map(doc => ({ id: doc.id, ...doc.data() as any }));
       
       console.log("Total de imóveis carregados:", data.length);
       if (isAdmin && data.length === 0) {

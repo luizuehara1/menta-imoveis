@@ -402,11 +402,11 @@ export default function PropertyDetail() {
 
           if (p) {
             // Rule 8: REGRAS DE VISIBILIDADE
-            // O imóvel público deve abrir se publicadoNoSite === true || publicado === true || ativo === true e excluido !== true.
+            // O imóvel público deve abrir se publicadoNoSite === true ou publicado === true.
             // Se o admin estiver logado, pode abrir mesmo se não estiver publicado.
-            const isPublic = p.excluido !== true && (p.publicadoNoSite === true || p.publicado === true || p.ativo === true || p.visivelNoSite === true);
+            const isPublic = p.publicadoNoSite === true || p.publicado === true;
             const isMock = isMockProperty(p);
-            console.log("Verificação de visibilidade do imóvel:", { isPublic, isMock, isAdmin, excluido: p.excluido, publicadoNoSite: p.publicadoNoSite, publicado: p.publicado, ativo: p.ativo });
+            console.log("Verificação de visibilidade do imóvel:", { isPublic, isMock, isAdmin, publicadoNoSite: p.publicadoNoSite, publicado: p.publicado });
 
             if ((isPublic || isAdmin) && !isMock) {
               setProperty(p);

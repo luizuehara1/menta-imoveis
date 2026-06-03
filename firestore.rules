@@ -54,8 +54,11 @@ service cloud.firestore {
     match /corretores/{document=**} { allow read: if true; allow write: if isAdmin(); }
 
     match /imoveis/{id} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read: if resource.data.publicadoNoSite == true
+                  || resource.data.publicado == true
+                  || isAdmin();
+
+      allow create, update, delete: if isAdmin();
       
       match /privado/{details=**} {
         allow read, write: if isAdmin();

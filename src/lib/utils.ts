@@ -82,16 +82,9 @@ export function isMockProperty(p: any): boolean {
 }
 
 export function isImovelPublico(imovel: any): boolean {
-  if (!imovel?.id) return false;
-  if (isMockProperty(imovel)) return false;
   return (
-    imovel?.excluido !== true &&
-    (
-      imovel?.publicadoNoSite === true ||
-      imovel?.publicado === true ||
-      imovel?.ativo === true ||
-      imovel?.visivelNoSite === true
-    )
+    imovel?.publicadoNoSite === true ||
+    imovel?.publicado === true
   );
 }
 

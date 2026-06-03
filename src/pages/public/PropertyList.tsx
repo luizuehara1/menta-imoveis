@@ -471,6 +471,8 @@ export default function PropertyList() {
 
   const fetchProperties = async (filters: any) => {
     setLoading(true);
+    console.log("Origem atual:", window.location.origin);
+    console.log("URL atual:", window.location.href);
     console.log("Buscando imóveis da coleção imoveis...");
     try {
       const snap = await getDocs(collection(db, 'imoveis'));
@@ -479,11 +481,13 @@ export default function PropertyList() {
         ...doc.data() as any
       }));
 
-      console.log("Total bruto:", lista.length);
-      console.log("Imóveis brutos:", lista);
-
       const publicos = lista.filter(isImovelPublico);
-      console.log("Total públicos:", publicos.length);
+
+      console.log("Origem atual:", window.location.origin);
+      console.log("Buscando imóveis da coleção imoveis...");
+      console.log("Total bruto Firestore:", lista.length);
+      console.log("Imóveis brutos:", lista);
+      console.log("Total imóveis publicados:", publicos.length);
       console.log("Imóveis públicos:", publicos);
       console.log("Filtros ativos:", filters);
 
