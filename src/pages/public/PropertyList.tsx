@@ -425,6 +425,7 @@ export default function PropertyList() {
   const [loading, setLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [sortBy, setSortBy] = useState('recentes');
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Search Filters
   const [searchFilters, setSearchFilters] = useState<any>({
@@ -472,6 +473,7 @@ export default function PropertyList() {
 
   const fetchProperties = async (filters: any) => {
     setLoading(true);
+    setLoadError(null);
     console.log("Origem atual:", window.location.origin);
     console.log("URL atual:", window.location.href);
     console.log("Buscando imóveis da coleção imoveis...");
@@ -583,8 +585,12 @@ export default function PropertyList() {
       setProperties(data);
     } catch (error: any) {
       console.error("Erro ao carregar imóveis:", error);
-      console.error("Código:", error.code);
-      console.error("Mensagem:", error.message);
+      const code = error?.code || 'Desconhecido';
+      const msg = error?.message || 'Sem mensagem';
+      console.error("Código:", code);
+      console.error("Mensagem:", msg);
+      setLoadError(`Erro ao carregar imóveis: ${code} - ${msg}`);
+      setProperties([]);
     } finally {
       setLoading(false);
     }
@@ -802,6 +808,13 @@ export default function PropertyList() {
                </select>
              </div>
           </div>
+
+          {loadError && (
+            <div className="bg-rose-50 border border-rose-200 text-rose-700 px-6 py-4 rounded-2xl mb-8 flex flex-col gap-1 shadow-sm">
+              <span className="font-bold text-sm">Aviso de Erro ao Carregar Imóveis</span>
+              <p className="text-xs font-mono">{loadError}</p>
+            </div>
+          )}
 
           {loading ? (
             <div className="py-10 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-10">

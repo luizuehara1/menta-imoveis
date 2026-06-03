@@ -4,6 +4,7 @@ import {
   query,
   getDocs,
   getDoc,
+  setDoc,
   addDoc,
   serverTimestamp,
   deleteDoc,
@@ -544,47 +545,82 @@ export default function AdminRents() {
       }
 
       if (leaseForm.propertyId) {
+        const propRef = doc(db, "imoveis", leaseForm.propertyId);
+        const propSnap = await getDoc(propRef);
+
         const statusLoc = String(payload.statusLocacao || "").trim().toLowerCase();
         const statusActiveList = ["ativa", "pago", "vigente", "confirmada"];
-        if (statusActiveList.includes(statusLoc)) {
-          // Determine if we should maintain it published or not on the public site
-          await updateDoc(doc(db, "imoveis", leaseForm.propertyId), {
-            status: "Alugado",
-            statusLocacao: "Alugado",
-            imovelAlugado: true,
-            disponivelParaVisita: false,
-            availableForVisit: "Não",
-            rented: true,
-            publicadoNoSite: true,
+        const isRented = statusActiveList.includes(statusLoc);
+
+        if (!propSnap.exists()) {
+          // If the property doesn't exist in the public imoveis collection, we create a safe mirror
+          await setDoc(propRef, {
+            titulo: leaseForm.propertyTitle || "Novo Imóvel de Locação",
+            codigo: leaseForm.propertyCode || leaseForm.propertyId.substring(0, 8).toUpperCase(),
+            codigoImovel: leaseForm.propertyCode || leaseForm.propertyId.substring(0, 8).toUpperCase(),
+            tipoNegocio: "Locação",
+            tipoImovel: "Apartamento",
+            cidade: leaseForm.propertyCity || "Balneário Camboriú",
+            bairro: leaseForm.propertyNeighborhood || "",
+            endereco: leaseForm.propertyAddress || "",
+            valorLocacao: toNumber(leaseForm.valorAluguel || 0),
+            valorCondominio: toNumber(leaseForm.valorCondominio || 0),
+            valorIptu: toNumber(leaseForm.valorIptu || 0),
+            fotos: [],
             publicado: true,
-            ativo: true,
+            publicadoNoSite: true,
+            status: isRented ? "Alugado" : "Disponível",
+            statusLocacao: isRented ? "Alugado" : null,
+            imovelAlugado: isRented,
+            rented: isRented,
+            disponivelParaVisita: !isRented,
+            availableForVisit: isRented ? "Não" : "Sim",
             locacaoAtivaId: leaseId,
             dataInicioLocacao: leaseForm.startDate || "",
-            dataFimLocacao: "",
+            criadoEm: serverTimestamp(),
             atualizadoEm: serverTimestamp(),
           });
         } else {
-          // Encerrada, Cancelada or Finalizada
-          const confirmarVal = confirm(
-            "Deseja alterar o status do imóvel vinculado para 'Disponível' e torná-lo disponível para visitas?",
-          );
-          if (confirmarVal) {
-            await updateDoc(doc(db, "imoveis", leaseForm.propertyId), {
-              status: "Disponível",
-              statusLocacao: null,
-              imovelAlugado: false,
-              disponivelParaVisita: true,
-              availableForVisit: "Sim",
-              rented: false,
-              locacaoAtivaId: null,
+          // Property already exists, we update it accordingly
+          if (isRented) {
+            await updateDoc(propRef, {
+              status: "Alugado",
+              statusLocacao: "Alugado",
+              imovelAlugado: true,
+              disponivelParaVisita: false,
+              availableForVisit: "Não",
+              rented: true,
+              publicadoNoSite: true,
+              publicado: true,
+              ativo: true,
+              locacaoAtivaId: leaseId,
+              dataInicioLocacao: leaseForm.startDate || "",
+              dataFimLocacao: "",
               atualizadoEm: serverTimestamp(),
             });
           } else {
-            // just decouple the active lease without changing status
-            await updateDoc(doc(db, "imoveis", leaseForm.propertyId), {
-              locacaoAtivaId: null,
-              atualizadoEm: serverTimestamp(),
-            });
+            // Encerrada, Cancelada or Finalizada
+            const confirmarVal = confirm(
+              "Deseja alterar o status do imóvel vinculado para 'Disponível' e torná-lo disponível para visitas?",
+            );
+            if (confirmarVal) {
+              await updateDoc(propRef, {
+                status: "Disponível",
+                statusLocacao: null,
+                imovelAlugado: false,
+                disponivelParaVisita: true,
+                availableForVisit: "Sim",
+                rented: false,
+                locacaoAtivaId: null,
+                atualizadoEm: serverTimestamp(),
+              });
+            } else {
+              // just decouple the active lease without changing status
+              await updateDoc(propRef, {
+                locacaoAtivaId: null,
+                atualizadoEm: serverTimestamp(),
+              });
+            }
           }
         }
       }

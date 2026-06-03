@@ -313,6 +313,7 @@ export default function Home() {
   const [featuredProperties, setFeaturedProperties] = useState<any[]>([]);
   const [fetchingProperties, setFetchingProperties] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const navigate = useNavigate();
 
   // Safety timer to force clear initial loading state
@@ -333,6 +334,7 @@ export default function Home() {
     async function carregarImoveis() {
       try {
         setFetchingProperties(true);
+        setLoadError(null);
         console.log("Origem atual:", window.location.origin);
         console.log("URL atual:", window.location.href);
         console.log("Buscando imóveis da coleção imoveis...");
@@ -362,9 +364,12 @@ export default function Home() {
         setFeaturedProperties(featured.slice(0, 3));
       } catch (error: any) {
         console.error("Erro ao carregar imóveis:", error);
-        console.error("Código:", error?.code);
-        console.error("Mensagem:", error?.message);
+        const code = error?.code || 'Desconhecido';
+        const msg = error?.message || 'Sem mensagem';
+        console.error("Código:", code);
+        console.error("Mensagem:", msg);
         console.error("Erro ao carregar imóveis na Home:", error);
+        setLoadError(`Erro ao carregar imóveis: ${code} - ${msg}`);
         setFeaturedProperties([]);
       } finally {
         setFetchingProperties(false);
@@ -409,6 +414,13 @@ export default function Home() {
               Ver catálogo completo
             </button>
           </motion.div>
+
+          {loadError && (
+            <div className="bg-rose-50 border border-rose-200 text-rose-700 px-6 py-4 rounded-2xl mb-8 flex flex-col gap-1 shadow-sm">
+              <span className="font-bold text-sm">Aviso de Erro ao Carregar Imóveis</span>
+              <p className="text-xs font-mono">{loadError}</p>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {fetchingProperties ? (
