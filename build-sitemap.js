@@ -64,15 +64,13 @@ async function generateSitemap() {
       };
 
       try {
-        const [docs1, docs2, docs3, docs4] = await Promise.all([
+        const [docs1, docs2] = await Promise.all([
           fetchQuery('publicado').catch(e => { console.error('[Sitemap] Query "publicado" failed:', e); return []; }),
-          fetchQuery('publicadoNoSite').catch(e => { console.error('[Sitemap] Query "publicadoNoSite" failed:', e); return []; }),
-          fetchQuery('ativo').catch(e => { console.error('[Sitemap] Query "ativo" failed:', e); return []; }),
-          fetchQuery('visivelNoSite').catch(e => { console.error('[Sitemap] Query "visivelNoSite" failed:', e); return []; })
+          fetchQuery('publicadoNoSite').catch(e => { console.error('[Sitemap] Query "publicadoNoSite" failed:', e); return []; })
         ]);
 
         const map = new Map();
-        [...docs1, ...docs2, ...docs3, ...docs4].forEach(doc => {
+        [...docs1, ...docs2].forEach(doc => {
           if (doc && doc.name) {
             const id = doc.name.split('/').pop();
             map.set(id, doc);
@@ -123,12 +121,9 @@ async function generateSitemap() {
     const isImovelPublico = (p) => {
       return (
         p &&
-        p.excluido !== true &&
         (
           p.publicadoNoSite === true ||
-          p.publicado === true ||
-          p.ativo === true ||
-          p.visivelNoSite === true
+          p.publicado === true
         )
       );
     };
