@@ -49,7 +49,11 @@ import {
   getValorMensal,
   toNumber,
   getCardStats,
-  getPropertyStats
+  getPropertyStats,
+  getCodigoPublicoImovel,
+  getLinkPublicoImovel,
+  getFotosImovel,
+  getFotoPrincipal
 } from '../../lib/utils';
 import { useSEO } from '../../hooks/useSEO';
 
@@ -105,87 +109,71 @@ const formatCharacteristic = (char: string, property: any) => {
 };
 
 function getPropertyImages(imovel: any): string[] {
-  const imagens: string[] = [];
-
-  if (imovel?.imagemPrincipal) {
-    if (typeof imovel.imagemPrincipal === "string") {
-      imagens.push(imovel.imagemPrincipal);
-    } else if (imovel.imagemPrincipal?.url) {
-      imagens.push(imovel.imagemPrincipal.url);
-    }
-  }
-
-  if (Array.isArray(imovel?.imagens)) {
-    imovel.imagens.forEach((img: any) => {
-      if (typeof img === "string") {
-        imagens.push(img);
-      } else if (img?.url) {
-        imagens.push(img.url);
-      }
-    });
-  }
-
-  const uniqueImages = [...new Set(imagens.filter(Boolean))];
-
-  return uniqueImages.length ? uniqueImages : ["/placeholder-imovel.png"];
+  const fotos = getFotosImovel(imovel);
+  return fotos.length ? fotos : ["/placeholder-imovel.png"];
 }
 
 async function buscarImovelPorCodigoOuId(codigoOuId: string): Promise<any | null> {
+  const codigoLimpo = decodeURIComponent(String(codigoOuId || "").trim());
+
+  if (!codigoLimpo) {
+    console.error("Código do imóvel vazio na URL");
+    return null;
+  }
+
   const imoveisRef = collection(db, "imoveis");
 
-  // 1. Try query by 'codigo'
-  const q1 = query(imoveisRef, where("codigo", "==", codigoOuId));
-  const snap1 = await getDocs(q1);
-  if (!snap1.empty) {
-    const docSnap = snap1.docs[0];
-    return {
-      id: docSnap.id,
-      ...docSnap.data()
-    };
+  const campos = ["codigo", "codigoImovel", "codImovel", "referencia"];
+
+  for (const campo of campos) {
+    const qPublicadoNoSite = query(
+      imoveisRef,
+      where(campo, "==", codigoLimpo),
+      where("publicadoNoSite", "==", true)
+    );
+
+    const snapPublicadoNoSite = await getDocs(qPublicadoNoSite);
+
+    if (!snapPublicadoNoSite.empty) {
+      const docSnap = snapPublicadoNoSite.docs[0];
+      return {
+        id: docSnap.id,
+        ...docSnap.data()
+      };
+    }
+
+    const qPublicado = query(
+      imoveisRef,
+      where(campo, "==", codigoLimpo),
+      where("publicado", "==", true)
+    );
+
+    const snapPublicado = await getDocs(qPublicado);
+
+    if (!snapPublicado.empty) {
+      const docSnap = snapPublicado.docs[0];
+      return {
+        id: docSnap.id,
+        ...docSnap.data()
+      };
+    }
   }
 
-  // 2. Try query by 'codigoImovel'
-  const q2 = query(imoveisRef, where("codigoImovel", "==", codigoOuId));
-  const snap2 = await getDocs(q2);
-  if (!snap2.empty) {
-    const docSnap = snap2.docs[0];
-    return {
-      id: docSnap.id,
-      ...docSnap.data()
-    };
-  }
+  // fallback: tentar buscar pelo ID do documento
+  const docSnap = await getDoc(doc(db, "imoveis", codigoLimpo));
 
-  // 3. Try query by 'code' as fallback
-  const q3 = query(imoveisRef, where("code", "==", codigoOuId));
-  const snap3 = await getDocs(q3);
-  if (!snap3.empty) {
-    const docSnap = snap3.docs[0];
-    return {
-      id: docSnap.id,
-      ...docSnap.data()
-    };
-  }
-
-  // 4. Try query by 'slug' as fallback
-  const q4 = query(imoveisRef, where("slug", "==", codigoOuId));
-  const snap4 = await getDocs(q4);
-  if (!snap4.empty) {
-    const docSnap = snap4.docs[0];
-    return {
-      id: docSnap.id,
-      ...docSnap.data()
-    };
-  }
-
-  // 5. Try document ID directly
-  const docSnap = await getDoc(doc(db, "imoveis", codigoOuId));
   if (docSnap.exists()) {
-    return {
-      id: docSnap.id,
-      ...docSnap.data()
-    };
+    const data = docSnap.data();
+
+    if (data.publicadoNoSite === true || data.publicado === true) {
+      return {
+        id: docSnap.id,
+        ...data
+      };
+    }
   }
 
+  console.error("Imóvel não encontrado para código:", codigoLimpo);
   return null;
 }
 
@@ -230,8 +218,8 @@ export default function PropertyDetail() {
     : "Detalhes do imóvel | Menta Imóveis";
 
   const dynamicCanonicalUrl = property
-    ? `https://mentaimoveis.com/imovel/${property.codigoImovel || property.codigo || property.id}`
-    : `https://mentaimoveis.com/imovel/${id}`;
+    ? getLinkPublicoImovel(property)
+    : `${window.location.origin}/imovel/${id}`;
 
   useSEO({
     title: dynamicTitle,
@@ -399,6 +387,15 @@ export default function PropertyDetail() {
         try {
           console.log("Iniciando busca do imóvel para identificador:", id);
           const p = await buscarImovelPorCodigoOuId(id);
+
+          console.log("Código recebido na URL:", id);
+          console.log("Imóvel encontrado:", p);
+          if (p) {
+            console.log("Código público gerado:", getCodigoPublicoImovel(p));
+            console.log("Link público gerado:", getLinkPublicoImovel(p));
+            console.log("Fotos encontradas:", getFotosImovel(p));
+            console.log("Foto principal:", getFotoPrincipal(p));
+          }
 
           if (p) {
             // Rule 8: REGRAS DE VISIBILIDADE

@@ -155,7 +155,7 @@ async function generateSitemap() {
 
     // Dynamic Property URLs
     publicProperties.forEach(p => {
-      const codigoPublico = p.codigoImovel || p.codigo || p.id;
+      const codigoPublico = p.codigoImovel || p.codigo || p.codImovel || p.referencia || p.id;
       xml += '  <url>\n';
       xml += `    <loc>${baseUrl}/imovel/${codigoPublico}</loc>\n`;
       xml += '    <changefreq>weekly</changefreq>\n';

@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useSettings, useOptions } from '../../hooks/useSettings';
 import PageWrapper from '../../components/PageWrapper';
 import { SafeImage } from '../../components/ui/SafeImage';
-import { formatCurrency, isValidPublicProperty, isMockProperty, cleanPhoneForWhatsapp, getSafeImageUrl, isImovelAlugado, matchesQuickSearch, normalizeText, buildPropertyWhatsAppMessage, getIptuValue, getValorTotalMensal, getValorMensal, getCardStats, isImovelPublico } from '../../lib/utils';
+import { formatCurrency, isValidPublicProperty, isMockProperty, cleanPhoneForWhatsapp, getSafeImageUrl, isImovelAlugado, matchesQuickSearch, normalizeText, buildPropertyWhatsAppMessage, getIptuValue, getValorTotalMensal, getValorMensal, getCardStats, isImovelPublico, getCodigoPublicoImovel, getLinkPublicoImovel, getFotoPrincipal } from '../../lib/utils';
 import { PropertyPriceBadge } from '../../components/public/PropertyPriceBadge';
 import { PropertyCardCosts } from '../../components/public/PropertyCardCosts';
 import { useSEO } from '../../hooks/useSEO';
@@ -128,7 +128,7 @@ const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
 
   const mainImageUnwrapped = React.useMemo(() => {
     const imgs = property?.images || property?.imagens || [];
-    const mainUrl = getImagemPrincipal(property);
+    const mainUrl = getFotoPrincipal(property);
     if (!mainUrl || mainUrl === '/placeholder-imovel.png') return { url: '/placeholder-imovel.png', aplicarMarcaDagua: false };
     const match = imgs.find((img: any) => (typeof img === 'string' ? img : img.url) === mainUrl);
     if (match) {
@@ -161,9 +161,9 @@ const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
       whileHover={{ y: -8 }}
       className="group bg-white rounded-3xl overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-500 border border-gray-100 flex flex-col h-full"
     >
-      <Link to={`/imovel/:id`.replace(':id', property.codigoImovel || property.codigo || property.id)} className="block relative h-64 overflow-hidden">
+      <Link to={`/imovel/${encodeURIComponent(getCodigoPublicoImovel(property))}`} className="block relative h-64 overflow-hidden">
         <SafeImage
-          src={getSafeImageUrl(getImagemPrincipal(property))}
+          src={getSafeImageUrl(getFotoPrincipal(property))}
           alt={displayTitle}
           className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"
         />
@@ -221,7 +221,7 @@ const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
           </span>
         </div>
         
-        <Link to={`/imovel/${property.codigoImovel || property.codigo || property.id}`}>
+        <Link to={`/imovel/${encodeURIComponent(getCodigoPublicoImovel(property))}`}>
           <h3 className="font-display text-xl font-bold text-primary-black group-hover:text-gold transition-colors leading-tight line-clamp-2 mb-4 h-12">
             {displayTitle}
           </h3>
@@ -374,7 +374,7 @@ const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
         
         <div className="flex items-center gap-3">
           <Link 
-            to={`/imovel/${property.codigoImovel || property.codigo || property.id}`} 
+            to={`/imovel/${encodeURIComponent(getCodigoPublicoImovel(property))}`} 
             className="flex-grow py-3 px-4 bg-primary-black text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-gold hover:text-primary-black transition-all text-center shadow-lg shadow-black/5"
           >
             Ver Detalhes

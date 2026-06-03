@@ -88,6 +88,32 @@ export function isImovelPublico(imovel: any): boolean {
   );
 }
 
+export function getCodigoPublicoImovel(imovel: any): string {
+  return (
+    imovel?.codigoImovel ||
+    imovel?.codigo ||
+    imovel?.codImovel ||
+    imovel?.referencia ||
+    imovel?.id ||
+    ""
+  );
+}
+
+export function getLinkPublicoImovel(imovel: any): string {
+  const codigoPublico = getCodigoPublicoImovel(imovel);
+
+  if (!codigoPublico) {
+    console.error("Imóvel sem código público:", imovel);
+    return window.location.origin + "/imoveis";
+  }
+
+  const link = `${window.location.origin}/imovel/${encodeURIComponent(codigoPublico)}`;
+  console.log("Link público gerado:", link);
+  console.log("Código público gerado:", codigoPublico);
+
+  return link;
+}
+
 /**
  * Validates if a property is complete enough to be shown to the public.
  */
@@ -120,6 +146,92 @@ export function unwrapImage(img: any): { url: string; aplicarMarcaDagua: boolean
     };
   }
   return { url: "", aplicarMarcaDagua: false };
+}
+
+export function getFotosImovel(imovel: any): string[] {
+  const rawFotos =
+    imovel?.fotos ||
+    imovel?.imagens ||
+    imovel?.images ||
+    imovel?.photos ||
+    [];
+
+  let fotosArray: any[] = [];
+  if (Array.isArray(rawFotos)) {
+    fotosArray = [...rawFotos];
+  } else if (rawFotos) {
+    fotosArray = [rawFotos];
+  }
+
+  const extraImages: string[] = [];
+  if (imovel?.imagemPrincipal) {
+    extraImages.push(
+      typeof imovel.imagemPrincipal === "string"
+        ? imovel.imagemPrincipal
+        : imovel.imagemPrincipal.url || imovel.imagemPrincipal.secure_url || imovel.imagemPrincipal.imagem || ""
+    );
+  }
+  if (imovel?.mainImage) {
+    extraImages.push(
+      typeof imovel.mainImage === "string"
+        ? imovel.mainImage
+        : imovel.mainImage.url || imovel.mainImage.secure_url || imovel.mainImage.imagem || ""
+    );
+  }
+
+  const processed = fotosArray
+    .map((foto) => {
+      if (typeof foto === "string") return foto;
+
+      return (
+        foto?.url ||
+        foto?.secure_url ||
+        foto?.src ||
+        foto?.imagem ||
+        foto?.imageUrl ||
+        ""
+      );
+    })
+    .filter(Boolean);
+
+  const allImages = [...extraImages, ...processed];
+  const uniqueImages = [...new Set(allImages.filter(Boolean))];
+
+  return uniqueImages;
+}
+
+export function getFotoPrincipal(imovel: any): string {
+  const fotos = getFotosImovel(imovel);
+
+  const fotoPrincipalObj = Array.isArray(imovel?.fotos)
+    ? imovel.fotos.find((foto: any) => foto?.principal === true)
+    : null;
+
+  if (fotoPrincipalObj) {
+    return (
+      fotoPrincipalObj.url ||
+      fotoPrincipalObj.secure_url ||
+      fotoPrincipalObj.src ||
+      fotoPrincipalObj.imagem ||
+      fotoPrincipalObj.imageUrl ||
+      fotos[0] ||
+      "/placeholder-imovel.png"
+    );
+  }
+
+  if (imovel?.imagemPrincipal) {
+    return typeof imovel.imagemPrincipal === "string"
+      ? imovel.imagemPrincipal
+      : imovel.imagemPrincipal.url || imovel.imagemPrincipal.secure_url || imovel.imagemPrincipal.imagem || fotos[0] || "/placeholder-imovel.png";
+  }
+
+  if (imovel?.mainImage) {
+    return typeof imovel.mainImage === "string"
+      ? imovel.mainImage
+      : imovel.mainImage.url || imovel.mainImage.secure_url || imovel.mainImage.imagem || fotos[0] || "/placeholder-imovel.png";
+  }
+
+  return fotos[0] || "/placeholder-imovel.png";
 }
 
 /**
@@ -648,8 +760,8 @@ export function formatOptionWithQuantity(option: any, optionQuantities?: Record<
 
 export function buildPropertyWhatsAppMessage(imovel: any): string {
   if (!imovel) return "";
-  const codigoPublico = imovel.codigoImovel || imovel.codigo || imovel.id;
-  const linkImovel = `${window.location.origin}/imovel/${codigoPublico}`;
+  const codigoPublico = getCodigoPublicoImovel(imovel);
+  const linkImovel = getLinkPublicoImovel(imovel);
 
   const titulo =
     imovel.tituloAnuncio ||
@@ -658,11 +770,7 @@ export function buildPropertyWhatsAppMessage(imovel: any): string {
     imovel.nome ||
     "Imóvel disponível";
 
-  const codigo =
-    imovel.codigo ||
-    imovel.codigoImovel ||
-    imovel.code ||
-    "Não informado";
+  const codigo = codigoPublico || "Não informado";
 
   if (isImovelAlugado(imovel) && normalizeTipoNegocio(imovel.tipoNegocio || imovel.businessType) === "Venda e Locação") {
     const vVenda = imovel.priceVenda || imovel.valorVenda || 0;

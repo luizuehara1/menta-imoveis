@@ -11,7 +11,7 @@ import { PremiumHeroBackground } from '../../components/three/PremiumHeroBackgro
 import { LuxuryShapeCanvas } from '../../components/three/AbstractLuxuryShape';
 import { useSettings, useOptions } from '../../hooks/useSettings';
 import { DEFAULT_SITE_CONFIG } from '../../constants/defaultSettings';
-import { formatCurrency, isValidPublicProperty, getSafeImageUrl, isImovelAlugado, getIptuValue, getValorMensal, normalizeTipoNegocio, getCardStats } from '../../lib/utils';
+import { formatCurrency, isValidPublicProperty, getSafeImageUrl, isImovelAlugado, getIptuValue, getValorMensal, normalizeTipoNegocio, getCardStats, getCodigoPublicoImovel, getFotoPrincipal } from '../../lib/utils';
 import { PropertyPriceBadge } from '../../components/public/PropertyPriceBadge';
 import { PropertyCardCosts } from '../../components/public/PropertyCardCosts';
 import { useSEO } from '../../hooks/useSEO';
@@ -431,15 +431,15 @@ export default function Home() {
                   whileHover={{ y: -12 }}
                   className="group bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-[0_40px_80px_-15px_rgba(0,0,0,0.1)] transition-all duration-500"
                 >
-                  <Link to={`/imovel/${property.codigoImovel || property.codigo || property.id}`} className="block relative h-64 overflow-hidden">
+                  <Link to={`/imovel/${encodeURIComponent(getCodigoPublicoImovel(property))}`} className="block relative h-64 overflow-hidden">
                     <SafeImage
-                      src={property.mainImage}
+                      src={getFotoPrincipal(property)}
                       alt={property.title}
                       className="w-full h-full transition-transform duration-1000 group-hover:scale-110"
                     />
                     {(() => {
                       const imgs = property.images || property.imagens || [];
-                      const mainUrl = typeof property.mainImage === 'string' ? property.mainImage : property.mainImage?.url;
+                      const mainUrl = getFotoPrincipal(property);
                       if (!mainUrl) return null;
                       const match = imgs.find((img: any) => (typeof img === 'string' ? img : img.url) === mainUrl);
                       const unwrapped = match ? (typeof match === 'string' ? { url: match, aplicarMarcaDagua: true } : match) : { url: mainUrl, aplicarMarcaDagua: true };
@@ -522,7 +522,7 @@ export default function Home() {
                         </div>
                       );
                     })()}
-                    <Link to={`/imovel/${property.codigoImovel || property.codigo || property.id}`} className="w-full mt-2 block text-center btn-gold !py-3 !text-xs !bg-transparent !text-primary-black !border !border-gold/30 hover:!bg-gold hover:!text-primary-black !rounded-xl">
+                    <Link to={`/imovel/${encodeURIComponent(getCodigoPublicoImovel(property))}`} className="w-full mt-2 block text-center btn-gold !py-3 !text-xs !bg-transparent !text-primary-black !border !border-gold/30 hover:!bg-gold hover:!text-primary-black !rounded-xl">
                       Ver Detalhes
                     </Link>
                   </div>

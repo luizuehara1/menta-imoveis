@@ -38,7 +38,7 @@ import {
 import { db } from '../../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { staggerContainer, slideUp, fadeIn, scaleIn } from '../../constants/animations';
-import { cleanPhoneForWhatsapp } from '../../lib/utils';
+import { cleanPhoneForWhatsapp, getCodigoPublicoImovel, getLinkPublicoImovel } from '../../lib/utils';
 
 interface VisitSchedulerProps {
   property: {
@@ -174,8 +174,8 @@ export default function VisitScheduler({ property }: VisitSchedulerProps) {
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
 
     // 5. IMÓVEL LINK
-    const codigoPublico = (property as any).codigoImovel || property.code || (property as any).codigo || property.id;
-    const linkImovel = `${window.location.origin}/imovel/${codigoPublico}`;
+    const codigoPublico = getCodigoPublicoImovel(property);
+    const linkImovel = getLinkPublicoImovel(property);
     const brokerId = (property as any).brokerId || (property as any).corretorId || (property as any).corretorResponsavel?.id || (property as any).broker?.id || "";
     const brokerName = (property as any).brokerName || (property as any).corretorResponsavel?.nome || (property as any).corretorNome || "";
 
