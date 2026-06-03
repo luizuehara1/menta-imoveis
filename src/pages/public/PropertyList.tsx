@@ -809,13 +809,6 @@ export default function PropertyList() {
              </div>
           </div>
 
-          {loadError && (
-            <div className="bg-rose-50 border border-rose-200 text-rose-700 px-6 py-4 rounded-2xl mb-8 flex flex-col gap-1 shadow-sm">
-              <span className="font-bold text-sm">Aviso de Erro ao Carregar Imóveis</span>
-              <p className="text-xs font-mono">{loadError}</p>
-            </div>
-          )}
-
           {loading ? (
             <div className="py-10 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-10">
               {[1, 2, 3, 4, 5, 6].map(n => (
@@ -832,12 +825,16 @@ export default function PropertyList() {
                   <Search size={40} className="text-gold" />
                </div>
                <h3 className="text-3xl font-display font-bold text-primary-black mb-3 tracking-tight">
-                 {searchFilters.busca ? "Nenhum imóvel encontrado para sua busca" : "Nenhum imóvel disponível no momento"}
+                 {loadError 
+                    ? "Não foi possível carregar os imóveis no momento" 
+                    : (searchFilters.busca ? "Nenhum imóvel encontrado para sua busca" : "Nenhum imóvel disponível no momento")}
                </h3>
                <p className="text-gray-400 font-medium mb-10 leading-relaxed text-sm">
-                 {searchFilters.busca 
-                   ? `Não encontramos nenhum imóvel publicado que atenda a "${searchFilters.busca}". Tente ajustar os termos da pesquisa rápida ou usar outros filtros.`
-                   : "Não encontramos nenhum imóvel publicado que atenda aos critérios. Tente ajustar sua busca ou volte mais tarde."}
+                 {loadError 
+                   ? "Tente novamente em instantes." 
+                   : (searchFilters.busca 
+                     ? `Não encontramos nenhum imóvel publicado que atenda a "${searchFilters.busca}". Tente ajustar os termos da pesquisa rápida ou usar outros filtros.`
+                     : "Não encontramos nenhum imóvel publicado que atenda aos critérios. Tente ajustar sua busca ou volte mais tarde.")}
                </p>
                <button 
                   onClick={() => {

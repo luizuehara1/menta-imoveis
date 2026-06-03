@@ -415,13 +415,6 @@ export default function Home() {
             </button>
           </motion.div>
 
-          {loadError && (
-            <div className="bg-rose-50 border border-rose-200 text-rose-700 px-6 py-4 rounded-2xl mb-8 flex flex-col gap-1 shadow-sm">
-              <span className="font-bold text-sm">Aviso de Erro ao Carregar Imóveis</span>
-              <p className="text-xs font-mono">{loadError}</p>
-            </div>
-          )}
-
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {fetchingProperties ? (
               [1, 2, 3].map((i) => (
@@ -537,7 +530,9 @@ export default function Home() {
               ))
             ) : (
               <div className="col-span-full py-12 text-center text-gray-400">
-                Nenhum imóvel em destaque no momento.
+                {loadError 
+                  ? "Não foi possível carregar os imóveis no momento. Tente novamente em instantes." 
+                  : "Nenhum imóvel em destaque no momento."}
               </div>
             )}
           </div>
