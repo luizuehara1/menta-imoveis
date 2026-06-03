@@ -1,4 +1,4 @@
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from './firebase';
 
 export async function fetchPublicImoveis(): Promise<any[]> {
@@ -8,30 +8,50 @@ export async function fetchPublicImoveis(): Promise<any[]> {
   console.log("Firebase authDomain:", db.app.options.authDomain);
   console.log("Origem atual:", window.location.origin);
   console.log("URL atual:", window.location.href);
-  console.log("Buscando imóveis da coleção imoveis...");
+  console.log("Buscando imóveis públicos da coleção imoveis...");
 
   try {
-    const snap = await getDocs(collection(db, "imoveis"));
-    
-    const lista = snap.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data() as any
-    }));
+    const imoveisRef = collection(db, "imoveis");
 
-    console.log("Total bruto Firestore:", lista.length);
-    console.log("Imóveis brutos:", lista);
-
-    const publicos = lista.filter((imovel) =>
-      imovel?.publicadoNoSite === true ||
-      imovel?.publicado === true
+    const qPublicadoNoSite = query(
+      imoveisRef,
+      where("publicadoNoSite", "==", true)
     );
 
-    console.log("Total imóveis publicados:", publicos.length);
-    console.log("Imóveis publicados:", publicos);
+    const qPublicado = query(
+      imoveisRef,
+      where("publicado", "==", true)
+    );
+
+    const [snapPublicadoNoSite, snapPublicado] = await Promise.all([
+      getDocs(qPublicadoNoSite),
+      getDocs(qPublicado)
+    ]);
+
+    const map = new Map<string, any>();
+
+    snapPublicadoNoSite.docs.forEach((docSnap) => {
+      map.set(docSnap.id, {
+        id: docSnap.id,
+        ...docSnap.data()
+      });
+    });
+
+    snapPublicado.docs.forEach((docSnap) => {
+      map.set(docSnap.id, {
+        id: docSnap.id,
+        ...docSnap.data()
+      });
+    });
+
+    const lista = Array.from(map.values());
+
+    console.log("Total imóveis publicados (deduplicados):", lista.length);
+    console.log("Imóveis publicados:", lista);
     console.log("[DEBUG] REQUISIÇÃO CONCLUÍDA COM SUCESSO");
     console.log("-----------------------------------------");
 
-    return publicos;
+    return lista;
   } catch (error: any) {
     console.error("-----------------------------------------");
     console.error("[DEBUG] FALHA AO BUSCAR IMÓVEIS DO FIRESTORE");
