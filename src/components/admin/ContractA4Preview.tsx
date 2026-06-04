@@ -538,88 +538,143 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
   const renderProposta = () => renderPropostaOrContraproposta(false);
   const renderContraproposta = () => renderPropostaOrContraproposta(true);
 
-  const renderAceite = () => (
-    <div className="pdf-compact-content relative z-10 w-full bg-white">
-      <div className="pdf-document-title">
-        ACEITE DE TERMOS DE PROPOSTA
-      </div>
+  const renderAceite = () => {
+    const a = dados.aceitante || {};
+    const p = dados.proponente || {};
+    
+    // Extracted buyers/proponents data
+    const compradorNome = a.nome || p.nome || contract.nomeCliente || (contract as any).compradorNome || (contract as any).proponenteNome || (contract as any).nome || "";
+    const compradorCpf = a.cpf || p.cpf || (contract as any).compradorCpf || (contract as any).proponenteCpf || (contract as any).cpf || "";
+    const compradorRg = a.rg || p.rg || (contract as any).compradorRg || (contract as any).proponenteRg || (contract as any).rg || "";
+    const compradorEstadoCivil = a.estadoCivil || p.estadoCivil || (contract as any).compradorEstadoCivil || (contract as any).proponenteEstadoCivil || "Solteiro(a)";
+    const compradorProfissao = a.profissao || p.profissao || (contract as any).compradorProfissao || (contract as any).proponenteProfissao || "";
+    const compradorTelefone = a.telefone || p.telefone || (contract as any).compradorTelefone || (contract as any).proponenteTelefone || "";
+    const compradorWhatsapp = a.whatsapp || p.whatsapp || a.celular || p.whatsapp || (contract as any).compradorWhatsapp || (contract as any).proponenteWhatsapp || "";
+    const compradorEmail = a.email || p.email || (contract as any).compradorEmail || (contract as any).proponenteEmail || "";
+    const compradorEndereco = a.endereco || p.endereco || (contract as any).compradorEndereco || (contract as any).proponenteEndereco || "";
+    const compradorCep = a.cep || p.cep || (contract as any).compradorCep || (contract as any).proponenteCep || "";
+    const compradorCidade = a.cidade || p.cidade || (contract as any).compradorCidade || (contract as any).proponenteCidade || "";
+    const compradorEstado = a.estado || p.estado || (contract as any).compradorEstado || (contract as any).proponenteEstado || "";
 
-      <section className="section avoid-break">
-        <h3 className="section-title">I - Identificação da Parte que Manifesta o Aceite</h3>
-        <div className="grid grid-cols-2 gap-y-1.5 gap-x-6">
-          <p><strong>Nome Completo:</strong> {dados.aceitante?.nome || '---'}</p>
-          <p><strong>CPF:</strong> {dados.aceitante?.cpf || '---'}</p>
-          <p><strong>RG:</strong> {dados.aceitante?.rg || '---'}</p>
-          <p><strong>Estado Civil:</strong> {dados.aceitante?.estadoCivil || '---'}</p>
-          <p><strong>Profissão:</strong> {dados.aceitante?.profissao || '---'}</p>
-          <p><strong>Telefone:</strong> {dados.aceitante?.telefone || '---'}{dados.aceitante?.whatsapp ? ` / WhatsApp: ${dados.aceitante?.whatsapp}` : ''}</p>
-          <p className="col-span-2"><strong>E-mail:</strong> {dados.aceitante?.email || '---'}</p>
-          <p className="col-span-2"><strong>Endereço Residencial:</strong> {dados.aceitante?.endereco || '---'}{dados.aceitante?.cep ? ` - CEP: ${dados.aceitante?.cep}` : ''}{dados.aceitante?.cidade ? ` - ${dados.aceitante?.cidade}/${dados.aceitante?.estado || ''}` : ''}</p>
+    // Spouse data
+    const spouseNome = a.vendedorConjugeNome || a.compradorConjugeNome || a.conjugeNome || a.aceitanteConjugeNome || p.compradorConjugeNome || p.conjugeNome || (contract as any).compradorConjugeNome || (contract as any).proponenteConjugeNome || "";
+    const spouseCpf = a.vendedorConjugeCpf || a.compradorConjugeCpf || a.conjugeCpf || a.aceitanteConjugeCpf || p.compradorConjugeCpf || p.conjugeCpf || (contract as any).compradorConjugeCpf || (contract as any).proponenteConjugeCpf || "";
+    const spouseRg = a.vendedorConjugeRg || a.compradorConjugeRg || a.conjugeRg || p.compradorConjugeRg || (contract as any).compradorConjugeRg || "";
+    const spouseProfissao = a.vendedorConjugeProfissao || a.compradorConjugeProfissao || a.conjugeProfissao || p.compradorConjugeProfissao || (contract as any).compradorConjugeProfissao || "";
+    const spouseTelefone = a.vendedorConjugeTelefone || a.compradorConjugeTelefone || a.conjugeTelefone || p.compradorConjugeTelefone || (contract as any).compradorConjugeTelefone || "";
+    const spouseEmail = a.vendedorConjugeEmail || a.compradorConjugeEmail || a.conjugeEmail || p.compradorConjugeEmail || (contract as any).compradorConjugeEmail || "";
+    const spouseEndereco = a.vendedorConjugeEndereco || a.compradorConjugeEndereco || a.conjugeEndereco || p.compradorConjugeEndereco || (contract as any).compradorConjugeEndereco || "";
 
-          {(() => {
-            const a = dados.aceitante || {};
-            const valName = a.vendedorConjugeNome || a.compradorConjugeNome || a.conjugeNome || a.aceitanteConjugeNome || "";
-            if (!valName) return null;
-            const valCpf = a.vendedorConjugeCpf || a.compradorConjugeCpf || a.conjugeCpf || a.aceitanteConjugeCpf || "";
-            const valRg = a.vendedorConjugeRg || a.compradorConjugeRg || a.conjugeRg || a.aceitanteConjugeRg || "";
-            const valProfissao = a.vendedorConjugeProfissao || a.compradorConjugeProfissao || a.conjugeProfissao || a.aceitanteConjugeProfissao || "";
-            const valEmail = a.vendedorConjugeEmail || a.compradorConjugeEmail || a.conjugeEmail || a.aceitanteConjugeEmail || "";
-            const valTelefone = a.vendedorConjugeTelefone || a.compradorConjugeTelefone || a.conjugeTelefone || a.aceitanteConjugeTelefone || "";
-            const valEndereco = a.vendedorConjugeEndereco || a.compradorConjugeEndereco || a.conjugeEndereco || a.aceitanteConjugeEndereco || "";
+    const valorAceiteFinal =
+      contract.valor ||
+      (contract as any).valorAceite ||
+      (contract as any).valorTotalNegociado ||
+      (contract as any).valorProposta ||
+      (contract as any).valorNegociado ||
+      (contract as any).valorContraproposta ||
+      dados.objeto?.valorAceite ||
+      0;
 
-            return (
-              <>
-                <p><strong>Cônjuge:</strong> {valName}</p>
-                <p><strong>CPF Cônjuge:</strong> {valCpf || "Não informado"}</p>
-                {valRg && <p><strong>RG Cônjuge:</strong> {valRg}</p>}
-                {valProfissao && <p><strong>Profissão Cônjuge:</strong> {valProfissao}</p>}
-                {valTelefone && <p><strong>Telefone Cônjuge:</strong> {valTelefone}</p>}
-                {valEmail && <p><strong>E-mail Cônjuge:</strong> {valEmail}</p>}
-                {valEndereco && <p className="col-span-2"><strong>Endereço Cônjuge:</strong> {valEndereco}</p>}
-              </>
-            );
-          })()}
+    const dataDocumentoBase =
+      (contract as any).dataDocumentoBase ||
+      (contract as any).dataProposta ||
+      (contract as any).criadoEm ||
+      (contract as any).createdAt ||
+      (contract as any).dataCriacao ||
+      dados.objeto?.dataDocumentoBase ||
+      "";
+
+    const imovelEndereco = contract.enderecoImovel || (contract as any).imovelEndereco || dados.imovel?.endereco || "Não informado";
+    const imovelCodigo = (contract as any).imovelCodigo || dados.imovel?.codigo || "Não informado";
+    const imovelTitulo = contract.imovelTitulo || (contract as any).imovelNomeEdificio || dados.imovel?.titulo || "Imóvel";
+    const imovelMatricula = (contract as any).imovelMatricula || dados.imovel?.matricula || "Não informado";
+    const imovelCri = String((contract as any).imovelCri || dados.imovel?.cri || dados.imovel?.criImovel || "").trim() || "Não informado";
+
+    const condicoesPagamento = (contract as any).condicoesPagamento || (contract as any).detalhesPagamento || dados.pagamento?.outrasCondicoes || dados.termos?.outrasCondicoes || "";
+    const outrasCondicoes = (contract as any).outrasCondicoes || (contract as any).observacoes || dados.pagamento?.outrasCondicoes || dados.termos?.outrasCondicoes || "";
+
+    const localFinal = dados.local || contract.local || "Balneário Camboriú - SC";
+    const dataFinal = dados.data || contract.data || "";
+
+    return (
+      <div className="pdf-compact-content relative z-10 w-full bg-white font-sans text-[10px]">
+        <div className="pdf-document-title">
+          ACEITE DE TERMOS DE PROPOSTA
         </div>
-      </section>
 
-      <section className="section avoid-break">
-        <h3 className="section-title">II - Objeto e Efeitos do Aceite</h3>
-        <div className="space-y-2">
-          <p className="font-bold text-xs p-1.5 bg-gray-50 rounded text-center border border-dashed border-gray-300 uppercase leading-none">
-            {dados.objeto?.tipoAceite === 'proposta' 
-              ? "ACEITA INTEGRALMENTE A PROPOSTA APRESENTADA" 
-              : "ACEITA INTEGRALMENTE A CONTRAPROPOSTA APRESENTADA"}
-          </p>
+        <section className="section avoid-break">
+          <h3 className="section-title">I - Identificação da Parte que Manifesta o Aceite</h3>
           <div className="grid grid-cols-2 gap-y-1.5 gap-x-6">
-            <p><strong>Valor do Aceite:</strong> {formatCurrency(contract.valor)}</p>
-            <p><strong>Data do Documento Base:</strong> {dados.objeto?.dataDocumentoBase}</p>
-            <p className="col-span-2"><strong>Imóvel Referência:</strong> {contract.enderecoImovel}</p>
+            <p><strong>Nome Completo:</strong> {compradorNome || 'Não informado'}</p>
+            <p><strong>CPF:</strong> {compradorCpf || 'Não informado'}</p>
+            <p><strong>RG:</strong> {compradorRg || 'Não informado'}</p>
+            <p><strong>Estado Civil:</strong> {compradorEstadoCivil || 'Não informado'}</p>
+            <p><strong>Profissão:</strong> {compradorProfissao || 'Não informado'}</p>
+            <p><strong>Telefone:</strong> {compradorTelefone || 'Não informado'}{compradorWhatsapp ? ` / WhatsApp: ${compradorWhatsapp}` : ''}</p>
+            <p className="col-span-2"><strong>E-mail:</strong> {compradorEmail || 'Não informado'}</p>
+            <p className="col-span-2"><strong>Endereço Residencial:</strong> {compradorEndereco || 'Não informado'}{compradorCep ? ` - CEP: ${compradorCep}` : ''}{compradorCidade ? ` - ${compradorCidade}/${compradorEstado}` : ''}</p>
+
+            {spouseNome && (
+              <>
+                <p><strong>Cônjuge:</strong> {spouseNome}</p>
+                <p><strong>CPF Cônjuge:</strong> {spouseCpf || "Não informado"}</p>
+                {spouseRg && <p><strong>RG Cônjuge:</strong> {spouseRg}</p>}
+                {spouseProfissao && <p><strong>Profissão Cônjuge:</strong> {spouseProfissao}</p>}
+                {spouseTelefone && <p><strong>Telefone Cônjuge:</strong> {spouseTelefone}</p>}
+                {spouseEmail && <p><strong>E-mail Cônjuge:</strong> {spouseEmail}</p>}
+                {spouseEndereco && <p className="col-span-2"><strong>Endereço Cônjuge:</strong> {spouseEndereco}</p>}
+              </>
+            )}
+          </div>
+        </section>
+
+        <section className="section avoid-break">
+          <h3 className="section-title">II - Objeto e Efeitos do Aceite</h3>
+          <div className="space-y-2">
+            <p className="font-bold text-xs p-1.5 bg-gray-50 rounded text-center border border-dashed border-gray-300 uppercase leading-none">
+              {dados.objeto?.tipoAceite === 'contraproposta' 
+                ? "ACEITA INTEGRALMENTE A CONTRAPROPOSTA APRESENTADA" 
+                : "ACEITA INTEGRALMENTE A PROPOSTA APRESENTADA"}
+            </p>
+            <div className="grid grid-cols-2 gap-y-1.5 gap-x-6">
+              <p><strong>Valor do Aceite:</strong> {formatCurrency(valorAceiteFinal)}</p>
+              <p><strong>Data do Documento Base:</strong> {formatarDataBR(dataDocumentoBase)}</p>
+              <p className="col-span-2"><strong>Imóvel Referência:</strong> {imovelEndereco}</p>
+              
+              <p><strong>Código do Imóvel:</strong> {imovelCodigo}</p>
+              <p><strong>Título / Edifício:</strong> {imovelTitulo}</p>
+              <p><strong>Matrícula:</strong> {imovelMatricula}</p>
+              <p><strong>CRI:</strong> {imovelCri}</p>
+              
+              {condicoesPagamento && <p className="col-span-2"><strong>Condições de Pagamento:</strong> {condicoesPagamento}</p>}
+              {outrasCondicoes && <p className="col-span-2"><strong>Outras Condições:</strong> {outrasCondicoes}</p>}
+            </div>
+          </div>
+        </section>
+
+        {renderClausulasSelecionadas()}
+
+        <div className="mt-8 text-right font-bold text-[9.5px]">
+          {localFinal}, {dataFinal}
+        </div>
+
+        <div className="pdf-signatures shrink-0">
+          <div className="flex flex-col justify-end">
+            <div className="pdf-signature-line">
+              {compradorNome || "Assinatura da Parte Aceitante"}
+            </div>
+            <div className="pdf-signature-role">Assinatura da Parte Aceitante</div>
+          </div>
+          <div className="flex flex-col justify-end">
+            <div className="pdf-signature-line">
+              {safeText(empresa.nome)}
+            </div>
+            <div className="pdf-signature-role">Intermediadora / Testemunha</div>
           </div>
         </div>
-      </section>
-
-      {renderClausulasSelecionadas()}
-
-      <div className="mt-8 text-right font-bold text-[9.5px]">
-        {dados.local}, {dados.data}
       </div>
-
-      <div className="pdf-signatures shrink-0">
-        <div className="flex flex-col justify-end">
-          <div className="pdf-signature-line">
-            {dados.aceitante?.nome}
-          </div>
-          <div className="pdf-signature-role">Assinatura da Parte Aceitante</div>
-        </div>
-        <div className="flex flex-col justify-end">
-          <div className="pdf-signature-line">
-            {safeText(empresa.nome)}
-          </div>
-          <div className="pdf-signature-role">Intermediadora / Testemunha</div>
-        </div>
-      </div>
-    </div>
-  );
+    );
+  };
 
   const renderArrasConfirmatorios = () => {
     const comp = dados.proponente || {};

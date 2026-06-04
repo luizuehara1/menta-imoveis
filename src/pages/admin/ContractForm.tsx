@@ -237,6 +237,312 @@ async function buscarImovelPorCodigoOuId(codigoOuId: string) {
   return null;
 }
 
+function normalizarDadosAceite(origem: any = {}) {
+  const parsedDados = origem?.dados || {};
+  const imovelRaw = parsedDados?.imovel || {};
+  const proponenteRaw = parsedDados?.proponente || parsedDados?.comprador || {};
+  const vendedorRaw = parsedDados?.vendedor || {};
+
+  const propId = origem.propostaId || origem.id || "";
+  const contraId = origem.origem === 'contraproposta' ? (origem.contrapropostaId || origem.id || "") : (origem.contrapropostaId || "");
+
+  const dProposta = origem.dataProposta || origem.criadoEm || origem.createdAt || origem.dataCriacao || "";
+  const dDocumentoBase = origem.dataDocumentoBase || origem.dataProposta || origem.criadoEm || origem.createdAt || origem.dataCriacao || "";
+
+  const compNome = origem.compradorNome || origem.proponenteNome || origem.nomeComprador || origem.nomeCliente || proponenteRaw.nome || origem.nome || "";
+  const compCpf = origem.compradorCpf || origem.proponenteCpf || origem.cpfComprador || (origem.dados?.proponente?.cpf || origem.dados?.proponente?.cpfCnpj || proponenteRaw.cpf || proponenteRaw.cpfCnpj || proponenteRaw.documento || "");
+  const compRg = origem.compradorRg || origem.proponenteRg || proponenteRaw.rg || "";
+  const compProfissao = origem.compradorProfissao || origem.proponenteProfissao || proponenteRaw.profissao || "";
+  const compEstadoCivil = origem.compradorEstadoCivil || origem.proponenteEstadoCivil || proponenteRaw.estadoCivil || "Solteiro(a)";
+  const compTelefone = origem.compradorTelefone || origem.proponenteTelefone || proponenteRaw.telefone || "";
+  const compEmail = origem.compradorEmail || origem.proponenteEmail || proponenteRaw.email || "";
+  const compEndereco = origem.compradorEndereco || origem.proponenteEndereco || proponenteRaw.endereco || "";
+
+  const compConjugeNome = origem.compradorConjugeNome || origem.proponenteConjugeNome || proponenteRaw.compradorConjugeNome || proponenteRaw.conjugeNome || proponenteRaw.conjuge?.nome || "";
+  const compConjugeCpf = origem.compradorConjugeCpf || origem.proponenteConjugeCpf || proponenteRaw.compradorConjugeCpf || proponenteRaw.conjugeCpf || proponenteRaw.conjuge?.cpf || "";
+  const compConjugeRg = origem.compradorConjugeRg || proponenteRaw.compradorConjugeRg || proponenteRaw.conjugeRg || proponenteRaw.conjuge?.rg || "";
+  const compConjugeProfissao = proponenteRaw.compradorConjugeProfissao || proponenteRaw.conjugeProfissao || proponenteRaw.conjuge?.profissao || "";
+  const compConjugeEstadoCivil = proponenteRaw.compradorConjugeEstadoCivil || proponenteRaw.conjugeEstadoCivil || proponenteRaw.conjuge?.estadoCivil || "Casado(a)";
+  const compConjugeTelefone = proponenteRaw.compradorConjugeTelefone || proponenteRaw.conjugeTelefone || proponenteRaw.conjuge?.telefone || "";
+  const compConjugeEmail = proponenteRaw.compradorConjugeEmail || proponenteRaw.conjugeEmail || proponenteRaw.conjuge?.email || "";
+  const compConjugeEndereco = proponenteRaw.compradorConjugeEndereco || proponenteRaw.conjugeEndereco || proponenteRaw.conjuge?.endereco || "";
+
+  const vendNome = origem.vendedorNome || origem.proprietario || origem.nomeProprietario || vendedorRaw.nome || origem.nomeVendedor || "";
+  const vendCpf = origem.vendedorCpf || origem.proprietarioCpf || vendedorRaw.cpf || vendedorRaw.documento || "";
+  const vendRg = origem.vendedorRg || origem.proprietarioRg || vendedorRaw.rg || "";
+  const vendProfissao = origem.vendedorProfissao || origem.proprietarioProfissao || vendedorRaw.profissao || "";
+  const vendEstadoCivil = origem.vendedorEstadoCivil || origem.proprietarioEstadoCivil || vendedorRaw.estadoCivil || "Solteiro(a)";
+  const vendTelefone = origem.vendedorTelefone || origem.proprietarioTelefone || vendedorRaw.telefone || "";
+  const vendEmail = origem.vendedorEmail || origem.proprietarioEmail || vendedorRaw.email || "";
+  const vendEndereco = origem.vendedorEndereco || origem.proprietarioEndereco || vendedorRaw.endereco || "";
+
+  const vendConjugeNome = origem.vendedorConjugeNome || vendedorRaw.vendedorConjugeNome || vendedorRaw.conjugeNome || "";
+  const vendConjugeCpf = origem.vendedorConjugeCpf || vendedorRaw.vendedorConjugeCpf || vendedorRaw.conjugeCpf || "";
+
+  const imId = origem.imovelId || imovelRaw.id || "";
+  const imCodigo = origem.imovelCodigo || origem.codigoImovel || origem.codigo || origem.codImovel || origem.referencia || imovelRaw.codigo || "";
+  const imTitulo = origem.imovelTitulo || origem.imovelNomeEdificio || origem.nomeEdificio || origem.edificio || origem.nomeEmpreendimento || origem.empreendimento || origem.condominioNome || origem.nomeCondominio || origem.tituloAnuncio || origem.titulo || imovelRaw.titulo || "Imóvel";
+  const imEndereco = origem.imovelEndereco || origem.endereco || imovelRaw.endereco || "";
+  const imBairro = origem.imovelBairro || origem.bairro || imovelRaw.bairro || "";
+  const imCidade = origem.imovelCidade || origem.cidade || imovelRaw.cidade || "";
+  const imEstado = origem.imovelEstado || origem.estado || imovelRaw.estado || "SC";
+  const imMatricula = origem.imovelMatricula || origem.matriculaImovel || origem.matricula || origem.numeroMatricula || origem.numeroMatriculaImovel || imovelRaw.matricula || "";
+  const imCri = String(origem.imovelCri || origem.criImovel || origem.cri || origem.cartorioRegistroImoveis || origem.cartorioRegistro || origem.cartorioImovel || imovelRaw.cri || "").trim();
+
+  const vAceite = origem.valorAceite || origem.valorTotalNegociado || origem.valorProposta || origem.valorNegociado || origem.valorContraproposta || origem.valor || 0;
+  const vProposta = origem.valorProposta || origem.valorTotalNegociado || origem.valorNegociado || origem.valor || 0;
+  const vTotalNegociado = origem.valorTotalNegociado || origem.valorProposta || origem.valorNegociado || origem.valor || 0;
+
+  const vExtenso = origem.valorPorExtenso || parsedDados?.pagamento?.valorExtenso || parsedDados?.termos?.valorExtenso || "";
+  const fPagamento = origem.formaPagamento || "";
+  const fPagamentos = origem.formasPagamento || [];
+
+  const condPagamento = origem.condicoesPagamento || origem.outrasCondicoes || origem.detalhesPagamento || origem.detalhesPagamentoContraproposta || origem.observacoesPagamento || parsedDados?.pagamento?.outrasCondicoes || parsedDados?.termos?.outrasCondicoes || "";
+  const outCondicoes = origem.outrasCondicoes || origem.detalhesPagamento || origem.detalhesPagamentoContraproposta || origem.condicoesPagamento || origem.observacoesPagamento || parsedDados?.pagamento?.outrasCondicoes || parsedDados?.termos?.outrasCondicoes || "";
+
+  const obs = origem.observacoes || origem.observacoesGerais || "";
+
+  return {
+    documentoBaseId: origem.id || origem.propostaId || "",
+    documentoBaseTipo: origem.origem || origem.tipoDocumento || "",
+
+    propostaId: propId,
+    contrapropostaId: contraId,
+
+    dataProposta: dProposta,
+    dataDocumentoBase: dDocumentoBase,
+
+    compradorNome: compNome,
+    compradorCpf: compCpf,
+    compradorRg: compRg,
+    compradorProfissao: compProfissao,
+    compradorEstadoCivil: compEstadoCivil,
+    compradorTelefone: compTelefone,
+    compradorEmail: compEmail,
+    compradorEndereco: compEndereco,
+
+    compradorConjugeNome: compConjugeNome,
+    compradorConjugeCpf: compConjugeCpf,
+    compradorConjugeRg: compConjugeRg,
+    compradorConjugeProfissao: compConjugeProfissao,
+    compradorConjugeEstadoCivil: compConjugeEstadoCivil,
+    compradorConjugeTelefone: compConjugeTelefone,
+    compradorConjugeEmail: compConjugeEmail,
+    compradorConjugeEndereco: compConjugeEndereco,
+
+    vendedorNome: vendNome,
+    vendedorCpf: vendCpf,
+    vendedorRg: vendRg,
+    vendedorProfissao: vendProfissao,
+    vendedorEstadoCivil: vendEstadoCivil,
+    vendedorTelefone: vendTelefone,
+    vendedorEmail: vendEmail,
+    vendedorEndereco: vendEndereco,
+
+    vendedorConjugeNome: vendConjugeNome,
+    vendedorConjugeCpf: vendConjugeCpf,
+
+    imovelId: imId,
+    imovelCodigo: imCodigo,
+    imovelTitulo: imTitulo,
+    imovelEndereco: imEndereco,
+    imovelBairro: imBairro,
+    imovelCidade: imCidade,
+    imovelEstado: imEstado,
+    imovelMatricula: imMatricula,
+    imovelCri: imCri,
+
+    valorAceite: vAceite,
+    valorProposta: vProposta,
+    valorTotalNegociado: vTotalNegociado,
+    valorPorExtenso: vExtenso,
+    formaPagamento: fPagamento,
+    formasPagamento: fPagamentos,
+    condicoesPagamento: condPagamento,
+    outrasCondicoes: outCondicoes,
+    observacoes: obs,
+
+    dados: {
+      ...parsedDados,
+      proponente: {
+        ...proponenteRaw,
+        nome: compNome,
+        cpf: compCpf,
+        rg: compRg,
+        profissao: compProfissao,
+        estadoCivil: compEstadoCivil,
+        telefone: compTelefone,
+        email: compEmail,
+        endereco: compEndereco,
+        compradorConjugeNome: compConjugeNome,
+        compradorConjugeCpf: compConjugeCpf,
+        compradorConjugeRg: compConjugeRg,
+        compradorConjugeProfissao: compConjugeProfissao,
+        compradorConjugeEstadoCivil: compConjugeEstadoCivil,
+        compradorConjugeTelefone: compConjugeTelefone,
+        compradorConjugeEmail: compConjugeEmail,
+        compradorConjugeEndereco: compConjugeEndereco,
+        conjugeNome: compConjugeNome,
+        conjugeCpf: compConjugeCpf,
+      },
+      vendedor: {
+        ...origem.vendedor,
+        ...vendedorRaw,
+        nome: vendNome,
+        cpf: vendCpf,
+        rg: vendRg,
+        profissao: vendProfissao,
+        estadoCivil: vendEstadoCivil,
+        telefone: vendTelefone,
+        email: vendEmail,
+        endereco: vendEndereco,
+        vendedorConjugeNome: vendConjugeNome,
+        vendedorConjugeCpf: vendConjugeCpf,
+        conjugeNome: vendConjugeNome,
+        conjugeCpf: vendConjugeCpf,
+      },
+      aceitante: {
+        nome: compNome, // We accept the offer on buyer details
+        cpf: compCpf,
+        rg: compRg,
+        profissao: compProfissao,
+        estadoCivil: compEstadoCivil,
+        telefone: compTelefone,
+        email: compEmail,
+        endereco: compEndereco,
+        conjugeNome: compConjugeNome,
+        conjugeCpf: compConjugeCpf,
+      },
+      imovel: {
+        ...imovelRaw,
+        id: imId,
+        codigo: imCodigo,
+        titulo: imTitulo,
+        endereco: imEndereco,
+        bairro: imBairro,
+        cidade: imCidade,
+        estado: imEstado,
+        matricula: imMatricula,
+        cri: imCri,
+      },
+      pagamento: {
+        ...parsedDados.pagamento,
+        metodos: fPagamentos,
+        valorExtenso: vExtenso,
+        outrasCondicoes: outCondicoes,
+        detalhesPagamento: outCondicoes,
+        detalhesPagamentoContraproposta: outCondicoes,
+        condicoesPagamento: condPagamento,
+        observacoesPagamento: outCondicoes,
+        observacoes: obs,
+      },
+      termos: {
+        ...parsedDados.termos,
+        metodos: fPagamentos,
+        valorExtenso: vExtenso,
+        outrasCondicoes: outCondicoes,
+        detalhesPagamento: outCondicoes,
+        detalhesPagamentoContraproposta: outCondicoes,
+        condicoesPagamento: condPagamento,
+        observacoesPagamento: outCondicoes,
+        observacoes: obs,
+      },
+      objeto: {
+        tipoAceite: origem.origem || origem.tipoDocumento || 'proposta',
+        dataDocumentoBase: dDocumentoBase,
+        valorAceite: vAceite,
+      }
+    }
+  };
+}
+
+async function completarComPropostaOriginal(dados: any) {
+  if (!dados.propostaId) return dados;
+
+  try {
+    const propostaSnap = await getDoc(doc(db, "propostas", dados.propostaId));
+
+    if (!propostaSnap.exists()) {
+      const cSnap = await getDoc(doc(db, "contratos", dados.propostaId));
+      if (!cSnap.exists()) return dados;
+      
+      const propostaRaw = cSnap.data() as any;
+      const proposta = normalizarDadosAceite({
+        id: cSnap.id,
+        ...propostaRaw
+      });
+      return mesclarDadosPropostaEContra(dados, proposta);
+    }
+
+    const propostaRaw = propostaSnap.data() as any;
+    const proposta = normalizarDadosAceite({
+      id: propostaSnap.id,
+      ...propostaRaw
+    });
+
+    return mesclarDadosPropostaEContra(dados, proposta);
+  } catch (error) {
+    console.error("Erro ao completar contraproposta com proposta original:", error);
+    return dados;
+  }
+}
+
+function mesclarDadosPropostaEContra(dados: any, proposta: any) {
+  return {
+    ...proposta,
+    ...dados,
+
+    compradorNome: dados.compradorNome || proposta.compradorNome,
+    compradorCpf: dados.compradorCpf || proposta.compradorCpf,
+    compradorRg: dados.compradorRg || proposta.compradorRg,
+    compradorProfissao: dados.compradorProfissao || proposta.compradorProfissao,
+    compradorEstadoCivil: dados.compradorEstadoCivil || proposta.compradorEstadoCivil,
+    compradorTelefone: dados.compradorTelefone || proposta.compradorTelefone,
+    compradorEmail: dados.compradorEmail || proposta.compradorEmail,
+    compradorEndereco: dados.compradorEndereco || proposta.compradorEndereco,
+
+    compradorConjugeNome: dados.compradorConjugeNome || proposta.compradorConjugeNome,
+    compradorConjugeCpf: dados.compradorConjugeCpf || proposta.compradorConjugeCpf,
+
+    imovelTitulo: dados.imovelTitulo || proposta.imovelTitulo,
+    imovelMatricula: dados.imovelMatricula || proposta.imovelMatricula,
+    imovelCri: dados.imovelCri || proposta.imovelCri,
+    imovelEndereco: dados.imovelEndereco || proposta.imovelEndereco,
+
+    condicoesPagamento: dados.condicoesPagamento || proposta.condicoesPagamento || "",
+    outrasCondicoes: dados.outrasCondicoes || proposta.outrasCondicoes || "",
+    valorPorExtenso: dados.valorPorExtenso || proposta.valorPorExtenso,
+    dataProposta: dados.dataProposta || proposta.dataProposta,
+    
+    dados: {
+      ...proposta.dados,
+      ...dados.dados,
+      proponente: {
+        ...proposta.dados?.proponente,
+        ...dados.dados?.proponente,
+        nome: dados.compradorNome || proposta.compradorNome,
+        cpf: dados.compradorCpf || proposta.compradorCpf,
+        rg: dados.compradorRg || proposta.compradorRg,
+        profissao: dados.compradorProfissao || proposta.compradorProfissao,
+        estadoCivil: dados.compradorEstadoCivil || proposta.compradorEstadoCivil,
+        telefone: dados.compradorTelefone || proposta.compradorTelefone,
+        email: dados.compradorEmail || proposta.compradorEmail,
+        endereco: dados.compradorEndereco || proposta.compradorEndereco,
+        compradorConjugeNome: dados.compradorConjugeNome || proposta.compradorConjugeNome,
+        compradorConjugeCpf: dados.compradorConjugeCpf || proposta.compradorConjugeCpf,
+      },
+      imovel: {
+        ...proposta.dados?.imovel,
+        ...dados.dados?.imovel,
+        titulo: dados.imovelTitulo || proposta.imovelTitulo,
+        matricula: dados.imovelMatricula || proposta.imovelMatricula,
+        cri: dados.imovelCri || proposta.imovelCri,
+        endereco: dados.imovelEndereco || proposta.imovelEndereco,
+      }
+    }
+  };
+}
+
 type Step = 'tipo' | 'dados' | 'pagamento' | 'revisao';
 
 export default function AdminContractForm() {
@@ -931,6 +1237,147 @@ export default function AdminContractForm() {
           }
         } catch (error) {
           console.error("Erro ao buscar imóvel do parâmetro da URL:", error);
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      // Check for document base loading (Aceite de Termos flow)
+      const tipo = searchParams.get('tipo') || searchParams.get('tipoContrato');
+      const propostaId = searchParams.get('propostaId');
+      const contrapropostaId = searchParams.get('contrapropostaId');
+      const documentoBaseId = searchParams.get('documentoBaseId') || searchParams.get('baseId');
+
+      if ((tipo === 'aceite' || propostaId || contrapropostaId || documentoBaseId) && !id) {
+        setLoading(true);
+        try {
+          console.log("Detectado fluxo de Aceite ou carregamento de documento base!");
+          console.log("propostaId:", propostaId);
+          console.log("contrapropostaId:", contrapropostaId);
+          console.log("documentoBaseId:", documentoBaseId);
+
+          let documentoBase: any = null;
+
+          if (contrapropostaId) {
+            const snap = await getDoc(doc(db, "contrapropostas", contrapropostaId));
+            if (snap.exists()) {
+              documentoBase = {
+                id: snap.id,
+                origem: "contraproposta",
+                ...snap.data()
+              };
+            } else {
+              console.log("Tentando buscar na coleção geral de contratos (contrapropostaId)...");
+              const cSnap = await getDoc(doc(db, "contratos", contrapropostaId));
+              if (cSnap.exists()) {
+                documentoBase = {
+                  id: cSnap.id,
+                  origem: "contraproposta",
+                  ...cSnap.data()
+                };
+              }
+            }
+          }
+
+          if (!documentoBase && propostaId) {
+            const snap = await getDoc(doc(db, "propostas", propostaId));
+            if (snap.exists()) {
+              documentoBase = {
+                id: snap.id,
+                origem: "proposta",
+                ...snap.data()
+              };
+            } else {
+              console.log("Tentando buscar na coleção geral de contratos (propostaId)...");
+              const cSnap = await getDoc(doc(db, "contratos", propostaId));
+              if (cSnap.exists()) {
+                documentoBase = {
+                  id: cSnap.id,
+                  origem: "proposta",
+                  ...cSnap.data()
+                };
+              }
+            }
+          }
+
+          if (!documentoBase && documentoBaseId) {
+            const propostaSnap = await getDoc(doc(db, "propostas", documentoBaseId));
+            if (propostaSnap.exists()) {
+              documentoBase = {
+                id: propostaSnap.id,
+                origem: "proposta",
+                ...propostaSnap.data()
+              };
+            } else {
+              const contraSnap = await getDoc(doc(db, "contrapropostas", documentoBaseId));
+              if (contraSnap.exists()) {
+                documentoBase = {
+                  id: contraSnap.id,
+                  origem: "contraproposta",
+                  ...contraSnap.data()
+                };
+              } else {
+                console.log("Tentando buscar na coleção geral de contratos (documentoBaseId)...");
+                const cSnap = await getDoc(doc(db, "contratos", documentoBaseId));
+                if (cSnap.exists()) {
+                  const cData = cSnap.data() as any;
+                  documentoBase = {
+                    id: cSnap.id,
+                    origem: cData.tipoContrato || "proposta",
+                    ...cData
+                  };
+                }
+              }
+            }
+          }
+
+          console.log("documentoBase encontrado:", documentoBase);
+
+          if (documentoBase) {
+            let dadosAceite = normalizarDadosAceite(documentoBase);
+
+            if (dadosAceite.contrapropostaId || documentoBase.origem === 'contraproposta') {
+              dadosAceite = await completarComPropostaOriginal(dadosAceite);
+            }
+
+            console.log("dadosAceite normalizados:", dadosAceite);
+
+            setContract((prev: any) => {
+              const finalVal = {
+                ...prev,
+                ...dadosAceite,
+                tipoContrato: 'aceite',
+                status: 'rascunho',
+                nomeCliente: dadosAceite.compradorNome || prev.nomeCliente,
+                nomeVendedor: dadosAceite.vendedorNome || prev.nomeVendedor,
+                enderecoImovel: dadosAceite.imovelEndereco || prev.enderecoImovel,
+                valor: dadosAceite.valorAceite || prev.valor,
+                dados: {
+                  ...prev.dados,
+                  ...dadosAceite.dados,
+                  proponente: {
+                    ...prev.dados?.proponente,
+                    ...dadosAceite.dados?.proponente
+                  },
+                  vendedor: {
+                    ...prev.dados?.vendedor,
+                    ...dadosAceite.dados?.vendedor
+                  },
+                  aceitante: {
+                    ...prev.dados?.aceitante,
+                    ...dadosAceite.dados?.aceitante
+                  }
+                }
+              };
+
+              console.log("formData final aceite:", finalVal);
+              return finalVal;
+            });
+          } else {
+            console.warn("Nenhum documento base do aceite foi encontrado no banco de dados.");
+          }
+        } catch (error) {
+          console.error("Erro ao carregar dados do aceite:", error);
         } finally {
           setLoading(false);
         }
