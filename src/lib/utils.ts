@@ -1583,13 +1583,11 @@ export function normalizarDadosDocumento(origem: any = {}): any {
       parsedDados?.pagamento?.parcelamentoDireto ||
       "",
 
-    compradorNome:
-      origem.compradorNome ||
-      origem.proponenteNome ||
-      origem.nomeComprador ||
-      origem.nomeCliente ||
-      compradorRaw.nome ||
-      "",
+    compradorNome: getNomeComprador(origem),
+    proponenteNome: getNomeComprador(origem),
+    nomeComprador: getNomeComprador(origem),
+    nomeCompleto: getNomeComprador(origem),
+    nomeCliente: getNomeComprador(origem),
 
     compradorCpf:
       origem.compradorCpf ||
@@ -1685,13 +1683,10 @@ export function normalizarDadosDocumento(origem: any = {}): any {
       parsedDados?.compradorPossuiConjuge ||
       false,
 
-    vendedorNome:
-      origem.vendedorNome ||
-      origem.proprietario ||
-      origem.nomeProprietario ||
-      origem.nomeVendedor ||
-      vendedorRaw.nome ||
-      "",
+    vendedorNome: getNomeVendedor(origem),
+    nomeVendedor: getNomeVendedor(origem),
+    nomeProprietario: getNomeVendedor(origem),
+    proprietario: getNomeVendedor(origem),
 
     vendedorCpf:
       origem.vendedorCpf ||
@@ -1933,6 +1928,146 @@ export function normalizarDadosDocumento(origem: any = {}): any {
       ""
   };
 }
+
+export function getNomeComprador(dados: any = {}): string {
+  if (!dados) return "";
+  const proponenteRaw = dados.dados?.proponente || dados.dados?.comprador || dados.proponente || dados.comprador || {};
+  return (
+    dados.compradorNome ||
+    dados.proponenteNome ||
+    dados.nomeComprador ||
+    dados.nomeProponente ||
+    dados.nomeCompleto ||
+    dados.clienteNome ||
+    dados.nomeCliente ||
+    dados.nome ||
+    proponenteRaw.nome ||
+    ""
+  ).trim();
+}
+
+export function getNomeVendedor(dados: any = {}): string {
+  if (!dados) return "";
+  const vendedorRaw = dados.dados?.vendedor || dados.vendedor || dados.proprietarioDados || {};
+  return (
+    dados.vendedorNome ||
+    dados.proprietarioNome ||
+    dados.nomeVendedor ||
+    dados.nomeProprietario ||
+    dados.proprietario ||
+    vendedorRaw.nome ||
+    ""
+  ).trim();
+}
+
+export function valorOuNaoInformado(...valores: any[]): string {
+  const valor = valores.find((v) => v !== undefined && v !== null && String(v).trim() !== "");
+  return valor ? String(valor).trim() : "Não informado";
+}
+
+export function getNomeEdificio(dados: any = {}): string {
+  if (!dados) return "";
+  const imovelRaw = dados.dados?.imovel || dados.imovel || {};
+  return (
+    dados.imovelTitulo ||
+    dados.imovelNomeEdificio ||
+    dados.nomeEdificio ||
+    dados.edificio ||
+    dados.nomeEmpreendimento ||
+    dados.empreendimento ||
+    dados.condominioNome ||
+    dados.nomeCondominio ||
+    dados.tituloAnuncio ||
+    dados.titulo ||
+    imovelRaw.titulo ||
+    imovelRaw.nomeEdificio ||
+    ""
+  ).trim();
+}
+
+export function getEnderecoImovel(dados: any = {}): string {
+  if (!dados) return "";
+  const imovelRaw = dados.dados?.imovel || dados.imovel || {};
+  
+  if (dados.imovelEndereco) return dados.imovelEndereco.trim();
+  if (dados.endereco) return dados.endereco.trim();
+  if (imovelRaw.endereco) return imovelRaw.endereco.trim();
+
+  const parts = [
+    dados.logradouro || imovelRaw.logradouro,
+    dados.numero || imovelRaw.numero,
+    dados.complemento || imovelRaw.complemento,
+    dados.bairro || imovelRaw.bairro,
+    dados.cidade || imovelRaw.cidade,
+    dados.estado || imovelRaw.estado
+  ].filter(Boolean);
+
+  return parts.length > 0 ? parts.join(", ").trim() : "";
+}
+
+export function getMatriculaImovel(dados: any = {}): string {
+  if (!dados) return "";
+  const imovelRaw = dados.dados?.imovel || dados.imovel || {};
+  return String(
+    dados.imovelMatricula ||
+    dados.matriculaImovel ||
+    dados.matricula ||
+    dados.numeroMatricula ||
+    dados.numeroMatriculaImovel ||
+    imovelRaw.matricula ||
+    ""
+  ).trim();
+}
+
+export function getCriImovel(dados: any = {}): string {
+  if (!dados) return "";
+  const imovelRaw = dados.dados?.imovel || dados.imovel || {};
+  return String(
+    dados.imovelCri ||
+    dados.criImovel ||
+    dados.cri ||
+    dados.cartorioRegistroImoveis ||
+    dados.cartorioRegistro ||
+    dados.cartorioImovel ||
+    imovelRaw.cri ||
+    imovelRaw.criImovel ||
+    ""
+  ).trim();
+}
+
+export function getTermosCondicoes(dados: any = {}): string {
+  if (!dados) return "";
+  return (
+    dados.termosCondicoes ||
+    dados.termosDaProposta ||
+    dados.condicoesPagamento ||
+    dados.outrasCondicoes ||
+    dados.detalhesPagamento ||
+    dados.detalhesPagamentoContraproposta ||
+    dados.observacoesPagamento ||
+    dados.observacoes ||
+    ""
+  ).trim();
+}
+
+export function getFormaPagamento(dados: any = {}): string {
+  if (!dados) return "";
+  const formasArray = Array.isArray(dados.formasPagamento)
+    ? dados.formasPagamento.filter(Boolean)
+    : [];
+
+  if (formasArray.length > 0) {
+    return formasArray.join(", ");
+  }
+
+  return (
+    dados.formaPagamento ||
+    dados.tipoPagamento ||
+    dados.pagamento ||
+    ""
+  ).trim();
+}
+
 
 
 

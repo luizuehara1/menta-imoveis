@@ -45,7 +45,7 @@ import { useSettings } from '../../hooks/useSettings';
 import { Contract, ContractType, ContractStatus, Property } from '../../types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { maskCurrency, parseCurrencyToNumber, formatCurrency, valorMonetarioPorExtenso, normalizarDadosImovel, normalizarPessoa, textoConjuge, normalizarDadosDocumento, formatarDataBR, getOutrasCondicoes, montarTextoConjuge } from '../../lib/utils';
+import { maskCurrency, parseCurrencyToNumber, formatCurrency, valorMonetarioPorExtenso, normalizarDadosImovel, normalizarPessoa, textoConjuge, normalizarDadosDocumento, formatarDataBR, getOutrasCondicoes, montarTextoConjuge, getNomeComprador, getNomeVendedor, valorOuNaoInformado, getNomeEdificio, getEnderecoImovel, getTermosCondicoes, getFormaPagamento } from '../../lib/utils';
 import { staggerContainer, slideUp, fadeIn, scaleIn } from '../../constants/animations';
 import { ContractA4Preview } from '../../components/admin/ContractA4Preview';
 import jsPDF from 'jspdf';
@@ -249,7 +249,7 @@ function normalizarDadosAceite(origem: any = {}) {
   const dProposta = origem.dataProposta || origem.criadoEm || origem.createdAt || origem.dataCriacao || "";
   const dDocumentoBase = origem.dataDocumentoBase || origem.dataProposta || origem.criadoEm || origem.createdAt || origem.dataCriacao || "";
 
-  const compNome = origem.compradorNome || origem.proponenteNome || origem.nomeComprador || origem.nomeCliente || proponenteRaw.nome || origem.nome || "";
+  const compNome = getNomeComprador(origem);
   const compCpf = origem.compradorCpf || origem.proponenteCpf || origem.cpfComprador || (origem.dados?.proponente?.cpf || origem.dados?.proponente?.cpfCnpj || proponenteRaw.cpf || proponenteRaw.cpfCnpj || proponenteRaw.documento || "");
   const compRg = origem.compradorRg || origem.proponenteRg || proponenteRaw.rg || "";
   const compProfissao = origem.compradorProfissao || origem.proponenteProfissao || proponenteRaw.profissao || "";
@@ -267,7 +267,7 @@ function normalizarDadosAceite(origem: any = {}) {
   const compConjugeEmail = proponenteRaw.compradorConjugeEmail || proponenteRaw.conjugeEmail || proponenteRaw.conjuge?.email || "";
   const compConjugeEndereco = proponenteRaw.compradorConjugeEndereco || proponenteRaw.conjugeEndereco || proponenteRaw.conjuge?.endereco || "";
 
-  const vendNome = origem.vendedorNome || origem.proprietario || origem.nomeProprietario || vendedorRaw.nome || origem.nomeVendedor || "";
+  const vendNome = getNomeVendedor(origem);
   const vendCpf = origem.vendedorCpf || origem.proprietarioCpf || vendedorRaw.cpf || vendedorRaw.documento || "";
   const vendRg = origem.vendedorRg || origem.proprietarioRg || vendedorRaw.rg || "";
   const vendProfissao = origem.vendedorProfissao || origem.proprietarioProfissao || vendedorRaw.profissao || "";
@@ -281,24 +281,24 @@ function normalizarDadosAceite(origem: any = {}) {
 
   const imId = origem.imovelId || imovelRaw.id || "";
   const imCodigo = origem.imovelCodigo || origem.codigoImovel || origem.codigo || origem.codImovel || origem.referencia || imovelRaw.codigo || "";
-  const imTitulo = origem.imovelTitulo || origem.imovelNomeEdificio || origem.nomeEdificio || origem.edificio || origem.nomeEmpreendimento || origem.empreendimento || origem.condominioNome || origem.nomeCondominio || origem.tituloAnuncio || origem.titulo || imovelRaw.titulo || "Imóvel";
-  const imEndereco = origem.imovelEndereco || origem.endereco || imovelRaw.endereco || "";
+  const imTitulo = getNomeEdificio(origem) || getNomeEdificio(imovelRaw) || "Imóvel";
+  const imEndereco = getEnderecoImovel(origem) || getEnderecoImovel(imovelRaw) || "";
   const imBairro = origem.imovelBairro || origem.bairro || imovelRaw.bairro || "";
   const imCidade = origem.imovelCidade || origem.cidade || imovelRaw.cidade || "";
   const imEstado = origem.imovelEstado || origem.estado || imovelRaw.estado || "SC";
-  const imMatricula = origem.imovelMatricula || origem.matriculaImovel || origem.matricula || origem.numeroMatricula || origem.numeroMatriculaImovel || imovelRaw.matricula || "";
-  const imCri = String(origem.imovelCri || origem.criImovel || origem.cri || origem.cartorioRegistroImoveis || origem.cartorioRegistro || origem.cartorioImovel || imovelRaw.cri || "").trim();
+  const imMatricula = getMatriculaImovel(origem) || getMatriculaImovel(imovelRaw) || "";
+  const imCri = getCriImovel(origem) || getCriImovel(imovelRaw) || "";
 
   const vAceite = origem.valorAceite || origem.valorTotalNegociado || origem.valorProposta || origem.valorNegociado || origem.valorContraproposta || origem.valor || 0;
   const vProposta = origem.valorProposta || origem.valorTotalNegociado || origem.valorNegociado || origem.valor || 0;
   const vTotalNegociado = origem.valorTotalNegociado || origem.valorProposta || origem.valorNegociado || origem.valor || 0;
 
   const vExtenso = origem.valorPorExtenso || parsedDados?.pagamento?.valorExtenso || parsedDados?.termos?.valorExtenso || "";
-  const fPagamento = origem.formaPagamento || "";
-  const fPagamentos = origem.formasPagamento || [];
+  const fPagamento = getFormaPagamento(origem) || getFormaPagamento(parsedDados) || getFormaPagamento(parsedDados?.pagamento) || getFormaPagamento(parsedDados?.termos) || "";
+  const fPagamentos = origem.formasPagamento || parsedDados?.formasPagamento || parsedDados?.pagamento?.formasPagamento || parsedDados?.termos?.metodos || [];
 
-  const condPagamento = origem.condicoesPagamento || origem.outrasCondicoes || origem.detalhesPagamento || origem.detalhesPagamentoContraproposta || origem.observacoesPagamento || parsedDados?.pagamento?.outrasCondicoes || parsedDados?.termos?.outrasCondicoes || "";
-  const outCondicoes = origem.outrasCondicoes || origem.detalhesPagamento || origem.detalhesPagamentoContraproposta || origem.condicoesPagamento || origem.observacoesPagamento || parsedDados?.pagamento?.outrasCondicoes || parsedDados?.termos?.outrasCondicoes || "";
+  const condPagamento = getTermosCondicoes(origem) || getTermosCondicoes(parsedDados) || getTermosCondicoes(parsedDados?.pagamento) || getTermosCondicoes(parsedDados?.termos) || "";
+  const outCondicoes = condPagamento;
 
   const obs = origem.observacoes || origem.observacoesGerais || "";
 
@@ -460,39 +460,143 @@ async function completarComPropostaOriginal(dados: any) {
   if (!dados.propostaId) return dados;
 
   try {
-    const propostaSnap = await getDoc(doc(db, "propostas", dados.propostaId));
+    console.log("Completando dados da contraproposta com a proposta original ID:", dados.propostaId);
+    let propostaRaw: any = null;
+    let propostaId = dados.propostaId;
 
-    if (!propostaSnap.exists()) {
-      const cSnap = await getDoc(doc(db, "contratos", dados.propostaId));
-      if (!cSnap.exists()) return dados;
-      
-      const propostaRaw = cSnap.data() as any;
-      const proposta = normalizarDadosAceite({
-        id: cSnap.id,
-        ...propostaRaw
-      });
-      return mesclarDadosPropostaEContra(dados, proposta);
+    const propostaSnap = await getDoc(doc(db, "propostas", propostaId));
+
+    if (propostaSnap.exists()) {
+      propostaRaw = { id: propostaSnap.id, ...propostaSnap.data() };
+    } else {
+      const cSnap = await getDoc(doc(db, "contratos", propostaId));
+      if (cSnap.exists()) {
+        propostaRaw = { id: cSnap.id, ...cSnap.data() };
+      }
     }
 
-    const propostaRaw = propostaSnap.data() as any;
-    const proposta = normalizarDadosAceite({
-      id: propostaSnap.id,
-      ...propostaRaw
-    });
+    if (!propostaRaw) {
+      console.warn("Proposta original nao encontrada no banco de dados.");
+      return dados;
+    }
 
-    return mesclarDadosPropostaEContra(dados, proposta);
+    const propostaNormalizada = normalizarDadosAceite(propostaRaw);
+    const mesclado = mesclarDadosPropostaEContra(dados, propostaNormalizada);
+
+    // Complete property data if missing
+    mesclado.imovelTitulo = mesclado.imovelTitulo || getNomeEdificio(propostaNormalizada) || getNomeEdificio(dados);
+    mesclado.imovelNomeEdificio = mesclado.imovelTitulo;
+    mesclado.imovelEndereco = mesclado.imovelEndereco || getEnderecoImovel(propostaNormalizada) || getEnderecoImovel(dados);
+    mesclado.imovelBairro = mesclado.imovelBairro || propostaNormalizada.imovelBairro || propostaRaw.imovelBairro || propostaRaw.bairro || "";
+    mesclado.imovelCidade = mesclado.imovelCidade || propostaNormalizada.imovelCidade || propostaRaw.imovelCidade || propostaRaw.cidade || "";
+    mesclado.imovelEstado = mesclado.imovelEstado || propostaNormalizada.imovelEstado || propostaRaw.imovelEstado || propostaRaw.estado || "SC";
+    mesclado.imovelMatricula = mesclado.imovelMatricula || getMatriculaImovel(propostaNormalizada) || getMatriculaImovel(dados);
+    mesclado.imovelCri = mesclado.imovelCri || getCriImovel(propostaNormalizada) || getCriImovel(dados);
+
+    const termosProposta = getTermosCondicoes(propostaNormalizada) || getTermosCondicoes(propostaRaw);
+    const formaProposta = getFormaPagamento(propostaNormalizada) || getFormaPagamento(propostaRaw);
+
+    mesclado.termosCondicoes = mesclado.termosCondicoes || termosProposta;
+    mesclado.condicoesPagamento = mesclado.condicoesPagamento || termosProposta;
+    mesclado.outrasCondicoes = mesclado.outrasCondicoes || termosProposta;
+    mesclado.detalhesPagamento = mesclado.detalhesPagamento || termosProposta;
+    mesclado.detalhesPagamentoContraproposta = mesclado.detalhesPagamentoContraproposta || termosProposta;
+    mesclado.observacoesPagamento = mesclado.observacoesPagamento || termosProposta;
+
+    mesclado.formaPagamento = mesclado.formaPagamento || formaProposta;
+    mesclado.formasPagamento = mesclado.formasPagamento || propostaNormalizada.formasPagamento || [];
+
+    // update nested dados as well
+    if (mesclado.dados) {
+      mesclado.dados.termos = {
+        ...(mesclado.dados.termos || {}),
+        metodos: mesclado.formasPagamento,
+        outrasCondicoes: mesclado.outrasCondicoes || mesclado.condicoesPagamento,
+        condicoesPagamento: mesclado.condicoesPagamento,
+        detalhesPagamento: mesclado.detalhesPagamento,
+        detalhesPagamentoContraproposta: mesclado.detalhesPagamentoContraproposta,
+        observacoesPagamento: mesclado.observacoesPagamento,
+      };
+      if (mesclado.dados.pagamento) {
+        mesclado.dados.pagamento = {
+          ...(mesclado.dados.pagamento || {}),
+          formasPagamento: mesclado.formasPagamento,
+          formaPagamento: mesclado.formaPagamento,
+          outrasCondicoes: mesclado.outrasCondicoes || mesclado.condicoesPagamento,
+          condicoesPagamento: mesclado.condicoesPagamento,
+          detalhesPagamento: mesclado.detalhesPagamento,
+          detalhesPagamentoContraproposta: mesclado.detalhesPagamentoContraproposta,
+          observacoesPagamento: mesclado.observacoesPagamento,
+        };
+      }
+    }
+
+    return mesclado;
   } catch (error) {
     console.error("Erro ao completar contraproposta com proposta original:", error);
     return dados;
   }
 }
 
+async function completarComCadastroImovel(dados: any) {
+  const codigoOuId = dados.imovelId || dados.imovelCodigo;
+  if (!codigoOuId) return dados;
+
+  try {
+    console.log("Tentando buscar dados adicionais do imovel no cadastro geral:", codigoOuId);
+    const imovel: any = await buscarImovelPorCodigoOuId(codigoOuId);
+    if (!imovel) {
+      console.warn("Imovel nao localizado no cadastro geral pelo ID ou Codigo:", codigoOuId);
+      return dados;
+    }
+
+    const imTituloRaw = getNomeEdificio(imovel);
+    const imEnderecoRaw = getEnderecoImovel(imovel);
+    const imMatriculaRaw = getMatriculaImovel(imovel);
+    const imCriRaw = getCriImovel(imovel);
+
+    return {
+      ...dados,
+      imovelId: dados.imovelId || imovel.id || "",
+      imovelCodigo: dados.imovelCodigo || imovel.codigo || imovel.codigoImovel || imovel.code || "",
+      imovelBairro: dados.imovelBairro || imovel.bairro || "",
+      imovelCidade: dados.imovelCidade || imovel.cidade || "",
+      imovelEstado: dados.imovelEstado || imovel.estado || "SC",
+      imovelTitulo: dados.imovelTitulo || imTituloRaw,
+      imovelNomeEdificio: dados.imovelNomeEdificio || imTituloRaw,
+      imovelEndereco: dados.imovelEndereco || imEnderecoRaw,
+      imovelMatricula: dados.imovelMatricula || imMatriculaRaw,
+      imovelCri: dados.imovelCri || imCriRaw,
+      dados: {
+        ...dados.dados,
+        imovel: {
+          ...dados.dados?.imovel,
+          titulo: dados.imovelTitulo || imTituloRaw,
+          endereco: dados.imovelEndereco || imEnderecoRaw,
+          bairro: dados.imovelBairro || imovel.bairro || "",
+          cidade: dados.imovelCidade || imovel.cidade || "",
+          estado: dados.imovelEstado || imovel.estado || "SC",
+          matricula: dados.imovelMatricula || imMatriculaRaw,
+          cri: dados.imovelCri || imCriRaw
+        }
+      }
+    };
+  } catch (err) {
+    console.error("Erro ao completar dados com o cadastro do imovel:", err);
+    return dados;
+  }
+}
+
 function mesclarDadosPropostaEContra(dados: any, proposta: any) {
+  const nomeFinal = getNomeComprador(dados) || getNomeComprador(proposta);
   return {
     ...proposta,
     ...dados,
 
-    compradorNome: dados.compradorNome || proposta.compradorNome,
+    compradorNome: nomeFinal,
+    proponenteNome: nomeFinal,
+    nomeComprador: nomeFinal,
+    nomeCompleto: nomeFinal,
     compradorCpf: dados.compradorCpf || proposta.compradorCpf,
     compradorRg: dados.compradorRg || proposta.compradorRg,
     compradorProfissao: dados.compradorProfissao || proposta.compradorProfissao,
@@ -520,7 +624,7 @@ function mesclarDadosPropostaEContra(dados: any, proposta: any) {
       proponente: {
         ...proposta.dados?.proponente,
         ...dados.dados?.proponente,
-        nome: dados.compradorNome || proposta.compradorNome,
+        nome: nomeFinal,
         cpf: dados.compradorCpf || proposta.compradorCpf,
         rg: dados.compradorRg || proposta.compradorRg,
         profissao: dados.compradorProfissao || proposta.compradorProfissao,
@@ -1340,32 +1444,75 @@ export default function AdminContractForm() {
               dadosAceite = await completarComPropostaOriginal(dadosAceite);
             }
 
-            console.log("dadosAceite normalizados:", dadosAceite);
+            // Enrich from Property registry if code/ID is available
+            dadosAceite = await completarComCadastroImovel(dadosAceite);
+
+            const dAceite = dadosAceite as any;
+
+            console.log("dadosAceite normalizados (enriquecidos):", dAceite);
+
+            console.log("Documento base do aceite:", documentoBase);
+            console.log("Campos disponíveis no documento base:", Object.keys(documentoBase));
+            console.log("Nome detectado:", getNomeComprador(documentoBase));
 
             setContract((prev: any) => {
+              const nomeCompradorFinal = getNomeComprador(dAceite);
               const finalVal = {
                 ...prev,
-                ...dadosAceite,
+                ...dAceite,
                 tipoContrato: 'aceite',
                 status: 'rascunho',
-                nomeCliente: dadosAceite.compradorNome || prev.nomeCliente,
-                nomeVendedor: dadosAceite.vendedorNome || prev.nomeVendedor,
-                enderecoImovel: dadosAceite.imovelEndereco || prev.enderecoImovel,
-                valor: dadosAceite.valorAceite || prev.valor,
+                compradorNome: nomeCompradorFinal,
+                proponenteNome: nomeCompradorFinal,
+                nomeComprador: nomeCompradorFinal,
+                nomeCompleto: nomeCompradorFinal,
+                nomeCliente: nomeCompradorFinal || prev.nomeCliente,
+                nomeVendedor: dAceite.vendedorNome || prev.nomeVendedor,
+                enderecoImovel: dAceite.imovelEndereco || prev.enderecoImovel,
+                valor: dAceite.valorAceite || prev.valor,
+                imovelTitulo: dAceite.imovelTitulo || prev.imovelTitulo,
+                imovelNomeEdificio: dAceite.imovelNomeEdificio || dAceite.imovelTitulo || prev.imovelNomeEdificio || prev.imovelTitulo,
+                imovelEndereco: dAceite.imovelEndereco || prev.imovelEndereco,
+                imovelBairro: dAceite.imovelBairro || prev.imovelBairro,
+                imovelCidade: dAceite.imovelCidade || prev.imovelCidade,
+                imovelEstado: dAceite.imovelEstado || prev.imovelEstado,
+                imovelMatricula: dAceite.imovelMatricula || prev.imovelMatricula,
+                imovelCri: dAceite.imovelCri || prev.imovelCri,
+                termosCondicoes: dAceite.termosCondicoes,
+                condicoesPagamento: dAceite.condicoesPagamento,
+                outrasCondicoes: dAceite.outrasCondicoes,
+                detalhesPagamento: dAceite.detalhesPagamento,
+                detalhesPagamentoContraproposta: dAceite.detalhesPagamentoContraproposta,
+                observacoesPagamento: dAceite.observacoesPagamento,
+                formaPagamento: dAceite.formaPagamento,
+                formasPagamento: dAceite.formasPagamento || [],
                 dados: {
                   ...prev.dados,
-                  ...dadosAceite.dados,
+                  ...dAceite.dados,
                   proponente: {
                     ...prev.dados?.proponente,
-                    ...dadosAceite.dados?.proponente
+                    ...dAceite.dados?.proponente,
+                    nome: nomeCompradorFinal
                   },
                   vendedor: {
                     ...prev.dados?.vendedor,
-                    ...dadosAceite.dados?.vendedor
+                    ...dAceite.dados?.vendedor
                   },
                   aceitante: {
                     ...prev.dados?.aceitante,
-                    ...dadosAceite.dados?.aceitante
+                    ...dAceite.dados?.aceitante,
+                    nome: nomeCompradorFinal
+                  },
+                  imovel: {
+                    ...prev.dados?.imovel,
+                    ...dAceite.dados?.imovel,
+                    titulo: dAceite.imovelTitulo || prev.dados?.imovel?.titulo,
+                    endereco: dAceite.imovelEndereco || prev.dados?.imovel?.endereco,
+                    bairro: dAceite.imovelBairro || prev.dados?.imovel?.bairro,
+                    cidade: dAceite.imovelCidade || prev.dados?.imovel?.cidade,
+                    estado: dAceite.imovelEstado || prev.dados?.imovel?.estado,
+                    matricula: dAceite.imovelMatricula || prev.dados?.imovel?.matricula,
+                    cri: dAceite.imovelCri || prev.dados?.imovel?.cri
                   }
                 }
               };
@@ -1857,6 +2004,20 @@ export default function AdminContractForm() {
         dadosContrato.status = contract.status || "Pendente";
       }
 
+      if (contract.tipoContrato === 'aceite') {
+        const termosFinal = getTermosCondicoes(contract);
+        const formaFinal = getFormaPagamento(contract);
+
+        dadosContrato.termosCondicoes = termosFinal;
+        dadosContrato.condicoesPagamento = termosFinal;
+        dadosContrato.outrasCondicoes = termosFinal;
+        dadosContrato.detalhesPagamento = termosFinal;
+        dadosContrato.detalhesPagamentoContraproposta = termosFinal;
+        dadosContrato.observacoesPagamento = termosFinal;
+        dadosContrato.formaPagamento = formaFinal;
+        dadosContrato.formasPagamento = contract.formasPagamento || [];
+      }
+
       if (contract.tipoContrato === 'arras_confirmatorios') {
         const a = contract.dados?.arras || {};
         dadosContrato.tipoContratoLabel = "Arras Confirmatórios";
@@ -1892,6 +2053,20 @@ export default function AdminContractForm() {
         if (contract.tipoContrato === 'proposta') {
           await setDoc(doc(db, 'propostas', savedId), cleanedData);
           console.log("Cópia da proposta salva na coleção 'propostas' ID:", savedId);
+        } else if (contract.tipoContrato === 'aceite') {
+          const nomeCompradorFinal = getNomeComprador(cleanedData);
+          const aceiteData = {
+            ...cleanedData,
+            compradorNome: nomeCompradorFinal,
+            proponenteNome: nomeCompradorFinal,
+            nomeComprador: nomeCompradorFinal,
+            nomeCompleto: nomeCompradorFinal,
+            tipoDocumento: "aceite_termos",
+            statusAceite: "Aceito",
+            aceitoEm: serverTimestamp()
+          };
+          await setDoc(doc(db, 'aceitesProposta', savedId), aceiteData);
+          console.log("Cópia do aceite salva na coleção 'aceitesProposta' ID:", savedId);
         }
       } else {
         await updateDoc(doc(db, 'contratos', id), cleanedData);
@@ -1900,6 +2075,20 @@ export default function AdminContractForm() {
         if (contract.tipoContrato === 'proposta') {
           await setDoc(doc(db, 'propostas', id), cleanedData, { merge: true });
           console.log("Cópia da proposta atualizada na coleção 'propostas' ID:", id);
+        } else if (contract.tipoContrato === 'aceite') {
+          const nomeCompradorFinal = getNomeComprador(cleanedData);
+          const aceiteData = {
+            ...cleanedData,
+            compradorNome: nomeCompradorFinal,
+            proponenteNome: nomeCompradorFinal,
+            nomeComprador: nomeCompradorFinal,
+            nomeCompleto: nomeCompradorFinal,
+            tipoDocumento: "aceite_termos",
+            statusAceite: "Aceito",
+            updatedAt: serverTimestamp()
+          };
+          await setDoc(doc(db, 'aceitesProposta', id), aceiteData, { merge: true });
+          console.log("Cópia do aceite atualizada na coleção 'aceitesProposta' ID:", id);
         }
       }
 
@@ -4001,6 +4190,129 @@ export default function AdminContractForm() {
                      Modo de Revisão
                   </div>
                 </div>
+
+                {contract.tipoContrato === 'aceite' && (
+                  <div className="space-y-6 mb-8">
+                    {/* DADOS DO ACEITE */}
+                    <div className="p-6 rounded-3xl bg-amber-50/50 border border-amber-200/60 text-amber-950">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2 bg-amber-100 rounded-xl text-amber-800">
+                          <Eye size={20} />
+                        </div>
+                        <h4 className="font-display font-bold text-base text-amber-900">DADOS DO ACEITE</h4>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                        <div>
+                          <span className="block text-[10px] text-amber-800 font-medium uppercase tracking-wider">Valor do Aceite</span>
+                          <strong className="text-amber-950 font-semibold">{formatCurrency((contract as any).valorAceite || contract.valor || 0)}</strong>
+                        </div>
+                        <div>
+                          <span className="block text-[10px] text-amber-800 font-medium uppercase tracking-wider">Data do Documento Base</span>
+                          <strong className="text-amber-950 font-semibold">{formatarDataBR((contract as any).dataDocumentoBase || (contract as any).dataProposta || "")}</strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* DADOS DO IMÓVEL */}
+                    <div className="p-6 rounded-3xl bg-amber-50/50 border border-amber-200/60 text-amber-950">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2 bg-amber-100 rounded-xl text-amber-800">
+                          <Home size={20} />
+                        </div>
+                        <h4 className="font-display font-bold text-base text-amber-900">DADOS DO IMÓVEL</h4>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs mb-4">
+                        <div>
+                          <span className="block text-[10px] text-amber-800 font-medium uppercase tracking-wider">Nome do Edifício</span>
+                          <strong className="text-amber-950 font-semibold">{(contract as any).imovelTitulo || "Não informado"}</strong>
+                        </div>
+                        <div>
+                          <span className="block text-[10px] text-amber-800 font-medium uppercase tracking-wider">Endereço</span>
+                          <strong className="text-amber-950 font-semibold">{(contract as any).imovelEndereco || "Não informado"}</strong>
+                        </div>
+                        <div>
+                          <span className="block text-[10px] text-amber-800 font-medium uppercase tracking-wider">Bairro</span>
+                          <strong className="text-amber-950 font-semibold">{(contract as any).imovelBairro || "Não informado"}</strong>
+                        </div>
+                        <div>
+                          <span className="block text-[10px] text-amber-800 font-medium uppercase tracking-wider">Cidade/UF</span>
+                          <strong className="text-amber-950 font-semibold">
+                            {((contract as any).imovelCidade || "Não informado")} / {((contract as any).imovelEstado || "Não informado")}
+                          </strong>
+                        </div>
+                        <div>
+                          <span className="block text-[10px] text-amber-800 font-medium uppercase tracking-wider">Matrícula</span>
+                          <strong className="text-amber-950 font-semibold">{(contract as any).imovelMatricula || "Não informado"}</strong>
+                        </div>
+                        <div>
+                          <span className="block text-[10px] text-amber-800 font-medium uppercase tracking-wider">CRI</span>
+                          <strong className="text-amber-950 font-semibold">{(contract as any).imovelCri || "Não informado"}</strong>
+                        </div>
+                      </div>
+
+                      {(!(contract as any).imovelTitulo || !(contract as any).imovelMatricula || !(contract as any).imovelCri) && (
+                        <div className="flex items-start gap-2.5 p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-rose-800 text-xs mt-2">
+                          <AlertCircle size={16} className="mt-0.5 shrink-0 text-rose-600" />
+                          <div>
+                            <p className="font-bold">Dados do imóvel incompletos</p>
+                            <p>Verifique nome do edifício, matrícula e CRI antes de finalizar o documento.</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* TERMOS E CONDIÇÕES */}
+                    <div className="p-6 rounded-3xl bg-amber-50/50 border border-amber-200/60 text-amber-950">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2 bg-amber-100 rounded-xl text-amber-800">
+                          <FileText size={20} />
+                        </div>
+                        <h4 className="font-display font-bold text-base text-amber-900">TERMOS E CONDIÇÕES</h4>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs mb-4">
+                        <div>
+                          <span className="block text-[10px] text-amber-800 font-medium uppercase tracking-wider">Forma de pagamento</span>
+                          <strong className="text-amber-950 font-semibold">{(contract as any).formaPagamento || "Não informado"}</strong>
+                        </div>
+                        <div>
+                          <span className="block text-[10px] text-amber-800 font-medium uppercase tracking-wider">Opções selecionadas</span>
+                          <strong className="text-amber-950 font-semibold">
+                            {Array.isArray((contract as any).formasPagamento) && (contract as any).formasPagamento.length > 0 ? (
+                              (contract as any).formasPagamento.join(', ')
+                            ) : (
+                              "Nenhuma opção selecionada"
+                            )}
+                          </strong>
+                        </div>
+                        <div className="col-span-2">
+                          <span className="block text-[10px] text-amber-800 font-medium uppercase tracking-wider">Condições de pagamento</span>
+                          <strong className="text-amber-950 font-semibold block bg-amber-100/30 p-2.5 rounded-xl border border-amber-100 mt-1">{(contract as any).condicoesPagamento || "Não informado"}</strong>
+                        </div>
+                        <div className="col-span-2">
+                          <span className="block text-[10px] text-amber-800 font-medium uppercase tracking-wider">Outras condições</span>
+                          <strong className="text-amber-950 font-semibold block bg-amber-100/30 p-2.5 rounded-xl border border-amber-100 mt-1">{(contract as any).outrasCondicoes || "Não informado"}</strong>
+                        </div>
+                        <div className="col-span-2">
+                          <span className="block text-[10px] text-amber-800 font-medium uppercase tracking-wider">Detalhes do pagamento</span>
+                          <strong className="text-amber-950 font-semibold block bg-amber-100/30 p-2.5 rounded-xl border border-amber-100 mt-1">{(contract as any).detalhesPagamento || "Não informado"}</strong>
+                        </div>
+                      </div>
+
+                      {(!getTermosCondicoes(contract) || getTermosCondicoes(contract) === "") && (
+                        <div className="flex items-start gap-2.5 p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-rose-800 text-xs mt-2">
+                          <AlertCircle size={16} className="mt-0.5 shrink-0 text-rose-600" />
+                          <div>
+                            <p className="font-bold">Atenção: os termos e condições da proposta não foram carregados.</p>
+                            <p>Verifique o documento base para carregar os detalhes do pagamento e condições.</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* A4 Preview Container */}
                 <div className="flex justify-center bg-gray-50/50 -m-10 p-10 overflow-hidden lg:overflow-visible min-h-[500px]">

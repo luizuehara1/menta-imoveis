@@ -2,7 +2,7 @@ import React from 'react';
 import { Contract, ContractType } from '../../types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { formatCurrency, isValidImageUrl, safeText, safeMoney, safeDate, valorMonetarioPorExtenso, getTituloImovel, formatarDataBR, getOutrasCondicoes, montarTextoConjuge } from '../../lib/utils';
+import { formatCurrency, isValidImageUrl, safeText, safeMoney, safeDate, valorMonetarioPorExtenso, getTituloImovel, formatarDataBR, getOutrasCondicoes, montarTextoConjuge, getNomeComprador, getNomeVendedor, valorOuNaoInformado, getTermosCondicoes, getFormaPagamento } from '../../lib/utils';
 import { useSettings } from '../../hooks/useSettings';
 
 interface ContractA4PreviewProps {
@@ -543,7 +543,16 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
     const p = dados.proponente || {};
     
     // Extracted buyers/proponents data
-    const compradorNome = a.nome || p.nome || contract.nomeCliente || (contract as any).compradorNome || (contract as any).proponenteNome || (contract as any).nome || "";
+    const compradorNome = valorOuNaoInformado(
+      (contract as any).compradorNome,
+      (contract as any).proponenteNome,
+      (contract as any).nomeCompleto,
+      contract.nomeCliente,
+      getNomeComprador(contract),
+      getNomeComprador(dados),
+      a.nome,
+      p.nome
+    );
     const compradorCpf = a.cpf || p.cpf || (contract as any).compradorCpf || (contract as any).proponenteCpf || (contract as any).cpf || "";
     const compradorRg = a.rg || p.rg || (contract as any).compradorRg || (contract as any).proponenteRg || (contract as any).rg || "";
     const compradorEstadoCivil = a.estadoCivil || p.estadoCivil || (contract as any).compradorEstadoCivil || (contract as any).proponenteEstadoCivil || "Solteiro(a)";
@@ -585,8 +594,11 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
       "";
 
     const imovelEndereco = contract.enderecoImovel || (contract as any).imovelEndereco || dados.imovel?.endereco || "Não informado";
+    const imovelBairro = (contract as any).imovelBairro || dados.imovel?.bairro || "Não informado";
+    const imovelCidade = (contract as any).imovelCidade || dados.imovel?.cidade || "Não informado";
+    const imovelEstado = (contract as any).imovelEstado || dados.imovel?.estado || "Não informado";
     const imovelCodigo = (contract as any).imovelCodigo || dados.imovel?.codigo || "Não informado";
-    const imovelTitulo = contract.imovelTitulo || (contract as any).imovelNomeEdificio || dados.imovel?.titulo || "Imóvel";
+    const imovelTitulo = contract.imovelTitulo || (contract as any).imovelNomeEdificio || (contract as any).imovelTitulo || dados.imovel?.titulo || "Não informado";
     const imovelMatricula = (contract as any).imovelMatricula || dados.imovel?.matricula || "Não informado";
     const imovelCri = String((contract as any).imovelCri || dados.imovel?.cri || dados.imovel?.criImovel || "").trim() || "Não informado";
 
@@ -637,18 +649,29 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
                 : "ACEITA INTEGRALMENTE A PROPOSTA APRESENTADA"}
             </p>
             <div className="grid grid-cols-2 gap-y-1.5 gap-x-6">
+              <p><strong>Nome do Edifício:</strong> {imovelTitulo || "Não informado"}</p>
+              <p><strong>Endereço:</strong> {imovelEndereco || "Não informado"}</p>
+              <p><strong>Bairro:</strong> {imovelBairro || "Não informado"}</p>
+              <p><strong>Cidade/UF:</strong> {imovelCidade || "Não informado"} / {imovelEstado || "Não informado"}</p>
+              <p><strong>Matrícula do imóvel:</strong> {imovelMatricula || "Não informado"}</p>
+              <p><strong>CRI do imóvel:</strong> {imovelCri || "Não informado"}</p>
               <p><strong>Valor do Aceite:</strong> {formatCurrency(valorAceiteFinal)}</p>
               <p><strong>Data do Documento Base:</strong> {formatarDataBR(dataDocumentoBase)}</p>
-              <p className="col-span-2"><strong>Imóvel Referência:</strong> {imovelEndereco}</p>
-              
-              <p><strong>Código do Imóvel:</strong> {imovelCodigo}</p>
-              <p><strong>Título / Edifício:</strong> {imovelTitulo}</p>
-              <p><strong>Matrícula:</strong> {imovelMatricula}</p>
-              <p><strong>CRI:</strong> {imovelCri}</p>
-              
-              {condicoesPagamento && <p className="col-span-2"><strong>Condições de Pagamento:</strong> {condicoesPagamento}</p>}
-              {outrasCondicoes && <p className="col-span-2"><strong>Outras Condições:</strong> {outrasCondicoes}</p>}
+              <p className="col-span-2"><strong>Forma de Pagamento:</strong> {(contract as any).formaPagamento || getFormaPagamento(contract) || getFormaPagamento(dados) || "Não informado"}</p>
+              <p className="col-span-2"><strong>Condições de pagamento:</strong> {condicoesPagamento || "Não informado"}</p>
+              <p className="col-span-2"><strong>Outras condições:</strong> {outrasCondicoes || "Não informado"}</p>
             </div>
+          </div>
+        </section>
+
+        <section className="section avoid-break">
+          <h3 className="section-title">III - Termos e Condições da Proposta Aceita</h3>
+          <div className="space-y-1.5 text-justify pl-2 border-l border-gold/20 whitespace-pre-wrap leading-relaxed text-[9.5px]">
+            {((contract as any).termosCondicoes || getTermosCondicoes(contract) || getTermosCondicoes(dados)) ? (
+              safeText((contract as any).termosCondicoes || getTermosCondicoes(contract) || getTermosCondicoes(dados))
+            ) : (
+              <span className="text-gray-500 italic">Preenchido conforme condições estipuladas no documento base.</span>
+            )}
           </div>
         </section>
 
