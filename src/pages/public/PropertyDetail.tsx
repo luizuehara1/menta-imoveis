@@ -1310,6 +1310,13 @@ export default function PropertyDetail() {
                              <Calendar size={18} className="text-gold" />
                              Agendar Visita
                            </motion.button>
+                           <Link 
+                             to={`/admin/propostas/nova?imovel=${encodeURIComponent(property.code || property.codigo || property.id)}`}
+                             className="flex items-center justify-center gap-2.5 bg-amber-50 border border-amber-200 text-amber-700 font-bold text-xs uppercase tracking-wider py-4.5 rounded-2xl shadow-sm hover:bg-amber-100 transition-all w-full no-underline"
+                           >
+                             <FileText size={18} />
+                             Enviar Proposta
+                           </Link>
                         </div>
                       </div>
                     )}

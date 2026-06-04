@@ -119,6 +119,8 @@ function AppRoutes() {
           <Route path="contratos" element={<AdminContracts />} />
           <Route path="contratos/novo" element={<AdminContractForm />} />
           <Route path="contratos/editar/:id" element={<AdminContractForm />} />
+          <Route path="propostas/nova" element={<AdminContractForm />} />
+          <Route path="propostas/editar/:id" element={<AdminContractForm />} />
           <Route path="configuracoes-locacao" element={<AdminLeaseSettings />} />
           <Route path="bairros" element={<AdminNeighborhoods />} />
           <Route path="clausulas-contrato" element={<AdminContractClauses />} />

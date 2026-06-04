@@ -418,12 +418,19 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
       <section className="section avoid-break">
         <h3 className="section-title">II - Identificação do Imóvel</h3>
         <div className="grid grid-cols-2 gap-y-1.5 gap-x-6">
-          <p className="col-span-2"><strong>Endereço:</strong> {contract.enderecoImovel}</p>
-          <p><strong>Matrícula nº:</strong> {dados.imovel?.matricula}</p>
-          <p><strong>CRI:</strong> {dados.imovel?.cri}</p>
-          <p><strong>Tipo:</strong> {dados.imovel?.tipo}</p>
-          <p className="col-span-2"><strong>Descrição:</strong> {dados.imovel?.descricao}</p>
+          <p><strong>Código:</strong> {(contract as any).imovelCodigo || dados.imovel?.codigo || "Não informado"}</p>
+          <p><strong>Título:</strong> {(contract as any).imovelTitulo || dados.imovel?.titulo || "Não informado"}</p>
+          <p className="col-span-2"><strong>Endereço:</strong> {contract.enderecoImovel || dados.imovel?.endereco || "Não informado"}</p>
+          <p><strong>Bairro:</strong> {(contract as any).imovelBairro || dados.imovel?.bairro || "Não informado"}</p>
+          <p><strong>Cidade/UF:</strong> {((contract as any).imovelCidade || dados.imovel?.cidade) ? `${(contract as any).imovelCidade || dados.imovel?.cidade || ""}${((contract as any).imovelEstado || dados.imovel?.estado) ? ` / ${(contract as any).imovelEstado || dados.imovel?.estado}` : ""}` : "Não informado"}</p>
+          <p><strong>Matrícula do imóvel:</strong> {(contract as any).imovelMatricula || dados.imovel?.matricula || "Matrícula não informada"}</p>
+          <p><strong>CRI do imóvel:</strong> {(contract as any).imovelCri || dados.imovel?.cri || "CRI não informado"}</p>
+          <p><strong>Valor anunciado:</strong> {(contract as any).valorImovel ? formatCurrency(Number((contract as any).valorImovel)) : "Sob Consulta"}</p>
+          <p><strong>Valor da proposta:</strong> {contract.valor ? formatCurrency(Number(contract.valor)) : "Não informado"}</p>
         </div>
+        <p className="mt-2 text-xs italic text-gray-600">
+          O imóvel objeto desta proposta encontra-se matriculado sob nº {((contract as any).imovelMatricula || dados.imovel?.matricula) || "Matrícula não informada"}, junto ao {((contract as any).imovelCri || dados.imovel?.cri) || "CRI não informado"}.
+        </p>
       </section>
 
       <section className="section prevent-page-break">
@@ -646,8 +653,8 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
           <h3 className="section-title">III - Identificação do Imóvel</h3>
           <div className="grid grid-cols-2 gap-y-1 gap-x-6">
             <p className="col-span-2"><strong>Endereço:</strong> {safeText(contract.enderecoImovel || imov.endereco || "Não informado")}</p>
-            <p><strong>Matrícula nº:</strong> {safeText(imov.matricula || "Não informada")}</p>
-            <p><strong>CRI:</strong> {safeText(imov.cri || "Não informado")}</p>
+            <p><strong>Matrícula nº:</strong> {safeText(imov.matricula || (contract as any)?.imovelMatricula || "Não informada")}</p>
+            <p><strong>CRI:</strong> {safeText(imov.cri || (contract as any)?.imovelCri || "Não informado")}</p>
             <p><strong>Tipo:</strong> {safeText(imov.tipo || "Não informado")}</p>
             <p className="col-span-2"><strong>Descrição:</strong> {safeText(imov.descricao || imov.titulo || "")}</p>
           </div>

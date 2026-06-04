@@ -30,10 +30,12 @@ import {
   collection, 
   addDoc, 
   updateDoc, 
+  setDoc,
   doc, 
   getDoc,
   getDocs,
   query,
+  where,
   orderBy,
   serverTimestamp 
 } from 'firebase/firestore';
@@ -118,6 +120,114 @@ function cleanSerializableData(value: any): any {
   }
 
   return value;
+}
+
+function getValorVendaImovel(imovel: any): number {
+  return Number(
+    imovel?.priceVenda ||
+    imovel?.valorVenda ||
+    imovel?.precoVenda ||
+    imovel?.preco ||
+    imovel?.valor ||
+    0
+  );
+}
+
+function getMatriculaImovel(imovel: any): string {
+  return (
+    imovel?.imovelMatricula ||
+    imovel?.matriculaImovel ||
+    imovel?.matricula ||
+    imovel?.numeroMatricula ||
+    imovel?.numeroMatriculaImovel ||
+    imovel?.dados?.imovel?.matricula ||
+    ""
+  );
+}
+
+function getCriImovel(imovel: any): string {
+  return (
+    imovel?.imovelCri ||
+    imovel?.criImovel ||
+    imovel?.cri ||
+    imovel?.cartorioRegistroImoveis ||
+    imovel?.cartorioRegistro ||
+    imovel?.cartorioImovel ||
+    imovel?.dados?.imovel?.cri ||
+    ""
+  );
+}
+
+function getTituloImovel(imovel: any): string {
+  return (
+    imovel?.tituloAnuncio ||
+    imovel?.titulo ||
+    imovel?.nome ||
+    "Imóvel"
+  );
+}
+
+function getCodigoImovel(imovel: any): string {
+  return (
+    imovel?.codigoImovel ||
+    imovel?.codigo ||
+    imovel?.code ||
+    imovel?.codImovel ||
+    imovel?.referencia ||
+    imovel?.id ||
+    ""
+  );
+}
+
+function montarEnderecoImovel(imovel: any): string {
+  return [
+    imovel?.endereco || imovel?.address,
+    imovel?.numero || imovel?.number,
+    imovel?.complemento || imovel?.complement,
+    imovel?.bairro || imovel?.neighborhood,
+    imovel?.cidade || imovel?.city,
+    imovel?.estado || imovel?.state
+  ].filter(Boolean).join(", ");
+}
+
+async function buscarImovelPorCodigoOuId(codigoOuId: string) {
+  const codigoLimpo = String(codigoOuId || "").trim();
+
+  if (!codigoLimpo) return null;
+
+  const imoveisRef = collection(db, "imoveis");
+
+  const campos = ["code", "codigo", "codigoImovel", "codImovel", "referencia"];
+
+  for (const campo of campos) {
+    const q = query(imoveisRef, where(campo, "==", codigoLimpo));
+    try {
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const docSnap = snap.docs[0];
+        return {
+          id: docSnap.id,
+          ...docSnap.data()
+        };
+      }
+    } catch (e) {
+      console.error("Erro ao buscar imovel por campo " + campo, e);
+    }
+  }
+
+  try {
+    const docSnap = await getDoc(doc(db, "imoveis", codigoLimpo));
+    if (docSnap.exists()) {
+      return {
+        id: docSnap.id,
+        ...docSnap.data()
+      };
+    }
+  } catch (e) {
+    console.error("Erro ao buscar imovel por ID " + codigoLimpo, e);
+  }
+
+  return null;
 }
 
 type Step = 'tipo' | 'dados' | 'pagamento' | 'revisao';
@@ -526,27 +636,51 @@ export default function AdminContractForm() {
     fetchContract();
   }, [id]);
 
+  useEffect(() => {
+    const handleUrlParam = async () => {
+      const imovelParam = searchParams.get('imovel') || searchParams.get('imovelId');
+      if (imovelParam && !id) {
+        setLoading(true);
+        try {
+          const foundImovel = await buscarImovelPorCodigoOuId(imovelParam);
+          if (foundImovel) {
+            handlePropertySelect(foundImovel as any);
+          }
+        } catch (error) {
+          console.error("Erro ao buscar imóvel do parâmetro da URL:", error);
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+    handleUrlParam();
+  }, [searchParams, id]);
+
   const handlePropertySelect = (property: Property) => {
     setSelectedProperty(property);
     setContract(prev => {
       const isArras = prev.tipoContrato === 'arras_confirmatorios';
-      const defaultVal = isArras ? (property.priceVenda || 0) : (prev.tipoContrato === 'proposta' ? (property.priceVenda || property.priceLocacao || 0) : prev.valor);
+      const defaultVal = isArras 
+        ? (getValorVendaImovel(property) || 0) 
+        : (prev.tipoContrato === 'proposta' ? (getValorVendaImovel(property) || 0) : prev.valor);
       
       const updatedDados = {
         ...prev.dados,
         imovel: {
           ...prev.dados?.imovel,
-          matricula: prev.dados?.imovel?.matricula || '',
-          cri: prev.dados?.imovel?.cri || '',
-          tipo: property.propertyType,
-          descricao: property.shortDescription || property.title,
-          codigo: property.code || '',
-          titulo: property.title || '',
-          endereco: `${property.address}, ${property.number || ''}`,
-          bairro: property.neighborhood || '',
-          cidade: property.city || '',
-          estado: property.state || '',
-          valorVenda: property.priceVenda || 0
+          matricula: getMatriculaImovel(property),
+          cri: getCriImovel(property),
+          tipo: property.propertyType || (property as any).tipoImovel || '',
+          descricao: property.shortDescription || property.title || getTituloImovel(property),
+          codigo: getCodigoImovel(property),
+          titulo: getTituloImovel(property),
+          endereco: montarEnderecoImovel(property),
+          bairro: property.neighborhood || (property as any).bairro || '',
+          cidade: property.city || (property as any).cidade || '',
+          estado: property.state || (property as any).estado || '',
+          valorVenda: getValorVendaImovel(property),
+          valorCondominio: property.condoFee || (property as any).valorCondominio || (property as any).condominio || "",
+          valorIptu: property.iptu || (property as any).valorIptu || (property as any).iptu || ""
         }
       };
 
@@ -554,24 +688,43 @@ export default function AdminContractForm() {
         if (!updatedDados.vendedor) updatedDados.vendedor = {};
         updatedDados.vendedor = {
           ...updatedDados.vendedor,
-          nome: property.ownerName || '',
+          nome: property.ownerName || (property as any).proprietario || (property as any).nomeProprietario || '',
           telefone: property.ownerPhone || '',
           email: property.ownerEmail || ''
         };
         if (!updatedDados.arras) updatedDados.arras = {};
         updatedDados.arras = {
           ...updatedDados.arras,
-          valorImovel: property.priceVenda || 0
+          valorImovel: getValorVendaImovel(property)
         };
       }
 
       return {
         ...prev,
+        // Root attributes as requested
         imovelId: property.id,
-        enderecoImovel: `${property.address}, ${property.number || ''} - ${property.neighborhood}, ${property.city}`,
-        nomeVendedor: property.ownerName || '',
+        imovelCodigo: getCodigoImovel(property),
+        imovelTitulo: getTituloImovel(property),
+        imovelTipo: property.propertyType || (property as any).tipoImovel || "",
+        imovelTipoNegocio: (property as any).tipoNegocio || property.businessType || "",
+        imovelEndereco: montarEnderecoImovel(property),
+        imovelBairro: property.neighborhood || (property as any).bairro || "",
+        imovelCidade: property.city || (property as any).cidade || "",
+        imovelEstado: property.state || (property as any).estado || "",
+        imovelMatricula: getMatriculaImovel(property),
+        imovelCri: getCriImovel(property),
+
+        valorImovel: getValorVendaImovel(property),
+        valorVenda: getValorVendaImovel(property),
+        valorCondominio: property.condoFee || (property as any).valorCondominio || (property as any).condominio || "",
+        valorIptu: property.iptu || (property as any).valorIptu || (property as any).iptu || "",
+
+        proprietario: property.ownerName || (property as any).proprietario || (property as any).nomeProprietario || "",
+        corretorResponsavel: (property as any).corretorResponsavel || (property as any).brokerName || "",
+
+        enderecoImovel: montarEnderecoImovel(property),
+        nomeVendedor: property.ownerName || (property as any).proprietario || (property as any).nomeProprietario || '',
         valor: defaultVal,
-        valorImovel: isArras ? (property.priceVenda || 0) : undefined,
         dados: updatedDados
       };
     });
@@ -585,6 +738,30 @@ export default function AdminContractForm() {
     if (!contract.nomeCliente || !contract.valor) {
       showToast('Por favor, preencha o nome do cliente e o valor.', 'error');
       return;
+    }
+
+    if (contract.tipoContrato === 'proposta') {
+      const im_id = contract.imovelId || '';
+      const im_matricula = (contract as any).imovelMatricula || contract.dados?.imovel?.matricula || '';
+      const im_cri = (contract as any).imovelCri || contract.dados?.imovel?.cri || '';
+      const val_proposta = Number((contract as any).valorProposta || contract.valor || 0);
+
+      if (!im_id) {
+        alert("Selecione um imóvel para criar a proposta.");
+        return;
+      }
+      if (!im_matricula) {
+        alert("Informe o número da matrícula do imóvel.");
+        return;
+      }
+      if (!im_cri) {
+        alert("Informe o CRI do imóvel.");
+        return;
+      }
+      if (!val_proposta || val_proposta <= 0) {
+        alert("Informe o valor da proposta.");
+        return;
+      }
     }
 
     const propertyWarranty = selectedProperty?.leaseWarrantyType || (selectedProperty as any)?.garantiaLocaticia || contract.dados?.imovel?.leaseWarrantyType || contract.dados?.imovel?.garantiaLocaticia || '';
@@ -644,6 +821,8 @@ export default function AdminContractForm() {
         imovelId: contract.imovelId || selectedProperty?.id || '',
         imovelCodigo: selectedProperty?.code || contract.imovelCodigo || '',
         imovelTitulo: selectedProperty?.title || contract.imovelTitulo || '',
+        imovelMatricula: (contract as any).imovelMatricula || contract.dados?.imovel?.matricula || '',
+        imovelCri: (contract as any).imovelCri || contract.dados?.imovel?.cri || '',
         locadorNome: contract.dados?.locador?.nome || contract.nomeVendedor || '',
         locadorDocumento: contract.dados?.locador?.cpf || '',
         locatarioNome: contract.nomeCliente || '',
@@ -655,6 +834,52 @@ export default function AdminContractForm() {
         atualizadoEm: serverTimestamp(),
         criadoPor: user?.uid || null
       } as any;
+
+      if (contract.tipoContrato === 'proposta') {
+        dadosContrato.imovelId = contract.imovelId || '';
+        dadosContrato.imovelCodigo = (contract as any).imovelCodigo || '';
+        dadosContrato.imovelTitulo = (contract as any).imovelTitulo || '';
+        dadosContrato.imovelEndereco = (contract as any).imovelEndereco || '';
+        dadosContrato.imovelBairro = (contract as any).imovelBairro || '';
+        dadosContrato.imovelCidade = (contract as any).imovelCidade || '';
+        dadosContrato.imovelEstado = (contract as any).imovelEstado || '';
+        dadosContrato.imovelMatricula = (contract as any).imovelMatricula || contract.dados?.imovel?.matricula || '';
+        dadosContrato.imovelCri = (contract as any).imovelCri || contract.dados?.imovel?.cri || '';
+        dadosContrato.valorImovel = Number((contract as any).valorImovel || 0);
+        dadosContrato.valorProposta = Number((contract as any).valorProposta || contract.valor || 0);
+        
+        const p = contract.dados?.proponente || {};
+        const v = contract.dados?.vendedor || {};
+
+        dadosContrato.comprador = {
+          nome: contract.nomeCliente || "",
+          documento: p.cpf || p.cpfCnpj || p.documento || "",
+          rg: p.rg || "",
+          estadoCivil: p.estadoCivil || "",
+          profissao: p.profissao || "",
+          telefone: p.telefone || "",
+          whatsapp: p.whatsapp || "",
+          email: p.email || "",
+          endereco: p.endereco || ""
+        };
+
+        dadosContrato.vendedor = {
+          nome: contract.nomeVendedor || "",
+          documento: v.cpf || v.cpfCnpj || v.documento || "",
+          rg: v.rg || "",
+          estadoCivil: v.estadoCivil || "",
+          profissao: v.profissao || "",
+          telefone: v.telefone || "",
+          whatsapp: v.whatsapp || "",
+          email: v.email || "",
+          endereco: v.endereco || ""
+        };
+
+        dadosContrato.formaPagamento = contract.dados?.pagamento?.outrasCondicoes || contract.dados?.pagamento?.descricao || "";
+        dadosContrato.observacoes = contract.dados?.pagamento?.observacoes || contract.dados?.observacoes || "";
+        
+        dadosContrato.status = contract.status || "Pendente";
+      }
 
       if (contract.tipoContrato === 'arras_confirmatorios') {
         const d = contract.dados || {};
@@ -708,9 +933,19 @@ export default function AdminContractForm() {
         const docRef = await addDoc(collection(db, 'contratos'), cleanedData);
         savedId = docRef.id;
         console.log("Contrato novo criado com sucesso. ID gerado:", savedId);
+        
+        if (contract.tipoContrato === 'proposta') {
+          await setDoc(doc(db, 'propostas', savedId), cleanedData);
+          console.log("Cópia da proposta salva na coleção 'propostas' ID:", savedId);
+        }
       } else {
         await updateDoc(doc(db, 'contratos', id), cleanedData);
         console.log("Contrato existente atualizado com sucesso. ID:", id);
+        
+        if (contract.tipoContrato === 'proposta') {
+          await setDoc(doc(db, 'propostas', id), cleanedData, { merge: true });
+          console.log("Cópia da proposta atualizada na coleção 'propostas' ID:", id);
+        }
       }
 
       showToast(finalizar ? 'Contrato finalizado e salvo com sucesso!' : 'Contrato salvo como rascunho com sucesso!', 'success');
@@ -1445,7 +1680,9 @@ export default function AdminContractForm() {
                         >
                           <option value="">-- Selecione ou preencha abaixo --</option>
                           {properties.map(p => (
-                            <option key={p.id} value={p.id}>{p.code} - {p.address}</option>
+                            <option key={p.id} value={p.id}>
+                              {getCodigoImovel(p)} - {getTituloImovel(p)} ({p.neighborhood || (p as any).bairro || "Sem bairro Check"} - R$ {getValorVendaImovel(p) ? formatCurrency(getValorVendaImovel(p)) : "Sob Consulta"})
+                            </option>
                           ))}
                         </select>
                       </div>
@@ -1460,6 +1697,96 @@ export default function AdminContractForm() {
                         />
                       </div>
                     </div>
+
+                    {contract.imovelId && (
+                      <div className="mt-8 p-6 bg-gold/5 rounded-2xl border border-gold/10 space-y-4">
+                        <h4 className="text-sm font-black text-gold uppercase tracking-wider">Resumo do Imóvel Selecionado</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+                          <div>
+                            <span className="font-bold text-gray-400 uppercase block">Código:</span>
+                            <span className="text-gray-900 font-semibold">{(contract as any).imovelCodigo || "Não informado"}</span>
+                          </div>
+                          <div>
+                            <span className="font-bold text-gray-400 uppercase block">Título:</span>
+                            <span className="text-gray-900 font-semibold">{(contract as any).imovelTitulo || "Não informado"}</span>
+                          </div>
+                          <div>
+                            <span className="font-bold text-gray-400 uppercase block">Endereço:</span>
+                            <span className="text-gray-900 font-semibold">{(contract as any).imovelEndereco || contract.enderecoImovel || "Não informado"}</span>
+                          </div>
+                          <div>
+                            <span className="font-bold text-gray-400 uppercase block">Bairro / Cidade:</span>
+                            <span className="text-gray-900 font-semibold">
+                              {(contract as any).imovelBairro || ""}{(contract as any).imovelCidade ? ` / ${(contract as any).imovelCidade}` : ""}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="font-bold text-gray-400 uppercase block">Valor de Venda (R$):</span>
+                            <span className="text-gray-900 font-semibold">
+                              {(contract as any).valorVenda ? formatCurrency(Number((contract as any).valorVenda)) : "Sob Consulta"}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="font-bold text-gray-400 uppercase block">Matrícula do Imóvel:</span>
+                            {getMatriculaImovel(contract) ? (
+                              <span className="text-gray-900 font-semibold">{getMatriculaImovel(contract)}</span>
+                            ) : (
+                              <div className="mt-1">
+                                <input
+                                  type="text"
+                                  className="input-field py-1 text-xs"
+                                  placeholder="Preencher matrícula obrigatoriamente *"
+                                  value={(contract as any).imovelMatricula || ""}
+                                  onChange={(e) => {
+                                    setContract(prev => ({
+                                      ...prev,
+                                      imovelMatricula: e.target.value,
+                                      dados: {
+                                        ...prev.dados,
+                                        imovel: {
+                                          ...prev.dados?.imovel,
+                                          matricula: e.target.value
+                                        }
+                                      }
+                                    }));
+                                  }}
+                                />
+                                <p className="text-[10px] text-red-500 mt-0.5">A matrícula é obrigatória para gerar esta proposta.</p>
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <span className="font-bold text-gray-400 uppercase block">CRI do Imóvel:</span>
+                            {getCriImovel(contract) ? (
+                              <span className="text-gray-900 font-semibold">{getCriImovel(contract)}</span>
+                            ) : (
+                              <div className="mt-1">
+                                <input
+                                  type="text"
+                                  className="input-field py-1 text-xs"
+                                  placeholder="Preencher CRI obrigatoriamente *"
+                                  value={(contract as any).imovelCri || ""}
+                                  onChange={(e) => {
+                                    setContract(prev => ({
+                                      ...prev,
+                                      imovelCri: e.target.value,
+                                      dados: {
+                                        ...prev.dados,
+                                        imovel: {
+                                          ...prev.dados?.imovel,
+                                          cri: e.target.value
+                                        }
+                                      }
+                                    }));
+                                  }}
+                                />
+                                <p className="text-[10px] text-red-500 mt-0.5">O CRI é obrigatório para gerar esta proposta.</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Partes Envolvidas */}

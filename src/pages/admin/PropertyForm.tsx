@@ -416,6 +416,8 @@ export default function AdminPropertyForm() {
 
   const { register, handleSubmit, control, setValue, watch, formState: { errors, isDirty } } = useForm<any>({
     defaultValues: {
+      matriculaImovel: '',
+      criImovel: '',
       businessType: 'Venda',
       propertyType: 'Apartamento',
       status: 'Disponível',
@@ -638,6 +640,12 @@ export default function AdminPropertyForm() {
             Object.keys(data).forEach(key => {
               setValue(key, data[key]);
             });
+
+            const loadedMatricula = data.matriculaImovel || data.matricula || data.numeroMatricula || data.numeroMatriculaImovel || "";
+            setValue('matriculaImovel', loadedMatricula);
+
+            const loadedCri = data.criImovel || data.cri || data.cartorioRegistroImoveis || data.cartorioRegistro || data.cartorioImovel || "";
+            setValue('criImovel', loadedCri);
 
             // Parse stats using getCardStats and pre-fill flat field inputs
             const stats = getCardStats(data);
@@ -994,6 +1002,8 @@ export default function AdminPropertyForm() {
 
       const propertyData: any = {
         ...data,
+        matriculaImovel: data.matriculaImovel || "",
+        criImovel: data.criImovel || "",
         businessType: normalizedSaveBType,
         valorTaxaLixo: valLixo,
         valorTaxaGas: valGas,
@@ -1773,6 +1783,24 @@ export default function AdminPropertyForm() {
                   <option key={o.id} value={o.nome}>{o.nome}</option>
                 ))}
               </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700">Número da Matrícula do Imóvel</label>
+              <input
+                {...register('matriculaImovel')}
+                type="text"
+                className="input-field"
+                placeholder="Ex: 123.456"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700">CRI do Imóvel</label>
+              <input
+                {...register('criImovel')}
+                type="text"
+                className="input-field"
+                placeholder="Ex: 1º Cartório de Registro de Imóveis de Balneário Camboriú/SC"
+              />
             </div>
 
             {(() => {
