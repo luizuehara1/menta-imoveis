@@ -1196,4 +1196,743 @@ export function valorMonetarioPorExtenso(valor: any): string {
   return primeiraLetraMaiuscula(texto);
 }
 
+export function normalizarDadosImovel(imovel: any): any {
+  return {
+    imovelId: imovel?.id || "",
+    imovelCodigo:
+      imovel?.codigoImovel ||
+      imovel?.codigo ||
+      imovel?.codImovel ||
+      imovel?.referencia ||
+      imovel?.id ||
+      "",
+
+    imovelTitulo: getTituloImovel(imovel) || "Imóvel",
+
+    imovelTipo: imovel?.tipoImovel || imovel?.tipo || "",
+    imovelTipoNegocio: imovel?.tipoNegocio || "",
+
+    imovelEndereco: [
+      imovel?.endereco,
+      imovel?.numero,
+      imovel?.complemento,
+      imovel?.bairro,
+      imovel?.cidade,
+      imovel?.estado
+    ].filter(Boolean).join(", "),
+
+    imovelBairro: imovel?.bairro || "",
+    imovelCidade: imovel?.cidade || "",
+    imovelEstado: imovel?.estado || "",
+
+    imovelMatricula:
+      imovel?.matriculaImovel ||
+      imovel?.matricula ||
+      imovel?.numeroMatricula ||
+      imovel?.numeroMatriculaImovel ||
+      "",
+
+    imovelCri:
+      imovel?.criImovel ||
+      imovel?.cri ||
+      imovel?.cartorioRegistroImoveis ||
+      imovel?.cartorioRegistro ||
+      imovel?.cartorioImovel ||
+      "",
+
+    valorImovel:
+      imovel?.valorVenda ||
+      imovel?.precoVenda ||
+      imovel?.preco ||
+      imovel?.valor ||
+      "",
+
+    valorLocacao:
+      imovel?.valorLocacao ||
+      imovel?.valorAluguel ||
+      imovel?.aluguel ||
+      "",
+
+    valorCondominio:
+      imovel?.valorCondominio ||
+      imovel?.condominio ||
+      "",
+
+    valorIptu:
+      imovel?.valorIptu ||
+      imovel?.iptu ||
+      imovel?.valorIptuAnual ||
+      "",
+
+    proprietario:
+      imovel?.proprietario ||
+      imovel?.nomeProprietario ||
+      "",
+
+    corretorResponsavel:
+      imovel?.corretorResponsavel ||
+      ""
+  };
+}
+
+export function normalizarPessoa(pessoa: any, prefixo: string): any {
+  return {
+    [`${prefixo}Nome`]: pessoa?.nome || "",
+    [`${prefixo}Cpf`]: pessoa?.cpf || pessoa?.cpfCnpj || pessoa?.cpf_cnpj || "",
+    [`${prefixo}Rg`]: pessoa?.rg || pessoa?.rgIe || pessoa?.rg_ie || "",
+    [`${prefixo}Profissao`]: pessoa?.profissao || "",
+    [`${prefixo}EstadoCivil`]: pessoa?.estadoCivil || "",
+    [`${prefixo}Telefone`]: pessoa?.telefone || "",
+    [`${prefixo}Email`]: pessoa?.email || "",
+    [`${prefixo}Endereco`]: pessoa?.endereco || "",
+    [`${prefixo}Nacionalidade`]: pessoa?.nacionalidade || "brasileiro(a)"
+  };
+}
+
+export function textoConjuge(prefixo: string, dados: any): string {
+  if (!dados) return "";
+  const nome = dados[`${prefixo}ConjugeNome`];
+
+  if (!nome) return "";
+
+  const cpf = dados[`${prefixo}ConjugeCpf`] || "";
+  const rg = dados[`${prefixo}ConjugeRg`] || "";
+  const profissao = dados[`${prefixo}ConjugeProfissao`] || "";
+  const estadoCivil = dados[`${prefixo}ConjugeEstadoCivil`] || "";
+
+  return `, e seu cônjuge ${nome}${cpf ? `, inscrito(a) no CPF nº ${cpf}` : ""}${rg ? `, RG nº ${rg}` : ""}${estadoCivil ? `, estado civil ${estadoCivil}` : ""}${profissao ? `, profissão ${profissao}` : ""}`;
+}
+
+export function getTituloImovel(imovel: any): string {
+  return (
+    imovel?.nomeEdificio ||
+    imovel?.edificio ||
+    imovel?.nomeEmpreendimento ||
+    imovel?.empreendimento ||
+    imovel?.condominioNome ||
+    imovel?.nomeCondominio ||
+    imovel?.tituloAnuncio ||
+    imovel?.titulo ||
+    imovel?.nome ||
+    ""
+  );
+}
+
+export function formatarDataBR(data: any): string {
+  if (!data) return "Não informado";
+
+  if (data?.toDate && typeof data.toDate === 'function') {
+    return data.toDate().toLocaleDateString("pt-BR");
+  }
+
+  const date = new Date(data);
+
+  if (Number.isNaN(date.getTime())) {
+    return String(data);
+  }
+
+  return date.toLocaleDateString("pt-BR");
+}
+
+export function getOutrasCondicoes(dados: any = {}): string {
+  if (!dados) return "";
+  return (
+    dados.outrasCondicoes ||
+    dados.detalhesPagamento ||
+    dados.detalhesPagamentoContraproposta ||
+    dados.condicoesPagamento ||
+    dados.observacoesPagamento ||
+    dados.observacoes ||
+    ""
+  );
+}
+
+export function montarTextoConjuge(dados: any = {}, prefixo: string): string {
+  if (!dados) return "";
+  const possuiConjuge = dados[`${prefixo}PossuiConjuge`];
+  const nome = dados[`${prefixo}ConjugeNome`];
+
+  if (!possuiConjuge && !nome) return "";
+  if (!nome) return "";
+
+  const cpf = dados[`${prefixo}ConjugeCpf`] || "";
+  const rg = dados[`${prefixo}ConjugeRg`] || "";
+  const profissao = dados[`${prefixo}ConjugeProfissao`] || "";
+  const estadoCivil = dados[`${prefixo}ConjugeEstadoCivil`] || "";
+  const telefone = dados[`${prefixo}ConjugeTelefone`] || "";
+  const email = dados[`${prefixo}ConjugeEmail`] || "";
+  const endereco = dados[`${prefixo}ConjugeEndereco`] || "";
+
+  return `, e seu cônjuge ${nome}${cpf ? `, inscrito(a) no CPF nº ${cpf}` : ""}${rg ? `, RG nº ${rg}` : ""}${estadoCivil ? `, estado civil ${estadoCivil}` : ""}${profissao ? `, profissão ${profissao}` : ""}${telefone ? `, telefone ${telefone}` : ""}${email ? `, e-mail ${email}` : ""}${endereco ? `, residente e domiciliado(a) em ${endereco}` : ""}`;
+}
+
+export function normalizarDadosDocumento(origem: any = {}): any {
+  // Extract and normalize nested sub-objects or raw top-level fields
+  const parsedDados = origem?.dados || {};
+  const imovelRaw = parsedDados?.imovel || {};
+  const compradorRaw = parsedDados?.proponente || parsedDados?.comprador || {};
+  const compradorConjugeRaw = parsedDados?.proponenteConjuge || parsedDados?.compradorConjuge || {};
+  const vendedorRaw = parsedDados?.vendedor || parsedDados?.aceitante || {};
+  const vendedorConjugeRaw = parsedDados?.vendedorConjuge || parsedDados?.aceitanteConjuge || {};
+  const locadorRaw = parsedDados?.locador || {};
+  const locadorConjugeRaw = parsedDados?.locadorConjuge || {};
+  const locatarioRaw = parsedDados?.locatario || {};
+  const locatarioConjugeRaw = parsedDados?.locatarioConjuge || {};
+
+  return {
+    tipoDocumento: origem.tipoDocumento || origem.tipoContrato || "",
+
+    propostaId: origem.propostaId || origem.id || "",
+    aceiteId: origem.aceiteId || "",
+    contratoId: origem.contratoId || "",
+
+    dataProposta:
+      origem.dataProposta ||
+      origem.criadoEm ||
+      origem.dataCriacao ||
+      origem.createdAt ||
+      "",
+
+    dataAceite:
+      origem.dataAceite ||
+      origem.aceitoEm ||
+      "",
+
+    dataContrato:
+      origem.dataContrato ||
+      origem.contratoCriadoEm ||
+      "",
+
+    imovelId: origem.imovelId || imovelRaw.id || imovelRaw.imovelId || "",
+
+    imovelCodigo:
+      origem.imovelCodigo ||
+      origem.codigoImovel ||
+      origem.codigo ||
+      origem.codImovel ||
+      origem.referencia ||
+      imovelRaw.codigo ||
+      imovelRaw.code ||
+      "",
+
+    imovelTitulo:
+      origem.imovelTitulo ||
+      origem.imovelNomeEdificio ||
+      origem.nomeEdificio ||
+      origem.edificio ||
+      origem.nomeEmpreendimento ||
+      origem.empreendimento ||
+      origem.condominioNome ||
+      origem.nomeCondominio ||
+      origem.tituloAnuncio ||
+      origem.titulo ||
+      imovelRaw.titulo ||
+      imovelRaw.nomeEdificio ||
+      "",
+
+    imovelEndereco:
+      origem.imovelEndereco ||
+      origem.endereco ||
+      imovelRaw.endereco ||
+      origem.enderecoImovel ||
+      "",
+
+    imovelBairro:
+      origem.imovelBairro ||
+      origem.bairro ||
+      imovelRaw.bairro ||
+      "",
+
+    imovelCidade:
+      origem.imovelCidade ||
+      origem.cidade ||
+      imovelRaw.cidade ||
+      "",
+
+    imovelEstado:
+      origem.imovelEstado ||
+      origem.estado ||
+      imovelRaw.estado ||
+      "SC",
+
+    imovelMatricula:
+      origem.imovelMatricula ||
+      origem.matriculaImovel ||
+      origem.matricula ||
+      origem.numeroMatricula ||
+      origem.numeroMatriculaImovel ||
+      imovelRaw.matricula ||
+      "",
+
+    imovelCri: String(
+      origem.imovelCri ||
+      origem.criImovel ||
+      origem.cri ||
+      origem.cartorioRegistroImoveis ||
+      origem.cartorioRegistro ||
+      origem.cartorioImovel ||
+      imovelRaw.cri ||
+      imovelRaw.criImovel ||
+      ""
+    ).trim(),
+
+    valorAnunciado:
+      origem.valorAnunciado ||
+      origem.valorImovel ||
+      origem.valorVenda ||
+      origem.precoVenda ||
+      origem.preco ||
+      origem.valor ||
+      imovelRaw.valor ||
+      imovelRaw.preco ||
+      "",
+
+    valorProposta:
+      origem.valorProposta ||
+      origem.valorTotalNegociado ||
+      origem.valorNegociado ||
+      origem.valor ||
+      "",
+
+    valorTotalNegociado:
+      origem.valorTotalNegociado ||
+      origem.valorProposta ||
+      origem.valorNegociado ||
+      origem.valor ||
+      "",
+
+    valorPorExtenso:
+      origem.valorPorExtenso ||
+      parsedDados?.pagamento?.valorExtenso ||
+      parsedDados?.termos?.valorExtenso ||
+      "",
+
+    formaPagamento:
+      origem.formaPagamento ||
+      "",
+
+    formasPagamento:
+      origem.formasPagamento ||
+      parsedDados?.pagamento?.metodos ||
+      parsedDados?.termos?.metodos ||
+      [],
+
+    condicoesPagamento:
+      getOutrasCondicoes(origem) ||
+      getOutrasCondicoes(parsedDados) ||
+      getOutrasCondicoes(parsedDados?.pagamento) ||
+      getOutrasCondicoes(parsedDados?.termos) ||
+      "",
+
+    outrasCondicoes:
+      getOutrasCondicoes(origem) ||
+      getOutrasCondicoes(parsedDados) ||
+      getOutrasCondicoes(parsedDados?.pagamento) ||
+      getOutrasCondicoes(parsedDados?.termos) ||
+      "",
+
+    detalhesPagamento:
+      getOutrasCondicoes(origem) ||
+      getOutrasCondicoes(parsedDados) ||
+      getOutrasCondicoes(parsedDados?.pagamento) ||
+      getOutrasCondicoes(parsedDados?.termos) ||
+      "",
+
+    detalhesPagamentoContraproposta:
+      getOutrasCondicoes(origem) ||
+      getOutrasCondicoes(parsedDados) ||
+      getOutrasCondicoes(parsedDados?.pagamento) ||
+      getOutrasCondicoes(parsedDados?.termos) ||
+      "",
+
+    observacoesPagamento:
+      getOutrasCondicoes(origem) ||
+      getOutrasCondicoes(parsedDados) ||
+      getOutrasCondicoes(parsedDados?.pagamento) ||
+      getOutrasCondicoes(parsedDados?.termos) ||
+      "",
+
+    sinal:
+      origem.sinal ||
+      origem.valorSinal ||
+      parsedDados?.pagamento?.sinal ||
+      origem.valorArras ||
+      "",
+
+    fgts:
+      origem.fgts ||
+      origem.valorFgts ||
+      parsedDados?.pagamento?.fgts ||
+      "",
+
+    financiamento:
+      origem.financiamento ||
+      origem.valorFinanciamento ||
+      parsedDados?.pagamento?.financiamento ||
+      "",
+
+    permuta:
+      origem.permuta ||
+      origem.valorPermuta ||
+      parsedDados?.pagamento?.permuta ||
+      "",
+
+    parcelamentoDireto:
+      origem.parcelamentoDireto ||
+      origem.valorParcelamentoDireto ||
+      parsedDados?.pagamento?.parcelamentoDireto ||
+      "",
+
+    compradorNome:
+      origem.compradorNome ||
+      origem.proponenteNome ||
+      origem.nomeComprador ||
+      origem.nomeCliente ||
+      compradorRaw.nome ||
+      "",
+
+    compradorCpf:
+      origem.compradorCpf ||
+      origem.proponenteCpf ||
+      origem.cpfComprador ||
+      compradorRaw.cpf ||
+      compradorRaw.cpfCnpj ||
+      "",
+
+    compradorRg:
+      origem.compradorRg ||
+      origem.proponenteRg ||
+      origem.rgComprador ||
+      compradorRaw.rg ||
+      "",
+
+    compradorProfissao:
+      origem.compradorProfissao ||
+      origem.proponenteProfissao ||
+      compradorRaw.profissao ||
+      "",
+
+    compradorEstadoCivil:
+      origem.compradorEstadoCivil ||
+      origem.proponenteEstadoCivil ||
+      compradorRaw.estadoCivil ||
+      "",
+
+    compradorTelefone:
+      origem.compradorTelefone ||
+      origem.proponenteTelefone ||
+      compradorRaw.telefone ||
+      "",
+
+    compradorEmail:
+      origem.compradorEmail ||
+      origem.proponenteEmail ||
+      compradorRaw.email ||
+      "",
+
+    compradorEndereco:
+      origem.compradorEndereco ||
+      origem.proponenteEndereco ||
+      compradorRaw.endereco ||
+      "",
+
+    compradorConjugeNome:
+      origem.compradorConjugeNome ||
+      compradorConjugeRaw.nome ||
+      "",
+
+    compradorConjugeCpf:
+      origem.compradorConjugeCpf ||
+      compradorConjugeRaw.cpf ||
+      compradorConjugeRaw.cpfCnpj ||
+      "",
+
+    compradorConjugeRg:
+      origem.compradorConjugeRg ||
+      compradorConjugeRaw.rg ||
+      "",
+
+    compradorConjugeProfissao:
+      origem.compradorConjugeProfissao ||
+      compradorConjugeRaw.profissao ||
+      "",
+
+    compradorConjugeEstadoCivil:
+      origem.compradorConjugeEstadoCivil ||
+      compradorConjugeRaw.estadoCivil ||
+      "",
+
+    compradorConjugeTelefone:
+      origem.compradorConjugeTelefone ||
+      compradorConjugeRaw.telefone ||
+      "",
+
+    compradorConjugeEmail:
+      origem.compradorConjugeEmail ||
+      compradorConjugeRaw.email ||
+      "",
+
+    compradorConjugeEndereco:
+      origem.compradorConjugeEndereco ||
+      compradorConjugeRaw.endereco ||
+      "",
+
+    compradorPossuiConjuge:
+      origem.compradorPossuiConjuge ||
+      compradorRaw.possuiConjuge ||
+      compradorRaw.compradorPossuiConjuge ||
+      compradorConjugeRaw.possuiConjuge ||
+      parsedDados?.compradorPossuiConjuge ||
+      false,
+
+    vendedorNome:
+      origem.vendedorNome ||
+      origem.proprietario ||
+      origem.nomeProprietario ||
+      origem.nomeVendedor ||
+      vendedorRaw.nome ||
+      "",
+
+    vendedorCpf:
+      origem.vendedorCpf ||
+      origem.proprietarioCpf ||
+      vendedorRaw.cpf ||
+      vendedorRaw.cpfCnpj ||
+      "",
+
+    vendedorRg:
+      origem.vendedorRg ||
+      origem.proprietarioRg ||
+      vendedorRaw.rg ||
+      "",
+
+    vendedorProfissao:
+      origem.vendedorProfissao ||
+      origem.proprietarioProfissao ||
+      vendedorRaw.profissao ||
+      "",
+
+    vendedorEstadoCivil:
+      origem.vendedorEstadoCivil ||
+      origem.proprietarioEstadoCivil ||
+      vendedorRaw.estadoCivil ||
+      "",
+
+    vendedorTelefone:
+      origem.vendedorTelefone ||
+      origem.proprietarioTelefone ||
+      vendedorRaw.telefone ||
+      "",
+
+    vendedorEmail:
+      origem.vendedorEmail ||
+      origem.proprietarioEmail ||
+      vendedorRaw.email ||
+      "",
+
+    vendedorEndereco:
+      origem.vendedorEndereco ||
+      origem.proprietarioEndereco ||
+      vendedorRaw.endereco ||
+      "",
+
+    vendedorConjugeNome:
+      origem.vendedorConjugeNome ||
+      vendedorConjugeRaw.nome ||
+      "",
+
+    vendedorConjugeCpf:
+      origem.vendedorConjugeCpf ||
+      vendedorConjugeRaw.cpf ||
+      vendedorConjugeRaw.cpfCnpj ||
+      "",
+
+    vendedorConjugeRg:
+      origem.vendedorConjugeRg ||
+      vendedorConjugeRaw.rg ||
+      "",
+
+    vendedorConjugeProfissao:
+      origem.vendedorConjugeProfissao ||
+      vendedorConjugeRaw.profissao ||
+      "",
+
+    vendedorConjugeEstadoCivil:
+      origem.vendedorConjugeEstadoCivil ||
+      vendedorConjugeRaw.estadoCivil ||
+      "",
+
+    vendedorConjugeTelefone:
+      origem.vendedorConjugeTelefone ||
+      vendedorConjugeRaw.telefone ||
+      "",
+
+    vendedorConjugeEmail:
+      origem.vendedorConjugeEmail ||
+      vendedorConjugeRaw.email ||
+      "",
+
+    vendedorConjugeEndereco:
+      origem.vendedorConjugeEndereco ||
+      vendedorConjugeRaw.endereco ||
+      "",
+
+    vendedorPossuiConjuge:
+      origem.vendedorPossuiConjuge ||
+      vendedorRaw.possuiConjuge ||
+      vendedorRaw.vendedorPossuiConjuge ||
+      vendedorConjugeRaw.possuiConjuge ||
+      parsedDados?.vendedorPossuiConjuge ||
+      false,
+
+    // Locador definitions with standard fallbacks
+    locadorNome:
+      origem.locadorNome ||
+      locadorRaw.nome ||
+      origem.vendedorNome ||
+      vendedorRaw.nome ||
+      "",
+    locadorCpf:
+      origem.locadorCpf ||
+      locadorRaw.cpf ||
+      locadorRaw.cpfCnpj ||
+      origem.vendedorCpf ||
+      vendedorRaw.cpf ||
+      "",
+    locadorRg:
+      origem.locadorRg ||
+      locadorRaw.rg ||
+      origem.vendedorRg ||
+      vendedorRaw.rg ||
+      "",
+    locadorProfissao:
+      origem.locadorProfissao ||
+      locadorRaw.profissao ||
+      origem.vendedorProfissao ||
+      vendedorRaw.profissao ||
+      "",
+    locadorEstadoCivil:
+      origem.locadorEstadoCivil ||
+      locadorRaw.estadoCivil ||
+      origem.vendedorEstadoCivil ||
+      vendedorRaw.estadoCivil ||
+      "",
+    locadorTelefone:
+      origem.locadorTelefone ||
+      locadorRaw.telefone ||
+      origem.vendedorTelefone ||
+      vendedorRaw.telefone ||
+      "",
+    locadorEmail:
+      origem.locadorEmail ||
+      locadorRaw.email ||
+      origem.vendedorEmail ||
+      vendedorRaw.email ||
+      "",
+    locadorEndereco:
+      origem.locadorEndereco ||
+      locadorRaw.endereco ||
+      origem.vendedorEndereco ||
+      vendedorRaw.endereco ||
+      "",
+
+    locadorConjugeNome: origem.locadorConjugeNome || locadorConjugeRaw.nome || origem.vendedorConjugeNome || vendedorConjugeRaw.nome || "",
+    locadorConjugeCpf: origem.locadorConjugeCpf || locadorConjugeRaw.cpf || origem.vendedorConjugeCpf || vendedorConjugeRaw.cpf || "",
+    locadorConjugeRg: origem.locadorConjugeRg || locadorConjugeRaw.rg || origem.vendedorConjugeRg || vendedorConjugeRaw.rg || "",
+    locadorConjugeProfissao: origem.locadorConjugeProfissao || locadorConjugeRaw.profissao || origem.vendedorConjugeProfissao || vendedorConjugeRaw.profissao || "",
+    locadorConjugeEstadoCivil: origem.locadorConjugeEstadoCivil || locadorConjugeRaw.estadoCivil || origem.vendedorConjugeEstadoCivil || vendedorConjugeRaw.estadoCivil || "",
+    locadorConjugeTelefone: origem.locadorConjugeTelefone || locadorConjugeRaw.telefone || origem.vendedorConjugeTelefone || vendedorConjugeRaw.telefone || "",
+    locadorConjugeEmail: origem.locadorConjugeEmail || locadorConjugeRaw.email || origem.vendedorConjugeEmail || vendedorConjugeRaw.email || "",
+    locadorConjugeEndereco: origem.locadorConjugeEndereco || locadorConjugeRaw.endereco || origem.vendedorConjugeEndereco || vendedorConjugeRaw.endereco || "",
+
+    locadorPossuiConjuge:
+      origem.locadorPossuiConjuge ||
+      locadorRaw.possuiConjuge ||
+      locadorRaw.locadorPossuiConjuge ||
+      locadorConjugeRaw.possuiConjuge ||
+      parsedDados?.locadorPossuiConjuge ||
+      origem.vendedorPossuiConjuge ||
+      vendedorRaw.possuiConjuge ||
+      false,
+
+    // Locatário definitions with standard fallbacks
+    locatarioNome:
+      origem.locatarioNome ||
+      locatarioRaw.nome ||
+      origem.compradorNome ||
+      compradorRaw.nome ||
+      "",
+    locatarioCpf:
+      origem.locatarioCpf ||
+      locatarioRaw.cpf ||
+      locatarioRaw.cpfCnpj ||
+      origem.compradorCpf ||
+      compradorRaw.cpf ||
+      "",
+    locatarioRg:
+      origem.locatarioRg ||
+      locatarioRaw.rg ||
+      origem.compradorRg ||
+      compradorRaw.rg ||
+      "",
+    locatarioProfissao:
+      origem.locatarioProfissao ||
+      locatarioRaw.profissao ||
+      origem.compradorProfissao ||
+      compradorRaw.profissao ||
+      "",
+    locatarioEstadoCivil:
+      origem.locatarioEstadoCivil ||
+      locatarioRaw.estadoCivil ||
+      origem.compradorEstadoCivil ||
+      compradorRaw.estadoCivil ||
+      "",
+    locatarioTelefone:
+      origem.locatarioTelefone ||
+      locatarioRaw.telefone ||
+      origem.compradorTelefone ||
+      compradorRaw.telefone ||
+      "",
+    locatarioEmail:
+      origem.locatarioEmail ||
+      locatarioRaw.email ||
+      origem.compradorEmail ||
+      compradorRaw.email ||
+      "",
+    locatarioEndereco:
+      origem.locatarioEndereco ||
+      locatarioRaw.endereco ||
+      origem.compradorEndereco ||
+      compradorRaw.endereco ||
+      "",
+
+    locatarioConjugeNome: origem.locatarioConjugeNome || locatarioConjugeRaw.nome || origem.compradorConjugeNome || compradorConjugeRaw.nome || "",
+    locatarioConjugeCpf: origem.locatarioConjugeCpf || locatarioConjugeRaw.cpf || origem.compradorConjugeCpf || compradorConjugeRaw.cpf || "",
+    locatarioConjugeRg: origem.locatarioConjugeRg || locatarioConjugeRaw.rg || origem.compradorConjugeRg || compradorConjugeRaw.rg || "",
+    locatarioConjugeProfissao: origem.locatarioConjugeProfissao || locatarioConjugeRaw.profissao || origem.compradorConjugeProfissao || compradorConjugeRaw.profissao || "",
+    locatarioConjugeEstadoCivil: origem.locatarioConjugeEstadoCivil || locatarioConjugeRaw.estadoCivil || origem.compradorConjugeEstadoCivil || compradorConjugeRaw.estadoCivil || "",
+    locatarioConjugeTelefone: origem.locatarioConjugeTelefone || locatarioConjugeRaw.telefone || origem.compradorConjugeTelefone || compradorConjugeRaw.telefone || "",
+    locatarioConjugeEmail: origem.locatarioConjugeEmail || locatarioConjugeRaw.email || origem.compradorConjugeEmail || compradorConjugeRaw.email || "",
+    locatarioConjugeEndereco: origem.locatarioConjugeEndereco || locatarioConjugeRaw.endereco || origem.compradorConjugeEndereco || compradorConjugeRaw.endereco || "",
+
+    locatarioPossuiConjuge:
+      origem.locatarioPossuiConjuge ||
+      locatarioRaw.possuiConjuge ||
+      locatarioRaw.locatarioPossuiConjuge ||
+      locatarioConjugeRaw.possuiConjuge ||
+      parsedDados?.locatarioPossuiConjuge ||
+      origem.compradorPossuiConjuge ||
+      compradorRaw.possuiConjuge ||
+      false,
+
+    observacoes:
+      origem.observacoes ||
+      origem.observacoesGerais ||
+      origem.descricao ||
+      parsedDados?.observacoes ||
+      ""
+  };
+}
+
+
 

@@ -45,7 +45,7 @@ import { useSettings } from '../../hooks/useSettings';
 import { Contract, ContractType, ContractStatus, Property } from '../../types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { maskCurrency, parseCurrencyToNumber, formatCurrency, valorMonetarioPorExtenso } from '../../lib/utils';
+import { maskCurrency, parseCurrencyToNumber, formatCurrency, valorMonetarioPorExtenso, normalizarDadosImovel, normalizarPessoa, textoConjuge, normalizarDadosDocumento, formatarDataBR, getOutrasCondicoes, montarTextoConjuge } from '../../lib/utils';
 import { staggerContainer, slideUp, fadeIn, scaleIn } from '../../constants/animations';
 import { ContractA4Preview } from '../../components/admin/ContractA4Preview';
 import jsPDF from 'jspdf';
@@ -146,7 +146,7 @@ function getMatriculaImovel(imovel: any): string {
 }
 
 function getCriImovel(imovel: any): string {
-  return (
+  const value = (
     imovel?.imovelCri ||
     imovel?.criImovel ||
     imovel?.cri ||
@@ -156,6 +156,7 @@ function getCriImovel(imovel: any): string {
     imovel?.dados?.imovel?.cri ||
     ""
   );
+  return String(value).trim();
 }
 
 function getTituloImovel(imovel: any): string {
@@ -166,12 +167,10 @@ function getTituloImovel(imovel: any): string {
     imovel?.empreendimento ||
     imovel?.condominioNome ||
     imovel?.nomeCondominio ||
-    imovel?.condoName ||
-    imovel?.buildingName ||
     imovel?.tituloAnuncio ||
     imovel?.titulo ||
     imovel?.nome ||
-    "Imóvel"
+    ""
   );
 }
 
@@ -256,6 +255,11 @@ export default function AdminContractForm() {
   
   const [properties, setProperties] = useState<Property[]>([]);
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
+  const [propostas, setPropostas] = useState<any[]>([]);
+  const [temConjugeComprador, setTemConjugeComprador] = useState(false);
+  const [temConjugeVendedor, setTemConjugeVendedor] = useState(false);
+  const [temConjugeLocador, setTemConjugeLocador] = useState(false);
+  const [temConjugeLocatario, setTemConjugeLocatario] = useState(false);
 
   const [contract, setContract] = useState<Partial<Contract>>({
     tipoContrato: 'proposta',
@@ -595,11 +599,160 @@ export default function AdminContractForm() {
     contract.dados?.valores?.desconto
   ]);
 
+  const sincronizarECompletarDocumento = (docObj: any) => {
+    // 1. Get flat normalized data
+    const flatData = normalizarDadosDocumento(docObj);
+
+    // 2. Build or merge with existing sub-objects under .dados
+    const existingDados = docObj.dados || {};
+
+    const proponenteMerged = {
+      ...existingDados.proponente,
+      nome: flatData.compradorNome || existingDados.proponente?.nome || "",
+      cpf: flatData.compradorCpf || existingDados.proponente?.cpf || "",
+      cpfCnpj: flatData.compradorCpf || existingDados.proponente?.cpfCnpj || "",
+      rg: flatData.compradorRg || existingDados.proponente?.rg || "",
+      profissao: flatData.compradorProfissao || existingDados.proponente?.profissao || "",
+      estadoCivil: flatData.compradorEstadoCivil || existingDados.proponente?.estadoCivil || "Solteiro(a)",
+      telefone: flatData.compradorTelefone || existingDados.proponente?.telefone || "",
+      email: flatData.compradorEmail || existingDados.proponente?.email || "",
+      endereco: flatData.compradorEndereco || existingDados.proponente?.endereco || "",
+      compradorConjugeNome: flatData.compradorConjugeNome || existingDados.proponente?.compradorConjugeNome || "",
+      compradorConjugeCpf: flatData.compradorConjugeCpf || existingDados.proponente?.compradorConjugeCpf || "",
+      compradorConjugeRg: flatData.compradorConjugeRg || existingDados.proponente?.compradorConjugeRg || "",
+      compradorConjugeProfissao: flatData.compradorConjugeProfissao || existingDados.proponente?.compradorConjugeProfissao || "",
+      compradorConjugeTelefone: flatData.compradorConjugeTelefone || existingDados.proponente?.compradorConjugeTelefone || "",
+      compradorConjugeEmail: flatData.compradorConjugeEmail || existingDados.proponente?.compradorConjugeEmail || "",
+      compradorConjugeEstadoCivil: flatData.compradorConjugeEstadoCivil || existingDados.proponente?.compradorConjugeEstadoCivil || "",
+      compradorConjugeEndereco: flatData.compradorConjugeEndereco || existingDados.proponente?.compradorConjugeEndereco || ""
+    };
+
+    const vendedorMerged = {
+      ...existingDados.vendedor,
+      ...existingDados.aceitante,
+      nome: flatData.vendedorNome || existingDados.vendedor?.nome || existingDados.aceitante?.nome || "",
+      cpf: flatData.vendedorCpf || existingDados.vendedor?.cpf || existingDados.aceitante?.cpf || "",
+      cpfCnpj: flatData.vendedorCpf || existingDados.vendedor?.cpfCnpj || existingDados.aceitante?.cpfCnpj || "",
+      rg: flatData.vendedorRg || existingDados.vendedor?.rg || existingDados.aceitante?.rg || "",
+      profissao: flatData.vendedorProfissao || existingDados.vendedor?.profissao || existingDados.aceitante?.profissao || "",
+      estadoCivil: flatData.vendedorEstadoCivil || existingDados.vendedor?.estadoCivil || existingDados.aceitante?.estadoCivil || "Solteiro(a)",
+      telefone: flatData.vendedorTelefone || existingDados.vendedor?.telefone || existingDados.aceitante?.telefone || "",
+      email: flatData.vendedorEmail || existingDados.vendedor?.email || existingDados.aceitante?.email || "",
+      endereco: flatData.vendedorEndereco || existingDados.vendedor?.endereco || existingDados.aceitante?.endereco || "",
+      vendedorConjugeNome: flatData.vendedorConjugeNome || existingDados.vendedor?.vendedorConjugeNome || "",
+      vendedorConjugeCpf: flatData.vendedorConjugeCpf || existingDados.vendedor?.vendedorConjugeCpf || "",
+      vendedorConjugeRg: flatData.vendedorConjugeRg || existingDados.vendedor?.vendedorConjugeRg || "",
+      vendedorConjugeProfissao: flatData.vendedorConjugeProfissao || existingDados.vendedor?.vendedorConjugeProfissao || "",
+      vendedorConjugeTelefone: flatData.vendedorConjugeTelefone || existingDados.vendedor?.vendedorConjugeTelefone || "",
+      vendedorConjugeEmail: flatData.vendedorConjugeEmail || existingDados.vendedor?.vendedorConjugeEmail || "",
+      vendedorConjugeEstadoCivil: flatData.vendedorConjugeEstadoCivil || existingDados.vendedor?.vendedorConjugeEstadoCivil || "",
+      vendedorConjugeEndereco: flatData.vendedorConjugeEndereco || existingDados.vendedor?.vendedorConjugeEndereco || ""
+    };
+
+    const locadorMerged = {
+      ...existingDados.locador,
+      nome: flatData.locadorNome || existingDados.locador?.nome || "",
+      cpf: flatData.locadorCpf || existingDados.locador?.cpf || "",
+      rg: flatData.locadorRg || existingDados.locador?.rg || "",
+      profissao: flatData.locadorProfissao || existingDados.locador?.profissao || "",
+      estadoCivil: flatData.locadorEstadoCivil || existingDados.locador?.estadoCivil || "Solteiro(a)",
+      telefone: flatData.locadorTelefone || existingDados.locador?.telefone || "",
+      email: flatData.locadorEmail || existingDados.locador?.email || "",
+      endereco: flatData.locadorEndereco || existingDados.locador?.endereco || "",
+      locadorConjugeNome: flatData.locadorConjugeNome || existingDados.locador?.locadorConjugeNome || "",
+      locadorConjugeCpf: flatData.locadorConjugeCpf || existingDados.locador?.locadorConjugeCpf || "",
+      locadorConjugeRg: flatData.locadorConjugeRg || existingDados.locador?.locadorConjugeRg || "",
+      locadorConjugeProfissao: flatData.locadorConjugeProfissao || existingDados.locador?.locadorConjugeProfissao || "",
+      locadorConjugeTelefone: flatData.locadorConjugeTelefone || existingDados.locador?.locadorConjugeTelefone || "",
+      locadorConjugeEmail: flatData.locadorConjugeEmail || existingDados.locador?.locadorConjugeEmail || "",
+      locadorConjugeEstadoCivil: flatData.locadorConjugeEstadoCivil || existingDados.locador?.locadorConjugeEstadoCivil || "",
+      locadorConjugeEndereco: flatData.locadorConjugeEndereco || existingDados.locador?.locadorConjugeEndereco || ""
+    };
+
+    const locatarioMerged = {
+      ...existingDados.locatario,
+      nome: flatData.locatarioNome || existingDados.locatario?.nome || "",
+      cpf: flatData.locatarioCpf || existingDados.locatario?.cpf || "",
+      rg: flatData.locatarioRg || existingDados.locatario?.rg || "",
+      profissao: flatData.locatarioProfissao || existingDados.locatario?.profissao || "",
+      estadoCivil: flatData.locatarioEstadoCivil || existingDados.locatario?.estadoCivil || "Solteiro(a)",
+      telefone: flatData.locatarioTelefone || existingDados.locatario?.telefone || "",
+      email: flatData.locatarioEmail || existingDados.locatario?.email || "",
+      endereco: flatData.locatarioEndereco || existingDados.locatario?.endereco || "",
+      locatarioConjugeNome: flatData.locatarioConjugeNome || existingDados.locatario?.locatarioConjugeNome || "",
+      locatarioConjugeCpf: flatData.locatarioConjugeCpf || existingDados.locatario?.locatarioConjugeCpf || "",
+      locatarioConjugeRg: flatData.locatarioConjugeRg || existingDados.locatario?.locatarioConjugeRg || "",
+      locatarioConjugeProfissao: flatData.locatarioConjugeProfissao || existingDados.locatario?.locatarioConjugeProfissao || "",
+      locatarioConjugeTelefone: flatData.locatarioConjugeTelefone || existingDados.locatario?.locatarioConjugeTelefone || "",
+      locatarioConjugeEmail: flatData.locatarioConjugeEmail || existingDados.locatario?.locatarioConjugeEmail || "",
+      locatarioConjugeEstadoCivil: flatData.locatarioConjugeEstadoCivil || existingDados.locatario?.locatarioConjugeEstadoCivil || "",
+      locatarioConjugeEndereco: flatData.locatarioConjugeEndereco || existingDados.locatario?.locatarioConjugeEndereco || ""
+    };
+
+    const imovelMerged = {
+      ...existingDados.imovel,
+      titulo: flatData.imovelTitulo || existingDados.imovel?.titulo || "",
+      cri: flatData.imovelCri || existingDados.imovel?.cri || "",
+      matricula: flatData.imovelMatricula || existingDados.imovel?.matricula || "",
+      codigo: flatData.imovelCodigo || existingDados.imovel?.codigo || "",
+      endereco: flatData.imovelEndereco || existingDados.imovel?.endereco || "",
+      bairro: flatData.imovelBairro || existingDados.imovel?.bairro || "",
+      cidade: flatData.imovelCidade || existingDados.imovel?.cidade || "",
+      estado: flatData.imovelEstado || existingDados.imovel?.estado || "",
+      tipo: flatData.imovelTipo || existingDados.imovel?.tipo || ""
+    };
+
+    const pagamentoMerged = {
+      ...existingDados.pagamento,
+      metodos: flatData.formasPagamento || existingDados.pagamento?.metodos || [],
+      valorExtenso: flatData.valorPorExtenso || existingDados.pagamento?.valorExtenso || "",
+      outrasCondicoes: flatData.condicoesPagamento || existingDados.pagamento?.outrasCondicoes || "",
+      observacoes: flatData.observacoes || existingDados.pagamento?.observacoes || ""
+    };
+
+    const termosMerged = {
+      ...existingDados.termos,
+      metodos: flatData.formasPagamento || existingDados.termos?.metodos || [],
+      valorExtenso: flatData.valorPorExtenso || existingDados.termos?.valorExtenso || "",
+      outrasCondicoes: flatData.condicoesPagamento || existingDados.termos?.outrasCondicoes || "",
+      observacoes: flatData.observacoes || existingDados.termos?.observacoes || ""
+    };
+
+    if (proponenteMerged.compradorConjugeNome) setTemConjugeComprador(true);
+    if (vendedorMerged.vendedorConjugeNome) setTemConjugeVendedor(true);
+    if (locadorMerged.locadorConjugeNome) setTemConjugeLocador(true);
+    if (locatarioMerged.locatarioConjugeNome) setTemConjugeLocatario(true);
+
+    return {
+      ...docObj,
+      ...flatData,
+      dados: {
+        ...existingDados,
+        proponente: proponenteMerged,
+        vendedor: vendedorMerged,
+        locador: locadorMerged,
+        locatario: locatarioMerged,
+        imovel: imovelMerged,
+        pagamento: pagamentoMerged,
+        termos: termosMerged
+      }
+    };
+  };
+
   useEffect(() => {
     const fetchProperties = async () => {
       const q = query(collection(db, 'imoveis'), orderBy('createdAt', 'desc'));
       const snap = await getDocs(q);
       setProperties(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Property[]);
+    };
+
+    const fetchPropostas = async () => {
+      try {
+        const snap = await getDocs(collection(db, 'propostas'));
+        setPropostas(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      } catch (err) {
+        console.error("Erro ao buscar propostas:", err);
+      }
     };
 
     const fetchContract = async () => {
@@ -608,7 +761,66 @@ export default function AdminContractForm() {
         const docRef = doc(db, 'contratos', id);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-          const data = docSnap.data() as any;
+          let data = docSnap.data() as any;
+
+          // If it's an old contract, arras, or update, and proposalId is present, we complete the missing fields
+          if (data.tipoContrato !== 'proposta' && data.propostaId) {
+            try {
+              const propostaSnap = await getDoc(doc(db, "propostas", data.propostaId));
+              if (propostaSnap.exists()) {
+                const propostaDados = propostaSnap.data() as any;
+                
+                // Merge fields dynamically from proposal if currently missing or default in contract
+                const normalizedProp = normalizarDadosDocumento({ id: propostaSnap.id, ...propostaDados });
+                const normalizedContract = normalizarDadosDocumento({ id: docSnap.id, ...data });
+
+                const outrasCondVal = getOutrasCondicoes(normalizedProp) || getOutrasCondicoes(propostaDados) || getOutrasCondicoes(propostaDados?.dados?.pagamento) || getOutrasCondicoes(propostaDados?.dados?.termos) || "";
+                 
+                data = {
+                  ...normalizedProp,
+                  ...data,
+                  outrasCondicoes: data.outrasCondicoes || outrasCondVal,
+                  detalhesPagamento: data.detalhesPagamento || outrasCondVal,
+                  detalhesPagamentoContraproposta: data.detalhesPagamentoContraproposta || outrasCondVal,
+                  observacoesPagamento: data.observacoesPagamento || outrasCondVal,
+                  
+                  imovelCri: normalizedContract.imovelCri || normalizedProp.imovelCri || "",
+                  imovelMatricula: normalizedContract.imovelMatricula || normalizedProp.imovelMatricula || "",
+                  imovelTitulo: normalizedContract.imovelTitulo || normalizedProp.imovelTitulo || "",
+                  condicoesPagamento: data.condicoesPagamento || normalizedContract.condicoesPagamento || normalizedProp.condicoesPagamento || outrasCondVal || "",
+                  dataProposta: normalizedContract.dataProposta || normalizedProp.dataProposta || "",
+                  valorPorExtenso: normalizedContract.valorPorExtenso || normalizedProp.valorPorExtenso || ""
+                };
+
+                if (!data.dados) data.dados = {};
+                if (!data.dados.pagamento) data.dados.pagamento = {};
+                if (!data.dados.termos) data.dados.termos = {};
+
+                data.dados.pagamento = {
+                  ...propostaDados?.dados?.pagamento,
+                  ...data.dados.pagamento,
+                  outrasCondicoes: data.dados.pagamento?.outrasCondicoes || outrasCondVal,
+                  detalhesPagamento: data.dados.pagamento?.detalhesPagamento || outrasCondVal,
+                  detalhesPagamentoContraproposta: data.dados.pagamento?.detalhesPagamentoContraproposta || outrasCondVal,
+                  condicoesPagamento: data.dados.pagamento?.condicoesPagamento || outrasCondVal,
+                  observacoesPagamento: data.dados.pagamento?.observacoesPagamento || outrasCondVal,
+                };
+
+                data.dados.termos = {
+                  ...propostaDados?.dados?.termos,
+                  ...data.dados.termos,
+                  outrasCondicoes: data.dados.termos?.outrasCondicoes || outrasCondVal,
+                  detalhesPagamento: data.dados.termos?.detalhesPagamento || outrasCondVal,
+                  detalhesPagamentoContraproposta: data.dados.termos?.detalhesPagamentoContraproposta || outrasCondVal,
+                  condicoesPagamento: data.dados.termos?.condicoesPagamento || outrasCondVal,
+                  observacoesPagamento: data.dados.termos?.observacoesPagamento || outrasCondVal,
+                };
+              }
+            } catch (propErr) {
+              console.error("Erro ao completar dados da proposta:", propErr);
+            }
+          }
+
           if (data.tipoContrato === 'arras_confirmatorios') {
             if (!data.dados) data.dados = {};
             if (!data.dados.proponente) data.dados.proponente = {};
@@ -661,7 +873,39 @@ export default function AdminContractForm() {
               prazoEscritura: data.prazoEscritura
             };
           }
-          setContract({ id: docSnap.id, ...data } as Contract);
+
+          let imovelOriginal: any = null;
+          const lookupId = data.imovelId || data.imovelCodigo || data.dados?.imovel?.id || data.dados?.imovel?.codigo;
+          if (lookupId) {
+            try {
+              imovelOriginal = await buscarImovelPorCodigoOuId(lookupId);
+            } catch (imovelErr) {
+              console.error("Erro ao buscar dados do imovel original:", imovelErr);
+            }
+          }
+
+          if (imovelOriginal) {
+            const tituloCorreto = getTituloImovel(imovelOriginal);
+            if (tituloCorreto && (!data.imovelTitulo || data.imovelTitulo === "Imóvel")) {
+              data.imovelTitulo = tituloCorreto;
+              data.imovelNomeEdificio = tituloCorreto;
+              if (!data.dados) data.dados = {};
+              if (!data.dados.imovel) data.dados.imovel = {};
+              data.dados.imovel.titulo = tituloCorreto;
+            }
+
+            const criCorreto = getCriImovel(imovelOriginal);
+            if (criCorreto && (!data.imovelCri || String(data.imovelCri).trim().length <= 2)) {
+              data.imovelCri = criCorreto;
+              if (!data.dados) data.dados = {};
+              if (!data.dados.imovel) data.dados.imovel = {};
+              data.dados.imovel.cri = criCorreto;
+            }
+          }
+
+          const synchronizedData = sincronizarECompletarDocumento(data);
+
+          setContract({ id: docSnap.id, ...synchronizedData } as Contract);
         }
       } catch (error) {
         console.error("Error fetching contract:", error);
@@ -671,6 +915,7 @@ export default function AdminContractForm() {
     };
 
     fetchProperties();
+    fetchPropostas();
     fetchContract();
   }, [id]);
 
@@ -702,6 +947,8 @@ export default function AdminContractForm() {
         ? (getValorVendaImovel(property) || 0) 
         : (prev.tipoContrato === 'proposta' ? (getValorVendaImovel(property) || 0) : prev.valor);
       
+      const tituloFinal = getTituloImovel(property) || "Imóvel";
+
       const updatedDados = {
         ...prev.dados,
         imovel: {
@@ -711,7 +958,7 @@ export default function AdminContractForm() {
           tipo: property.propertyType || (property as any).tipoImovel || '',
           descricao: property.shortDescription || property.title || getTituloImovel(property),
           codigo: getCodigoImovel(property),
-          titulo: getTituloImovel(property),
+          titulo: tituloFinal,
           endereco: montarEnderecoImovel(property),
           bairro: property.neighborhood || (property as any).bairro || '',
           cidade: property.city || (property as any).cidade || '',
@@ -742,8 +989,8 @@ export default function AdminContractForm() {
         // Root attributes as requested
         imovelId: property.id,
         imovelCodigo: getCodigoImovel(property),
-        imovelTitulo: getTituloImovel(property) || "Imóvel",
-        imovelNomeEdificio: (property as any).nomeEdificio || (property as any).edificio || (property as any).nomeEmpreendimento || (property as any).empreendimento || (property as any).condoName || (property as any).buildingName || "",
+        imovelTitulo: tituloFinal,
+        imovelNomeEdificio: tituloFinal,
         imovelTipo: property.propertyType || (property as any).tipoImovel || "",
         imovelTipoNegocio: (property as any).tipoNegocio || property.businessType || "",
         imovelEndereco: montarEnderecoImovel(property),
@@ -767,6 +1014,155 @@ export default function AdminContractForm() {
         dados: updatedDados
       };
     });
+  };
+
+  const handleLoadProposta = (prop: any) => {
+    if (!prop) return;
+    setContract(prev => {
+      const isArras = prev.tipoContrato === 'arras_confirmatorios';
+      const isAceite = prev.tipoContrato === 'aceite';
+
+      // Reconstruct comprador/proponente
+      const compradorFromProp = prop.comprador || {};
+      const proponente = {
+        nome: compradorFromProp.nome || prop.compradorNome || prop.dados?.proponente?.nome || prop.nomeCliente || "",
+        cpf: compradorFromProp.documento || prop.compradorCpf || prop.dados?.proponente?.cpf || "",
+        rg: compradorFromProp.rg || prop.compradorRg || prop.dados?.proponente?.rg || "",
+        estadoCivil: compradorFromProp.estadoCivil || prop.compradorEstadoCivil || prop.dados?.proponente?.estadoCivil || "Solteiro(a)",
+        profissao: compradorFromProp.profissao || prop.compradorProfissao || prop.dados?.proponente?.profissao || "",
+        telefone: compradorFromProp.telefone || prop.compradorTelefone || prop.dados?.proponente?.telefone || "",
+        whatsapp: compradorFromProp.whatsapp || prop.compradorWhatsapp || prop.dados?.proponente?.whatsapp || "",
+        email: compradorFromProp.email || prop.compradorEmail || prop.dados?.proponente?.email || "",
+        endereco: compradorFromProp.endereco || prop.compradorEndereco || prop.dados?.proponente?.endereco || "",
+        cep: prop.compradorCep || prop.dados?.proponente?.cep || "",
+        cidade: prop.compradorCidade || prop.dados?.proponente?.cidade || "",
+        estado: prop.compradorEstado || prop.dados?.proponente?.estado || "",
+        
+        compradorConjugeNome: prop.compradorConjugeNome || prop.dados?.proponente?.compradorConjugeNome || prop.dados?.proponente?.conjugeNome || "",
+        compradorConjugeCpf: prop.compradorConjugeCpf || prop.dados?.proponente?.compradorConjugeCpf || prop.dados?.proponente?.conjugeCpf || "",
+        compradorConjugeRg: prop.compradorConjugeRg || prop.dados?.proponente?.compradorConjugeRg || prop.dados?.proponente?.conjugeRg || "",
+        compradorConjugeProfissao: prop.compradorConjugeProfissao || prop.dados?.proponente?.compradorConjugeProfissao || prop.dados?.proponente?.conjugeProfissao || "",
+        compradorConjugeTelefone: prop.compradorConjugeTelefone || prop.dados?.proponente?.compradorConjugeTelefone || prop.dados?.proponente?.conjugeTelefone || "",
+        compradorConjugeEmail: prop.compradorConjugeEmail || prop.dados?.proponente?.compradorConjugeEmail || prop.dados?.proponente?.conjugeEmail || "",
+        compradorConjugeEstadoCivil: prop.compradorConjugeEstadoCivil || prop.dados?.proponente?.compradorConjugeEstadoCivil || prop.dados?.proponente?.conjugeEstadoCivil || "",
+        compradorConjugeEndereco: prop.compradorConjugeEndereco || prop.dados?.proponente?.compradorConjugeEndereco || prop.dados?.proponente?.conjugeEndereco || "",
+        
+        conjugeNome: prop.compradorConjugeNome || prop.dados?.proponente?.compradorConjugeNome || prop.dados?.proponente?.conjugeNome || "",
+        conjugeCpf: prop.compradorConjugeCpf || prop.dados?.proponente?.compradorConjugeCpf || prop.dados?.proponente?.conjugeCpf || "",
+      };
+
+      // Reconstruct vendedor
+      const vendedorFromProp = prop.vendedor || {};
+      const vendedor = {
+        nome: vendedorFromProp.nome || prop.vendedorNome || prop.dados?.vendedor?.nome || prop.nomeVendedor || "",
+        cpf: vendedorFromProp.documento || prop.vendedorCpf || prop.dados?.vendedor?.cpf || "",
+        rg: vendedorFromProp.rg || prop.vendedorRg || prop.dados?.vendedor?.rg || "",
+        estadoCivil: vendedorFromProp.estadoCivil || prop.vendedorEstadoCivil || prop.dados?.vendedor?.estadoCivil || "Solteiro(a)",
+        profissao: vendedorFromProp.profissao || prop.vendedorProfissao || prop.dados?.vendedor?.profissao || "",
+        telefone: vendedorFromProp.telefone || prop.vendedorTelefone || prop.dados?.vendedor?.telefone || "",
+        whatsapp: vendedorFromProp.whatsapp || prop.vendedorWhatsapp || prop.dados?.vendedor?.whatsapp || "",
+        email: vendedorFromProp.email || prop.vendedorEmail || prop.dados?.vendedor?.email || "",
+        endereco: vendedorFromProp.endereco || prop.vendedorEndereco || prop.dados?.vendedor?.endereco || "",
+        cep: prop.vendedorCep || prop.dados?.vendedor?.cep || "",
+        cidade: prop.vendedorCidade || prop.dados?.vendedor?.cidade || "",
+        estado: prop.vendedorEstado || prop.dados?.vendedor?.estado || "",
+        
+        vendedorConjugeNome: prop.vendedorConjugeNome || prop.dados?.vendedor?.vendedorConjugeNome || prop.dados?.vendedor?.conjugeNome || "",
+        vendedorConjugeCpf: prop.vendedorConjugeCpf || prop.dados?.vendedor?.vendedorConjugeCpf || prop.dados?.vendedor?.conjugeCpf || "",
+        vendedorConjugeRg: prop.vendedorConjugeRg || prop.dados?.vendedor?.vendedorConjugeRg || prop.dados?.vendedor?.conjugeRg || "",
+        vendedorConjugeProfissao: prop.vendedorConjugeProfissao || prop.dados?.vendedor?.vendedorConjugeProfissao || prop.dados?.vendedor?.conjugeProfissao || "",
+        vendedorConjugeTelefone: prop.vendedorConjugeTelefone || prop.dados?.vendedor?.vendedorConjugeTelefone || prop.dados?.vendedor?.conjugeTelefone || "",
+        vendedorConjugeEmail: prop.vendedorConjugeEmail || prop.dados?.vendedor?.vendedorConjugeEmail || prop.dados?.vendedor?.conjugeEmail || "",
+        vendedorConjugeEstadoCivil: prop.vendedorConjugeEstadoCivil || prop.dados?.vendedor?.vendedorConjugeEstadoCivil || prop.dados?.vendedor?.conjugeEstadoCivil || "",
+        vendedorConjugeEndereco: prop.vendedorConjugeEndereco || prop.dados?.vendedor?.vendedorConjugeEndereco || prop.dados?.vendedor?.conjugeEndereco || "",
+        
+        conjugeNome: prop.vendedorConjugeNome || prop.dados?.vendedor?.vendedorConjugeNome || prop.dados?.vendedor?.conjugeNome || "",
+        conjugeCpf: prop.vendedorConjugeCpf || prop.dados?.vendedor?.vendedorConjugeCpf || prop.dados?.vendedor?.conjugeCpf || "",
+      };
+
+      if (proponente.compradorConjugeNome) setTemConjugeComprador(true);
+      if (vendedor.vendedorConjugeNome) setTemConjugeVendedor(true);
+      if (prop.locadorConjugeNome || prop.dados?.locador?.locadorConjugeNome || prop.dados?.locador?.conjugeNome) setTemConjugeLocador(true);
+      if (prop.locatarioConjugeNome || prop.dados?.locatario?.locatarioConjugeNome || prop.dados?.locatario?.conjugeNome) setTemConjugeLocatario(true);
+
+      const imovel = {
+        matricula: prop.imovelMatricula || prop.dados?.imovel?.matricula || "",
+        cri: getCriImovel(prop) || "",
+        tipo: prop.imovelTipo || prop.dados?.imovel?.tipo || "",
+        codigo: prop.imovelCodigo || prop.dados?.imovel?.codigo || "",
+        titulo: prop.imovelTitulo || prop.dados?.imovel?.titulo || "",
+        endereco: prop.imovelEndereco || prop.dados?.imovel?.endereco || "",
+        bairro: prop.imovelBairro || prop.dados?.imovel?.bairro || "",
+        cidade: prop.imovelCidade || prop.dados?.imovel?.cidade || "",
+        estado: prop.imovelEstado || prop.dados?.imovel?.estado || "",
+        valorVenda: prop.valorImovel || prop.dados?.imovel?.valorVenda || 0,
+        valorCondominio: prop.valorCondominio || prop.dados?.imovel?.valorCondominio || "",
+        valorIptu: prop.valorIptu || prop.dados?.imovel?.valorIptu || "",
+      };
+
+      const outrasCondVal = getOutrasCondicoes(prop) || prop.formaPagamento || prop.dados?.pagamento?.outrasCondicoes || "";
+      const pagamento = {
+        metodos: prop.dados?.pagamento?.metodos || [],
+        valorExtenso: prop.valorPorExtenso || prop.dados?.pagamento?.valorExtenso || "",
+        outrasCondicoes: outrasCondVal,
+        detalhesPagamento: outrasCondVal,
+        detalhesPagamentoContraproposta: outrasCondVal,
+        condicoesPagamento: outrasCondVal,
+        observacoesPagamento: outrasCondVal,
+        observacoes: prop.observacoes || prop.dados?.pagamento?.observacoes || "",
+      };
+
+      const aceitante = isAceite ? {
+        nome: vendedor.nome,
+        cpf: vendedor.cpf,
+        rg: vendedor.rg,
+        estadoCivil: vendedor.estadoCivil,
+        profissao: vendedor.profissao,
+        telefone: vendedor.telefone,
+        whatsapp: vendedor.whatsapp,
+        email: vendedor.email,
+        endereco: vendedor.endereco,
+        cep: vendedor.cep,
+        cidade: vendedor.cidade,
+        estado: vendedor.estado,
+        conjugeNome: vendedor.vendedorConjugeNome || vendedor.conjugeNome,
+        conjugeCpf: vendedor.vendedorConjugeCpf || vendedor.conjugeCpf,
+      } : { estadoCivil: 'Solteiro(a)' };
+
+      return {
+        ...prev,
+        imovelId: prop.imovelId || prev.imovelId || "",
+        imovelCodigo: prop.imovelCodigo || prev.imovelCodigo || "",
+        imovelTitulo: prop.imovelTitulo || prev.imovelTitulo || "",
+        imovelNomeEdificio: prop.imovelNomeEdificio || prop.imovelTitulo || prev.imovelNomeEdificio || "",
+        imovelTipo: prop.imovelTipo || prev.imovelTipo || "",
+        imovelTipoNegocio: prop.imovelTipoNegocio || prev.imovelTipoNegocio || "",
+        imovelEndereco: prop.imovelEndereco || prev.imovelEndereco || "",
+        imovelBairro: prop.imovelBairro || prev.imovelBairro || "",
+        imovelCidade: prop.imovelCidade || prev.imovelCidade || "",
+        imovelEstado: prop.imovelEstado || prev.imovelEstado || "",
+        imovelMatricula: prop.imovelMatricula || prev.imovelMatricula || "",
+        imovelCri: prop.imovelCri || getCriImovel(prop) || prev.imovelCri || "",
+        enderecoImovel: prop.imovelEndereco || prev.enderecoImovel || "",
+        nomeCliente: proponente.nome || prev.nomeCliente || "",
+        nomeVendedor: vendedor.nome || prev.nomeVendedor || "",
+        valor: prop.valorProposta || prop.valorTotalNegociado || prop.valor || prev.valor || 0,
+        valorPorExtenso: prop.valorPorExtenso || prev.valorPorExtenso || "",
+        dados: {
+          ...prev.dados,
+          proponente,
+          vendedor,
+          imovel,
+          pagamento,
+          aceitante,
+          objeto: {
+            tipoAceite: 'proposta',
+            dataDocumentoBase: prop.criadoEm?.toDate ? format(prop.criadoEm.toDate(), "dd/MM/yyyy") : format(new Date(), "dd/MM/yyyy"),
+          }
+        }
+      };
+    });
+    showToast("Dados da proposta importados com sucesso!", "success");
   };
 
   const saveContract = async (finalizar = false) => {
@@ -854,15 +1250,85 @@ export default function AdminContractForm() {
     };
 
     try {
+      // 1. Normalize Property
+      const imovelNormalizado = normalizarDadosImovel(selectedProperty || contract.dados?.imovel || contract);
+      const tituloFinal = 
+        getTituloImovel(selectedProperty) ||
+        getTituloImovel(contract.dados?.imovel) ||
+        getTituloImovel(contract) ||
+        ((contract as any).imovelTitulo !== "Imóvel" ? (contract as any).imovelTitulo : "") ||
+        ((contract as any).imovelNomeEdificio !== "Imóvel" ? (contract as any).imovelNomeEdificio : "") ||
+        "Imóvel";
+      
+      // 2. Normalize Parties
+      const compradorNormalizado = normalizarPessoa(contract.dados?.proponente, 'comprador');
+      const vendedorNormalizado = normalizarPessoa(contract.dados?.vendedor || contract.dados?.aceitante, 'vendedor');
+      const locadorNormalizado = normalizarPessoa(contract.dados?.locador, 'locador');
+      const locatarioNormalizado = normalizarPessoa(contract.dados?.locatario, 'locatario');
+
+      // 3. Normalize Spouses (preserve entered values or fallback)
+      const compradorConjugeNormalizado = {
+        compradorConjugeNome: contract.dados?.proponente?.compradorConjugeNome || contract.dados?.proponente?.conjugeNome || "",
+        compradorConjugeCpf: contract.dados?.proponente?.compradorConjugeCpf || contract.dados?.proponente?.conjugeCpf || "",
+        compradorConjugeRg: contract.dados?.proponente?.compradorConjugeRg || contract.dados?.proponente?.conjugeRg || "",
+        compradorConjugeProfissao: contract.dados?.proponente?.compradorConjugeProfissao || contract.dados?.proponente?.conjugeProfissao || "",
+        compradorConjugeTelefone: contract.dados?.proponente?.compradorConjugeTelefone || contract.dados?.proponente?.conjugeTelefone || "",
+        compradorConjugeEmail: contract.dados?.proponente?.compradorConjugeEmail || contract.dados?.proponente?.conjugeEmail || "",
+        compradorConjugeEstadoCivil: contract.dados?.proponente?.compradorConjugeEstadoCivil || contract.dados?.proponente?.conjugeEstadoCivil || "",
+        compradorConjugeEndereco: contract.dados?.proponente?.compradorConjugeEndereco || contract.dados?.proponente?.conjugeEndereco || "",
+      };
+
+      const vendedorConjugeNormalizado = {
+        vendedorConjugeNome: contract.dados?.vendedor?.vendedorConjugeNome || contract.dados?.vendedor?.conjugeNome || "",
+        vendedorConjugeCpf: contract.dados?.vendedor?.vendedorConjugeCpf || contract.dados?.vendedor?.conjugeCpf || "",
+        vendedorConjugeRg: contract.dados?.vendedor?.vendedorConjugeRg || contract.dados?.vendedor?.conjugeRg || "",
+        vendedorConjugeProfissao: contract.dados?.vendedor?.vendedorConjugeProfissao || contract.dados?.vendedor?.conjugeProfissao || "",
+        vendedorConjugeTelefone: contract.dados?.vendedor?.vendedorConjugeTelefone || contract.dados?.vendedor?.conjugeTelefone || "",
+        vendedorConjugeEmail: contract.dados?.vendedor?.vendedorConjugeEmail || contract.dados?.vendedor?.conjugeEmail || "",
+        vendedorConjugeEstadoCivil: contract.dados?.vendedor?.vendedorConjugeEstadoCivil || contract.dados?.vendedor?.conjugeEstadoCivil || "",
+        vendedorConjugeEndereco: contract.dados?.vendedor?.vendedorConjugeEndereco || contract.dados?.vendedor?.conjugeEndereco || "",
+      };
+
+      const locadorConjugeNormalizado = {
+        locadorConjugeNome: contract.dados?.locador?.locadorConjugeNome || contract.dados?.locador?.conjugeNome || "",
+        locadorConjugeCpf: contract.dados?.locador?.locadorConjugeCpf || contract.dados?.locador?.conjugeCpf || "",
+        locadorConjugeRg: contract.dados?.locador?.locadorConjugeRg || contract.dados?.locador?.conjugeRg || "",
+        locadorConjugeProfissao: contract.dados?.locador?.locadorConjugeProfissao || contract.dados?.locador?.conjugeProfissao || "",
+        locadorConjugeTelefone: contract.dados?.locador?.locadorConjugeTelefone || contract.dados?.locador?.conjugeTelefone || "",
+        locadorConjugeEmail: contract.dados?.locador?.locadorConjugeEmail || contract.dados?.locador?.conjugeEmail || "",
+        locadorConjugeEstadoCivil: contract.dados?.locador?.locadorConjugeEstadoCivil || contract.dados?.locador?.conjugeEstadoCivil || "",
+        locadorConjugeEndereco: contract.dados?.locador?.locadorConjugeEndereco || contract.dados?.locador?.conjugeEndereco || "",
+      };
+
+      const locatarioConjugeNormalizado = {
+        locatarioConjugeNome: contract.dados?.locatario?.locatarioConjugeNome || contract.dados?.locatario?.conjugeNome || "",
+        locatarioConjugeCpf: contract.dados?.locatario?.locatarioConjugeCpf || contract.dados?.locatario?.conjugeCpf || "",
+        locatarioConjugeRg: contract.dados?.locatario?.locatarioConjugeRg || contract.dados?.locatario?.conjugeRg || "",
+        locatarioConjugeProfissao: contract.dados?.locatario?.locatarioConjugeProfissao || contract.dados?.locatario?.conjugeProfissao || "",
+        locatarioConjugeTelefone: contract.dados?.locatario?.locatarioConjugeTelefone || contract.dados?.locatario?.conjugeTelefone || "",
+        locatarioConjugeEmail: contract.dados?.locatario?.locatarioConjugeEmail || contract.dados?.locatario?.conjugeEmail || "",
+        locatarioConjugeEstadoCivil: contract.dados?.locatario?.locatarioConjugeEstadoCivil || contract.dados?.locatario?.conjugeEstadoCivil || "",
+        locatarioConjugeEndereco: contract.dados?.locatario?.locatarioConjugeEndereco || contract.dados?.locatario?.conjugeEndereco || "",
+      };
+
       const dadosContrato = {
         ...contract,
+        ...imovelNormalizado,
+        ...compradorNormalizado,
+        ...compradorConjugeNormalizado,
+        ...vendedorNormalizado,
+        ...vendedorConjugeNormalizado,
+        ...locadorNormalizado,
+        ...locadorConjugeNormalizado,
+        ...locatarioNormalizado,
+        ...locatarioConjugeNormalizado,
         status: finalizar ? 'finalizado' : (contract.status || 'rascunho'),
         imovelId: contract.imovelId || selectedProperty?.id || '',
         imovelCodigo: selectedProperty?.code || contract.imovelCodigo || '',
-        imovelTitulo: (contract as any).imovelTitulo || selectedProperty?.title || getTituloImovel(selectedProperty) || '',
-        imovelNomeEdificio: (contract as any).imovelNomeEdificio || (selectedProperty as any)?.nomeEdificio || (selectedProperty as any)?.buildingName || "",
-        imovelMatricula: (contract as any).imovelMatricula || contract.dados?.imovel?.matricula || '',
-        imovelCri: (contract as any).imovelCri || contract.dados?.imovel?.cri || '',
+        imovelTitulo: tituloFinal,
+        imovelNomeEdificio: tituloFinal,
+        imovelMatricula: String((contract as any).imovelMatricula || contract.dados?.imovel?.matricula || '').trim(),
+        imovelCri: String((contract as any).imovelCri || contract.dados?.imovel?.cri || '').trim(),
         valorTotalNegociado: Number(contract.valor || 0),
         valorPorExtenso: contract.dados?.[contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos']?.valorExtenso || valorMonetarioPorExtenso(Number(contract.valor || 0)),
         locadorNome: contract.dados?.locador?.nome || contract.nomeVendedor || '',
@@ -874,62 +1340,78 @@ export default function AdminContractForm() {
         valorRepasseLocador: contract.valor || 0,
         clausulasAplicadas: contract.dados?.clausulasSelecionadas || [],
         atualizadoEm: serverTimestamp(),
-        criadoPor: user?.uid || null
+        criadoPor: user?.uid || null,
+        comprador: {
+          nome: contract.nomeCliente || "",
+          documento: contract.dados?.proponente?.cpf || contract.dados?.proponente?.cpfCnpj || "",
+          rg: contract.dados?.proponente?.rg || "",
+          estadoCivil: contract.dados?.proponente?.estadoCivil || "Solteiro(a)",
+          profissao: contract.dados?.proponente?.profissao || "",
+          telefone: contract.dados?.proponente?.telefone || "",
+          whatsapp: contract.dados?.proponente?.whatsapp || "",
+          email: contract.dados?.proponente?.email || "",
+          endereco: contract.dados?.proponente?.endereco || "",
+          conjugeNome: compradorConjugeNormalizado.compradorConjugeNome,
+          conjugeCpf: compradorConjugeNormalizado.compradorConjugeCpf,
+        },
+        vendedor: {
+          nome: contract.nomeVendedor || "",
+          documento: contract.dados?.vendedor?.cpf || contract.dados?.vendedor?.cpfCnpj || "",
+          rg: contract.dados?.vendedor?.rg || "",
+          estadoCivil: contract.dados?.vendedor?.estadoCivil || "Solteiro(a)",
+          profissao: contract.dados?.vendedor?.profissao || "",
+          telefone: contract.dados?.vendedor?.telefone || "",
+          whatsapp: contract.dados?.vendedor?.whatsapp || "",
+          email: contract.dados?.vendedor?.email || "",
+          endereco: contract.dados?.vendedor?.endereco || "",
+          conjugeNome: vendedorConjugeNormalizado.vendedorConjugeNome,
+          conjugeCpf: vendedorConjugeNormalizado.vendedorConjugeCpf,
+        },
+        dados: {
+          ...contract.dados,
+          proponente: {
+            ...contract.dados?.proponente,
+            ...compradorConjugeNormalizado,
+            conjugeNome: compradorConjugeNormalizado.compradorConjugeNome,
+            conjugeCpf: compradorConjugeNormalizado.compradorConjugeCpf,
+          },
+          vendedor: {
+            ...contract.dados?.vendedor,
+            ...vendedorConjugeNormalizado,
+            conjugeNome: vendedorConjugeNormalizado.vendedorConjugeNome,
+            conjugeCpf: vendedorConjugeNormalizado.vendedorConjugeCpf,
+          },
+          locador: {
+            ...contract.dados?.locador,
+            ...locadorConjugeNormalizado,
+            conjugeNome: locadorConjugeNormalizado.locadorConjugeNome,
+            conjugeCpf: locadorConjugeNormalizado.locadorConjugeCpf,
+          },
+          locatario: {
+            ...contract.dados?.locatario,
+            ...locatarioConjugeNormalizado,
+            conjugeNome: locatarioConjugeNormalizado.locatarioConjugeNome,
+            conjugeCpf: locatarioConjugeNormalizado.locatarioConjugeCpf,
+          },
+          imovel: {
+            ...contract.dados?.imovel,
+            ...imovelNormalizado,
+            titulo: tituloFinal,
+            cri: String((contract as any).imovelCri || contract.dados?.imovel?.cri || '').trim(),
+          }
+        }
       } as any;
 
       if (contract.tipoContrato === 'proposta') {
-        dadosContrato.imovelId = contract.imovelId || '';
-        dadosContrato.imovelCodigo = (contract as any).imovelCodigo || '';
-        dadosContrato.imovelTitulo = (contract as any).imovelTitulo || (contract as any).imovelNomeEdificio || (selectedProperty as any)?.nomeEdificio || (selectedProperty as any)?.buildingName || getTituloImovel(selectedProperty) || 'Imóvel';
-        dadosContrato.imovelNomeEdificio = (contract as any).imovelNomeEdificio || (selectedProperty as any)?.nomeEdificio || (selectedProperty as any)?.buildingName || '';
-        dadosContrato.imovelEndereco = (contract as any).imovelEndereco || '';
-        dadosContrato.imovelBairro = (contract as any).imovelBairro || '';
-        dadosContrato.imovelCidade = (contract as any).imovelCidade || '';
-        dadosContrato.imovelEstado = (contract as any).imovelEstado || '';
-        dadosContrato.imovelMatricula = (contract as any).imovelMatricula || contract.dados?.imovel?.matricula || '';
-        dadosContrato.imovelCri = (contract as any).imovelCri || contract.dados?.imovel?.cri || '';
-        dadosContrato.valorImovel = Number((contract as any).valorImovel || 0);
-        dadosContrato.valorProposta = Number((contract as any).valorProposta || contract.valor || 0);
-        
-        const p = contract.dados?.proponente || {};
-        const v = contract.dados?.vendedor || {};
-
-        dadosContrato.comprador = {
-          nome: contract.nomeCliente || "",
-          documento: p.cpf || p.cpfCnpj || p.documento || "",
-          rg: p.rg || "",
-          estadoCivil: p.estadoCivil || "",
-          profissao: p.profissao || "",
-          telefone: p.telefone || "",
-          whatsapp: p.whatsapp || "",
-          email: p.email || "",
-          endereco: p.endereco || ""
-        };
-
-        dadosContrato.vendedor = {
-          nome: contract.nomeVendedor || "",
-          documento: v.cpf || v.cpfCnpj || v.documento || "",
-          rg: v.rg || "",
-          estadoCivil: v.estadoCivil || "",
-          profissao: v.profissao || "",
-          telefone: v.telefone || "",
-          whatsapp: v.whatsapp || "",
-          email: v.email || "",
-          endereco: v.endereco || ""
-        };
-
+        dadosContrato.valorImovel = Number(imovelNormalizado.valorImovel || 0);
+        dadosContrato.valorProposta = Number(contract.valor || 0);
         dadosContrato.formaPagamento = contract.dados?.pagamento?.outrasCondicoes || contract.dados?.pagamento?.descricao || "";
         dadosContrato.observacoes = contract.dados?.pagamento?.observacoes || contract.dados?.observacoes || "";
-        
         dadosContrato.status = contract.status || "Pendente";
       }
 
       if (contract.tipoContrato === 'arras_confirmatorios') {
-        const d = contract.dados || {};
-        const p = d.proponente || {};
-        const v = d.vendedor || {};
-        const a = d.arras || {};
-        
+        const a = contract.dados?.arras || {};
         dadosContrato.tipoContratoLabel = "Arras Confirmatórios";
         dadosContrato.valorImovel = Number(a.valorImovel || contract.valorImovel || contract.valor || 0);
         dadosContrato.valorArras = Number(a.valorArras || 0);
@@ -937,37 +1419,20 @@ export default function AdminContractForm() {
         dadosContrato.dataPagamentoArras = a.dataPagamentoArras || "";
         dadosContrato.prazoContratoDefinitivo = a.prazoContratoDefinitivo || "";
         dadosContrato.prazoEscritura = a.prazoEscritura || "";
-
-        dadosContrato.comprador = {
-          nome: contract.nomeCliente || "",
-          documento: p.cpf || p.cpfCnpj || p.documento || "",
-          rg: p.rg || "",
-          estadoCivil: p.estadoCivil || "",
-          profissao: p.profissao || "",
-          telefone: p.telefone || "",
-          whatsapp: p.whatsapp || "",
-          email: p.email || "",
-          endereco: p.endereco || ""
-        };
-
-        dadosContrato.vendedor = {
-          nome: contract.nomeVendedor || "",
-          documento: v.cpf || v.cpfCnpj || v.documento || "",
-          rg: v.rg || "",
-          estadoCivil: v.estadoCivil || "",
-          profissao: v.profissao || "",
-          telefone: v.telefone || "",
-          whatsapp: v.whatsapp || "",
-          email: v.email || "",
-          endereco: v.endereco || ""
-        };
       }
 
       if (finalizar) {
         (dadosContrato as any).finalizadoEm = serverTimestamp();
       }
 
-      const cleanedData = cleanFirestoreData(dadosContrato);
+      // Consolidar e normalizar todos os dados planos na raiz do documento antes de salvar
+      const normalizedFlatData = normalizarDadosDocumento(dadosContrato);
+      const finalDadosContrato = {
+        ...dadosContrato,
+        ...normalizedFlatData
+      };
+
+      const cleanedData = cleanFirestoreData(finalDadosContrato);
       console.log("Salvando contrato final/rascunho no Firestore:", cleanedData);
 
       let savedId = id;
@@ -1590,6 +2055,111 @@ export default function AdminContractForm() {
                             <input type="text" className="col-span-1 input-field" placeholder="Cidade" value={contract.dados.locador?.cidade || ''} onChange={e => updateDados('locador', 'cidade', e.target.value)} />
                             <input type="text" className="col-span-1 input-field" placeholder="Estado" value={contract.dados.locador?.estado || ''} onChange={e => updateDados('locador', 'estado', e.target.value)} />
                           </div>
+
+                          <div className="flex items-center gap-2 mt-4">
+                            <input
+                              type="checkbox"
+                              id="possuiConjugeLocador"
+                              className="rounded border-gray-300 text-gold focus:ring-gold"
+                              checked={temConjugeLocador}
+                              onChange={e => setTemConjugeLocador(e.target.checked)}
+                            />
+                            <label htmlFor="possuiConjugeLocador" className="text-xs text-gray-500 font-medium">Possui cônjuge / companheiro(a)</label>
+                          </div>
+
+                          {temConjugeLocador && (
+                            <div className="space-y-4 border-l-2 border-gold/30 pl-4 mt-2">
+                              <h5 className="text-[10px] font-black text-gold uppercase tracking-widest">Cônjuge do Locador</h5>
+                              <input
+                                type="text"
+                                className="input-field"
+                                placeholder="Nome Completo do Cônjuge"
+                                value={contract.dados.locador?.locadorConjugeNome || contract.dados.locador?.conjugeNome || ''}
+                                onChange={e => {
+                                  updateDados('locador', 'locadorConjugeNome', e.target.value);
+                                  updateDados('locador', 'conjugeNome', e.target.value);
+                                }}
+                              />
+                              <div className="grid grid-cols-2 gap-4">
+                                <input
+                                  type="text"
+                                  className="input-field"
+                                  placeholder="CPF do Cônjuge"
+                                  value={contract.dados.locador?.locadorConjugeCpf || contract.dados.locador?.conjugeCpf || ''}
+                                  onChange={e => {
+                                    updateDados('locador', 'locadorConjugeCpf', e.target.value);
+                                    updateDados('locador', 'conjugeCpf', e.target.value);
+                                  }}
+                                />
+                                <input
+                                  type="text"
+                                  className="input-field"
+                                  placeholder="RG do Cônjuge"
+                                  value={contract.dados.locador?.locadorConjugeRg || contract.dados.locador?.conjugeRg || ''}
+                                  onChange={e => {
+                                    updateDados('locador', 'locadorConjugeRg', e.target.value);
+                                    updateDados('locador', 'conjugeRg', e.target.value);
+                                  }}
+                                />
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                <select
+                                  className="input-field"
+                                  value={contract.dados.locador?.locadorConjugeEstadoCivil || contract.dados.locador?.conjugeEstadoCivil || 'Casado(a)'}
+                                  onChange={e => {
+                                    updateDados('locador', 'locadorConjugeEstadoCivil', e.target.value);
+                                    updateDados('locador', 'conjugeEstadoCivil', e.target.value);
+                                  }}
+                                >
+                                  <option value="Casado(a)">Casado(a)</option>
+                                  <option value="União Estável">União Estável</option>
+                                  <option value="Solteiro(a)">Solteiro(a)</option>
+                                </select>
+                                <input
+                                  type="text"
+                                  className="input-field"
+                                  placeholder="Profissão do Cônjuge"
+                                  value={contract.dados.locador?.locadorConjugeProfissao || contract.dados.locador?.conjugeProfissao || ''}
+                                  onChange={e => {
+                                    updateDados('locador', 'locadorConjugeProfissao', e.target.value);
+                                    updateDados('locador', 'conjugeProfissao', e.target.value);
+                                  }}
+                                />
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                <input
+                                  type="text"
+                                  className="input-field"
+                                  placeholder="Telefone do Cônjuge"
+                                  value={contract.dados.locador?.locadorConjugeTelefone || contract.dados.locador?.conjugeTelefone || ''}
+                                  onChange={e => {
+                                    updateDados('locador', 'locadorConjugeTelefone', e.target.value);
+                                    updateDados('locador', 'conjugeTelefone', e.target.value);
+                                  }}
+                                />
+                                <input
+                                  type="email"
+                                  className="input-field"
+                                  placeholder="E-mail do Cônjuge"
+                                  value={contract.dados.locador?.locadorConjugeEmail || contract.dados.locador?.conjugeEmail || ''}
+                                  onChange={e => {
+                                    updateDados('locador', 'locadorConjugeEmail', e.target.value);
+                                    updateDados('locador', 'conjugeEmail', e.target.value);
+                                  }}
+                                />
+                              </div>
+                              <input
+                                type="text"
+                                className="input-field"
+                                placeholder="Endereço Residencial do Cônjuge"
+                                value={contract.dados.locador?.locadorConjugeEndereco || contract.dados.locador?.conjugeEndereco || ''}
+                                onChange={e => {
+                                  updateDados('locador', 'locadorConjugeEndereco', e.target.value);
+                                  updateDados('locador', 'conjugeEndereco', e.target.value);
+                                }}
+                              />
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -1623,6 +2193,111 @@ export default function AdminContractForm() {
                             <input type="text" className="col-span-1 input-field" placeholder="Cidade" value={contract.dados.locatario?.cidade || ''} onChange={e => updateDados('locatario', 'cidade', e.target.value)} />
                             <input type="text" className="col-span-1 input-field" placeholder="Estado" value={contract.dados.locatario?.estado || ''} onChange={e => updateDados('locatario', 'estado', e.target.value)} />
                           </div>
+
+                          <div className="flex items-center gap-2 mt-4">
+                            <input
+                              type="checkbox"
+                              id="possuiConjugeLocatario"
+                              className="rounded border-gray-300 text-gold focus:ring-gold"
+                              checked={temConjugeLocatario}
+                              onChange={e => setTemConjugeLocatario(e.target.checked)}
+                            />
+                            <label htmlFor="possuiConjugeLocatario" className="text-xs text-gray-500 font-medium">Possui cônjuge / companheiro(a)</label>
+                          </div>
+
+                          {temConjugeLocatario && (
+                            <div className="space-y-4 border-l-2 border-gold/30 pl-4 mt-2">
+                              <h5 className="text-[10px] font-black text-gold uppercase tracking-widest">Cônjuge do Locatário</h5>
+                              <input
+                                type="text"
+                                className="input-field"
+                                placeholder="Nome Completo do Cônjuge"
+                                value={contract.dados.locatario?.locatarioConjugeNome || contract.dados.locatario?.conjugeNome || ''}
+                                onChange={e => {
+                                  updateDados('locatario', 'locatarioConjugeNome', e.target.value);
+                                  updateDados('locatario', 'conjugeNome', e.target.value);
+                                }}
+                              />
+                              <div className="grid grid-cols-2 gap-4">
+                                <input
+                                  type="text"
+                                  className="input-field"
+                                  placeholder="CPF do Cônjuge"
+                                  value={contract.dados.locatario?.locatarioConjugeCpf || contract.dados.locatario?.conjugeCpf || ''}
+                                  onChange={e => {
+                                    updateDados('locatario', 'locatarioConjugeCpf', e.target.value);
+                                    updateDados('locatario', 'conjugeCpf', e.target.value);
+                                  }}
+                                />
+                                <input
+                                  type="text"
+                                  className="input-field"
+                                  placeholder="RG do Cônjuge"
+                                  value={contract.dados.locatario?.locatarioConjugeRg || contract.dados.locatario?.conjugeRg || ''}
+                                  onChange={e => {
+                                    updateDados('locatario', 'locatarioConjugeRg', e.target.value);
+                                    updateDados('locatario', 'conjugeRg', e.target.value);
+                                  }}
+                                />
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                <select
+                                  className="input-field"
+                                  value={contract.dados.locatario?.locatarioConjugeEstadoCivil || contract.dados.locatario?.conjugeEstadoCivil || 'Casado(a)'}
+                                  onChange={e => {
+                                    updateDados('locatario', 'locatarioConjugeEstadoCivil', e.target.value);
+                                    updateDados('locatario', 'conjugeEstadoCivil', e.target.value);
+                                  }}
+                                >
+                                  <option value="Casado(a)">Casado(a)</option>
+                                  <option value="União Estável">União Estável</option>
+                                  <option value="Solteiro(a)">Solteiro(a)</option>
+                                </select>
+                                <input
+                                  type="text"
+                                  className="input-field"
+                                  placeholder="Profissão do Cônjuge"
+                                  value={contract.dados.locatario?.locatarioConjugeProfissao || contract.dados.locatario?.conjugeProfissao || ''}
+                                  onChange={e => {
+                                    updateDados('locatario', 'locatarioConjugeProfissao', e.target.value);
+                                    updateDados('locatario', 'conjugeProfissao', e.target.value);
+                                  }}
+                                />
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                <input
+                                  type="text"
+                                  className="input-field"
+                                  placeholder="Telefone do Cônjuge"
+                                  value={contract.dados.locatario?.locatarioConjugeTelefone || contract.dados.locatario?.conjugeTelefone || ''}
+                                  onChange={e => {
+                                    updateDados('locatario', 'locatarioConjugeTelefone', e.target.value);
+                                    updateDados('locatario', 'conjugeTelefone', e.target.value);
+                                  }}
+                                />
+                                <input
+                                  type="email"
+                                  className="input-field"
+                                  placeholder="E-mail do Cônjuge"
+                                  value={contract.dados.locatario?.locatarioConjugeEmail || contract.dados.locatario?.conjugeEmail || ''}
+                                  onChange={e => {
+                                    updateDados('locatario', 'locatarioConjugeEmail', e.target.value);
+                                    updateDados('locatario', 'conjugeEmail', e.target.value);
+                                  }}
+                                />
+                              </div>
+                              <input
+                                type="text"
+                                className="input-field"
+                                placeholder="Endereço Residencial do Cônjuge"
+                                value={contract.dados.locatario?.locatarioConjugeEndereco || contract.dados.locatario?.conjugeEndereco || ''}
+                                onChange={e => {
+                                  updateDados('locatario', 'locatarioConjugeEndereco', e.target.value);
+                                  updateDados('locatario', 'conjugeEndereco', e.target.value);
+                                }}
+                              />
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1916,6 +2591,135 @@ export default function AdminContractForm() {
                               <input type="text" className="input-field" value={contract.dados.proponente?.estado || ''} onChange={e => updateDados('proponente', 'estado', e.target.value)} />
                             </div>
                           </div>
+
+                          <div className="flex items-center gap-2 mt-4">
+                            <input
+                              type="checkbox"
+                              id="possuiConjugeComprador"
+                              className="rounded border-gray-300 text-gold focus:ring-gold"
+                              checked={temConjugeComprador}
+                              onChange={e => setTemConjugeComprador(e.target.checked)}
+                            />
+                            <label htmlFor="possuiConjugeComprador" className="text-xs text-gray-500 font-medium">Possui cônjuge / companheiro(a)</label>
+                          </div>
+
+                          {temConjugeComprador && (
+                            <div className="space-y-4 border-l-2 border-gold/30 pl-4 mt-2">
+                              <h5 className="text-[10px] font-black text-gold uppercase tracking-widest">Cônjuge do Comprador</h5>
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Nome Completo do Cônjuge</label>
+                                <input
+                                  type="text"
+                                  className="input-field"
+                                  placeholder="Nome Completo do Cônjuge"
+                                  value={contract.dados.proponente?.compradorConjugeNome || contract.dados.proponente?.conjugeNome || ''}
+                                  onChange={e => {
+                                    updateDados('proponente', 'compradorConjugeNome', e.target.value);
+                                    updateDados('proponente', 'conjugeNome', e.target.value);
+                                  }}
+                                />
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">CPF</label>
+                                  <input
+                                    type="text"
+                                    className="input-field"
+                                    placeholder="CPF"
+                                    value={contract.dados.proponente?.compradorConjugeCpf || contract.dados.proponente?.conjugeCpf || ''}
+                                    onChange={e => {
+                                      updateDados('proponente', 'compradorConjugeCpf', e.target.value);
+                                      updateDados('proponente', 'conjugeCpf', e.target.value);
+                                    }}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">RG</label>
+                                  <input
+                                    type="text"
+                                    className="input-field"
+                                    placeholder="RG"
+                                    value={contract.dados.proponente?.compradorConjugeRg || contract.dados.proponente?.conjugeRg || ''}
+                                    onChange={e => {
+                                      updateDados('proponente', 'compradorConjugeRg', e.target.value);
+                                      updateDados('proponente', 'conjugeRg', e.target.value);
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Estado Civil</label>
+                                  <select
+                                    className="input-field"
+                                    value={contract.dados.proponente?.compradorConjugeEstadoCivil || contract.dados.proponente?.conjugeEstadoCivil || 'Casado(a)'}
+                                    onChange={e => {
+                                      updateDados('proponente', 'compradorConjugeEstadoCivil', e.target.value);
+                                      updateDados('proponente', 'conjugeEstadoCivil', e.target.value);
+                                    }}
+                                  >
+                                    <option value="Casado(a)">Casado(a)</option>
+                                    <option value="União Estável">União Estável</option>
+                                    <option value="Solteiro(a)">Solteiro(a)</option>
+                                  </select>
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Profissão</label>
+                                  <input
+                                    type="text"
+                                    className="input-field"
+                                    placeholder="Profissão"
+                                    value={contract.dados.proponente?.compradorConjugeProfissao || contract.dados.proponente?.conjugeProfissao || ''}
+                                    onChange={e => {
+                                      updateDados('proponente', 'compradorConjugeProfissao', e.target.value);
+                                      updateDados('proponente', 'conjugeProfissao', e.target.value);
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Telefone</label>
+                                  <input
+                                    type="text"
+                                    className="input-field"
+                                    placeholder="Telefone"
+                                    value={contract.dados.proponente?.compradorConjugeTelefone || contract.dados.proponente?.conjugeTelefone || ''}
+                                    onChange={e => {
+                                      updateDados('proponente', 'compradorConjugeTelefone', e.target.value);
+                                      updateDados('proponente', 'conjugeTelefone', e.target.value);
+                                    }}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">E-mail</label>
+                                  <input
+                                    type="email"
+                                    className="input-field"
+                                    placeholder="E-mail"
+                                    value={contract.dados.proponente?.compradorConjugeEmail || contract.dados.proponente?.conjugeEmail || ''}
+                                    onChange={e => {
+                                      updateDados('proponente', 'compradorConjugeEmail', e.target.value);
+                                      updateDados('proponente', 'conjugeEmail', e.target.value);
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Endereço Residencial</label>
+                                <input
+                                  type="text"
+                                  className="input-field"
+                                  placeholder="Endereço Residencial do Cônjuge"
+                                  value={contract.dados.proponente?.compradorConjugeEndereco || contract.dados.proponente?.conjugeEndereco || ''}
+                                  onChange={e => {
+                                    updateDados('proponente', 'compradorConjugeEndereco', e.target.value);
+                                    updateDados('proponente', 'conjugeEndereco', e.target.value);
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -2022,6 +2826,135 @@ export default function AdminContractForm() {
                               }} />
                             </div>
                           </div>
+
+                          <div className="flex items-center gap-2 mt-4">
+                            <input
+                              type="checkbox"
+                              id="possuiConjugeVendedor"
+                              className="rounded border-gray-300 text-gold focus:ring-gold"
+                              checked={temConjugeVendedor}
+                              onChange={e => setTemConjugeVendedor(e.target.checked)}
+                            />
+                            <label htmlFor="possuiConjugeVendedor" className="text-xs text-gray-500 font-medium">Possui cônjuge / companheiro(a)</label>
+                          </div>
+
+                          {temConjugeVendedor && (
+                            <div className="space-y-4 border-l-2 border-gold/30 pl-4 mt-2">
+                              <h5 className="text-[10px] font-black text-gold uppercase tracking-widest">Cônjuge do Vendedor</h5>
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Nome Completo do Cônjuge</label>
+                                <input
+                                  type="text"
+                                  className="input-field"
+                                  placeholder="Nome Completo do Cônjuge"
+                                  value={contract.dados.vendedor?.vendedorConjugeNome || contract.dados.vendedor?.conjugeNome || ''}
+                                  onChange={e => {
+                                    updateDados('vendedor', 'vendedorConjugeNome', e.target.value);
+                                    updateDados('vendedor', 'conjugeNome', e.target.value);
+                                  }}
+                                />
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">CPF</label>
+                                  <input
+                                    type="text"
+                                    className="input-field"
+                                    placeholder="CPF"
+                                    value={contract.dados.vendedor?.vendedorConjugeCpf || contract.dados.vendedor?.conjugeCpf || ''}
+                                    onChange={e => {
+                                      updateDados('vendedor', 'vendedorConjugeCpf', e.target.value);
+                                      updateDados('vendedor', 'conjugeCpf', e.target.value);
+                                    }}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">RG</label>
+                                  <input
+                                    type="text"
+                                    className="input-field"
+                                    placeholder="RG"
+                                    value={contract.dados.vendedor?.vendedorConjugeRg || contract.dados.vendedor?.conjugeRg || ''}
+                                    onChange={e => {
+                                      updateDados('vendedor', 'vendedorConjugeRg', e.target.value);
+                                      updateDados('vendedor', 'conjugeRg', e.target.value);
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Estado Civil</label>
+                                  <select
+                                    className="input-field"
+                                    value={contract.dados.vendedor?.vendedorConjugeEstadoCivil || contract.dados.vendedor?.conjugeEstadoCivil || 'Casado(a)'}
+                                    onChange={e => {
+                                      updateDados('vendedor', 'vendedorConjugeEstadoCivil', e.target.value);
+                                      updateDados('vendedor', 'conjugeEstadoCivil', e.target.value);
+                                    }}
+                                  >
+                                    <option value="Casado(a)">Casado(a)</option>
+                                    <option value="União Estável">União Estável</option>
+                                    <option value="Solteiro(a)">Solteiro(a)</option>
+                                  </select>
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Profissão</label>
+                                  <input
+                                    type="text"
+                                    className="input-field"
+                                    placeholder="Profissão"
+                                    value={contract.dados.vendedor?.vendedorConjugeProfissao || contract.dados.vendedor?.conjugeProfissao || ''}
+                                    onChange={e => {
+                                      updateDados('vendedor', 'vendedorConjugeProfissao', e.target.value);
+                                      updateDados('vendedor', 'conjugeProfissao', e.target.value);
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Telefone</label>
+                                  <input
+                                    type="text"
+                                    className="input-field"
+                                    placeholder="Telefone"
+                                    value={contract.dados.vendedor?.vendedorConjugeTelefone || contract.dados.vendedor?.conjugeTelefone || ''}
+                                    onChange={e => {
+                                      updateDados('vendedor', 'vendedorConjugeTelefone', e.target.value);
+                                      updateDados('vendedor', 'conjugeTelefone', e.target.value);
+                                    }}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">E-mail</label>
+                                  <input
+                                    type="email"
+                                    className="input-field"
+                                    placeholder="E-mail"
+                                    value={contract.dados.vendedor?.vendedorConjugeEmail || contract.dados.vendedor?.conjugeEmail || ''}
+                                    onChange={e => {
+                                      updateDados('vendedor', 'vendedorConjugeEmail', e.target.value);
+                                      updateDados('vendedor', 'conjugeEmail', e.target.value);
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Endereço Residencial</label>
+                                <input
+                                  type="text"
+                                  className="input-field"
+                                  placeholder="Endereço Residencial do Cônjuge"
+                                  value={contract.dados.vendedor?.vendedorConjugeEndereco || contract.dados.vendedor?.conjugeEndereco || ''}
+                                  onChange={e => {
+                                    updateDados('vendedor', 'vendedorConjugeEndereco', e.target.value);
+                                    updateDados('vendedor', 'conjugeEndereco', e.target.value);
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -2375,7 +3308,29 @@ export default function AdminContractForm() {
                               rows={4}
                               className="input-field py-4 min-h-[120px]" 
                               value={contract.dados[contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos']?.outrasCondicoes || ''} 
-                              onChange={e => updateDados(contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos', 'outrasCondicoes', e.target.value)}
+                              onChange={e => {
+                                const val = e.target.value;
+                                const section = contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos';
+                                setContract(prev => ({
+                                  ...prev,
+                                  outrasCondicoes: val,
+                                  detalhesPagamento: val,
+                                  detalhesPagamentoContraproposta: val,
+                                  condicoesPagamento: val,
+                                  observacoesPagamento: val,
+                                  dados: {
+                                    ...prev.dados,
+                                    [section]: {
+                                      ...prev.dados[section],
+                                      outrasCondicoes: val,
+                                      detalhesPagamento: val,
+                                      detalhesPagamentoContraproposta: val,
+                                      condicoesPagamento: val,
+                                      observacoesPagamento: val
+                                    }
+                                  }
+                                }));
+                              }}
                               placeholder="Descreva detalhadamente prazos, parcelas, ou termos da contraproposta..."
                             />
                           </div>

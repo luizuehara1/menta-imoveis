@@ -1008,7 +1008,7 @@ export default function AdminPropertyForm() {
       const propertyData: any = {
         ...data,
         matriculaImovel: data.matriculaImovel || "",
-        criImovel: data.criImovel || "",
+        criImovel: String(data.criImovel || "").trim(),
         nomeEdificio: data.nomeEdificio || data.buildingName || "",
         buildingName: data.buildingName || data.nomeEdificio || "",
         businessType: normalizedSaveBType,

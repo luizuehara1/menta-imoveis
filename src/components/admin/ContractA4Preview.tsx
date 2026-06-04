@@ -2,7 +2,7 @@ import React from 'react';
 import { Contract, ContractType } from '../../types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { formatCurrency, isValidImageUrl, safeText, safeMoney, safeDate, valorMonetarioPorExtenso } from '../../lib/utils';
+import { formatCurrency, isValidImageUrl, safeText, safeMoney, safeDate, valorMonetarioPorExtenso, getTituloImovel, formatarDataBR, getOutrasCondicoes, montarTextoConjuge } from '../../lib/utils';
 import { useSettings } from '../../hooks/useSettings';
 
 interface ContractA4PreviewProps {
@@ -246,6 +246,17 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
               <p><strong>E-mail:</strong> {safeText(l.email)}</p>
             </div>
             <p className="col-span-2"><strong>Endereço:</strong> {safeText(l.endereco || 'Não informado')}{l.cep ? ` - CEP: ${safeText(l.cep)}` : ''}{l.cidade ? ` - ${safeText(l.cidade)}/${safeText(l.estado || '')}` : ''}</p>
+            {(l.locadorConjugeNome || l.conjugeNome) && (
+              <div className="col-span-2 grid grid-cols-2 gap-y-0.5 gap-x-4 border-t border-gray-100/50 pt-1 mt-0.5">
+                <p><strong>Cônjuge do Locador:</strong> {l.locadorConjugeNome || l.conjugeNome}</p>
+                <p><strong>CPF Cônjuge:</strong> {l.locadorConjugeCpf || l.conjugeCpf || "Não informado"}</p>
+                {(l.locadorConjugeRg || l.conjugeRg) && <p><strong>RG Cônjuge:</strong> {l.locadorConjugeRg || l.conjugeRg}</p>}
+                {(l.locadorConjugeProfissao || l.conjugeProfissao) && <p><strong>Profissão Cônjuge:</strong> {l.locadorConjugeProfissao || l.conjugeProfissao}</p>}
+                {(l.locadorConjugeTelefone || l.conjugeTelefone) && <p><strong>Telefone Cônjuge:</strong> {l.locadorConjugeTelefone || l.conjugeTelefone}</p>}
+                {(l.locadorConjugeEmail || l.conjugeEmail) && <p><strong>E-mail Cônjuge:</strong> {l.locadorConjugeEmail || l.conjugeEmail}</p>}
+                {(l.locadorConjugeEndereco || l.conjugeEndereco) && <p className="col-span-2"><strong>Endereço Cônjuge:</strong> {l.locadorConjugeEndereco || l.conjugeEndereco}</p>}
+              </div>
+            )}
             <p className="col-span-2"><strong>Dados Bancários para Repasse:</strong> {safeText(l.dadosBancarios || l.banco || 'Não informado')}</p>
             <div className="flex gap-4">
               <p><strong>Comissão Imobiliária:</strong> {percComissao}% ({safeMoney(valorComissao)})</p>
@@ -272,6 +283,17 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
               <p><strong>E-mail:</strong> {safeText(t.email)}</p>
             </div>
             <p className="col-span-2"><strong>Endereço Residencial:</strong> {safeText(t.endereco || 'Não informado')}{t.cep ? ` - CEP: ${safeText(t.cep)}` : ''}{t.cidade ? ` - ${safeText(t.cidade)}/${safeText(t.estado || '')}` : ''}</p>
+            {(t.locatarioConjugeNome || t.conjugeNome) && (
+              <div className="col-span-2 grid grid-cols-2 gap-y-0.5 gap-x-4 border-t border-gray-100/50 pt-1 mt-0.5">
+                <p><strong>Cônjuge do Locatário:</strong> {t.locatarioConjugeNome || t.conjugeNome}</p>
+                <p><strong>CPF Cônjuge:</strong> {t.locatarioConjugeCpf || t.conjugeCpf || "Não informado"}</p>
+                {(t.locatarioConjugeRg || t.conjugeRg) && <p><strong>RG Cônjuge:</strong> {t.locatarioConjugeRg || t.conjugeRg}</p>}
+                {(t.locatarioConjugeProfissao || t.conjugeProfissao) && <p><strong>Profissão Cônjuge:</strong> {t.locatarioConjugeProfissao || t.conjugeProfissao}</p>}
+                {(t.locatarioConjugeTelefone || t.conjugeTelefone) && <p><strong>Telefone Cônjuge:</strong> {t.locatarioConjugeTelefone || t.conjugeTelefone}</p>}
+                {(t.locatarioConjugeEmail || t.conjugeEmail) && <p><strong>E-mail Cônjuge:</strong> {t.locatarioConjugeEmail || t.conjugeEmail}</p>}
+                {(t.locatarioConjugeEndereco || t.conjugeEndereco) && <p className="col-span-2"><strong>Endereço Cônjuge:</strong> {t.locatarioConjugeEndereco || t.conjugeEndereco}</p>}
+              </div>
+            )}
             <div className="flex gap-4">
               <p><strong>Status Pagamento Locatário:</strong> <span className="uppercase font-bold text-xs">{safeText(v.statusPagamentoLocatario || 'pendente')}</span></p>
               <p><strong>Saldo em Aberto Locatário:</strong> {safeMoney(v.saldoAbertoLocatario || 0)}</p>
@@ -388,181 +410,133 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
     );
   };
 
-  const renderProposta = () => (
-    <div className="pdf-compact-content relative z-10 w-full">
-      <div className="pdf-document-title">
-        PROPOSTA DE COMPRA E VENDA DE IMÓVEL
-      </div>
+  const renderPropostaOrContraproposta = (isContra = false) => {
+    const p = dados.proponente || {};
+    const imovelMatricula = (contract as any).imovelMatricula || dados.imovel?.matricula || "Matrícula não informada";
+    const imovelCriRaw = (contract as any).imovelCri || dados.imovel?.cri || dados.imovel?.criImovel || dados.imovel?.cartorioRegistroImoveis || dados.imovel?.cartorioRegistro || dados.imovel?.cartorioImovel || "";
+    const imovelCri = String(imovelCriRaw).trim() || "Não informado";
+    const imovelTituloRaw = (contract as any).imovelTitulo || (contract as any).imovelNomeEdificio || dados.imovel?.titulo || dados.imovel?.buildingName || dados.imovel?.nomeEdificio || dados.imovel?.condoName || "";
+    const tituloFinal = (imovelTituloRaw && imovelTituloRaw !== "Imóvel") ? imovelTituloRaw : "Imóvel";
+    
+    const outrasCondVal = getOutrasCondicoes(dados) || getOutrasCondicoes(contract) || getOutrasCondicoes(dados?.pagamento) || getOutrasCondicoes(dados?.termos) || "";
+    
+    // Extracted spouse info
+    const spouseNome = p.compradorConjugeNome || p.conjugeNome || dados.compradorConjugeNome || "";
+    const spouseCpf = p.compradorConjugeCpf || p.conjugeCpf || dados.compradorConjugeCpf || "";
+    const spouseRg = p.compradorConjugeRg || p.conjugeRg || dados.compradorConjugeRg || "";
+    const spouseProfissao = p.compradorConjugeProfissao || p.conjugeProfissao || dados.compradorConjugeProfissao || "";
+    const spouseEmail = p.compradorConjugeEmail || p.conjugeEmail || dados.compradorConjugeEmail || "";
+    const spouseTelefone = p.compradorConjugeTelefone || p.conjugeTelefone || dados.compradorConjugeTelefone || "";
+    const spouseEstadoCivil = p.compradorConjugeEstadoCivil || p.conjugeEstadoCivil || dados.compradorConjugeEstadoCivil || "";
+    const spouseEndereco = p.compradorConjugeEndereco || p.conjugeEndereco || dados.compradorConjugeEndereco || "";
 
-      <section className="section avoid-break">
-        <h3 className="section-title">I - Proponente Comprador</h3>
-        <div className="grid grid-cols-2 gap-y-1.5 gap-x-6">
-          <p><strong>Nome:</strong> {dados.proponente?.nome || contract.nomeCliente}</p>
-          <p><strong>CPF:</strong> {dados.proponente?.cpf}</p>
-          <p><strong>RG:</strong> {dados.proponente?.rg}</p>
-          <p><strong>Estado Civil:</strong> {dados.proponente?.estadoCivil}</p>
-          <p><strong>Profissão:</strong> {dados.proponente?.profissao}</p>
-          <p><strong>Telefone:</strong> {dados.proponente?.telefone}{dados.proponente?.whatsapp ? ` / WhatsApp: ${dados.proponente?.whatsapp}` : ''}</p>
-          <p className="col-span-2"><strong>E-mail:</strong> {dados.proponente?.email || '---'}</p>
-          <p className="col-span-2"><strong>Endereço:</strong> {dados.proponente?.endereco || '---'}{dados.proponente?.cep ? ` - CEP: ${dados.proponente?.cep}` : ''}{dados.proponente?.cidade ? ` - ${dados.proponente?.cidade}/${dados.proponente?.estado || ''}` : ''}</p>
-          
-          {dados.proponente?.estadoCivil === 'Casado(a)' && (
-            <>
-              <p><strong>Cônjuge:</strong> {dados.proponente?.conjugeNome}</p>
-              <p><strong>CPF Cônjuge:</strong> {dados.proponente?.conjugeCpf}</p>
-            </>
-          )}
+    const metodosDePagamento = dados.pagamento?.metodos || dados.termos?.metodos || (contract as any).formasPagamento || [];
+
+    return (
+      <div className="pdf-compact-content relative z-10 w-full font-sans">
+        <div className="pdf-document-title">
+          {isContra ? "CONTRAPROPOSTA DE COMPRA E VENDA" : "PROPOSTA DE COMPRA E VENDA DE IMÓVEL"}
         </div>
-      </section>
 
-      <section className="section avoid-break">
-        <h3 className="section-title">II - Identificação do Imóvel</h3>
-        {(() => {
-          const imovelMatricula = (contract as any).imovelMatricula || dados.imovel?.matricula || "Matrícula não informada";
-          const imovelCri = (contract as any).imovelCri || dados.imovel?.cri || "CRI não informado";
-          const imovelTituloRaw = (contract as any).imovelTitulo || (contract as any).imovelNomeEdificio || dados.imovel?.titulo || dados.imovel?.buildingName || dados.imovel?.nomeEdificio || dados.imovel?.condoName || "";
-          const tituloFinal = (imovelTituloRaw && imovelTituloRaw !== "Imóvel") ? imovelTituloRaw : "Imóvel";
+        <section className="section avoid-break">
+          <h3 className="section-title">I - Proponente Comprador</h3>
+          <div className="grid grid-cols-2 gap-y-1.5 gap-x-6 text-[10px]">
+            <p><strong>Nome:</strong> {p.nome || contract.nomeCliente || "Não informado"}</p>
+            <p><strong>CPF:</strong> {p.cpf || "Não informado"}</p>
+            <p><strong>RG:</strong> {p.rg || "Não informado"}</p>
+            <p><strong>Estado Civil:</strong> {p.estadoCivil || "Não informado"}</p>
+            <p><strong>Profissão:</strong> {p.profissao || "Não informado"}</p>
+            <p><strong>Telefone:</strong> {p.telefone || "Não informado"}{p.whatsapp || p.celular ? ` / WhatsApp: ${p.whatsapp || p.celular}` : ''}</p>
+            <p className="col-span-2"><strong>E-mail:</strong> {p.email || '---'}</p>
+            <p className="col-span-2"><strong>Endereço:</strong> {p.endereco || '---'}{p.cep ? ` - CEP: ${p.cep}` : ''}{p.cidade ? ` - ${p.cidade}/${p.estado || ''}` : ''}</p>
+            
+            {spouseNome && (
+              <>
+                <p><strong>Cônjuge:</strong> {spouseNome}</p>
+                <p><strong>CPF Cônjuge:</strong> {spouseCpf || "Não informado"}</p>
+                {spouseRg && <p><strong>RG Cônjuge:</strong> {spouseRg}</p>}
+                {spouseProfissao && <p><strong>Profissão Cônjuge:</strong> {spouseProfissao}</p>}
+                {spouseTelefone && <p><strong>Telefone Cônjuge:</strong> {spouseTelefone}</p>}
+                {spouseEmail && <p><strong>E-mail Cônjuge:</strong> {spouseEmail}</p>}
+                {spouseEstadoCivil && <p><strong>Estado Civil Cônjuge:</strong> {spouseEstadoCivil}</p>}
+                {spouseEndereco && <p className="col-span-2"><strong>Endereço Cônjuge:</strong> {spouseEndereco}</p>}
+              </>
+            )}
+          </div>
+        </section>
 
-          return (
-            <>
-              <div className="grid grid-cols-2 gap-y-1.5 gap-x-6">
-                <p><strong>Código:</strong> {(contract as any).imovelCodigo || dados.imovel?.codigo || "Não informado"}</p>
-                <p><strong>Título:</strong> {tituloFinal}</p>
-                <p className="col-span-2"><strong>Endereço:</strong> {contract.enderecoImovel || dados.imovel?.endereco || "Não informado"}</p>
-                <p><strong>Bairro:</strong> {(contract as any).imovelBairro || dados.imovel?.bairro || "Não informado"}</p>
-                <p><strong>Cidade/UF:</strong> {((contract as any).imovelCidade || dados.imovel?.cidade) ? `${(contract as any).imovelCidade || dados.imovel?.cidade || ""}${((contract as any).imovelEstado || dados.imovel?.estado) ? ` / ${(contract as any).imovelEstado || dados.imovel?.estado}` : ""}` : "Não informado"}</p>
-                <p><strong>Matrícula do imóvel:</strong> {imovelMatricula}</p>
-                <p><strong>CRI do imóvel:</strong> {imovelCri}</p>
-                <p><strong>Valor anunciado:</strong> {(contract as any).valorImovel ? formatCurrency(Number((contract as any).valorImovel)) : "Sob Consulta"}</p>
-                <p><strong>Valor da proposta:</strong> {contract.valor ? formatCurrency(Number(contract.valor)) : "Não informado"}</p>
+        <section className="section avoid-break">
+          <h3 className="section-title">II - Identificação do Imóvel</h3>
+          <div className="grid grid-cols-2 gap-y-1.5 gap-x-6 text-[10px]">
+            <p><strong>Código:</strong> {(contract as any).imovelCodigo || dados.imovel?.codigo || "Não informado"}</p>
+            <p><strong>Edifício:</strong> {tituloFinal}</p>
+            <p className="col-span-2"><strong>Endereço:</strong> {contract.enderecoImovel || dados.imovel?.endereco || "Não informado"}</p>
+            <p><strong>Bairro:</strong> {(contract as any).imovelBairro || dados.imovel?.bairro || "Não informado"}</p>
+            <p><strong>Cidade/UF:</strong> {((contract as any).imovelCidade || dados.imovel?.cidade) ? `${(contract as any).imovelCidade || dados.imovel?.cidade || ""}${((contract as any).imovelEstado || dados.imovel?.estado) ? ` / ${(contract as any).imovelEstado || dados.imovel?.estado}` : ""}` : "Não informado"}</p>
+            <p><strong>Matrícula do imóvel:</strong> {imovelMatricula}</p>
+            <p><strong>CRI do imóvel:</strong> {imovelCri}</p>
+            <p><strong>Valor anunciado:</strong> {(contract as any).valorImovel ? formatCurrency(Number((contract as any).valorImovel)) : "Sob Consulta"}</p>
+            <p><strong>{isContra ? "Valor da contraproposta:" : "Valor da proposta:"}</strong> {contract.valor ? formatCurrency(Number(contract.valor)) : "Não informado"}</p>
+          </div>
+          {tituloFinal && tituloFinal !== "Imóvel" ? (
+            <p className="mt-2 text-xs italic text-gray-600">
+              O imóvel objeto desta {isContra ? "contraproposta" : "proposta"}, localizado no <strong>{tituloFinal}</strong>, encontra-se matriculado sob nº <strong>{imovelMatricula}</strong>, junto ao <strong>{imovelCri}</strong>.
+            </p>
+          ) : (
+            <p className="mt-2 text-xs italic text-gray-600">
+              O imóvel objeto desta {isContra ? "contraproposta" : "proposta"} encontra-se matriculado sob nº <strong>{imovelMatricula}</strong>, junto ao <strong>{imovelCri}</strong>.
+            </p>
+          )}
+        </section>
+
+        <section className="section prevent-page-break">
+          <h3 className="section-title">III - Valor e Forma de Pagamento</h3>
+          <div className="space-y-1 text-[10px]">
+            <p>O proponente oferece pelo imóvel acima descrito o valor de <strong>{formatCurrency(contract.valor)}</strong> ({dados.pagamento?.valorExtenso || dados.termos?.valorExtenso || (contract as any).valorPorExtenso || valorMonetarioPorExtenso(contract.valor)}).</p>
+            {metodosDePagamento && metodosDePagamento.length > 0 && (
+              <div className="leading-tight">
+                <p className="font-semibold text-gray-800">Condições de Pagamento de Preferência:</p>
+                <ul className="list-disc pl-4 mt-0.5 space-y-0.5">
+                  {metodosDePagamento.map((m: string) => (
+                    <li key={m}>{m}</li>
+                  ))}
+                </ul>
               </div>
-              {tituloFinal && tituloFinal !== "Imóvel" ? (
-                <p className="mt-2 text-xs italic text-gray-600">
-                  O imóvel objeto desta proposta, localizado no <strong>{tituloFinal}</strong>, encontra-se matriculado sob nº <strong>{imovelMatricula}</strong>, junto ao <strong>{imovelCri}</strong>.
-                </p>
-              ) : (
-                <p className="mt-2 text-xs italic text-gray-600">
-                  O imóvel objeto desta proposta encontra-se matriculado sob nº <strong>{imovelMatricula}</strong>, junto ao <strong>{imovelCri}</strong>.
-                </p>
-              )}
-            </>
-          );
-        })()}
-      </section>
+            )}
+            {outrasCondVal && (
+              <div className="bg-gray-50/50 p-1.5 rounded border border-gray-100/80 mt-1 whitespace-pre-line">
+                <strong>Outras Condições:</strong> {outrasCondVal}
+              </div>
+            )}
+          </div>
+        </section>
 
-      <section className="section prevent-page-break">
-        <h3 className="section-title">III - Valor e Forma de Pagamento</h3>
-        <div className="space-y-1">
-          <p>O proponente oferece pelo imóvel acima descrito o valor de <strong>{formatCurrency(contract.valor)}</strong> ({dados.pagamento?.valorExtenso || (contract as any).valorPorExtenso || valorMonetarioPorExtenso(contract.valor)}).</p>
-          {dados.pagamento?.metodos && dados.pagamento.metodos.length > 0 && (
-            <div className="leading-tight">
-              <p className="font-semibold text-gray-800">Condições de Pagamento de Preferência:</p>
-              <ul className="list-disc pl-4 mt-0.5 space-y-0.5">
-                {dados.pagamento?.metodos?.map((m: string) => (
-                  <li key={m}>{m}</li>
-                ))}
-              </ul>
+        {renderClausulasSelecionadas()}
+
+        <div className="mt-4 text-right font-bold text-[9.5px]">
+          {dados.local || "Balneário Camboriú"}, {dados.data || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+        </div>
+
+        <div className="pdf-signatures shrink-0">
+          <div className="flex flex-col justify-end">
+            <div className="pdf-signature-line">
+              {p.nome || contract.nomeCliente || "Proponente Comprador"}
             </div>
-          )}
-          {dados.pagamento?.outrasCondicoes && (
-            <div className="bg-gray-50/50 p-1.5 rounded border border-gray-100/80 mt-1">
-              <strong>Outras Condições:</strong> {dados.pagamento.outrasCondicoes}
+            <div className="pdf-signature-role">Proponente Comprador</div>
+          </div>
+          <div className="flex flex-col justify-end">
+            <div className="pdf-signature-line">
+              {safeText(empresa.nome)}
             </div>
-          )}
-        </div>
-      </section>
-
-      {renderClausulasSelecionadas()}
-
-      <div className="mt-4 text-right font-bold text-[9.5px]">
-        {dados.local}, {dados.data}
-      </div>
-
-      <div className="pdf-signatures shrink-0">
-        <div className="flex flex-col justify-end">
-          <div className="pdf-signature-line">
-            {dados.proponente?.nome || contract.nomeCliente}
+            <div className="pdf-signature-role">Intermediadora / Testemunha</div>
           </div>
-          <div className="pdf-signature-role">Proponente Comprador</div>
-        </div>
-        <div className="flex flex-col justify-end">
-          <div className="pdf-signature-line">
-            {safeText(empresa.nome)}
-          </div>
-          <div className="pdf-signature-role">Intermediadora / Testemunha</div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
-  const renderContraproposta = () => (
-    <div className="pdf-compact-content relative z-10 w-full">
-      <div className="pdf-document-title">
-        CONTRAPROPOSTA DE COMPRA E VENDA
-      </div>
-
-      <section className="section avoid-break">
-        <h3 className="section-title">I - Identificação do Proprietário Vendedor</h3>
-        <div className="grid grid-cols-2 gap-y-1.5 gap-x-6">
-          <p><strong>Nome:</strong> {dados.vendedor?.nome || contract.nomeVendedor}</p>
-          <p><strong>CPF:</strong> {dados.vendedor?.cpf}</p>
-          <p><strong>RG:</strong> {dados.vendedor?.rg}</p>
-          <p><strong>Estado Civil:</strong> {dados.vendedor?.estadoCivil}</p>
-          <p><strong>Profissão:</strong> {dados.vendedor?.profissao}</p>
-          <p><strong>Telefone:</strong> {dados.vendedor?.telefone}{dados.vendedor?.whatsapp ? ` / WhatsApp: ${dados.vendedor?.whatsapp}` : ''}</p>
-          <p className="col-span-2"><strong>E-mail:</strong> {dados.vendedor?.email || '---'}</p>
-          <p className="col-span-2"><strong>Endereço:</strong> {dados.vendedor?.endereco || '---'}{dados.vendedor?.cep ? ` - CEP: ${dados.vendedor?.cep}` : ''}{dados.vendedor?.cidade ? ` - ${dados.vendedor?.cidade}/${dados.vendedor?.estado || ''}` : ''}</p>
-        </div>
-      </section>
-
-      <section className="section avoid-break">
-        <h3 className="section-title">II - Referência à Proposta Apresentada</h3>
-        <div className="grid grid-cols-2 gap-y-1.5 gap-x-6">
-          <p><strong>Data da Proposta:</strong> {dados.referencia?.dataProposta}</p>
-          <p><strong>Nome do Proponente:</strong> {contract.nomeCliente}</p>
-          <p className="col-span-2"><strong>Imóvel Referência:</strong> {contract.enderecoImovel}</p>
-        </div>
-      </section>
-
-      <section className="section prevent-page-break">
-        <h3 className="section-title">III - Termos e Condições Adicionais da Contraproposta</h3>
-        <div className="space-y-1">
-          <p>O proprietário vendedor apresenta contraproposta no valor de <strong>{formatCurrency(contract.valor)}</strong>.</p>
-          {dados.termos?.metodos && dados.termos.metodos.length > 0 && (
-            <div className="leading-tight">
-              <p className="font-semibold text-gray-800">Forma de Pagamento Proposta:</p>
-              <ul className="list-disc pl-4 mt-0.5 space-y-0.5">
-                {dados.termos?.metodos?.map((m: string) => (
-                  <li key={m}>{m}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      </section>
-
-      {renderClausulasSelecionadas()}
-
-      <div className="mt-4 text-right font-bold text-[9.5px]">
-        {dados.local}, {dados.data}
-      </div>
-
-      <div className="pdf-signatures shrink-0">
-        <div className="flex flex-col justify-end">
-          <div className="pdf-signature-line">
-            {dados.vendedor?.nome || contract.nomeVendedor}
-          </div>
-          <div className="pdf-signature-role">Proprietário Vendedor</div>
-        </div>
-        <div className="flex flex-col justify-end">
-          <div className="pdf-signature-line">
-            {safeText(empresa.nome)}
-          </div>
-          <div className="pdf-signature-role">Intermediadora / Testemunha</div>
-        </div>
-      </div>
-    </div>
-  );
+  const renderProposta = () => renderPropostaOrContraproposta(false);
+  const renderContraproposta = () => renderPropostaOrContraproposta(true);
 
   const renderAceite = () => (
     <div className="pdf-compact-content relative z-10 w-full bg-white">
@@ -581,6 +555,30 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
           <p><strong>Telefone:</strong> {dados.aceitante?.telefone || '---'}{dados.aceitante?.whatsapp ? ` / WhatsApp: ${dados.aceitante?.whatsapp}` : ''}</p>
           <p className="col-span-2"><strong>E-mail:</strong> {dados.aceitante?.email || '---'}</p>
           <p className="col-span-2"><strong>Endereço Residencial:</strong> {dados.aceitante?.endereco || '---'}{dados.aceitante?.cep ? ` - CEP: ${dados.aceitante?.cep}` : ''}{dados.aceitante?.cidade ? ` - ${dados.aceitante?.cidade}/${dados.aceitante?.estado || ''}` : ''}</p>
+
+          {(() => {
+            const a = dados.aceitante || {};
+            const valName = a.vendedorConjugeNome || a.compradorConjugeNome || a.conjugeNome || a.aceitanteConjugeNome || "";
+            if (!valName) return null;
+            const valCpf = a.vendedorConjugeCpf || a.compradorConjugeCpf || a.conjugeCpf || a.aceitanteConjugeCpf || "";
+            const valRg = a.vendedorConjugeRg || a.compradorConjugeRg || a.conjugeRg || a.aceitanteConjugeRg || "";
+            const valProfissao = a.vendedorConjugeProfissao || a.compradorConjugeProfissao || a.conjugeProfissao || a.aceitanteConjugeProfissao || "";
+            const valEmail = a.vendedorConjugeEmail || a.compradorConjugeEmail || a.conjugeEmail || a.aceitanteConjugeEmail || "";
+            const valTelefone = a.vendedorConjugeTelefone || a.compradorConjugeTelefone || a.conjugeTelefone || a.aceitanteConjugeTelefone || "";
+            const valEndereco = a.vendedorConjugeEndereco || a.compradorConjugeEndereco || a.conjugeEndereco || a.aceitanteConjugeEndereco || "";
+
+            return (
+              <>
+                <p><strong>Cônjuge:</strong> {valName}</p>
+                <p><strong>CPF Cônjuge:</strong> {valCpf || "Não informado"}</p>
+                {valRg && <p><strong>RG Cônjuge:</strong> {valRg}</p>}
+                {valProfissao && <p><strong>Profissão Cônjuge:</strong> {valProfissao}</p>}
+                {valTelefone && <p><strong>Telefone Cônjuge:</strong> {valTelefone}</p>}
+                {valEmail && <p><strong>E-mail Cônjuge:</strong> {valEmail}</p>}
+                {valEndereco && <p className="col-span-2"><strong>Endereço Cônjuge:</strong> {valEndereco}</p>}
+              </>
+            );
+          })()}
         </div>
       </section>
 
@@ -647,6 +645,17 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
             <p><strong>Telefone:</strong> {safeText(comp.telefone || (contract as any).comprador?.telefone || "---")}{comp.whatsapp ? ` / WhatsApp: ${safeText(comp.whatsapp)}` : ''}</p>
             <p className="col-span-2"><strong>E-mail:</strong> {safeText(comp.email || (contract as any).comprador?.email || "---")}</p>
             <p className="col-span-2"><strong>Endereço:</strong> {safeText(comp.endereco || (contract as any).comprador?.endereco || "---")}{comp.cep ? ` - CEP: ${safeText(comp.cep)}` : ''}{comp.cidade ? ` - ${safeText(comp.cidade)}/${safeText(comp.estado || '')}` : ''}</p>
+            {(comp.compradorConjugeNome || comp.conjugeNome) && (
+              <>
+                <p><strong>Cônjuge do Comprador:</strong> {comp.compradorConjugeNome || comp.conjugeNome}</p>
+                <p><strong>CPF Cônjuge:</strong> {comp.compradorConjugeCpf || comp.conjugeCpf || "Não informado"}</p>
+                {(comp.compradorConjugeRg || comp.conjugeRg) && <p><strong>RG Cônjuge:</strong> {comp.compradorConjugeRg || comp.conjugeRg}</p>}
+                {(comp.compradorConjugeProfissao || comp.conjugeProfissao) && <p><strong>Profissão Cônjuge:</strong> {comp.compradorConjugeProfissao || comp.conjugeProfissao}</p>}
+                {(comp.compradorConjugeTelefone || comp.conjugeTelefone) && <p><strong>Telefone Cônjuge:</strong> {comp.compradorConjugeTelefone || comp.conjugeTelefone}</p>}
+                {(comp.compradorConjugeEmail || comp.conjugeEmail) && <p><strong>E-mail Cônjuge:</strong> {comp.compradorConjugeEmail || comp.conjugeEmail}</p>}
+                {(comp.compradorConjugeEndereco || comp.conjugeEndereco) && <p className="col-span-2"><strong>Endereço Cônjuge:</strong> {comp.compradorConjugeEndereco || comp.conjugeEndereco}</p>}
+              </>
+            )}
           </div>
         </section>
 
@@ -662,6 +671,17 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
             <p><strong>Telefone:</strong> {safeText(vend.telefone || (contract as any).vendedor?.telefone || "---")}{vend.whatsapp ? ` / WhatsApp: ${safeText(vend.whatsapp)}` : ''}</p>
             <p className="col-span-2"><strong>E-mail:</strong> {safeText(vend.email || (contract as any).vendedor?.email || "---")}</p>
             <p className="col-span-2"><strong>Endereço:</strong> {safeText(vend.endereco || (contract as any).vendedor?.endereco || "---")}{vend.cep ? ` - CEP: ${safeText(vend.cep)}` : ''}{vend.cidade ? ` - ${safeText(vend.cidade)}/${safeText(vend.estado || '')}` : ''}</p>
+            {(vend.vendedorConjugeNome || vend.conjugeNome) && (
+              <>
+                <p><strong>Cônjuge do Vendedor:</strong> {vend.vendedorConjugeNome || vend.conjugeNome}</p>
+                <p><strong>CPF Cônjuge:</strong> {vend.vendedorConjugeCpf || vend.conjugeCpf || "Não informado"}</p>
+                {(vend.vendedorConjugeRg || vend.conjugeRg) && <p><strong>RG Cônjuge:</strong> {vend.vendedorConjugeRg || vend.conjugeRg}</p>}
+                {(vend.vendedorConjugeProfissao || vend.conjugeProfissao) && <p><strong>Profissão Cônjuge:</strong> {vend.vendedorConjugeProfissao || vend.conjugeProfissao}</p>}
+                {(vend.vendedorConjugeTelefone || vend.conjugeTelefone) && <p><strong>Telefone Cônjuge:</strong> {vend.vendedorConjugeTelefone || vend.conjugeTelefone}</p>}
+                {(vend.vendedorConjugeEmail || vend.conjugeEmail) && <p><strong>E-mail Cônjuge:</strong> {vend.vendedorConjugeEmail || vend.conjugeEmail}</p>}
+                {(vend.vendedorConjugeEndereco || vend.conjugeEndereco) && <p className="col-span-2"><strong>Endereço Cônjuge:</strong> {vend.vendedorConjugeEndereco || vend.conjugeEndereco}</p>}
+              </>
+            )}
           </div>
         </section>
 
