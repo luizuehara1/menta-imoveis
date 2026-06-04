@@ -2068,6 +2068,20 @@ export function getFormaPagamento(dados: any = {}): string {
   ).trim();
 }
 
+export function getDetalhesPagamento(dados: any = {}): string {
+  if (!dados) return "";
+  return (
+    dados.detalhesPagamento ||
+    dados.detalhesPagamentoContraproposta ||
+    dados.outrasCondicoes ||
+    dados.condicoesPagamento ||
+    dados.observacoesPagamento ||
+    dados.clausulaPagamento ||
+    dados.termosCondicoes ||
+    ""
+  ).trim();
+}
+
 
 
 

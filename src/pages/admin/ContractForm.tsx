@@ -45,7 +45,7 @@ import { useSettings } from '../../hooks/useSettings';
 import { Contract, ContractType, ContractStatus, Property } from '../../types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { maskCurrency, parseCurrencyToNumber, formatCurrency, valorMonetarioPorExtenso, normalizarDadosImovel, normalizarPessoa, textoConjuge, normalizarDadosDocumento, formatarDataBR, getOutrasCondicoes, montarTextoConjuge, getNomeComprador, getNomeVendedor, valorOuNaoInformado, getNomeEdificio, getEnderecoImovel, getTermosCondicoes, getFormaPagamento } from '../../lib/utils';
+import { maskCurrency, parseCurrencyToNumber, formatCurrency, valorMonetarioPorExtenso, normalizarDadosImovel, normalizarPessoa, textoConjuge, normalizarDadosDocumento, formatarDataBR, getOutrasCondicoes, montarTextoConjuge, getNomeComprador, getNomeVendedor, valorOuNaoInformado, getNomeEdificio, getEnderecoImovel, getTermosCondicoes, getFormaPagamento, getDetalhesPagamento } from '../../lib/utils';
 import { staggerContainer, slideUp, fadeIn, scaleIn } from '../../constants/animations';
 import { ContractA4Preview } from '../../components/admin/ContractA4Preview';
 import jsPDF from 'jspdf';
@@ -1112,11 +1112,18 @@ export default function AdminContractForm() {
       tipo: flatData.imovelTipo || existingDados.imovel?.tipo || ""
     };
 
+    const detalhesFinal = getDetalhesPagamento(docObj) || getDetalhesPagamento(flatData) || getDetalhesPagamento(existingDados.pagamento) || getDetalhesPagamento(existingDados.termos) || "";
+
     const pagamentoMerged = {
       ...existingDados.pagamento,
       metodos: flatData.formasPagamento || existingDados.pagamento?.metodos || [],
       valorExtenso: flatData.valorPorExtenso || existingDados.pagamento?.valorExtenso || "",
-      outrasCondicoes: flatData.condicoesPagamento || existingDados.pagamento?.outrasCondicoes || "",
+      outrasCondicoes: detalhesFinal,
+      detalhesPagamento: detalhesFinal,
+      detalhesPagamentoContraproposta: detalhesFinal,
+      condicoesPagamento: detalhesFinal,
+      observacoesPagamento: detalhesFinal,
+      clausulaPagamento: detalhesFinal,
       observacoes: flatData.observacoes || existingDados.pagamento?.observacoes || ""
     };
 
@@ -1124,7 +1131,12 @@ export default function AdminContractForm() {
       ...existingDados.termos,
       metodos: flatData.formasPagamento || existingDados.termos?.metodos || [],
       valorExtenso: flatData.valorPorExtenso || existingDados.termos?.valorExtenso || "",
-      outrasCondicoes: flatData.condicoesPagamento || existingDados.termos?.outrasCondicoes || "",
+      outrasCondicoes: detalhesFinal,
+      detalhesPagamento: detalhesFinal,
+      detalhesPagamentoContraproposta: detalhesFinal,
+      condicoesPagamento: detalhesFinal,
+      observacoesPagamento: detalhesFinal,
+      clausulaPagamento: detalhesFinal,
       observacoes: flatData.observacoes || existingDados.termos?.observacoes || ""
     };
 
@@ -1136,6 +1148,12 @@ export default function AdminContractForm() {
     return {
       ...docObj,
       ...flatData,
+      detalhesPagamento: detalhesFinal,
+      detalhesPagamentoContraproposta: detalhesFinal,
+      outrasCondicoes: detalhesFinal,
+      condicoesPagamento: detalhesFinal,
+      observacoesPagamento: detalhesFinal,
+      clausulaPagamento: detalhesFinal,
       dados: {
         ...existingDados,
         proponente: proponenteMerged,
@@ -1532,6 +1550,37 @@ export default function AdminContractForm() {
     };
     handleUrlParam();
   }, [searchParams, id]);
+
+  useEffect(() => {
+    if (step === 'revisao') {
+      const detalhesFinal = getDetalhesPagamento(contract) || getDetalhesPagamento(contract.dados?.[contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos']);
+      if (detalhesFinal) {
+        const section = contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos';
+        setContract((prev) => ({
+          ...prev,
+          detalhesPagamento: detalhesFinal,
+          detalhesPagamentoContraproposta: detalhesFinal,
+          outrasCondicoes: detalhesFinal,
+          condicoesPagamento: detalhesFinal,
+          observacoesPagamento: detalhesFinal,
+          clausulaPagamento: detalhesFinal,
+          dados: {
+            ...prev.dados,
+            [section]: {
+              ...prev?.dados?.[section],
+              detalhesPagamento: detalhesFinal,
+              detalhesPagamentoContraproposta: detalhesFinal,
+              outrasCondicoes: detalhesFinal,
+              condicoesPagamento: detalhesFinal,
+              observacoesPagamento: detalhesFinal,
+              clausulaPagamento: detalhesFinal
+            }
+          }
+        }));
+        console.log("Detalhes do pagamento indo para revisão:", detalhesFinal);
+      }
+    }
+  }, [step]);
 
   const handlePropertySelect = (property: Property) => {
     setSelectedProperty(property);
@@ -1996,6 +2045,37 @@ export default function AdminContractForm() {
         }
       } as any;
 
+      const detalhesFinal = getDetalhesPagamento(contract) || getDetalhesPagamento(contract.dados?.[contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos']);
+      dadosContrato.detalhesPagamento = detalhesFinal;
+      dadosContrato.detalhesPagamentoContraproposta = detalhesFinal;
+      dadosContrato.outrasCondicoes = detalhesFinal;
+      dadosContrato.condicoesPagamento = detalhesFinal;
+      dadosContrato.observacoesPagamento = detalhesFinal;
+      dadosContrato.clausulaPagamento = detalhesFinal;
+
+      if (!dadosContrato.dados) dadosContrato.dados = {};
+      if (!dadosContrato.dados.pagamento) dadosContrato.dados.pagamento = {};
+      dadosContrato.dados.pagamento.detalhesPagamento = detalhesFinal;
+      dadosContrato.dados.pagamento.detalhesPagamentoContraproposta = detalhesFinal;
+      dadosContrato.dados.pagamento.outrasCondicoes = detalhesFinal;
+      dadosContrato.dados.pagamento.condicoesPagamento = detalhesFinal;
+      dadosContrato.dados.pagamento.observacoesPagamento = detalhesFinal;
+      dadosContrato.dados.pagamento.clausulaPagamento = detalhesFinal;
+
+      if (!dadosContrato.dados.termos) dadosContrato.dados.termos = {};
+      dadosContrato.dados.termos.detalhesPagamento = detalhesFinal;
+      dadosContrato.dados.termos.detalhesPagamentoContraproposta = detalhesFinal;
+      dadosContrato.dados.termos.outrasCondicoes = detalhesFinal;
+      dadosContrato.dados.termos.condicoesPagamento = detalhesFinal;
+      dadosContrato.dados.termos.observacoesPagamento = detalhesFinal;
+      dadosContrato.dados.termos.clausulaPagamento = detalhesFinal;
+
+      console.log("Documento final antes de salvar:", {
+        id,
+        tipoContrato: contract.tipoContrato,
+        detalhesPagamento: detalhesFinal
+      });
+
       if (contract.tipoContrato === 'proposta') {
         dadosContrato.valorImovel = Number(imovelNormalizado.valorImovel || 0);
         dadosContrato.valorProposta = Number(contract.valor || 0);
@@ -2053,6 +2133,9 @@ export default function AdminContractForm() {
         if (contract.tipoContrato === 'proposta') {
           await setDoc(doc(db, 'propostas', savedId), cleanedData);
           console.log("Cópia da proposta salva na coleção 'propostas' ID:", savedId);
+        } else if (contract.tipoContrato === 'contraproposta') {
+          await setDoc(doc(db, 'contrapropostas', savedId), cleanedData);
+          console.log("Cópia da contraproposta salva na coleção 'contrapropostas' ID:", savedId);
         } else if (contract.tipoContrato === 'aceite') {
           const nomeCompradorFinal = getNomeComprador(cleanedData);
           const aceiteData = {
@@ -2067,6 +2150,12 @@ export default function AdminContractForm() {
           };
           await setDoc(doc(db, 'aceitesProposta', savedId), aceiteData);
           console.log("Cópia do aceite salva na coleção 'aceitesProposta' ID:", savedId);
+        } else if (contract.tipoContrato === 'arras_confirmatorios') {
+          await setDoc(doc(db, 'arrasConfirmatorios', savedId), cleanedData);
+          console.log("Cópia das arras salva na coleção 'arrasConfirmatorios' ID:", savedId);
+        } else if (contract.tipoContrato === 'locacao_temporaria') {
+          await setDoc(doc(db, 'locacoes', savedId), cleanedData);
+          console.log("Cópia da locação salva na coleção 'locacoes' ID:", savedId);
         }
       } else {
         await updateDoc(doc(db, 'contratos', id), cleanedData);
@@ -2075,6 +2164,9 @@ export default function AdminContractForm() {
         if (contract.tipoContrato === 'proposta') {
           await setDoc(doc(db, 'propostas', id), cleanedData, { merge: true });
           console.log("Cópia da proposta atualizada na coleção 'propostas' ID:", id);
+        } else if (contract.tipoContrato === 'contraproposta') {
+          await setDoc(doc(db, 'contrapropostas', id), cleanedData, { merge: true });
+          console.log("Cópia da contraproposta atualizada na coleção 'contrapropostas' ID:", id);
         } else if (contract.tipoContrato === 'aceite') {
           const nomeCompradorFinal = getNomeComprador(cleanedData);
           const aceiteData = {
@@ -2089,6 +2181,12 @@ export default function AdminContractForm() {
           };
           await setDoc(doc(db, 'aceitesProposta', id), aceiteData, { merge: true });
           console.log("Cópia do aceite atualizada na coleção 'aceitesProposta' ID:", id);
+        } else if (contract.tipoContrato === 'arras_confirmatorios') {
+          await setDoc(doc(db, 'arrasConfirmatorios', id), cleanedData, { merge: true });
+          console.log("Cópia das arras atualizada na coleção 'arrasConfirmatorios' ID:", id);
+        } else if (contract.tipoContrato === 'locacao_temporaria') {
+          await setDoc(doc(db, 'locacoes', id), cleanedData, { merge: true });
+          console.log("Cópia da locação atualizada na coleção 'locacoes' ID:", id);
         }
       }
 
@@ -3943,7 +4041,16 @@ export default function AdminContractForm() {
                             <textarea 
                               rows={4}
                               className="input-field py-4 min-h-[120px]" 
-                              value={contract.dados[contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos']?.outrasCondicoes || ''} 
+                              value={
+                                (contract as any).detalhesPagamento ||
+                                (contract as any).detalhesPagamentoContraproposta ||
+                                (contract as any).outrasCondicoes ||
+                                (contract as any).condicoesPagamento ||
+                                (contract as any).observacoesPagamento ||
+                                (contract as any).clausulaPagamento ||
+                                getDetalhesPagamento(contract.dados?.[contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos']) ||
+                                ""
+                              } 
                               onChange={e => {
                                 const val = e.target.value;
                                 const section = contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos';
@@ -3954,15 +4061,17 @@ export default function AdminContractForm() {
                                   detalhesPagamentoContraproposta: val,
                                   condicoesPagamento: val,
                                   observacoesPagamento: val,
+                                  clausulaPagamento: val,
                                   dados: {
                                     ...prev.dados,
                                     [section]: {
-                                      ...prev.dados[section],
+                                      ...prev?.dados?.[section],
                                       outrasCondicoes: val,
                                       detalhesPagamento: val,
                                       detalhesPagamentoContraproposta: val,
                                       condicoesPagamento: val,
-                                      observacoesPagamento: val
+                                      observacoesPagamento: val,
+                                      clausulaPagamento: val
                                     }
                                   }
                                 }));
@@ -4313,6 +4422,32 @@ export default function AdminContractForm() {
                     </div>
                   </div>
                 )}
+
+                {/* DETALHES DO PAGAMENTO / CONTRAPROPOSTA */}
+                <div className="mb-8 p-6 rounded-3xl bg-amber-50/50 border border-amber-200/60 text-amber-950">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 bg-amber-100 rounded-xl text-amber-800">
+                      <CreditCard size={20} />
+                    </div>
+                    <h4 className="font-display font-bold text-base text-amber-900 text-left">DETALHES DO PAGAMENTO / CONTRAPROPOSTA</h4>
+                  </div>
+                  
+                  <div className="text-xs space-y-4 text-left">
+                    {getDetalhesPagamento(contract) ? (
+                      <div className="bg-amber-100/30 p-4 rounded-xl border border-amber-100 mt-1 whitespace-pre-wrap leading-relaxed font-sans text-amber-950">
+                        {getDetalhesPagamento(contract)}
+                      </div>
+                    ) : (
+                      <div className="flex items-start gap-2.5 p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-rose-800 text-xs mt-2">
+                        <AlertCircle size={16} className="mt-0.5 shrink-0 text-rose-600" />
+                        <div>
+                          <p className="font-bold">Atenção: detalhes do pagamento não foram preenchidos.</p>
+                          <p>Por favor, volte à etapa anterior e preencha o campo de detalhes do pagamento caso necessário.</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
 
                 {/* A4 Preview Container */}
                 <div className="flex justify-center bg-gray-50/50 -m-10 p-10 overflow-hidden lg:overflow-visible min-h-[500px]">
