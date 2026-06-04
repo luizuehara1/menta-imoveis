@@ -1052,3 +1052,148 @@ export function getCardStats(imovel: any) {
   return getPropertyStats(imovel);
 }
 
+export function parseCurrencyBR(value: any): number {
+  if (typeof value === "number") return value;
+
+  if (!value) return 0;
+
+  const clean = String(value)
+    .replace(/[R$\s]/g, "")
+    .replace(/\./g, "")
+    .replace(",", ".");
+
+  const number = Number(clean);
+
+  return Number.isFinite(number) ? number : 0;
+}
+
+export function numeroPorExtenso(n: number): string {
+  const unidades = [
+    "",
+    "um",
+    "dois",
+    "três",
+    "quatro",
+    "cinco",
+    "seis",
+    "sete",
+    "oito",
+    "nove"
+  ];
+
+  const especiais = [
+    "dez",
+    "onze",
+    "doze",
+    "treze",
+    "quatorze",
+    "quinze",
+    "dezesseis",
+    "dezessete",
+    "dezoito",
+    "dezenove"
+  ];
+
+  const dezenas = [
+    "",
+    "",
+    "vinte",
+    "trinta",
+    "quarenta",
+    "cinquenta",
+    "sessenta",
+    "setenta",
+    "oitenta",
+    "noventa"
+  ];
+
+  const centenas = [
+    "",
+    "cento",
+    "duzentos",
+    "trezentos",
+    "quatrocentos",
+    "quinhentos",
+    "seiscentos",
+    "setecentos",
+    "oitocentos",
+    "novecentos"
+  ];
+
+  if (n === 0) return "zero";
+  if (n === 100) return "cem";
+
+  if (n < 10) return unidades[n];
+
+  if (n < 20) return especiais[n - 10];
+
+  if (n < 100) {
+    const dezena = Math.floor(n / 10);
+    const unidade = n % 10;
+
+    return dezenas[dezena] + (unidade ? " e " + unidades[unidade] : "");
+  }
+
+  if (n < 1000) {
+    const centena = Math.floor(n / 100);
+    const resto = n % 100;
+
+    return centenas[centena] + (resto ? " e " + numeroPorExtenso(resto) : "");
+  }
+
+  if (n < 1000000) {
+    const milhar = Math.floor(n / 1000);
+    const resto = n % 1000;
+
+    const milharTexto =
+      milhar === 1 ? "mil" : numeroPorExtenso(milhar) + " mil";
+
+    return milharTexto + (resto ? " e " + numeroPorExtenso(resto) : "");
+  }
+
+  if (n < 1000000000) {
+    const milhao = Math.floor(n / 1000000);
+    const resto = n % 1000000;
+
+    const milhaoTexto =
+      milhao === 1
+        ? "um milhão"
+        : numeroPorExtenso(milhao) + " milhões";
+
+    return milhaoTexto + (resto ? " e " + numeroPorExtenso(resto) : "");
+  }
+
+  return String(n);
+}
+
+export function primeiraLetraMaiuscula(texto: string): string {
+  if (!texto) return "";
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
+export function valorMonetarioPorExtenso(valor: any): string {
+  const numero = parseCurrencyBR(valor);
+
+  if (!numero || numero <= 0) return "";
+
+  const reais = Math.floor(numero);
+  const centavos = Math.round((numero - reais) * 100);
+
+  let texto = "";
+
+  if (reais > 0) {
+    texto += numeroPorExtenso(reais);
+    texto += reais === 1 ? " real" : " reais";
+  }
+
+  if (centavos > 0) {
+    if (texto) texto += " e ";
+
+    texto += numeroPorExtenso(centavos);
+    texto += centavos === 1 ? " centavo" : " centavos";
+  }
+
+  return primeiraLetraMaiuscula(texto);
+}
+
+

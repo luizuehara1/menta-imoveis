@@ -2,7 +2,7 @@ import React from 'react';
 import { Contract, ContractType } from '../../types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { formatCurrency, isValidImageUrl, safeText, safeMoney, safeDate } from '../../lib/utils';
+import { formatCurrency, isValidImageUrl, safeText, safeMoney, safeDate, valorMonetarioPorExtenso } from '../../lib/utils';
 import { useSettings } from '../../hooks/useSettings';
 
 interface ContractA4PreviewProps {
@@ -436,7 +436,7 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
       <section className="section prevent-page-break">
         <h3 className="section-title">III - Valor e Forma de Pagamento</h3>
         <div className="space-y-1">
-          <p>O proponente oferece pelo imóvel acima descrito o valor de <strong>{formatCurrency(contract.valor)}</strong> ({dados.pagamento?.valorExtenso}).</p>
+          <p>O proponente oferece pelo imóvel acima descrito o valor de <strong>{formatCurrency(contract.valor)}</strong> ({dados.pagamento?.valorExtenso || (contract as any).valorPorExtenso || valorMonetarioPorExtenso(contract.valor)}).</p>
           {dados.pagamento?.metodos && dados.pagamento.metodos.length > 0 && (
             <div className="leading-tight">
               <p className="font-semibold text-gray-800">Condições de Pagamento de Preferência:</p>

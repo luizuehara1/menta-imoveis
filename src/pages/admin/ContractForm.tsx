@@ -45,7 +45,7 @@ import { useSettings } from '../../hooks/useSettings';
 import { Contract, ContractType, ContractStatus, Property } from '../../types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { maskCurrency, parseCurrencyToNumber, formatCurrency } from '../../lib/utils';
+import { maskCurrency, parseCurrencyToNumber, formatCurrency, valorMonetarioPorExtenso } from '../../lib/utils';
 import { staggerContainer, slideUp, fadeIn, scaleIn } from '../../constants/animations';
 import { ContractA4Preview } from '../../components/admin/ContractA4Preview';
 import jsPDF from 'jspdf';
@@ -240,6 +240,7 @@ export default function AdminContractForm() {
   const { user, isAdmin } = useAuth();
   const { settings } = useSettings();
   const printRef = useRef<HTMLDivElement>(null);
+  const lastConvertedValueRef = useRef<number | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(id ? true : false);
@@ -503,6 +504,35 @@ export default function AdminContractForm() {
       return 1;
     }
   };
+
+  // Preencher automaticamente o valor por extenso conforme o valor total negociado
+  useEffect(() => {
+    const valor = Number(contract.valor || 0);
+    const section = contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos';
+    const currentExtenso = contract.dados?.[section]?.valorExtenso || '';
+
+    if (valor > 0 && (currentExtenso === '' || lastConvertedValueRef.current !== valor)) {
+      const extensoGerado = valorMonetarioPorExtenso(valor);
+      lastConvertedValueRef.current = valor;
+
+      setContract(prev => {
+        const currentSectionData = prev.dados?.[section] || {};
+        if (currentSectionData.valorExtenso === extensoGerado) {
+          return prev;
+        }
+        return {
+          ...prev,
+          dados: {
+            ...prev.dados,
+            [section]: {
+              ...currentSectionData,
+              valorExtenso: extensoGerado
+            }
+          }
+        };
+      });
+    }
+  }, [contract.valor, contract.tipoContrato]);
 
   useEffect(() => {
     if (contract.tipoContrato === 'locacao_temporaria') {
@@ -823,6 +853,8 @@ export default function AdminContractForm() {
         imovelTitulo: selectedProperty?.title || contract.imovelTitulo || '',
         imovelMatricula: (contract as any).imovelMatricula || contract.dados?.imovel?.matricula || '',
         imovelCri: (contract as any).imovelCri || contract.dados?.imovel?.cri || '',
+        valorTotalNegociado: Number(contract.valor || 0),
+        valorPorExtenso: contract.dados?.[contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos']?.valorExtenso || valorMonetarioPorExtenso(Number(contract.valor || 0)),
         locadorNome: contract.dados?.locador?.nome || contract.nomeVendedor || '',
         locadorDocumento: contract.dados?.locador?.cpf || '',
         locatarioNome: contract.nomeCliente || '',
