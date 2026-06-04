@@ -417,20 +417,37 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
 
       <section className="section avoid-break">
         <h3 className="section-title">II - Identificação do Imóvel</h3>
-        <div className="grid grid-cols-2 gap-y-1.5 gap-x-6">
-          <p><strong>Código:</strong> {(contract as any).imovelCodigo || dados.imovel?.codigo || "Não informado"}</p>
-          <p><strong>Título:</strong> {(contract as any).imovelTitulo || dados.imovel?.titulo || "Não informado"}</p>
-          <p className="col-span-2"><strong>Endereço:</strong> {contract.enderecoImovel || dados.imovel?.endereco || "Não informado"}</p>
-          <p><strong>Bairro:</strong> {(contract as any).imovelBairro || dados.imovel?.bairro || "Não informado"}</p>
-          <p><strong>Cidade/UF:</strong> {((contract as any).imovelCidade || dados.imovel?.cidade) ? `${(contract as any).imovelCidade || dados.imovel?.cidade || ""}${((contract as any).imovelEstado || dados.imovel?.estado) ? ` / ${(contract as any).imovelEstado || dados.imovel?.estado}` : ""}` : "Não informado"}</p>
-          <p><strong>Matrícula do imóvel:</strong> {(contract as any).imovelMatricula || dados.imovel?.matricula || "Matrícula não informada"}</p>
-          <p><strong>CRI do imóvel:</strong> {(contract as any).imovelCri || dados.imovel?.cri || "CRI não informado"}</p>
-          <p><strong>Valor anunciado:</strong> {(contract as any).valorImovel ? formatCurrency(Number((contract as any).valorImovel)) : "Sob Consulta"}</p>
-          <p><strong>Valor da proposta:</strong> {contract.valor ? formatCurrency(Number(contract.valor)) : "Não informado"}</p>
-        </div>
-        <p className="mt-2 text-xs italic text-gray-600">
-          O imóvel objeto desta proposta encontra-se matriculado sob nº {((contract as any).imovelMatricula || dados.imovel?.matricula) || "Matrícula não informada"}, junto ao {((contract as any).imovelCri || dados.imovel?.cri) || "CRI não informado"}.
-        </p>
+        {(() => {
+          const imovelMatricula = (contract as any).imovelMatricula || dados.imovel?.matricula || "Matrícula não informada";
+          const imovelCri = (contract as any).imovelCri || dados.imovel?.cri || "CRI não informado";
+          const imovelTituloRaw = (contract as any).imovelTitulo || (contract as any).imovelNomeEdificio || dados.imovel?.titulo || dados.imovel?.buildingName || dados.imovel?.nomeEdificio || dados.imovel?.condoName || "";
+          const tituloFinal = (imovelTituloRaw && imovelTituloRaw !== "Imóvel") ? imovelTituloRaw : "Imóvel";
+
+          return (
+            <>
+              <div className="grid grid-cols-2 gap-y-1.5 gap-x-6">
+                <p><strong>Código:</strong> {(contract as any).imovelCodigo || dados.imovel?.codigo || "Não informado"}</p>
+                <p><strong>Título:</strong> {tituloFinal}</p>
+                <p className="col-span-2"><strong>Endereço:</strong> {contract.enderecoImovel || dados.imovel?.endereco || "Não informado"}</p>
+                <p><strong>Bairro:</strong> {(contract as any).imovelBairro || dados.imovel?.bairro || "Não informado"}</p>
+                <p><strong>Cidade/UF:</strong> {((contract as any).imovelCidade || dados.imovel?.cidade) ? `${(contract as any).imovelCidade || dados.imovel?.cidade || ""}${((contract as any).imovelEstado || dados.imovel?.estado) ? ` / ${(contract as any).imovelEstado || dados.imovel?.estado}` : ""}` : "Não informado"}</p>
+                <p><strong>Matrícula do imóvel:</strong> {imovelMatricula}</p>
+                <p><strong>CRI do imóvel:</strong> {imovelCri}</p>
+                <p><strong>Valor anunciado:</strong> {(contract as any).valorImovel ? formatCurrency(Number((contract as any).valorImovel)) : "Sob Consulta"}</p>
+                <p><strong>Valor da proposta:</strong> {contract.valor ? formatCurrency(Number(contract.valor)) : "Não informado"}</p>
+              </div>
+              {tituloFinal && tituloFinal !== "Imóvel" ? (
+                <p className="mt-2 text-xs italic text-gray-600">
+                  O imóvel objeto desta proposta, localizado no <strong>{tituloFinal}</strong>, encontra-se matriculado sob nº <strong>{imovelMatricula}</strong>, junto ao <strong>{imovelCri}</strong>.
+                </p>
+              ) : (
+                <p className="mt-2 text-xs italic text-gray-600">
+                  O imóvel objeto desta proposta encontra-se matriculado sob nº <strong>{imovelMatricula}</strong>, junto ao <strong>{imovelCri}</strong>.
+                </p>
+              )}
+            </>
+          );
+        })()}
       </section>
 
       <section className="section prevent-page-break">

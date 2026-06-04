@@ -418,6 +418,7 @@ export default function AdminPropertyForm() {
     defaultValues: {
       matriculaImovel: '',
       criImovel: '',
+      nomeEdificio: '',
       businessType: 'Venda',
       propertyType: 'Apartamento',
       status: 'Disponível',
@@ -646,6 +647,10 @@ export default function AdminPropertyForm() {
 
             const loadedCri = data.criImovel || data.cri || data.cartorioRegistroImoveis || data.cartorioRegistro || data.cartorioImovel || "";
             setValue('criImovel', loadedCri);
+
+            const loadedNomeEdificio = data.nomeEdificio || data.buildingName || data.edificio || data.nomeEmpreendimento || data.empreendimento || data.condoName || data.condominioNome || "";
+            setValue('nomeEdificio', loadedNomeEdificio);
+            setValue('buildingName', loadedNomeEdificio);
 
             // Parse stats using getCardStats and pre-fill flat field inputs
             const stats = getCardStats(data);
@@ -1004,6 +1009,8 @@ export default function AdminPropertyForm() {
         ...data,
         matriculaImovel: data.matriculaImovel || "",
         criImovel: data.criImovel || "",
+        nomeEdificio: data.nomeEdificio || data.buildingName || "",
+        buildingName: data.buildingName || data.nomeEdificio || "",
         businessType: normalizedSaveBType,
         valorTaxaLixo: valLixo,
         valorTaxaGas: valGas,
@@ -2104,7 +2111,10 @@ export default function AdminPropertyForm() {
                     <span className="text-sm font-bold">É um Edifício?</span>
                   </label>
                   {watch('isBuilding') && (
-                    <input {...register('buildingName')} className="input-field" placeholder="Nome do Edifício" />
+                    <div className="space-y-2">
+                      <label className="text-xs text-gray-400 font-bold uppercase block pl-1">Nome do Edifício / Empreendimento</label>
+                      <input {...register('nomeEdificio')} className="input-field" placeholder="Ex: Edifício Ilha de Malta" />
+                    </div>
                   )}
                </div>
                <div className="space-y-4">

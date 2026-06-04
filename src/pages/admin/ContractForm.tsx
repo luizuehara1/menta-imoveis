@@ -160,6 +160,14 @@ function getCriImovel(imovel: any): string {
 
 function getTituloImovel(imovel: any): string {
   return (
+    imovel?.nomeEdificio ||
+    imovel?.edificio ||
+    imovel?.nomeEmpreendimento ||
+    imovel?.empreendimento ||
+    imovel?.condominioNome ||
+    imovel?.nomeCondominio ||
+    imovel?.condoName ||
+    imovel?.buildingName ||
     imovel?.tituloAnuncio ||
     imovel?.titulo ||
     imovel?.nome ||
@@ -734,7 +742,8 @@ export default function AdminContractForm() {
         // Root attributes as requested
         imovelId: property.id,
         imovelCodigo: getCodigoImovel(property),
-        imovelTitulo: getTituloImovel(property),
+        imovelTitulo: getTituloImovel(property) || "Imóvel",
+        imovelNomeEdificio: (property as any).nomeEdificio || (property as any).edificio || (property as any).nomeEmpreendimento || (property as any).empreendimento || (property as any).condoName || (property as any).buildingName || "",
         imovelTipo: property.propertyType || (property as any).tipoImovel || "",
         imovelTipoNegocio: (property as any).tipoNegocio || property.businessType || "",
         imovelEndereco: montarEnderecoImovel(property),
@@ -850,7 +859,8 @@ export default function AdminContractForm() {
         status: finalizar ? 'finalizado' : (contract.status || 'rascunho'),
         imovelId: contract.imovelId || selectedProperty?.id || '',
         imovelCodigo: selectedProperty?.code || contract.imovelCodigo || '',
-        imovelTitulo: selectedProperty?.title || contract.imovelTitulo || '',
+        imovelTitulo: (contract as any).imovelTitulo || selectedProperty?.title || getTituloImovel(selectedProperty) || '',
+        imovelNomeEdificio: (contract as any).imovelNomeEdificio || (selectedProperty as any)?.nomeEdificio || (selectedProperty as any)?.buildingName || "",
         imovelMatricula: (contract as any).imovelMatricula || contract.dados?.imovel?.matricula || '',
         imovelCri: (contract as any).imovelCri || contract.dados?.imovel?.cri || '',
         valorTotalNegociado: Number(contract.valor || 0),
@@ -870,7 +880,8 @@ export default function AdminContractForm() {
       if (contract.tipoContrato === 'proposta') {
         dadosContrato.imovelId = contract.imovelId || '';
         dadosContrato.imovelCodigo = (contract as any).imovelCodigo || '';
-        dadosContrato.imovelTitulo = (contract as any).imovelTitulo || '';
+        dadosContrato.imovelTitulo = (contract as any).imovelTitulo || (contract as any).imovelNomeEdificio || (selectedProperty as any)?.nomeEdificio || (selectedProperty as any)?.buildingName || getTituloImovel(selectedProperty) || 'Imóvel';
+        dadosContrato.imovelNomeEdificio = (contract as any).imovelNomeEdificio || (selectedProperty as any)?.nomeEdificio || (selectedProperty as any)?.buildingName || '';
         dadosContrato.imovelEndereco = (contract as any).imovelEndereco || '';
         dadosContrato.imovelBairro = (contract as any).imovelBairro || '';
         dadosContrato.imovelCidade = (contract as any).imovelCidade || '';
