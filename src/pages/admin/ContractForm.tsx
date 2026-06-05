@@ -45,7 +45,7 @@ import { useSettings } from '../../hooks/useSettings';
 import { Contract, ContractType, ContractStatus, Property } from '../../types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { maskCurrency, parseCurrencyToNumber, formatCurrency, valorMonetarioPorExtenso, normalizarDadosImovel, normalizarPessoa, textoConjuge, normalizarDadosDocumento, formatarDataBR, getOutrasCondicoes, montarTextoConjuge, getNomeComprador, getNomeVendedor, valorOuNaoInformado, getNomeEdificio, getEnderecoImovel, getTermosCondicoes, getFormaPagamento, getDetalhesPagamento } from '../../lib/utils';
+import { maskCurrency, parseCurrencyToNumber, formatCurrency, valorMonetarioPorExtenso, normalizarDadosImovel, normalizarPessoa, textoConjuge, normalizarDadosDocumento, formatarDataBR, getOutrasCondicoes, montarTextoConjuge, getNomeComprador, getNomeVendedor, getCpfVendedor, getRgVendedor, getProfissaoVendedor, getEstadoCivilVendedor, getTelefoneVendedor, getEmailVendedor, getEnderecoVendedor, valorOuNaoInformado, getNomeEdificio, getEnderecoImovel, getTermosCondicoes, getFormaPagamento, getDetalhesPagamento } from '../../lib/utils';
 import { staggerContainer, slideUp, fadeIn, scaleIn } from '../../constants/animations';
 import { ContractA4Preview } from '../../components/admin/ContractA4Preview';
 import jsPDF from 'jspdf';
@@ -538,6 +538,55 @@ async function completarComPropostaOriginal(dados: any) {
   }
 }
 
+async function completarVendedorComImovel(dados: any) {
+  const temVendedor = getNomeVendedor(dados);
+
+  if (temVendedor) return dados;
+
+  const codigoOuId = dados.imovelId || dados.imovelCodigo;
+
+  if (!codigoOuId) return dados;
+
+  const imovel = await buscarImovelPorCodigoOuId(codigoOuId);
+
+  if (!imovel) return dados;
+
+  const vendedorNomeFinal = getNomeVendedor(imovel);
+  const vendedorCpfFinal = getCpfVendedor(imovel);
+  const vendedorRgFinal = getRgVendedor(imovel);
+  const vendedorProfissaoFinal = getProfissaoVendedor(imovel);
+  const vendedorEstadoCivilFinal = getEstadoCivilVendedor(imovel);
+  const vendedorTelefoneFinal = getTelefoneVendedor(imovel);
+  const vendedorEmailFinal = getEmailVendedor(imovel);
+  const vendedorEnderecoFinal = getEnderecoVendedor(imovel);
+
+  return {
+    ...dados,
+    vendedorNome: vendedorNomeFinal,
+    vendedorCpf: vendedorCpfFinal,
+    vendedorRg: vendedorRgFinal,
+    vendedorProfissao: vendedorProfissaoFinal,
+    vendedorEstadoCivil: vendedorEstadoCivilFinal,
+    vendedorTelefone: vendedorTelefoneFinal,
+    vendedorEmail: vendedorEmailFinal,
+    vendedorEndereco: vendedorEnderecoFinal,
+    dados: {
+      ...dados.dados,
+      vendedor: {
+        ...dados.dados?.vendedor,
+        nome: vendedorNomeFinal,
+        cpf: vendedorCpfFinal,
+        rg: vendedorRgFinal,
+        profissao: vendedorProfissaoFinal,
+        estadoCivil: vendedorEstadoCivilFinal,
+        telefone: vendedorTelefoneFinal,
+        email: vendedorEmailFinal,
+        endereco: vendedorEnderecoFinal
+      }
+    }
+  };
+}
+
 async function completarComCadastroImovel(dados: any) {
   const codigoOuId = dados.imovelId || dados.imovelCodigo;
   if (!codigoOuId) return dados;
@@ -555,6 +604,16 @@ async function completarComCadastroImovel(dados: any) {
     const imMatriculaRaw = getMatriculaImovel(imovel);
     const imCriRaw = getCriImovel(imovel);
 
+    const temVendedor = getNomeVendedor(dados);
+    const vendedorNomeFinal = temVendedor ? getNomeVendedor(dados) : getNomeVendedor(imovel);
+    const vendedorCpfFinal = temVendedor ? getCpfVendedor(dados) : getCpfVendedor(imovel);
+    const vendedorRgFinal = temVendedor ? getRgVendedor(dados) : getRgVendedor(imovel);
+    const vendedorProfissaoFinal = temVendedor ? getProfissaoVendedor(dados) : getProfissaoVendedor(imovel);
+    const vendedorEstadoCivilFinal = temVendedor ? getEstadoCivilVendedor(dados) : getEstadoCivilVendedor(imovel);
+    const vendedorTelefoneFinal = temVendedor ? getTelefoneVendedor(dados) : getTelefoneVendedor(imovel);
+    const vendedorEmailFinal = temVendedor ? getEmailVendedor(dados) : getEmailVendedor(imovel);
+    const vendedorEnderecoFinal = temVendedor ? getEnderecoVendedor(dados) : getEnderecoVendedor(imovel);
+
     return {
       ...dados,
       imovelId: dados.imovelId || imovel.id || "",
@@ -567,8 +626,29 @@ async function completarComCadastroImovel(dados: any) {
       imovelEndereco: dados.imovelEndereco || imEnderecoRaw,
       imovelMatricula: dados.imovelMatricula || imMatriculaRaw,
       imovelCri: dados.imovelCri || imCriRaw,
+
+      vendedorNome: vendedorNomeFinal,
+      vendedorCpf: vendedorCpfFinal,
+      vendedorRg: vendedorRgFinal,
+      vendedorProfissao: vendedorProfissaoFinal,
+      vendedorEstadoCivil: vendedorEstadoCivilFinal,
+      vendedorTelefone: vendedorTelefoneFinal,
+      vendedorEmail: vendedorEmailFinal,
+      vendedorEndereco: vendedorEnderecoFinal,
+
       dados: {
         ...dados.dados,
+        vendedor: {
+          ...dados.dados?.vendedor,
+          nome: vendedorNomeFinal,
+          cpf: vendedorCpfFinal,
+          rg: vendedorRgFinal,
+          profissao: vendedorProfissaoFinal,
+          estadoCivil: vendedorEstadoCivilFinal,
+          telefone: vendedorTelefoneFinal,
+          email: vendedorEmailFinal,
+          endereco: vendedorEnderecoFinal
+        },
         imovel: {
           ...dados.dados?.imovel,
           titulo: dados.imovelTitulo || imTituloRaw,

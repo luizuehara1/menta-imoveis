@@ -1688,48 +1688,13 @@ export function normalizarDadosDocumento(origem: any = {}): any {
     nomeProprietario: getNomeVendedor(origem),
     proprietario: getNomeVendedor(origem),
 
-    vendedorCpf:
-      origem.vendedorCpf ||
-      origem.proprietarioCpf ||
-      vendedorRaw.cpf ||
-      vendedorRaw.cpfCnpj ||
-      "",
-
-    vendedorRg:
-      origem.vendedorRg ||
-      origem.proprietarioRg ||
-      vendedorRaw.rg ||
-      "",
-
-    vendedorProfissao:
-      origem.vendedorProfissao ||
-      origem.proprietarioProfissao ||
-      vendedorRaw.profissao ||
-      "",
-
-    vendedorEstadoCivil:
-      origem.vendedorEstadoCivil ||
-      origem.proprietarioEstadoCivil ||
-      vendedorRaw.estadoCivil ||
-      "",
-
-    vendedorTelefone:
-      origem.vendedorTelefone ||
-      origem.proprietarioTelefone ||
-      vendedorRaw.telefone ||
-      "",
-
-    vendedorEmail:
-      origem.vendedorEmail ||
-      origem.proprietarioEmail ||
-      vendedorRaw.email ||
-      "",
-
-    vendedorEndereco:
-      origem.vendedorEndereco ||
-      origem.proprietarioEndereco ||
-      vendedorRaw.endereco ||
-      "",
+    vendedorCpf: getCpfVendedor(origem),
+    vendedorRg: getRgVendedor(origem),
+    vendedorProfissao: getProfissaoVendedor(origem),
+    vendedorEstadoCivil: getEstadoCivilVendedor(origem),
+    vendedorTelefone: getTelefoneVendedor(origem),
+    vendedorEmail: getEmailVendedor(origem),
+    vendedorEndereco: getEnderecoVendedor(origem),
 
     vendedorConjugeNome:
       origem.vendedorConjugeNome ||
@@ -1956,6 +1921,113 @@ export function getNomeVendedor(dados: any = {}): string {
     dados.nomeProprietario ||
     dados.proprietario ||
     vendedorRaw.nome ||
+    dados.vendedor?.nome ||
+    dados.proprietarioDados?.nome ||
+    ""
+  ).trim();
+}
+
+export function getCpfVendedor(dados: any = {}): string {
+  if (!dados) return "";
+  const vendedorRaw = dados?.dados?.vendedor || dados?.vendedor || dados?.proprietarioDados || {};
+  return (
+    dados.vendedorCpf ||
+    dados.proprietarioCpf ||
+    dados.cpfVendedor ||
+    dados.cpfProprietario ||
+    vendedorRaw.cpf ||
+    dados.vendedor?.cpf ||
+    dados.proprietarioDados?.cpf ||
+    ""
+  ).trim();
+}
+
+export function getRgVendedor(dados: any = {}): string {
+  if (!dados) return "";
+  const vendedorRaw = dados?.dados?.vendedor || dados?.vendedor || dados?.proprietarioDados || {};
+  return (
+    dados.vendedorRg ||
+    dados.proprietarioRg ||
+    dados.rgVendedor ||
+    dados.rgProprietario ||
+    vendedorRaw.rg ||
+    dados.vendedor?.rg ||
+    dados.proprietarioDados?.rg ||
+    ""
+  ).trim();
+}
+
+export function getProfissaoVendedor(dados: any = {}): string {
+  if (!dados) return "";
+  const vendedorRaw = dados?.dados?.vendedor || dados?.vendedor || dados?.proprietarioDados || {};
+  return (
+    dados.vendedorProfissao ||
+    dados.proprietarioProfissao ||
+    dados.profissaoVendedor ||
+    dados.profissaoProprietario ||
+    vendedorRaw.profissao ||
+    dados.vendedor?.profissao ||
+    dados.proprietarioDados?.profissao ||
+    ""
+  ).trim();
+}
+
+export function getEstadoCivilVendedor(dados: any = {}): string {
+  if (!dados) return "";
+  const vendedorRaw = dados?.dados?.vendedor || dados?.vendedor || dados?.proprietarioDados || {};
+  return (
+    dados.vendedorEstadoCivil ||
+    dados.proprietarioEstadoCivil ||
+    dados.estadoCivilVendedor ||
+    dados.estadoCivilProprietario ||
+    vendedorRaw.estadoCivil ||
+    dados.vendedor?.estadoCivil ||
+    dados.proprietarioDados?.estadoCivil ||
+    ""
+  ).trim();
+}
+
+export function getTelefoneVendedor(dados: any = {}): string {
+  if (!dados) return "";
+  const vendedorRaw = dados?.dados?.vendedor || dados?.vendedor || dados?.proprietarioDados || {};
+  return (
+    dados.vendedorTelefone ||
+    dados.proprietarioTelefone ||
+    dados.telefoneVendedor ||
+    dados.telefoneProprietario ||
+    vendedorRaw.telefone ||
+    dados.vendedor?.telefone ||
+    dados.proprietarioDados?.telefone ||
+    ""
+  ).trim();
+}
+
+export function getEmailVendedor(dados: any = {}): string {
+  if (!dados) return "";
+  const vendedorRaw = dados?.dados?.vendedor || dados?.vendedor || dados?.proprietarioDados || {};
+  return (
+    dados.vendedorEmail ||
+    dados.proprietarioEmail ||
+    dados.emailVendedor ||
+    dados.emailProprietario ||
+    vendedorRaw.email ||
+    dados.vendedor?.email ||
+    dados.proprietarioDados?.email ||
+    ""
+  ).trim();
+}
+
+export function getEnderecoVendedor(dados: any = {}): string {
+  if (!dados) return "";
+  const vendedorRaw = dados?.dados?.vendedor || dados?.vendedor || dados?.proprietarioDados || {};
+  return (
+    dados.vendedorEndereco ||
+    dados.proprietarioEndereco ||
+    dados.enderecoVendedor ||
+    dados.enderecoProprietario ||
+    vendedorRaw.endereco ||
+    dados.vendedor?.endereco ||
+    dados.proprietarioDados?.endereco ||
     ""
   ).trim();
 }

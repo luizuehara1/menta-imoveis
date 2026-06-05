@@ -2,7 +2,7 @@ import React from 'react';
 import { Contract, ContractType } from '../../types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { formatCurrency, isValidImageUrl, safeText, safeMoney, safeDate, valorMonetarioPorExtenso, getTituloImovel, formatarDataBR, getOutrasCondicoes, montarTextoConjuge, getNomeComprador, getNomeVendedor, valorOuNaoInformado, getTermosCondicoes, getFormaPagamento } from '../../lib/utils';
+import { formatCurrency, isValidImageUrl, safeText, safeMoney, safeDate, valorMonetarioPorExtenso, getTituloImovel, formatarDataBR, getOutrasCondicoes, montarTextoConjuge, getNomeComprador, getNomeVendedor, getCpfVendedor, getRgVendedor, getProfissaoVendedor, getEstadoCivilVendedor, getTelefoneVendedor, getEmailVendedor, getEnderecoVendedor, getDetalhesPagamento, valorOuNaoInformado, getTermosCondicoes, getFormaPagamento } from '../../lib/utils';
 import { useSettings } from '../../hooks/useSettings';
 
 interface ContractA4PreviewProps {
@@ -359,6 +359,30 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
             </p>
             <p className="col-span-2 mt-0.5"><strong>Forma de Pagamento:</strong> {safeText(v.formaPagamento)}</p>
             {v.condicoesPagamento && <p className="col-span-2"><strong>Condições:</strong> {safeText(v.condicoesPagamento)}</p>}
+            {(() => {
+              const detalhesPagamentoFinal = getDetalhesPagamento(dados) || getDetalhesPagamento(contract);
+              if (!detalhesPagamentoFinal) return null;
+              const textoJaTemClausula = detalhesPagamentoFinal
+                .trim()
+                .toUpperCase()
+                .startsWith("CLÁUSULA");
+              return (
+                <div className="col-span-2 mt-2 border-t border-gray-100 pt-2 text-[9.5px]">
+                  {textoJaTemClausula ? (
+                    <div style={{ whiteSpace: "pre-line" }} className="leading-relaxed whitespace-pre-line bg-gray-50/50 p-2 rounded border border-gray-100">
+                      {detalhesPagamentoFinal}
+                    </div>
+                  ) : (
+                    <div className="leading-relaxed bg-gray-50/50 p-2 rounded border border-gray-100">
+                      <strong>Detalhes do pagamento / contraproposta:</strong>
+                      <div style={{ whiteSpace: "pre-line" }} className="whitespace-pre-line mt-1">
+                        {detalhesPagamentoFinal}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </section>
         
@@ -430,6 +454,12 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
     const spouseEstadoCivil = p.compradorConjugeEstadoCivil || p.conjugeEstadoCivil || dados.compradorConjugeEstadoCivil || "";
     const spouseEndereco = p.compradorConjugeEndereco || p.conjugeEndereco || dados.compradorConjugeEndereco || "";
 
+    // Extracted seller spouse info
+    const vendedorConjugeNome = dados.vendedorConjugeNome || (contract as any).vendedorConjugeNome || dados.proprietarioConjugeNome || (contract as any).proprietarioConjugeNome || "";
+    const vendedorConjugeCpf = dados.vendedorConjugeCpf || (contract as any).vendedorConjugeCpf || dados.proprietarioConjugeCpf || (contract as any).proprietarioConjugeCpf || "";
+    const vendedorConjugeRg = dados.vendedorConjugeRg || (contract as any).vendedorConjugeRg || dados.proprietarioConjugeRg || (contract as any).proprietarioConjugeRg || "";
+    const vendedorConjugeProfissao = dados.vendedorConjugeProfissao || (contract as any).vendedorConjugeProfissao || dados.proprietarioConjugeProfissao || (contract as any).proprietarioConjugeProfissao || "";
+
     const metodosDePagamento = dados.pagamento?.metodos || dados.termos?.metodos || (contract as any).formasPagamento || [];
 
     return (
@@ -439,31 +469,71 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
         </div>
 
         <section className="section avoid-break">
-          <h3 className="section-title">I - Proponente Comprador</h3>
-          <div className="grid grid-cols-2 gap-y-1.5 gap-x-6 text-[10px]">
-            <p><strong>Nome:</strong> {p.nome || contract.nomeCliente || "Não informado"}</p>
-            <p><strong>CPF:</strong> {p.cpf || "Não informado"}</p>
-            <p><strong>RG:</strong> {p.rg || "Não informado"}</p>
-            <p><strong>Estado Civil:</strong> {p.estadoCivil || "Não informado"}</p>
-            <p><strong>Profissão:</strong> {p.profissao || "Não informado"}</p>
-            <p><strong>Telefone:</strong> {p.telefone || "Não informado"}{p.whatsapp || p.celular ? ` / WhatsApp: ${p.whatsapp || p.celular}` : ''}</p>
-            <p className="col-span-2"><strong>E-mail:</strong> {p.email || '---'}</p>
-            <p className="col-span-2"><strong>Endereço:</strong> {p.endereco || '---'}{p.cep ? ` - CEP: ${p.cep}` : ''}{p.cidade ? ` - ${p.cidade}/${p.estado || ''}` : ''}</p>
-            
-            {spouseNome && (
-              <>
-                <p><strong>Cônjuge:</strong> {spouseNome}</p>
-                <p><strong>CPF Cônjuge:</strong> {spouseCpf || "Não informado"}</p>
-                {spouseRg && <p><strong>RG Cônjuge:</strong> {spouseRg}</p>}
-                {spouseProfissao && <p><strong>Profissão Cônjuge:</strong> {spouseProfissao}</p>}
-                {spouseTelefone && <p><strong>Telefone Cônjuge:</strong> {spouseTelefone}</p>}
-                {spouseEmail && <p><strong>E-mail Cônjuge:</strong> {spouseEmail}</p>}
-                {spouseEstadoCivil && <p><strong>Estado Civil Cônjuge:</strong> {spouseEstadoCivil}</p>}
-                {spouseEndereco && <p className="col-span-2"><strong>Endereço Cônjuge:</strong> {spouseEndereco}</p>}
-              </>
-            )}
-          </div>
+          {isContra ? (
+            <>
+              <h3 className="section-title">I - Proprietário Vendedor</h3>
+              <div className="grid grid-cols-2 gap-y-1.5 gap-x-6 text-[10px]">
+                <p><strong>Nome:</strong> {getNomeVendedor(dados) || getNomeVendedor(contract) || "Não informado"}</p>
+                <p><strong>CPF:</strong> {getCpfVendedor(dados) || getCpfVendedor(contract) || "Não informado"}</p>
+                <p><strong>RG:</strong> {getRgVendedor(dados) || getRgVendedor(contract) || "Não informado"}</p>
+                <p><strong>Estado Civil:</strong> {getEstadoCivilVendedor(dados) || getEstadoCivilVendedor(contract) || "Não informado"}</p>
+                <p><strong>Profissão:</strong> {getProfissaoVendedor(dados) || getProfissaoVendedor(contract) || "Não informado"}</p>
+                <p><strong>Telefone:</strong> {getTelefoneVendedor(dados) || getTelefoneVendedor(contract) || "Não informado"}</p>
+                <p className="col-span-2"><strong>E-mail:</strong> {getEmailVendedor(dados) || getEmailVendedor(contract) || "Não informado"}</p>
+                <p className="col-span-2"><strong>Endereço:</strong> {getEnderecoVendedor(dados) || getEnderecoVendedor(contract) || "Não informado"}</p>
+                
+                {vendedorConjugeNome && (
+                  <>
+                    <p><strong>Cônjuge:</strong> {vendedorConjugeNome}</p>
+                    <p><strong>CPF Cônjuge:</strong> {vendedorConjugeCpf || "Não informado"}</p>
+                    {vendedorConjugeRg && <p><strong>RG Cônjuge:</strong> {vendedorConjugeRg}</p>}
+                    {vendedorConjugeProfissao && <p><strong>Profissão Cônjuge:</strong> {vendedorConjugeProfissao}</p>}
+                  </>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <h3 className="section-title">I - Proponente Comprador</h3>
+              <div className="grid grid-cols-2 gap-y-1.5 gap-x-6 text-[10px]">
+                <p><strong>Nome:</strong> {p.nome || contract.nomeCliente || "Não informado"}</p>
+                <p><strong>CPF:</strong> {p.cpf || "Não informado"}</p>
+                <p><strong>RG:</strong> {p.rg || "Não informado"}</p>
+                <p><strong>Estado Civil:</strong> {p.estadoCivil || "Não informado"}</p>
+                <p><strong>Profissão:</strong> {p.profissao || "Não informado"}</p>
+                <p><strong>Telefone:</strong> {p.telefone || "Não informado"}{p.whatsapp || p.celular ? ` / WhatsApp: ${p.whatsapp || p.celular}` : ''}</p>
+                <p className="col-span-2"><strong>E-mail:</strong> {p.email || '---'}</p>
+                <p className="col-span-2"><strong>Endereço:</strong> {p.endereco || '---'}{p.cep ? ` - CEP: ${p.cep}` : ''}{p.cidade ? ` - ${p.cidade}/${p.estado || ''}` : ''}</p>
+                
+                {spouseNome && (
+                  <>
+                    <p><strong>Cônjuge:</strong> {spouseNome}</p>
+                    <p><strong>CPF Cônjuge:</strong> {spouseCpf || "Não informado"}</p>
+                    {spouseRg && <p><strong>RG Cônjuge:</strong> {spouseRg}</p>}
+                    {spouseProfissao && <p><strong>Profissão Cônjuge:</strong> {spouseProfissao}</p>}
+                    {spouseTelefone && <p><strong>Telefone Cônjuge:</strong> {spouseTelefone}</p>}
+                    {spouseEmail && <p><strong>E-mail Cônjuge:</strong> {spouseEmail}</p>}
+                    {spouseEstadoCivil && <p><strong>Estado Civil Cônjuge:</strong> {spouseEstadoCivil}</p>}
+                    {spouseEndereco && <p className="col-span-2"><strong>Endereço Cônjuge:</strong> {spouseEndereco}</p>}
+                  </>
+                )}
+              </div>
+            </>
+          )}
         </section>
+
+        {isContra && (
+          <section className="section avoid-break">
+            <h3 className="section-title">Dados do Comprador</h3>
+            <div className="grid grid-cols-2 gap-y-1.5 gap-x-6 text-[10px]">
+              <p><strong>Nome:</strong> {p.nome || contract.nomeCliente || "Não informado"}</p>
+              <p><strong>CPF:</strong> {p.cpf || "Não informado"}</p>
+              <p><strong>RG:</strong> {p.rg || "Não informado"}</p>
+              <p><strong>Telefone:</strong> {p.telefone || "Não informado"}</p>
+              <p><strong>E-mail:</strong> {p.email || "Não informado"}</p>
+            </div>
+          </section>
+        )}
 
         <section className="section avoid-break">
           <h3 className="section-title">II - Identificação do Imóvel</h3>
@@ -492,7 +562,12 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
         <section className="section prevent-page-break">
           <h3 className="section-title">III - Valor e Forma de Pagamento</h3>
           <div className="space-y-1 text-[10px]">
-            <p>O proponente oferece pelo imóvel acima descrito o valor de <strong>{formatCurrency(contract.valor)}</strong> ({dados.pagamento?.valorExtenso || dados.termos?.valorExtenso || (contract as any).valorPorExtenso || valorMonetarioPorExtenso(contract.valor)}).</p>
+            {isContra ? (
+              <p>A parte vendedora apresenta contraproposta ao proponente comprador, referente ao imóvel acima descrito, no valor de <strong>{formatCurrency(contract.valor)}</strong> ({dados.pagamento?.valorExtenso || dados.termos?.valorExtenso || (contract as any).valorPorExtenso || valorMonetarioPorExtenso(contract.valor)}).</p>
+            ) : (
+              <p>O proponente oferece pelo imóvel acima descrito o valor de <strong>{formatCurrency(contract.valor)}</strong> ({dados.pagamento?.valorExtenso || dados.termos?.valorExtenso || (contract as any).valorPorExtenso || valorMonetarioPorExtenso(contract.valor)}).</p>
+            )}
+            
             {metodosDePagamento && metodosDePagamento.length > 0 && (
               <div className="leading-tight">
                 <p className="font-semibold text-gray-800">Condições de Pagamento de Preferência:</p>
@@ -508,6 +583,31 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
                 <strong>Outras Condições:</strong> {outrasCondVal}
               </div>
             )}
+
+            {(() => {
+              const detalhesPagamentoFinal = getDetalhesPagamento(dados) || getDetalhesPagamento(contract);
+              if (!detalhesPagamentoFinal) return null;
+              const textoJaTemClausula = detalhesPagamentoFinal
+                .trim()
+                .toUpperCase()
+                .startsWith("CLÁUSULA");
+              return (
+                <div className="mt-2 text-[9.5px]">
+                  {textoJaTemClausula ? (
+                    <div style={{ whiteSpace: "pre-line" }} className="leading-relaxed bg-gray-50/50 p-2.5 rounded border border-gray-100 mt-1">
+                      {detalhesPagamentoFinal}
+                    </div>
+                  ) : (
+                    <div className="leading-relaxed bg-gray-50/50 p-2.5 rounded border border-gray-100 mt-1">
+                      <strong className="block mb-1">Detalhes do pagamento / contraproposta:</strong>
+                      <div style={{ whiteSpace: "pre-line" }}>
+                        {detalhesPagamentoFinal}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </section>
 
@@ -518,18 +618,43 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
         </div>
 
         <div className="pdf-signatures shrink-0">
-          <div className="flex flex-col justify-end">
-            <div className="pdf-signature-line">
-              {p.nome || contract.nomeCliente || "Proponente Comprador"}
-            </div>
-            <div className="pdf-signature-role">Proponente Comprador</div>
-          </div>
-          <div className="flex flex-col justify-end">
-            <div className="pdf-signature-line">
-              {safeText(empresa.nome)}
-            </div>
-            <div className="pdf-signature-role">Intermediadora / Testemunha</div>
-          </div>
+          {isContra ? (
+            <>
+              <div className="flex flex-col justify-end">
+                <div className="pdf-signature-line">
+                  {getNomeVendedor(dados) || getNomeVendedor(contract) || "Proprietário Vendedor"}
+                </div>
+                <div className="pdf-signature-role">Proprietário Vendedor</div>
+              </div>
+              <div className="flex flex-col justify-end">
+                <div className="pdf-signature-line">
+                  {p.nome || contract.nomeCliente || "Proponente Comprador"}
+                </div>
+                <div className="pdf-signature-role">Proponente Comprador</div>
+              </div>
+              <div className="flex flex-col justify-end col-span-2 max-w-[200px] mx-auto w-full mt-2">
+                <div className="pdf-signature-line">
+                  {safeText(empresa.nome)}
+                </div>
+                <div className="pdf-signature-role">Intermediadora / Testemunha</div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex flex-col justify-end">
+                <div className="pdf-signature-line">
+                  {p.nome || contract.nomeCliente || "Proponente Comprador"}
+                </div>
+                <div className="pdf-signature-role">Proponente Comprador</div>
+              </div>
+              <div className="flex flex-col justify-end">
+                <div className="pdf-signature-line">
+                  {safeText(empresa.nome)}
+                </div>
+                <div className="pdf-signature-role">Intermediadora / Testemunha</div>
+              </div>
+            </>
+          )}
         </div>
       </div>
     );
@@ -660,6 +785,30 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
               <p className="col-span-2"><strong>Forma de Pagamento:</strong> {(contract as any).formaPagamento || getFormaPagamento(contract) || getFormaPagamento(dados) || "Não informado"}</p>
               <p className="col-span-2"><strong>Condições de pagamento:</strong> {condicoesPagamento || "Não informado"}</p>
               <p className="col-span-2"><strong>Outras condições:</strong> {outrasCondicoes || "Não informado"}</p>
+              {(() => {
+                const detalhesPagamentoFinal = getDetalhesPagamento(dados) || getDetalhesPagamento(contract);
+                if (!detalhesPagamentoFinal) return null;
+                const textoJaTemClausula = detalhesPagamentoFinal
+                  .trim()
+                  .toUpperCase()
+                  .startsWith("CLÁUSULA");
+                return (
+                  <div className="col-span-2 mt-2 border-t border-gray-100 pt-2 text-[9.5px]">
+                    {textoJaTemClausula ? (
+                      <div style={{ whiteSpace: "pre-line" }} className="leading-relaxed bg-gray-50/50 p-2.5 rounded border border-gray-100 mt-1 whitespace-pre-line">
+                        {detalhesPagamentoFinal}
+                      </div>
+                    ) : (
+                      <div className="leading-relaxed bg-gray-50/50 p-2.5 rounded border border-gray-100 mt-1">
+                        <strong className="block mb-1">Detalhes do pagamento:</strong>
+                        <div style={{ whiteSpace: "pre-line" }} className="whitespace-pre-line">
+                          {detalhesPagamentoFinal}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </section>
@@ -789,6 +938,30 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
             {arr.condicoesDesistenciaComprador && <p className="col-span-2"><strong>Desistência do Comprador:</strong> {safeText(arr.condicoesDesistenciaComprador)}</p>}
             {arr.condicoesDesistenciaVendedor && <p className="col-span-2"><strong>Desistência do Vendedor:</strong> {safeText(arr.condicoesDesistenciaVendedor)}</p>}
             {contract.observacoes && <p className="col-span-2"><strong>Observações Adicionais:</strong> {safeText(contract.observacoes)}</p>}
+            {(() => {
+              const detalhesPagamentoFinal = getDetalhesPagamento(dados) || getDetalhesPagamento(contract);
+              if (!detalhesPagamentoFinal) return null;
+              const textoJaTemClausula = detalhesPagamentoFinal
+                .trim()
+                .toUpperCase()
+                .startsWith("CLÁUSULA");
+              return (
+                <div className="col-span-2 mt-2 border-t border-gray-100 pt-2 text-[9.5px]">
+                  {textoJaTemClausula ? (
+                    <div style={{ whiteSpace: "pre-line" }} className="leading-relaxed whitespace-pre-line">
+                      {detalhesPagamentoFinal}
+                    </div>
+                  ) : (
+                    <div className="leading-relaxed">
+                      <strong>Detalhes do pagamento / contraproposta:</strong>
+                      <div style={{ whiteSpace: "pre-line" }} className="whitespace-pre-line mt-1">
+                        {detalhesPagamentoFinal}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </section>
 
