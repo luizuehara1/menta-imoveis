@@ -308,6 +308,8 @@ export interface Contract {
   valorPorExtenso?: string;
 
   tipoDocumento?: string;
+  usarVendedorComoAceitante?: boolean;
+  parteAceitanteTipo?: string;
   propostaId?: string;
   aceiteId?: string;
   contratoId?: string;

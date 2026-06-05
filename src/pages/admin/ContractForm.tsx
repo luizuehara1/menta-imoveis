@@ -45,7 +45,7 @@ import { useSettings } from '../../hooks/useSettings';
 import { Contract, ContractType, ContractStatus, Property } from '../../types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { maskCurrency, parseCurrencyToNumber, formatCurrency, valorMonetarioPorExtenso, normalizarDadosImovel, normalizarPessoa, textoConjuge, normalizarDadosDocumento, formatarDataBR, getOutrasCondicoes, montarTextoConjuge, getNomeComprador, getNomeVendedor, getCpfVendedor, getRgVendedor, getProfissaoVendedor, getEstadoCivilVendedor, getTelefoneVendedor, getEmailVendedor, getEnderecoVendedor, valorOuNaoInformado, getNomeEdificio, getEnderecoImovel, getTermosCondicoes, getFormaPagamento, getDetalhesPagamento } from '../../lib/utils';
+import { maskCurrency, parseCurrencyToNumber, formatCurrency, valorMonetarioPorExtenso, normalizarDadosImovel, normalizarPessoa, textoConjuge, normalizarDadosDocumento, formatarDataBR, getOutrasCondicoes, montarTextoConjuge, getNomeComprador, getNomeVendedor, getCpfVendedor, getRgVendedor, getProfissaoVendedor, getEstadoCivilVendedor, getTelefoneVendedor, getEmailVendedor, getEnderecoVendedor, valorOuNaoInformado, getNomeEdificio, getEnderecoImovel, getTermosCondicoes, getFormaPagamento, getDetalhesPagamento, getParteAceitante } from '../../lib/utils';
 import { staggerContainer, slideUp, fadeIn, scaleIn } from '../../constants/animations';
 import { ContractA4Preview } from '../../components/admin/ContractA4Preview';
 import jsPDF from 'jspdf';
@@ -1534,6 +1534,7 @@ export default function AdminContractForm() {
           }
 
           console.log("documentoBase encontrado:", documentoBase);
+          console.log("Outras condições do documento base:", getOutrasCondicoes(documentoBase));
 
           if (documentoBase) {
             let dadosAceite = normalizarDadosAceite(documentoBase);
@@ -1552,6 +1553,8 @@ export default function AdminContractForm() {
             console.log("Documento base do aceite:", documentoBase);
             console.log("Campos disponíveis no documento base:", Object.keys(documentoBase));
             console.log("Nome detectado:", getNomeComprador(documentoBase));
+
+            const outrasCondVal = getOutrasCondicoes(dAceite) || getOutrasCondicoes(documentoBase) || "";
 
             setContract((prev: any) => {
               const nomeCompradorFinal = getNomeComprador(dAceite);
@@ -1576,12 +1579,13 @@ export default function AdminContractForm() {
                 imovelEstado: dAceite.imovelEstado || prev.imovelEstado,
                 imovelMatricula: dAceite.imovelMatricula || prev.imovelMatricula,
                 imovelCri: dAceite.imovelCri || prev.imovelCri,
-                termosCondicoes: dAceite.termosCondicoes,
-                condicoesPagamento: dAceite.condicoesPagamento,
-                outrasCondicoes: dAceite.outrasCondicoes,
-                detalhesPagamento: dAceite.detalhesPagamento,
-                detalhesPagamentoContraproposta: dAceite.detalhesPagamentoContraproposta,
-                observacoesPagamento: dAceite.observacoesPagamento,
+                termosCondicoes: outrasCondVal,
+                condicoesPagamento: outrasCondVal,
+                outrasCondicoes: outrasCondVal,
+                detalhesPagamento: outrasCondVal,
+                detalhesPagamentoContraproposta: outrasCondVal,
+                observacoesPagamento: outrasCondVal,
+                clausulaPagamento: outrasCondVal,
                 formaPagamento: dAceite.formaPagamento,
                 formasPagamento: dAceite.formasPagamento || [],
                 dados: {
@@ -1633,6 +1637,7 @@ export default function AdminContractForm() {
 
   useEffect(() => {
     if (step === 'revisao') {
+      console.log("Outras condições no formData:", getOutrasCondicoes(contract));
       const detalhesFinal = getDetalhesPagamento(contract) || getDetalhesPagamento(contract.dados?.[contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos']);
       if (detalhesFinal) {
         const section = contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos';
@@ -1661,6 +1666,84 @@ export default function AdminContractForm() {
       }
     }
   }, [step]);
+
+  const aplicarVendedorComoAceitante = () => {
+    setContract((prev: any) => {
+      const v = prev.dados?.vendedor || prev.dados?.aceitante || {};
+      const nomeVend = prev.nomeVendedor || prev.vendedorNome || prev.nomeProprietario || prev.proprietarioNome || v.nome || "";
+      const telefoneFinal = v.telefone || prev.vendedorTelefone || prev.proprietarioTelefone || prev.telefoneVendedor || "";
+      const emailFinal = v.email || prev.vendedorEmail || prev.proprietarioEmail || "";
+      const cpfFinal = v.cpf || prev.vendedorCpf || prev.proprietarioCpf || "";
+      const rgFinal = v.rg || prev.vendedorRg || prev.proprietarioRg || "";
+      const profissaoFinal = v.profissao || prev.vendedorProfissao || prev.proprietarioProfissao || "";
+      const estadoCivilFinal = v.estadoCivil || prev.vendedorEstadoCivil || prev.proprietarioEstadoCivil || "Solteiro(a)";
+      const whatsappFinal = v.whatsapp || prev.vendedorWhatsapp || prev.proprietarioWhatsapp || v.telefone || telefoneFinal || "";
+      const enderecoFinal = v.endereco || prev.vendedorEndereco || prev.proprietarioEndereco || "";
+      const cepFinal = v.cep || prev.vendedorCep || prev.proprietarioCep || "";
+      const cidadeFinal = v.cidade || prev.vendedorCidade || prev.proprietarioCidade || "";
+      const estadoFinal = v.estado || prev.vendedorEstado || prev.proprietarioEstado || "";
+
+      return {
+        ...prev,
+        usarVendedorComoAceitante: true,
+        parteAceitanteTipo: "vendedor",
+        parteAceitanteNome: nomeVend,
+        parteAceitanteCpf: cpfFinal,
+        parteAceitanteRg: rgFinal,
+        parteAceitanteProfissao: profissaoFinal,
+        parteAceitanteEstadoCivil: estadoCivilFinal,
+        parteAceitanteTelefone: telefoneFinal,
+        parteAceitanteWhatsapp: whatsappFinal,
+        parteAceitanteEmail: emailFinal,
+        parteAceitanteEndereco: enderecoFinal,
+        parteAceitanteCep: cepFinal,
+        parteAceitanteCidade: cidadeFinal,
+        parteAceitanteEstado: estadoFinal
+      };
+    });
+  };
+
+  const aplicarCompradorComoAceitante = () => {
+    setContract((prev: any) => {
+      const p = prev.dados?.proponente || {};
+      const nomeComp = prev.nomeCliente || p.nome || "";
+      const telefoneFinal = p.telefone || prev.compradorTelefone || prev.proponenteTelefone || "";
+      const emailFinal = p.email || prev.compradorEmail || prev.proponenteEmail || "";
+      const cpfFinal = p.cpf || prev.compradorCpf || prev.proponenteCpf || "";
+      const rgFinal = p.rg || prev.compradorRg || prev.proponenteRg || "";
+      const profissaoFinal = p.profissao || prev.compradorProfissao || prev.proponenteProfissao || "";
+      const estadoCivilFinal = p.estadoCivil || prev.compradorEstadoCivil || prev.proponenteEstadoCivil || "Solteiro(a)";
+      const whatsappFinal = p.whatsapp || prev.compradorWhatsapp || prev.proponenteWhatsapp || p.telefone || telefoneFinal || "";
+      const enderecoFinal = p.endereco || prev.compradorEndereco || prev.proponenteEndereco || "";
+      const cepFinal = p.cep || prev.compradorCep || prev.proponenteCep || "";
+      const cidadeFinal = p.cidade || prev.compradorCidade || prev.proponenteCidade || "";
+      const estadoFinal = p.estado || prev.compradorEstado || prev.proponenteEstado || "";
+
+      return {
+        ...prev,
+        usarVendedorComoAceitante: false,
+        parteAceitanteTipo: "comprador",
+        parteAceitanteNome: nomeComp,
+        parteAceitanteCpf: cpfFinal,
+        parteAceitanteRg: rgFinal,
+        parteAceitanteProfissao: profissaoFinal,
+        parteAceitanteEstadoCivil: estadoCivilFinal,
+        parteAceitanteTelefone: telefoneFinal,
+        parteAceitanteWhatsapp: whatsappFinal,
+        parteAceitanteEmail: emailFinal,
+        parteAceitanteEndereco: enderecoFinal,
+        parteAceitanteCep: cepFinal,
+        parteAceitanteCidade: cidadeFinal,
+        parteAceitanteEstado: estadoFinal
+      };
+    });
+  };
+
+  useEffect(() => {
+    if (contract.tipoContrato === 'aceite' && contract.usarVendedorComoAceitante === undefined) {
+      aplicarVendedorComoAceitante();
+    }
+  }, [contract.tipoContrato, contract.usarVendedorComoAceitante]);
 
   const handlePropertySelect = (property: Property) => {
     setSelectedProperty(property);
@@ -2198,7 +2281,41 @@ export default function AdminContractForm() {
       const finalDadosContrato = {
         ...dadosContrato,
         ...normalizedFlatData
-      };
+      } as any;
+
+      // Section 6 & 10: Store official fields for the Accepting Party when tipoContrato is 'aceite' or 'contraproposta'
+      if (contract.tipoContrato === 'aceite' || contract.tipoContrato === 'contraproposta') {
+        const parteAceitante = getParteAceitante({ ...dadosContrato, ...contract });
+        const usesVendedor = contract.usarVendedorComoAceitante === true || contract.parteAceitanteTipo === "vendedor";
+        const parteAceitanteFinal = {
+          usarVendedorComoAceitante: contract.usarVendedorComoAceitante === true,
+          parteAceitanteTipo: usesVendedor ? "vendedor" : "comprador",
+          parteAceitanteNome: parteAceitante.nome,
+          parteAceitanteCpf: parteAceitante.cpf,
+          parteAceitanteRg: parteAceitante.rg,
+          parteAceitanteProfissao: parteAceitante.profissao,
+          parteAceitanteEstadoCivil: parteAceitante.estadoCivil,
+          parteAceitanteTelefone: parteAceitante.telefone,
+          parteAceitanteWhatsapp: parteAceitante.whatsapp,
+          parteAceitanteEmail: parteAceitante.email,
+          parteAceitanteEndereco: parteAceitante.endereco,
+          parteAceitanteCep: parteAceitante.cep,
+          parteAceitanteCidade: parteAceitante.cidade,
+          parteAceitanteEstado: parteAceitante.estado,
+        };
+
+        Object.entries(parteAceitanteFinal).forEach(([key, val]) => {
+          finalDadosContrato[key] = val;
+        });
+
+        if (!finalDadosContrato.dados) finalDadosContrato.dados = {};
+        Object.entries(parteAceitanteFinal).forEach(([key, val]) => {
+          finalDadosContrato.dados[key] = val;
+        });
+
+        setContract((prev: any) => ({ ...prev, ...parteAceitanteFinal }));
+        console.log("Campos de parteAceitante adicionados ao finalDadosContrato:", parteAceitanteFinal);
+      }
 
       const cleanedData = cleanFirestoreData(finalDadosContrato);
       console.log("Salvando contrato final/rascunho no Firestore:", cleanedData);
@@ -3540,6 +3657,28 @@ export default function AdminContractForm() {
                       {/* Vendedor */}
                       <div className="space-y-6">
                         <h4 className="text-sm font-black text-gold uppercase tracking-[0.2em] mb-4">Vendedor / Parte Aceitante</h4>
+                        
+                        {(contract.tipoContrato === 'aceite' || contract.tipoContrato === 'contraproposta') && (
+                          <div className="flex items-center gap-2 mb-4 bg-gray-50 p-3 rounded-xl border border-gray-100">
+                            <input
+                              type="checkbox"
+                              id="usarVendedorComoAceitante"
+                              className="rounded border-gray-300 text-gold focus:ring-gold h-4 w-4"
+                              checked={contract.usarVendedorComoAceitante === true}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  aplicarVendedorComoAceitante();
+                                } else {
+                                  aplicarCompradorComoAceitante();
+                                }
+                              }}
+                            />
+                            <label htmlFor="usarVendedorComoAceitante" className="text-xs text-gray-700 font-semibold select-none cursor-pointer">
+                              Usar vendedor como parte aceitante no PDF
+                            </label>
+                          </div>
+                        )}
+
                         <div className="space-y-4">
                           <div className="space-y-2">
                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Nome Completo</label>
@@ -4401,6 +4540,67 @@ export default function AdminContractForm() {
                           <strong className="text-amber-950 font-semibold">{formatarDataBR((contract as any).dataDocumentoBase || (contract as any).dataProposta || "")}</strong>
                         </div>
                       </div>
+                    </div>
+
+                    {/* PARTE QUE MANIFESTA O ACEITE */}
+                    <div className="p-6 rounded-3xl bg-amber-50/50 border border-amber-200/60 text-amber-950 mt-4">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2 bg-amber-100 rounded-xl text-amber-800">
+                          <User size={20} />
+                        </div>
+                        <h4 className="font-display font-bold text-base text-amber-900">PARTE QUE MANIFESTA O ACEITE</h4>
+                      </div>
+
+                      {(() => {
+                        const parteAceitante = getParteAceitante(contract);
+                        const isVendedor = contract.usarVendedorComoAceitante === true || contract.parteAceitanteTipo === "vendedor";
+                        return (
+                          <div className="space-y-4 text-left text-xs">
+                            <div>
+                              <span className="block text-[10px] text-amber-800 font-medium uppercase tracking-wider">Tipo da Parte</span>
+                              <strong className="text-amber-950 font-semibold uppercase tracking-wider">{isVendedor ? "Vendedor / Parte Aceitante" : "Comprador / Proponente"}</strong>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                              <div>
+                                <span className="block text-[10px] text-amber-800 font-medium uppercase tracking-wider">Nome Completo</span>
+                                <strong className="text-amber-950 font-semibold">{parteAceitante.nome || "Não informado"}</strong>
+                              </div>
+                              <div>
+                                <span className="block text-[10px] text-amber-800 font-medium uppercase tracking-wider">CPF</span>
+                                <strong className="text-amber-950 font-semibold">{parteAceitante.cpf || "Não informado"}</strong>
+                              </div>
+                              <div>
+                                <span className="block text-[10px] text-amber-800 font-medium uppercase tracking-wider">RG</span>
+                                <strong className="text-amber-950 font-semibold">{parteAceitante.rg || "Não informado"}</strong>
+                              </div>
+                              <div>
+                                <span className="block text-[10px] text-amber-800 font-medium uppercase tracking-wider">Profissão</span>
+                                <strong className="text-amber-950 font-semibold">{parteAceitante.profissao || "Não informado"}</strong>
+                              </div>
+                              <div>
+                                <span className="block text-[10px] text-amber-800 font-medium uppercase tracking-wider">Estado Civil</span>
+                                <strong className="text-amber-950 font-semibold">{parteAceitante.estadoCivil || "Não informado"}</strong>
+                              </div>
+                              <div>
+                                <span className="block text-[10px] text-amber-800 font-medium uppercase tracking-wider">Telefone</span>
+                                <strong className="text-amber-950 font-semibold">{parteAceitante.telefone || "Não informado"}</strong>
+                              </div>
+                              <div>
+                                <span className="block text-[10px] text-amber-800 font-medium uppercase tracking-wider">WhatsApp</span>
+                                <strong className="text-amber-950 font-semibold">{parteAceitante.whatsapp || "Não informado"}</strong>
+                              </div>
+                              <div>
+                                <span className="block text-[10px] text-amber-800 font-medium uppercase tracking-wider">E-mail</span>
+                                <strong className="text-amber-950 font-semibold">{parteAceitante.email || "Não informado"}</strong>
+                              </div>
+                              <div className="col-span-1 md:col-span-2 lg:col-span-3">
+                                <span className="block text-[10px] text-amber-800 font-medium uppercase tracking-wider">Endereço</span>
+                                <strong className="text-amber-950 font-semibold-block">{parteAceitante.endereco || "Não informado"}</strong>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* DADOS DO IMÓVEL */}

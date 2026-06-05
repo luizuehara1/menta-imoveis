@@ -1342,6 +1342,8 @@ export function getOutrasCondicoes(dados: any = {}): string {
     dados.detalhesPagamentoContraproposta ||
     dados.condicoesPagamento ||
     dados.observacoesPagamento ||
+    dados.clausulaPagamento ||
+    dados.termosCondicoes ||
     dados.observacoes ||
     ""
   );
@@ -2152,6 +2154,217 @@ export function getDetalhesPagamento(dados: any = {}): string {
     dados.termosCondicoes ||
     ""
   ).trim();
+}
+
+export function getParteAceitante(dados: any = {}) {
+  if (!dados) return {
+    nome: "",
+    cpf: "",
+    rg: "",
+    profissao: "",
+    estadoCivil: "",
+    telefone: "",
+    whatsapp: "",
+    email: "",
+    endereco: "",
+    cep: "",
+    cidade: "",
+    estado: ""
+  };
+
+  const deveUsarVendedor =
+    dados.usarVendedorComoAceitante === true ||
+    dados.parteAceitanteTipo === "vendedor";
+
+  if (deveUsarVendedor) {
+    const telefoneFinal =
+      dados.parteAceitanteTelefone ||
+      dados.vendedorTelefone ||
+      dados.proprietarioTelefone ||
+      dados.telefoneVendedor ||
+      dados.vendedor?.telefone ||
+      "";
+    return {
+      nome:
+        dados.parteAceitanteNome ||
+        dados.vendedorNome ||
+        dados.proprietarioNome ||
+        dados.nomeVendedor ||
+        dados.nomeProprietario ||
+        dados.proprietario ||
+        dados.vendedor?.nome ||
+        "",
+
+      cpf:
+        dados.parteAceitanteCpf ||
+        dados.vendedorCpf ||
+        dados.proprietarioCpf ||
+        dados.cpfVendedor ||
+        dados.cpfProprietario ||
+        dados.vendedor?.cpf ||
+        "",
+
+      rg:
+        dados.parteAceitanteRg ||
+        dados.vendedorRg ||
+        dados.proprietarioRg ||
+        dados.rgVendedor ||
+        dados.rgProprietario ||
+        dados.vendedor?.rg ||
+        "",
+
+      profissao:
+        dados.parteAceitanteProfissao ||
+        dados.vendedorProfissao ||
+        dados.proprietarioProfissao ||
+        dados.vendedor?.profissao ||
+        "",
+
+      estadoCivil:
+        dados.parteAceitanteEstadoCivil ||
+        dados.vendedorEstadoCivil ||
+        dados.proprietarioEstadoCivil ||
+        dados.vendedor?.estadoCivil ||
+        "Solteiro(a)",
+
+      telefone: telefoneFinal,
+
+      whatsapp:
+        dados.parteAceitanteWhatsapp ||
+        dados.vendedorWhatsapp ||
+        dados.proprietarioWhatsapp ||
+        dados.vendedorTelefone ||
+        dados.vendedor?.whatsapp ||
+        telefoneFinal,
+
+      email:
+        dados.parteAceitanteEmail ||
+        dados.vendedorEmail ||
+        dados.proprietarioEmail ||
+        dados.vendedor?.email ||
+        "",
+
+      endereco:
+        dados.parteAceitanteEndereco ||
+        dados.vendedorEndereco ||
+        dados.proprietarioEndereco ||
+        dados.vendedor?.endereco ||
+        "",
+
+      cep:
+        dados.parteAceitanteCep ||
+        dados.vendedorCep ||
+        dados.proprietarioCep ||
+        dados.vendedor?.cep ||
+        "",
+
+      cidade:
+        dados.parteAceitanteCidade ||
+        dados.vendedorCidade ||
+        dados.proprietarioCidade ||
+        dados.vendedor?.cidade ||
+        "",
+
+      estado:
+        dados.parteAceitanteEstado ||
+        dados.vendedorEstado ||
+        dados.proprietarioEstado ||
+        dados.vendedor?.estado ||
+        ""
+    };
+  }
+
+  // Comprador (Buyer) as the default Parte Aceitante if not vendedor
+  const p = dados.proponente || dados.comprador || {};
+  const isCompradorPhone =
+    dados.parteAceitanteTelefone ||
+    dados.compradorTelefone ||
+    dados.proponenteTelefone ||
+    p.telefone ||
+    "";
+  return {
+    nome:
+      dados.parteAceitanteNome ||
+      dados.compradorNome ||
+      dados.proponenteNome ||
+      dados.nomeComprador ||
+      dados.nomeCompleto ||
+      dados.nomeCliente ||
+      p.nome ||
+      "",
+
+    cpf:
+      dados.parteAceitanteCpf ||
+      dados.compradorCpf ||
+      dados.proponenteCpf ||
+      p.cpf ||
+      "",
+
+    rg:
+      dados.parteAceitanteRg ||
+      dados.compradorRg ||
+      dados.proponenteRg ||
+      p.rg ||
+      "",
+
+    profissao:
+      dados.parteAceitanteProfissao ||
+      dados.compradorProfissao ||
+      dados.proponenteProfissao ||
+      p.profissao ||
+      "",
+
+    estadoCivil:
+      dados.parteAceitanteEstadoCivil ||
+      dados.compradorEstadoCivil ||
+      dados.proponenteEstadoCivil ||
+      p.estadoCivil ||
+      "Solteiro(a)",
+
+    telefone: isCompradorPhone,
+
+    whatsapp:
+      dados.parteAceitanteWhatsapp ||
+      dados.compradorWhatsapp ||
+      dados.proponenteWhatsapp ||
+      p.whatsapp ||
+      isCompradorPhone,
+
+    email:
+      dados.parteAceitanteEmail ||
+      dados.compradorEmail ||
+      dados.proponenteEmail ||
+      p.email ||
+      "",
+
+    endereco:
+      dados.parteAceitanteEndereco ||
+      dados.compradorEndereco ||
+      dados.proponenteEndereco ||
+      p.endereco ||
+      "",
+
+    cep:
+      dados.parteAceitanteCep ||
+      dados.compradorCep ||
+      dados.proponenteCep ||
+      p.cep ||
+      "",
+
+    cidade:
+      dados.parteAceitanteCidade ||
+      dados.compradorCidade ||
+      dados.proponenteCidade ||
+      p.cidade ||
+      "",
+
+    estado:
+      dados.parteAceitanteEstado ||
+      dados.compradorEstado ||
+      dados.proponenteEstado ||
+      p.estado ||
+      ""
+  };
 }
 
 

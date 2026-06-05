@@ -2,7 +2,7 @@ import React from 'react';
 import { Contract, ContractType } from '../../types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { formatCurrency, isValidImageUrl, safeText, safeMoney, safeDate, valorMonetarioPorExtenso, getTituloImovel, formatarDataBR, getOutrasCondicoes, montarTextoConjuge, getNomeComprador, getNomeVendedor, getCpfVendedor, getRgVendedor, getProfissaoVendedor, getEstadoCivilVendedor, getTelefoneVendedor, getEmailVendedor, getEnderecoVendedor, getDetalhesPagamento, valorOuNaoInformado, getTermosCondicoes, getFormaPagamento } from '../../lib/utils';
+import { formatCurrency, isValidImageUrl, safeText, safeMoney, safeDate, valorMonetarioPorExtenso, getTituloImovel, formatarDataBR, getOutrasCondicoes, montarTextoConjuge, getNomeComprador, getNomeVendedor, getCpfVendedor, getRgVendedor, getProfissaoVendedor, getEstadoCivilVendedor, getTelefoneVendedor, getEmailVendedor, getEnderecoVendedor, getDetalhesPagamento, valorOuNaoInformado, getTermosCondicoes, getFormaPagamento, getParteAceitante } from '../../lib/utils';
 import { useSettings } from '../../hooks/useSettings';
 
 interface ContractA4PreviewProps {
@@ -436,6 +436,12 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
 
   const renderPropostaOrContraproposta = (isContra = false) => {
     const p = dados.proponente || {};
+    const contraParteAceitante = getParteAceitante({
+      ...dados,
+      ...contract,
+      parteAceitanteTipo: "vendedor",
+      tipoDocumento: "contraproposta"
+    });
     const imovelMatricula = (contract as any).imovelMatricula || dados.imovel?.matricula || "Matrícula não informada";
     const imovelCriRaw = (contract as any).imovelCri || dados.imovel?.cri || dados.imovel?.criImovel || dados.imovel?.cartorioRegistroImoveis || dados.imovel?.cartorioRegistro || dados.imovel?.cartorioImovel || "";
     const imovelCri = String(imovelCriRaw).trim() || "Não informado";
@@ -473,14 +479,14 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
             <>
               <h3 className="section-title">I - Proprietário Vendedor</h3>
               <div className="grid grid-cols-2 gap-y-1.5 gap-x-6 text-[10px]">
-                <p><strong>Nome:</strong> {getNomeVendedor(dados) || getNomeVendedor(contract) || "Não informado"}</p>
-                <p><strong>CPF:</strong> {getCpfVendedor(dados) || getCpfVendedor(contract) || "Não informado"}</p>
-                <p><strong>RG:</strong> {getRgVendedor(dados) || getRgVendedor(contract) || "Não informado"}</p>
-                <p><strong>Estado Civil:</strong> {getEstadoCivilVendedor(dados) || getEstadoCivilVendedor(contract) || "Não informado"}</p>
-                <p><strong>Profissão:</strong> {getProfissaoVendedor(dados) || getProfissaoVendedor(contract) || "Não informado"}</p>
-                <p><strong>Telefone:</strong> {getTelefoneVendedor(dados) || getTelefoneVendedor(contract) || "Não informado"}</p>
-                <p className="col-span-2"><strong>E-mail:</strong> {getEmailVendedor(dados) || getEmailVendedor(contract) || "Não informado"}</p>
-                <p className="col-span-2"><strong>Endereço:</strong> {getEnderecoVendedor(dados) || getEnderecoVendedor(contract) || "Não informado"}</p>
+                <p><strong>Nome:</strong> {contraParteAceitante.nome || "Não informado"}</p>
+                <p><strong>CPF:</strong> {contraParteAceitante.cpf || "Não informado"}</p>
+                <p><strong>RG:</strong> {contraParteAceitante.rg || "Não informado"}</p>
+                <p><strong>Estado Civil:</strong> {contraParteAceitante.estadoCivil || "Não informado"}</p>
+                <p><strong>Profissão:</strong> {contraParteAceitante.profissao || "Não informado"}</p>
+                <p><strong>Telefone:</strong> {contraParteAceitante.telefone || "Não informado"}{contraParteAceitante.whatsapp ? ` / WhatsApp: ${contraParteAceitante.whatsapp}` : ''}</p>
+                <p className="col-span-2"><strong>E-mail:</strong> {contraParteAceitante.email || "Não informado"}</p>
+                <p className="col-span-2"><strong>Endereço:</strong> {contraParteAceitante.endereco || "Não informado"}{contraParteAceitante.cep ? ` - CEP: ${contraParteAceitante.cep}` : ''}{contraParteAceitante.cidade ? ` - ${contraParteAceitante.cidade}/${contraParteAceitante.estado}` : ''}</p>
                 
                 {vendedorConjugeNome && (
                   <>
@@ -666,6 +672,14 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
   const renderAceite = () => {
     const a = dados.aceitante || {};
     const p = dados.proponente || {};
+
+    const parteAceitante = getParteAceitante({ ...dados, ...contract });
+
+    console.log("formData completo:", contract);
+    console.log("parteAceitanteTipo:", (contract as any).parteAceitanteTipo || dados.parteAceitanteTipo);
+    console.log("parteAceitante detectada:", parteAceitante);
+    console.log("vendedorNome:", (contract as any).vendedorNome || dados.vendedorNome);
+    console.log("compradorNome:", (contract as any).compradorNome || dados.compradorNome);
     
     // Extracted buyers/proponents data
     const compradorNome = valorOuNaoInformado(
@@ -730,6 +744,9 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
     const condicoesPagamento = (contract as any).condicoesPagamento || (contract as any).detalhesPagamento || dados.pagamento?.outrasCondicoes || dados.termos?.outrasCondicoes || "";
     const outrasCondicoes = (contract as any).outrasCondicoes || (contract as any).observacoes || dados.pagamento?.outrasCondicoes || dados.termos?.outrasCondicoes || "";
 
+    const outrasCondicoesFinal = getOutrasCondicoes(dados) || getOutrasCondicoes(contract) || "";
+    console.log("Outras condições usadas no PDF:", outrasCondicoesFinal);
+
     const localFinal = dados.local || contract.local || "Balneário Camboriú - SC";
     const dataFinal = dados.data || contract.data || "";
 
@@ -741,6 +758,20 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
 
         <section className="section avoid-break">
           <h3 className="section-title">I - Identificação da Parte que Manifesta o Aceite</h3>
+          <div className="grid grid-cols-2 gap-y-1.5 gap-x-6">
+            <p><strong>Nome Completo:</strong> {parteAceitante.nome || 'Não informado'}</p>
+            <p><strong>CPF:</strong> {parteAceitante.cpf || 'Não informado'}</p>
+            <p><strong>RG:</strong> {parteAceitante.rg || 'Não informado'}</p>
+            <p><strong>Estado Civil:</strong> {parteAceitante.estadoCivil || 'Não informado'}</p>
+            <p><strong>Profissão:</strong> {parteAceitante.profissao || 'Não informado'}</p>
+            <p><strong>Telefone:</strong> {parteAceitante.telefone || 'Não informado'}{parteAceitante.whatsapp ? ` / WhatsApp: ${parteAceitante.whatsapp}` : ''}</p>
+            <p className="col-span-2"><strong>E-mail:</strong> {parteAceitante.email || 'Não informado'}</p>
+            <p className="col-span-2"><strong>Endereço Residencial:</strong> {parteAceitante.endereco || 'Não informado'}{parteAceitante.cep ? ` - CEP: ${parteAceitante.cep}` : ''}{parteAceitante.cidade ? ` - ${parteAceitante.cidade}/${parteAceitante.estado}` : ''}</p>
+          </div>
+        </section>
+
+        <section className="section avoid-break">
+          <h3 className="section-title">Dados do Proponente Comprador</h3>
           <div className="grid grid-cols-2 gap-y-1.5 gap-x-6">
             <p><strong>Nome Completo:</strong> {compradorNome || 'Não informado'}</p>
             <p><strong>CPF:</strong> {compradorCpf || 'Não informado'}</p>
@@ -783,46 +814,24 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
               <p><strong>Valor do Aceite:</strong> {formatCurrency(valorAceiteFinal)}</p>
               <p><strong>Data do Documento Base:</strong> {formatarDataBR(dataDocumentoBase)}</p>
               <p className="col-span-2"><strong>Forma de Pagamento:</strong> {(contract as any).formaPagamento || getFormaPagamento(contract) || getFormaPagamento(dados) || "Não informado"}</p>
-              <p className="col-span-2"><strong>Condições de pagamento:</strong> {condicoesPagamento || "Não informado"}</p>
-              <p className="col-span-2"><strong>Outras condições:</strong> {outrasCondicoes || "Não informado"}</p>
-              {(() => {
-                const detalhesPagamentoFinal = getDetalhesPagamento(dados) || getDetalhesPagamento(contract);
-                if (!detalhesPagamentoFinal) return null;
-                const textoJaTemClausula = detalhesPagamentoFinal
-                  .trim()
-                  .toUpperCase()
-                  .startsWith("CLÁUSULA");
-                return (
-                  <div className="col-span-2 mt-2 border-t border-gray-100 pt-2 text-[9.5px]">
-                    {textoJaTemClausula ? (
-                      <div style={{ whiteSpace: "pre-line" }} className="leading-relaxed bg-gray-50/50 p-2.5 rounded border border-gray-100 mt-1 whitespace-pre-line">
-                        {detalhesPagamentoFinal}
-                      </div>
-                    ) : (
-                      <div className="leading-relaxed bg-gray-50/50 p-2.5 rounded border border-gray-100 mt-1">
-                        <strong className="block mb-1">Detalhes do pagamento:</strong>
-                        <div style={{ whiteSpace: "pre-line" }} className="whitespace-pre-line">
-                          {detalhesPagamentoFinal}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
             </div>
           </div>
         </section>
 
-        <section className="section avoid-break">
-          <h3 className="section-title">III - Termos e Condições da Proposta Aceita</h3>
-          <div className="space-y-1.5 text-justify pl-2 border-l border-gold/20 whitespace-pre-wrap leading-relaxed text-[9.5px]">
-            {((contract as any).termosCondicoes || getTermosCondicoes(contract) || getTermosCondicoes(dados)) ? (
-              safeText((contract as any).termosCondicoes || getTermosCondicoes(contract) || getTermosCondicoes(dados))
-            ) : (
-              <span className="text-gray-500 italic">Preenchido conforme condições estipuladas no documento base.</span>
-            )}
-          </div>
-        </section>
+        {outrasCondicoesFinal && (() => {
+          const textoJaTemClausula = outrasCondicoesFinal
+            .trim()
+            .toUpperCase()
+            .startsWith("CLÁUSULA");
+          return (
+            <section className="section avoid-break">
+              <h3 className="section-title">III - OUTRAS CONDIÇÕES E DETALHES DO PAGAMENTO</h3>
+              <div style={{ whiteSpace: "pre-line" }} className="whitespace-pre-line leading-relaxed text-justify pl-2 border-l border-gold/20 text-[9.5px]">
+                {outrasCondicoesFinal}
+              </div>
+            </section>
+          );
+        })()}
 
         {renderClausulasSelecionadas()}
 
@@ -833,7 +842,7 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
         <div className="pdf-signatures shrink-0">
           <div className="flex flex-col justify-end">
             <div className="pdf-signature-line">
-              {compradorNome || "Assinatura da Parte Aceitante"}
+              {parteAceitante.nome || compradorNome || "Assinatura da Parte Aceitante"}
             </div>
             <div className="pdf-signature-role">Assinatura da Parte Aceitante</div>
           </div>
