@@ -1551,9 +1551,9 @@ export function normalizarDadosDocumento(origem: any = {}): any {
 
     formasPagamento:
       origem.formasPagamento ||
-      parsedDados?.pagamento?.metodos ||
-      parsedDados?.termos?.metodos ||
-      [],
+      (origem.tipoContrato === 'proposta' || origem.tipoDocumento === 'proposta'
+        ? (parsedDados?.pagamento?.metodos || parsedDados?.termos?.metodos || [])
+        : (parsedDados?.termos?.metodos || parsedDados?.pagamento?.metodos || [])),
 
     condicoesPagamento:
       getOutrasCondicoes(origem) ||
@@ -2190,6 +2190,35 @@ export function getDetalhesPagamento(dados: any = {}): string {
     dados.termosCondicoes ||
     ""
   ).trim();
+}
+
+export function normalizarFormasPagamento(dados: any = {}): string[] {
+  if (!dados) return [];
+
+  if (Array.isArray(dados.formasPagamento)) {
+    return dados.formasPagamento.filter(Boolean);
+  }
+
+  if (Array.isArray(dados.opcoesPagamento)) {
+    return dados.opcoesPagamento.filter(Boolean);
+  }
+
+  if (Array.isArray(dados.pagamentosSelecionados)) {
+    return dados.pagamentosSelecionados.filter(Boolean);
+  }
+
+  if (Array.isArray(dados.metodos)) {
+    return dados.metodos.filter(Boolean);
+  }
+
+  if (typeof dados.formaPagamento === "string" && dados.formaPagamento.trim()) {
+    return dados.formaPagamento
+      .split(",")
+      .map((item: string) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
 }
 
 export function getParteAceitante(dados: any = {}) {

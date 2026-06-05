@@ -45,7 +45,7 @@ import { useSettings } from '../../hooks/useSettings';
 import { Contract, ContractType, ContractStatus, Property } from '../../types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { maskCurrency, parseCurrencyToNumber, formatCurrency, valorMonetarioPorExtenso, normalizarDadosImovel, normalizarPessoa, textoConjuge, normalizarDadosDocumento, formatarDataBR, getOutrasCondicoes, montarTextoConjuge, getNomeComprador, getNomeVendedor, getCpfVendedor, getRgVendedor, getProfissaoVendedor, getEstadoCivilVendedor, getTelefoneVendedor, getEmailVendedor, getEnderecoVendedor, valorOuNaoInformado, getNomeEdificio, getEnderecoImovel, getTermosCondicoes, getFormaPagamento, getDetalhesPagamento, getParteAceitante } from '../../lib/utils';
+import { maskCurrency, parseCurrencyToNumber, formatCurrency, valorMonetarioPorExtenso, normalizarDadosImovel, normalizarPessoa, textoConjuge, normalizarDadosDocumento, formatarDataBR, getOutrasCondicoes, montarTextoConjuge, getNomeComprador, getNomeVendedor, getCpfVendedor, getRgVendedor, getProfissaoVendedor, getEstadoCivilVendedor, getTelefoneVendedor, getEmailVendedor, getEnderecoVendedor, valorOuNaoInformado, getNomeEdificio, getEnderecoImovel, getTermosCondicoes, getFormaPagamento, getDetalhesPagamento, getParteAceitante, normalizarFormasPagamento } from '../../lib/utils';
 import { staggerContainer, slideUp, fadeIn, scaleIn } from '../../constants/animations';
 import { ContractA4Preview } from '../../components/admin/ContractA4Preview';
 import jsPDF from 'jspdf';
@@ -1282,20 +1282,46 @@ export default function AdminContractForm() {
                 const normalizedProp = normalizarDadosDocumento({ id: propostaSnap.id, ...propostaDados });
                 const normalizedContract = normalizarDadosDocumento({ id: docSnap.id, ...data });
 
+                // Preserve existing contract's payment settings exactly (the saved document is the absolute source of truth)
+                const contractTermosMetodos = data.dados?.termos?.metodos;
+                const contractPagamentoMetodos = data.dados?.pagamento?.metodos;
+                const contractFormasPagamento = data.formasPagamento;
+
+                const contractTermosOutrasCondicoes = data.dados?.termos?.outrasCondicoes;
+                const contractTermosDetalhes = data.dados?.termos?.detalhesPagamento;
+                const contractTermosContraproposta = data.dados?.termos?.detalhesPagamentoContraproposta;
+                const contractTermosCondicoes = data.dados?.termos?.condicoesPagamento;
+                const contractTermosObservacoes = data.dados?.termos?.observacoesPagamento;
+                const contractTermosClausula = data.dados?.termos?.clausulaPagamento;
+
+                const contractPagamentoOutrasCondicoes = data.dados?.pagamento?.outrasCondicoes;
+                const contractPagamentoDetalhes = data.dados?.pagamento?.detalhesPagamento;
+                const contractPagamentoContraproposta = data.dados?.pagamento?.detalhesPagamentoContraproposta;
+                const contractPagamentoCondicoes = data.dados?.pagamento?.condicoesPagamento;
+                const contractPagamentoObservacoes = data.dados?.pagamento?.observacoesPagamento;
+                const contractPagamentoClausula = data.dados?.pagamento?.clausulaPagamento;
+
+                const contractOutrasCondicoes = data.outrasCondicoes;
+                const contractDetalhesPagamento = data.detalhesPagamento;
+                const contractContraproposta = data.detalhesPagamentoContraproposta;
+                const contractCondicoesPagamento = data.condicoesPagamento;
+                const contractObservacoesPagamento = data.observacoesPagamento;
+                const contractClausulaPagamento = data.clausulaPagamento;
+
                 const outrasCondVal = getOutrasCondicoes(normalizedProp) || getOutrasCondicoes(propostaDados) || getOutrasCondicoes(propostaDados?.dados?.pagamento) || getOutrasCondicoes(propostaDados?.dados?.termos) || "";
                  
                 data = {
                   ...normalizedProp,
                   ...data,
-                  outrasCondicoes: data.outrasCondicoes || outrasCondVal,
-                  detalhesPagamento: data.detalhesPagamento || outrasCondVal,
-                  detalhesPagamentoContraproposta: data.detalhesPagamentoContraproposta || outrasCondVal,
-                  observacoesPagamento: data.observacoesPagamento || outrasCondVal,
+                  outrasCondicoes: data.outrasCondicoes !== undefined ? data.outrasCondicoes : outrasCondVal,
+                  detalhesPagamento: data.detalhesPagamento !== undefined ? data.detalhesPagamento : outrasCondVal,
+                  detalhesPagamentoContraproposta: data.detalhesPagamentoContraproposta !== undefined ? data.detalhesPagamentoContraproposta : outrasCondVal,
+                  observacoesPagamento: data.observacoesPagamento !== undefined ? data.observacoesPagamento : outrasCondVal,
                   
                   imovelCri: normalizedContract.imovelCri || normalizedProp.imovelCri || "",
                   imovelMatricula: normalizedContract.imovelMatricula || normalizedProp.imovelMatricula || "",
                   imovelTitulo: normalizedContract.imovelTitulo || normalizedProp.imovelTitulo || "",
-                  condicoesPagamento: data.condicoesPagamento || normalizedContract.condicoesPagamento || normalizedProp.condicoesPagamento || outrasCondVal || "",
+                  condicoesPagamento: data.condicoesPagamento !== undefined ? data.condicoesPagamento : (normalizedContract.condicoesPagamento || normalizedProp.condicoesPagamento || outrasCondVal || ""),
                   dataProposta: normalizedContract.dataProposta || normalizedProp.dataProposta || "",
                   valorPorExtenso: normalizedContract.valorPorExtenso || normalizedProp.valorPorExtenso || ""
                 };
@@ -1307,22 +1333,57 @@ export default function AdminContractForm() {
                 data.dados.pagamento = {
                   ...propostaDados?.dados?.pagamento,
                   ...data.dados.pagamento,
-                  outrasCondicoes: data.dados.pagamento?.outrasCondicoes || outrasCondVal,
-                  detalhesPagamento: data.dados.pagamento?.detalhesPagamento || outrasCondVal,
-                  detalhesPagamentoContraproposta: data.dados.pagamento?.detalhesPagamentoContraproposta || outrasCondVal,
-                  condicoesPagamento: data.dados.pagamento?.condicoesPagamento || outrasCondVal,
-                  observacoesPagamento: data.dados.pagamento?.observacoesPagamento || outrasCondVal,
+                  outrasCondicoes: data.dados.pagamento?.outrasCondicoes !== undefined ? data.dados.pagamento.outrasCondicoes : outrasCondVal,
+                  detalhesPagamento: data.dados.pagamento?.detalhesPagamento !== undefined ? data.dados.pagamento.detalhesPagamento : outrasCondVal,
+                  detalhesPagamentoContraproposta: data.dados.pagamento?.detalhesPagamentoContraproposta !== undefined ? data.dados.pagamento.detalhesPagamentoContraproposta : outrasCondVal,
+                  condicoesPagamento: data.dados.pagamento?.condicoesPagamento !== undefined ? data.dados.pagamento.condicoesPagamento : outrasCondVal,
+                  observacoesPagamento: data.dados.pagamento?.observacoesPagamento !== undefined ? data.dados.pagamento.observacoesPagamento : outrasCondVal,
                 };
 
                 data.dados.termos = {
                   ...propostaDados?.dados?.termos,
                   ...data.dados.termos,
-                  outrasCondicoes: data.dados.termos?.outrasCondicoes || outrasCondVal,
-                  detalhesPagamento: data.dados.termos?.detalhesPagamento || outrasCondVal,
-                  detalhesPagamentoContraproposta: data.dados.termos?.detalhesPagamentoContraproposta || outrasCondVal,
-                  condicoesPagamento: data.dados.termos?.condicoesPagamento || outrasCondVal,
-                  observacoesPagamento: data.dados.termos?.observacoesPagamento || outrasCondVal,
+                  outrasCondicoes: data.dados.termos?.outrasCondicoes !== undefined ? data.dados.termos.outrasCondicoes : outrasCondVal,
+                  detalhesPagamento: data.dados.termos?.detalhesPagamento !== undefined ? data.dados.termos.detalhesPagamento : outrasCondVal,
+                  detalhesPagamentoContraproposta: data.dados.termos?.detalhesPagamentoContraproposta !== undefined ? data.dados.termos.detalhesPagamentoContraproposta : outrasCondVal,
+                  condicoesPagamento: data.dados.termos?.condicoesPagamento !== undefined ? data.dados.termos.condicoesPagamento : outrasCondVal,
+                  observacoesPagamento: data.dados.termos?.observacoesPagamento !== undefined ? data.dados.termos.observacoesPagamento : outrasCondVal,
                 };
+
+                // Restore terms and payment options if they were originally defined in the contract
+                if (contractTermosMetodos !== undefined) {
+                  data.dados.termos.metodos = contractTermosMetodos;
+                }
+                if (contractPagamentoMetodos !== undefined) {
+                  data.dados.pagamento.metodos = contractPagamentoMetodos;
+                }
+                if (contractFormasPagamento !== undefined) {
+                  data.formasPagamento = contractFormasPagamento;
+                }
+
+                // Restore terms detailed strings specifically
+                if (contractTermosOutrasCondicoes !== undefined) data.dados.termos.outrasCondicoes = contractTermosOutrasCondicoes;
+                if (contractTermosDetalhes !== undefined) data.dados.termos.detalhesPagamento = contractTermosDetalhes;
+                if (contractTermosContraproposta !== undefined) data.dados.termos.detalhesPagamentoContraproposta = contractTermosContraproposta;
+                if (contractTermosCondicoes !== undefined) data.dados.termos.condicoesPagamento = contractTermosCondicoes;
+                if (contractTermosObservacoes !== undefined) data.dados.termos.observacoesPagamento = contractTermosObservacoes;
+                if (contractTermosClausula !== undefined) data.dados.termos.clausulaPagamento = contractTermosClausula;
+
+                // Restore payment detailed strings specifically
+                if (contractPagamentoOutrasCondicoes !== undefined) data.dados.pagamento.outrasCondicoes = contractPagamentoOutrasCondicoes;
+                if (contractPagamentoDetalhes !== undefined) data.dados.pagamento.detalhesPagamento = contractPagamentoDetalhes;
+                if (contractPagamentoContraproposta !== undefined) data.dados.pagamento.detalhesPagamentoContraproposta = contractPagamentoContraproposta;
+                if (contractPagamentoCondicoes !== undefined) data.dados.pagamento.condicoesPagamento = contractPagamentoCondicoes;
+                if (contractPagamentoObservacoes !== undefined) data.dados.pagamento.observacoesPagamento = contractPagamentoObservacoes;
+                if (contractPagamentoClausula !== undefined) data.dados.pagamento.clausulaPagamento = contractPagamentoClausula;
+
+                // Restore root detailed strings specifically
+                if (contractOutrasCondicoes !== undefined) data.outrasCondicoes = contractOutrasCondicoes;
+                if (contractDetalhesPagamento !== undefined) data.detalhesPagamento = contractDetalhesPagamento;
+                if (contractContraproposta !== undefined) data.detalhesPagamentoContraproposta = contractContraproposta;
+                if (contractCondicoesPagamento !== undefined) data.condicoesPagamento = contractCondicoesPagamento;
+                if (contractObservacoesPagamento !== undefined) data.observacoesPagamento = contractObservacoesPagamento;
+                if (contractClausulaPagamento !== undefined) data.clausulaPagamento = contractClausulaPagamento;
               }
             } catch (propErr) {
               console.error("Erro ao completar dados da proposta:", propErr);
