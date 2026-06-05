@@ -895,7 +895,7 @@ export function getValorMensal(imovel: any): number {
   const aluguel = toNumber(imovel.valorAluguel || imovel.priceLocacao || 0);
   const condominio = getCondominio(imovel);
   const iptuMensal = getIptuMensal(imovel);
-  const taxaLixo = toNumber(imovel.valorTaxaLixo || imovel.taxaLixo || 0);
+  const taxaLixo = getTaxaLixoMensal(imovel);
   const taxaGas = toNumber(imovel.valorTaxaGas || imovel.taxaGas || 0);
   const taxaAgua = toNumber(imovel.valorTaxaAgua || imovel.taxaAgua || 0);
   const taxaLuz = toNumber(imovel.valorTaxaLuz || imovel.taxaLuz || 0);
@@ -1347,6 +1347,42 @@ export function getOutrasCondicoes(dados: any = {}): string {
     dados.observacoes ||
     ""
   );
+}
+
+export function getTaxaLixoAnual(imovel: any): number {
+  if (!imovel) return 0;
+  return toNumber(
+    imovel.taxaLixo ||
+    imovel.valorTaxaLixo ||
+    imovel.taxaDeLixo ||
+    imovel.lixo ||
+    imovel.valorLixo ||
+    imovel.taxaLixoAnual ||
+    0
+  );
+}
+
+export function getTaxaLixoMensal(imovel: any): number {
+  const anual = getTaxaLixoAnual(imovel);
+  return anual > 0 ? anual / 12 : 0;
+}
+
+export function getCondicoesPagamentoFinal(dados: any = {}): string {
+  if (!dados) return "";
+  const cond =
+    dados.condicoesPagamento ||
+    dados.detalhesPagamento ||
+    dados.detalhesPagamentoContraproposta ||
+    dados.outrasCondicoes ||
+    dados.observacoesPagamento ||
+    dados.clausulaPagamento ||
+    dados.termosCondicoes ||
+    "";
+  if (cond) return String(cond);
+  if (dados.dados) {
+    return getCondicoesPagamentoFinal(dados.dados);
+  }
+  return "";
 }
 
 export function montarTextoConjuge(dados: any = {}, prefixo: string): string {

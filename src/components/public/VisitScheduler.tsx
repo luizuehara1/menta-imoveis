@@ -89,6 +89,13 @@ export default function VisitScheduler({ property }: VisitSchedulerProps) {
     mensagem: ''
   });
 
+  const agendamentoValido = !!(
+    selectedDate &&
+    selectedHour &&
+    formData.nomeCliente?.trim() &&
+    formData.telefone?.trim()
+  );
+
   useEffect(() => {
     if (selectedDate) {
       fetchBookedHours(selectedDate);
@@ -143,24 +150,76 @@ export default function VisitScheduler({ property }: VisitSchedulerProps) {
     return isBefore(day, today) || day.getFullYear() !== 2026;
   };
 
+  const limparTelefoneBrasil = (telefone: string) => {
+    const numeros = String(telefone || "").replace(/\D/g, "");
+    if (!numeros) return "";
+    if (numeros.startsWith("55")) {
+      return numeros;
+    }
+    return `55${numeros}`;
+  };
+
+  const abrirWhatsApp = (numeroDestino: string, mensagem: string) => {
+    const telefoneLimpo = limparTelefoneBrasil(numeroDestino);
+    if (!telefoneLimpo) {
+      alert("Telefone de destino do WhatsApp não configurado.");
+      return;
+    }
+    const url = `https://wa.me/${telefoneLimpo}?text=${encodeURIComponent(mensagem)}`;
+    console.log("Número destino WhatsApp:", numeroDestino);
+    console.log("Mensagem WhatsApp:", mensagem);
+    console.log("URL WhatsApp:", url);
+    window.location.href = url;
+  };
+
+  const formatarData = (data: Date | null) => {
+    if (!data) return "Não informada";
+    return format(data, 'dd/MM/yyyy');
+  };
+
+  const montarMensagemAgendamento = () => {
+    return `
+Olá! Gostaria de solicitar um agendamento.
+
+📅 Data: ${formatarData(selectedDate)}
+⏰ Horário: ${selectedHour || "Não informado"}
+
+👤 Nome: ${formData.nomeCliente || "Não informado"}
+📱 WhatsApp: ${formData.telefone || "Não informado"}
+📧 E-mail: ${formData.email || "Não informado"}
+
+📝 Observação:
+${formData.mensagem || "Sem observação"}
+
+${property ? `
+🏢 Imóvel: ${property.title || (property as any).nomeEdificio || property.code || ""}
+🔗 Link: ${window.location.href}
+` : ""}
+    `.trim();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    console.log("Data selecionada:", selectedDate);
+    console.log("Horário selecionado:", selectedHour);
+    console.log("FormData agendamento:", formData);
+
     // 8. FORM VALIDATION
-    if (!formData.nomeCliente || !formData.nomeCliente.trim()) {
-      setError("Por favor, preencha o seu nome.");
-      return;
-    }
-    if (!formData.telefone || !formData.telefone.trim()) {
-      setError("Por favor, preencha o seu telefone.");
-      return;
-    }
     if (!selectedDate) {
-      setError("Por favor, selecione uma data.");
+      alert("Selecione uma data para o agendamento.");
       return;
     }
     if (!selectedHour) {
-      setError("Por favor, selecione um horário.");
+      alert("Selecione um horário para o agendamento.");
+      return;
+    }
+    if (!formData.nomeCliente || !formData.nomeCliente.trim()) {
+      alert("Informe seu nome completo.");
+      return;
+    }
+    if (!formData.telefone || !formData.telefone.trim()) {
+      alert("Informe seu WhatsApp.");
       return;
     }
     if (!property || !property.id) {
@@ -172,16 +231,11 @@ export default function VisitScheduler({ property }: VisitSchedulerProps) {
     setError(null);
 
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
-
-    // 5. IMÓVEL LINK
-    const codigoPublico = getCodigoPublicoImovel(property);
     const linkImovel = getLinkPublicoImovel(property);
     const brokerId = (property as any).brokerId || (property as any).corretorId || (property as any).corretorResponsavel?.id || (property as any).broker?.id || "";
     const brokerName = (property as any).brokerName || (property as any).corretorResponsavel?.nome || (property as any).corretorNome || "";
 
-    // 4. VISIT DATA
     const visitData: any = {
-      // Standard local fields
       nomeCliente: formData.nomeCliente.trim(),
       telefone: formData.telefone.trim(),
       email: formData.email?.trim() || "",
@@ -196,7 +250,6 @@ export default function VisitScheduler({ property }: VisitSchedulerProps) {
       status: "Pendente",
       createdAt: serverTimestamp(),
 
-      // Explicitly requested simple fields
       imovelTitulo: property.title || (property as any).nome || "Imóvel",
       imovelCodigo: property.code || (property as any).codigo || "",
       linkImovel: linkImovel,
@@ -217,71 +270,28 @@ export default function VisitScheduler({ property }: VisitSchedulerProps) {
     }
 
     try {
-      // Check if already booked (wrapped in try/catch to gracefully handle limited public read permissions)
-      let isAlreadyBooked = false;
-      try {
-        const q = query(
-          collection(db, 'visitas'),
-          where('imovelId', '==', property.id),
-          where('data', '==', dateStr),
-          where('horario', '==', selectedHour)
-        );
-        const existingDocs = await getDocs(q);
-        isAlreadyBooked = existingDocs.docs.some(doc => doc.data().status !== 'cancelada');
-      } catch (readErr) {
-        console.warn("Could not check duplicate bookings due to restricted read permissions. Proceeding anyway.", readErr);
-      }
-      
-      if (isAlreadyBooked) {
-        throw new Error("Esse horário acabou de ser reservado. Escolha outro horário.");
-      }
+      const mensagem = montarMensagemAgendamento();
+      const brokerPhone = property.brokerWhatsapp || (property as any).broker?.whatsapp || (property as any).corretorResponsavel?.whatsapp || (property as any).corretorWhatsapp || "";
+      const numeroDestino = brokerPhone || "47992914069";
 
-      // 9. LOG ATTEMPT TO SAVE
-      console.log("Tentando salvar visita:", visitData);
+      // 1. OPEN WHATSAPP IMMEDIATELY ON CLICK
+      abrirWhatsApp(numeroDestino, mensagem);
 
-      await addDoc(collection(db, 'visitas'), visitData);
+      // 2. SAVE IN BACKGROUND WITHOUT BLOCKING NAVIGATION
+      addDoc(collection(db, 'visitas'), visitData)
+        .then(() => {
+          console.log("Visita salva com sucesso persistida no Firebase.");
+        })
+        .catch(err => {
+          console.error("Erro em background ao salvar visita no Firebase:", err);
+        });
 
       setSuccess(true);
-      
-      // 6. WHATSAPP REDIRECT AFTER SAVING SUCCESS
-      const brokerPhone = property.brokerWhatsapp || "";
-      const cleanPhone = cleanPhoneForWhatsapp(brokerPhone);
-      const p = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
-      
-      if (cleanPhone) {
-        const message = `Olá! Solicitei uma visita para este imóvel:
-
-Imóvel: ${property.title || "Imóvel"}
-Código: ${property.code || "Não informado"}
-Data: ${dateStr}
-Horário: ${selectedHour}
-
-Link do imóvel:
-${linkImovel}
-
-Meus dados:
-Nome: ${formData.nomeCliente.trim()}
-Telefone: ${formData.telefone.trim()}
-E-mail: ${formData.email?.trim() || "Não informado"}`;
-
-        const whatsappUrl = `https://wa.me/${p}?text=${encodeURIComponent(message)}`;
-        
-        // Brief delay to show success state before redirecting
-        setTimeout(() => {
-          window.open(whatsappUrl, '_blank');
-        }, 1500);
-      }
-
       setFormData({ nomeCliente: '', telefone: '', email: '', mensagem: '' });
       setSelectedDate(null);
       setSelectedHour(null);
     } catch (err: any) {
-      // 9. CLEAR ERRORS IN THE CONSOLE
-      console.error("Erro ao salvar visita:", err);
-      if (err && typeof err === 'object') {
-        console.error("Código:", err.code);
-        console.error("Mensagem:", err.message);
-      }
+      console.error("Erro ao solicitar visita:", err);
       setError("Erro ao solicitar visita. Tente novamente ou chame no WhatsApp.");
     } finally {
       setSubmitting(false);
@@ -524,10 +534,10 @@ E-mail: ${formData.email?.trim() || "Não informado"}`;
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   type="submit"
-                  disabled={submitting || !selectedDate || !selectedHour}
+                  disabled={!agendamentoValido || submitting}
                   className={`
                     w-full py-6 rounded-[2rem] font-bold flex items-center justify-center gap-4 transition-all shadow-2xl text-xs uppercase tracking-[0.2em]
-                    ${(submitting || !selectedDate || !selectedHour) 
+                    ${(!agendamentoValido || submitting) 
                       ? 'bg-gray-100 text-gray-300 cursor-not-allowed shadow-none' 
                       : 'bg-primary-black text-white hover:bg-primary-black/90 shadow-black/20'
                     }

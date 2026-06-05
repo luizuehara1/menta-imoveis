@@ -47,6 +47,7 @@ import {
   getIptuValue,
   getValorTotalMensal,
   getValorMensal,
+  getTaxaLixoMensal,
   toNumber,
   getCardStats,
   getPropertyStats,
@@ -490,7 +491,7 @@ export default function PropertyDetail() {
   const condoFeeVal = toNumber(property.condoFee || property.valorCondominio || 0);
   const iptuVal = getIptuValue(property);
   const fireInsuranceVal = toNumber(property.fireInsurance || property.valorSeguroIncendio || 0);
-  const taxaLixoVal = toNumber(property.valorTaxaLixo || property.taxaLixo || 0);
+  const taxaLixoVal = getTaxaLixoMensal(property);
   const taxaGasVal = toNumber(property.valorTaxaGas || property.taxaGas || 0);
   const taxaAguaVal = toNumber(property.valorTaxaAgua || property.taxaAgua || 0);
   const taxaLuzVal = toNumber(property.valorTaxaLuz || property.taxaLuz || 0);

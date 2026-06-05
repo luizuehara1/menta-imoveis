@@ -49,6 +49,7 @@ import {
   safeText,
   safeMoney,
   safeDate,
+  getTaxaLixoMensal,
 } from "../../lib/utils";
 import { useSettings } from "../../hooks/useSettings";
 import {
@@ -382,7 +383,7 @@ export default function AdminRents() {
                 return property.valorIptuMensal || property.iptuMensal || (rawIptu > 0 ? rawIptu / 12 : 0);
               })(),
               valorCondominio: property.condoFee || property.valorCondominio || 0,
-              valorTaxaLixo: toNumber(property.valorTaxaLixo ?? property.taxaLixo ?? property.taxalixo ?? 0),
+              valorTaxaLixo: getTaxaLixoMensal(property),
               valorTaxaGas: toNumber(property.valorTaxaGas ?? property.taxaGas ?? property.taxagas ?? 0),
               valorTaxaAgua: toNumber((property as any).valorTaxaAgua ?? (property as any).taxaAgua ?? (property as any).taxaagua ?? 0),
               valorTaxaLuz: toNumber((property as any).valorTaxaLuz ?? (property as any).taxaLuz ?? (property as any).taxaluz ?? 0),
@@ -505,7 +506,7 @@ export default function AdminRents() {
           return property.valorIptuMensal || property.iptuMensal || (rawIptu > 0 ? rawIptu / 12 : 0);
         })(),
         valorCondominio: property.condoFee || property.valorCondominio || 0,
-        valorTaxaLixo: toNumber(property.valorTaxaLixo ?? property.taxaLixo ?? property.taxalixo ?? 0),
+        valorTaxaLixo: getTaxaLixoMensal(property),
         valorTaxaGas: toNumber(property.valorTaxaGas ?? property.taxaGas ?? property.taxagas ?? 0),
         valorTaxaAgua: toNumber((property as any).valorTaxaAgua ?? (property as any).taxaAgua ?? (property as any).taxaagua ?? 0),
         valorTaxaLuz: toNumber((property as any).valorTaxaLuz ?? (property as any).taxaLuz ?? (property as any).taxaluz ?? 0),
@@ -2135,7 +2136,7 @@ export default function AdminRents() {
                         </div>
                         <div className="space-y-2">
                           <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
-                            Taxa de Lixo (R$)
+                            Taxa de Lixo Mensal (R$)
                           </label>
                           <input
                             type="text"
@@ -2150,6 +2151,11 @@ export default function AdminRents() {
                               })
                             }
                           />
+                          {(leaseForm.valorTaxaLixo || 0) > 0 && (
+                            <p className="text-[10px] text-gray-500 mt-1 pl-1">
+                              <strong>Taxa de Lixo Anual:</strong> {formatCurrency(toNumber(leaseForm.valorTaxaLixo) * 12)} | <strong>Taxa de Lixo Mensal:</strong> {formatCurrency(leaseForm.valorTaxaLixo)}
+                            </p>
+                          )}
                         </div>
                         <div className="space-y-2">
                           <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
@@ -3040,7 +3046,7 @@ export default function AdminRents() {
                     </div>
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
-                        Taxa de Lixo (R$)
+                        Taxa de Lixo Mensal (R$)
                       </label>
                       <input
                         type="text"
@@ -3048,6 +3054,11 @@ export default function AdminRents() {
                         value={maskCurrency(receiptForm.valorTaxaLixo)}
                         onChange={(e) => handleReceiptFieldChange("valorTaxaLixo", parseCurrencyToNumber(e.target.value))}
                       />
+                      {(Number(receiptForm.valorTaxaLixo) || 0) > 0 && (
+                        <p className="text-[10px] text-gray-500 mt-1 pl-1">
+                          <strong>Taxa de Lixo Anual:</strong> {formatCurrency(toNumber(receiptForm.valorTaxaLixo) * 12)} | <strong>Taxa de Lixo Mensal:</strong> {formatCurrency(receiptForm.valorTaxaLixo)}
+                        </p>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">

@@ -557,7 +557,7 @@ export default function AdminPropertyForm() {
     const total = toNumber(priceLocacao) + 
                   toNumber(condoFee) + 
                   (toNumber(iptu) > 0 ? toNumber(iptu) / 12 : 0) + 
-                  toNumber(valorTaxaLixo) + 
+                  (toNumber(valorTaxaLixo) > 0 ? toNumber(valorTaxaLixo) / 12 : 0) + 
                   toNumber(valorTaxaGas) + 
                   toNumber(valorTaxaAgua) + 
                   toNumber(valorTaxaLuz) + 
@@ -983,6 +983,7 @@ export default function AdminPropertyForm() {
       console.log("Salvando imóvel em:", "imoveis");
 
       const valLixo = toNumber(data.valorTaxaLixo ?? data.taxaLixo);
+      const valLixoMensal = valLixo > 0 ? valLixo / 12 : 0;
       const valGas = toNumber(data.valorTaxaGas ?? data.taxaGas);
       const valAgua = toNumber(data.valorTaxaAgua ?? data.taxaAgua);
       const valLuz = toNumber(data.valorTaxaLuz ?? data.taxaLuz);
@@ -993,7 +994,7 @@ export default function AdminPropertyForm() {
       const fireInsurance = toNumber(data.fireInsurance);
       const outrasTaxas = toNumber(data.taxes);
 
-      const computedTotal = aluguel + condoFee + iptuMensal + valLixo + valGas + valAgua + valLuz + fireInsurance + outrasTaxas;
+      const computedTotal = aluguel + condoFee + iptuMensal + valLixoMensal + valGas + valAgua + valLuz + fireInsurance + outrasTaxas;
 
       const rawSaveBType = String(data.businessType || 'Venda').toLowerCase();
       let normalizedSaveBType = 'Venda';
@@ -1013,6 +1014,10 @@ export default function AdminPropertyForm() {
         buildingName: data.buildingName || data.nomeEdificio || "",
         businessType: normalizedSaveBType,
         valorTaxaLixo: valLixo,
+        taxaLixoAnual: valLixo,
+        taxaLixoMensal: valLixoMensal,
+        valorTaxaLixoAnual: valLixo,
+        valorTaxaLixoMensal: valLixoMensal,
         valorTaxaGas: valGas,
         valorTaxaAgua: valAgua,
         valorTaxaLuz: valLuz,
@@ -1895,7 +1900,7 @@ export default function AdminPropertyForm() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-gray-700 font-extrabold text-[#a27e1f]">Taxa de Lixo (R$)</label>
+                    <label className="text-sm font-bold text-gray-700 font-extrabold text-[#a27e1f]">Taxa de Lixo Anual (R$)</label>
                     <Controller
                       name="valorTaxaLixo"
                       control={control}
@@ -1909,6 +1914,11 @@ export default function AdminPropertyForm() {
                         />
                       )}
                     />
+                    {toNumber(valorTaxaLixo) > 0 && (
+                      <p className="text-xs text-blue-600 font-semibold bg-blue-50 border border-blue-100 rounded-lg p-2 mt-1">
+                        Taxa de Lixo Mensal calculada: {formatCurrency(toNumber(valorTaxaLixo) / 12)}
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-2">

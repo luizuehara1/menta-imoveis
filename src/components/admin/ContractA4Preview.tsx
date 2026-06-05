@@ -2,7 +2,7 @@ import React from 'react';
 import { Contract, ContractType } from '../../types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { formatCurrency, isValidImageUrl, safeText, safeMoney, safeDate, valorMonetarioPorExtenso, getTituloImovel, formatarDataBR, getOutrasCondicoes, montarTextoConjuge, getNomeComprador, getNomeVendedor, getCpfVendedor, getRgVendedor, getProfissaoVendedor, getEstadoCivilVendedor, getTelefoneVendedor, getEmailVendedor, getEnderecoVendedor, getDetalhesPagamento, valorOuNaoInformado, getTermosCondicoes, getFormaPagamento, getParteAceitante } from '../../lib/utils';
+import { formatCurrency, isValidImageUrl, safeText, safeMoney, safeDate, valorMonetarioPorExtenso, getTituloImovel, formatarDataBR, getOutrasCondicoes, montarTextoConjuge, getNomeComprador, getNomeVendedor, getCpfVendedor, getRgVendedor, getProfissaoVendedor, getEstadoCivilVendedor, getTelefoneVendedor, getEmailVendedor, getEnderecoVendedor, getDetalhesPagamento, valorOuNaoInformado, getTermosCondicoes, getFormaPagamento, getParteAceitante, getCondicoesPagamentoFinal } from '../../lib/utils';
 import { useSettings } from '../../hooks/useSettings';
 
 interface ContractA4PreviewProps {
@@ -741,11 +741,8 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
     const imovelMatricula = (contract as any).imovelMatricula || dados.imovel?.matricula || "Não informado";
     const imovelCri = String((contract as any).imovelCri || dados.imovel?.cri || dados.imovel?.criImovel || "").trim() || "Não informado";
 
-    const condicoesPagamento = (contract as any).condicoesPagamento || (contract as any).detalhesPagamento || dados.pagamento?.outrasCondicoes || dados.termos?.outrasCondicoes || "";
-    const outrasCondicoes = (contract as any).outrasCondicoes || (contract as any).observacoes || dados.pagamento?.outrasCondicoes || dados.termos?.outrasCondicoes || "";
-
-    const outrasCondicoesFinal = getOutrasCondicoes(dados) || getOutrasCondicoes(contract) || "";
-    console.log("Outras condições usadas no PDF:", outrasCondicoesFinal);
+    const condicoesFinal = getCondicoesPagamentoFinal(contract) || getCondicoesPagamentoFinal(dados) || "";
+    const outrasFinal = (contract as any).outrasCondicoes || (contract as any).outrasCondicoesFinal || dados.outrasCondicoes || "";
 
     const localFinal = dados.local || contract.local || "Balneário Camboriú - SC";
     const dataFinal = dados.data || contract.data || "";
@@ -771,32 +768,6 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
         </section>
 
         <section className="section avoid-break">
-          <h3 className="section-title">Dados do Proponente Comprador</h3>
-          <div className="grid grid-cols-2 gap-y-1.5 gap-x-6">
-            <p><strong>Nome Completo:</strong> {compradorNome || 'Não informado'}</p>
-            <p><strong>CPF:</strong> {compradorCpf || 'Não informado'}</p>
-            <p><strong>RG:</strong> {compradorRg || 'Não informado'}</p>
-            <p><strong>Estado Civil:</strong> {compradorEstadoCivil || 'Não informado'}</p>
-            <p><strong>Profissão:</strong> {compradorProfissao || 'Não informado'}</p>
-            <p><strong>Telefone:</strong> {compradorTelefone || 'Não informado'}{compradorWhatsapp ? ` / WhatsApp: ${compradorWhatsapp}` : ''}</p>
-            <p className="col-span-2"><strong>E-mail:</strong> {compradorEmail || 'Não informado'}</p>
-            <p className="col-span-2"><strong>Endereço Residencial:</strong> {compradorEndereco || 'Não informado'}{compradorCep ? ` - CEP: ${compradorCep}` : ''}{compradorCidade ? ` - ${compradorCidade}/${compradorEstado}` : ''}</p>
-
-            {spouseNome && (
-              <>
-                <p><strong>Cônjuge:</strong> {spouseNome}</p>
-                <p><strong>CPF Cônjuge:</strong> {spouseCpf || "Não informado"}</p>
-                {spouseRg && <p><strong>RG Cônjuge:</strong> {spouseRg}</p>}
-                {spouseProfissao && <p><strong>Profissão Cônjuge:</strong> {spouseProfissao}</p>}
-                {spouseTelefone && <p><strong>Telefone Cônjuge:</strong> {spouseTelefone}</p>}
-                {spouseEmail && <p><strong>E-mail Cônjuge:</strong> {spouseEmail}</p>}
-                {spouseEndereco && <p className="col-span-2"><strong>Endereço Cônjuge:</strong> {spouseEndereco}</p>}
-              </>
-            )}
-          </div>
-        </section>
-
-        <section className="section avoid-break">
           <h3 className="section-title">II - Objeto e Efeitos do Aceite</h3>
           <div className="space-y-2">
             <p className="font-bold text-xs p-1.5 bg-gray-50 rounded text-center border border-dashed border-gray-300 uppercase leading-none">
@@ -814,24 +785,20 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
               <p><strong>Valor do Aceite:</strong> {formatCurrency(valorAceiteFinal)}</p>
               <p><strong>Data do Documento Base:</strong> {formatarDataBR(dataDocumentoBase)}</p>
               <p className="col-span-2"><strong>Forma de Pagamento:</strong> {(contract as any).formaPagamento || getFormaPagamento(contract) || getFormaPagamento(dados) || "Não informado"}</p>
+              <p className="col-span-2"><strong>Condições de Pagamento:</strong> {condicoesFinal || "Não informado"}</p>
             </div>
           </div>
         </section>
 
-        {outrasCondicoesFinal && (() => {
-          const textoJaTemClausula = outrasCondicoesFinal
-            .trim()
-            .toUpperCase()
-            .startsWith("CLÁUSULA");
-          return (
-            <section className="section avoid-break">
-              <h3 className="section-title">III - OUTRAS CONDIÇÕES E DETALHES DO PAGAMENTO</h3>
-              <div style={{ whiteSpace: "pre-line" }} className="whitespace-pre-line leading-relaxed text-justify pl-2 border-l border-gold/20 text-[9.5px]">
-                {outrasCondicoesFinal}
-              </div>
-            </section>
-          );
-        })()}
+        <section className="section avoid-break">
+          <h3 className="section-title">III - TERMOS E CONDIÇÕES DA PROPOSTA ACEITA</h3>
+          <div className="leading-relaxed text-justify pl-2 border-l border-gold/20 text-[9.5px]">
+            <p className="font-semibold text-gray-800 mb-1">Condições de pagamento:</p>
+            <div style={{ whiteSpace: "pre-line" }}>
+              {condicoesFinal || "Não informado"}
+            </div>
+          </div>
+        </section>
 
         {renderClausulasSelecionadas()}
 
@@ -842,7 +809,7 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
         <div className="pdf-signatures shrink-0">
           <div className="flex flex-col justify-end">
             <div className="pdf-signature-line">
-              {parteAceitante.nome || compradorNome || "Assinatura da Parte Aceitante"}
+              {parteAceitante.nome || "Assinatura da Parte Aceitante"}
             </div>
             <div className="pdf-signature-role">Assinatura da Parte Aceitante</div>
           </div>

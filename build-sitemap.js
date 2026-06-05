@@ -19,68 +19,52 @@ async function generateSitemap() {
 
     // 2. Fetch properties from Firestore securely and rules-compliantly
     let documents = [];
-    try {
-      // Try getting the entire collection first (works if permission allows or for admin/local use)
-      const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/imoveis?pageSize=1000`;
-      console.log(`[Sitemap] Attempting full collection fetch via Firestore REST: ${url}`);
-      const response = await fetch(url);
-      if (response.ok) {
-        const data = await response.json();
-        documents = data.documents || [];
-        console.log(`[Sitemap] Successfully fetched full collection: ${documents.length} raw docs`);
-      } else {
-        throw new Error(`HTTP error ${response.status} fetching full collection`);
-      }
-    } catch (err) {
-      console.log(`[Sitemap] Full collection fetch failed or blocked (${err.message}). Trying parallel filtered runQueries...`);
-      // Falls back to parallel queries permitted by public rules
-      const fetchQuery = async (fieldName) => {
-        const queryUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents:runQuery`;
-        const body = {
-          structuredQuery: {
-            from: [{ collectionId: 'imoveis' }],
-            where: {
-              fieldFilter: {
-                field: { fieldPath: fieldName },
-                op: 'EQUAL',
-                value: { booleanValue: true }
-              }
+    const fetchQuery = async (fieldName) => {
+      const queryUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents:runQuery`;
+      const body = {
+        structuredQuery: {
+          from: [{ collectionId: 'imoveis' }],
+          where: {
+            fieldFilter: {
+              field: { fieldPath: fieldName },
+              op: 'EQUAL',
+              value: { booleanValue: true }
             }
           }
-        };
-        const response = await fetch(queryUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body)
-        });
-        if (!response.ok) {
-          throw new Error(`runQuery for ${fieldName} failed: ${response.status} - ${await response.text()}`);
         }
-        const results = await response.json();
-        // Extract documents from results array
-        return results
-          .filter(r => r && r.document)
-          .map(r => r.document);
       };
-
-      try {
-        const [docs1, docs2] = await Promise.all([
-          fetchQuery('publicado').catch(e => { console.error('[Sitemap] Query "publicado" failed:', e); return []; }),
-          fetchQuery('publicadoNoSite').catch(e => { console.error('[Sitemap] Query "publicadoNoSite" failed:', e); return []; })
-        ]);
-
-        const map = new Map();
-        [...docs1, ...docs2].forEach(doc => {
-          if (doc && doc.name) {
-            const id = doc.name.split('/').pop();
-            map.set(id, doc);
-          }
-        });
-        documents = Array.from(map.values());
-        console.log(`[Sitemap] Successfully retrieved ${documents.length} raw docs via parallel queries`);
-      } catch (parallelErr) {
-        throw new Error(`Both full fetch and parallel queries failed: ${parallelErr.message}`);
+      const response = await fetch(queryUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (!response.ok) {
+        throw new Error(`runQuery for ${fieldName} returned status ${response.status}`);
       }
+      const results = await response.json();
+      return results
+        .filter(r => r && r.document)
+        .map(r => r.document);
+    };
+
+    console.log('[Sitemap] Fetching published properties via Firestore structured query...');
+    try {
+      const [docs1, docs2] = await Promise.all([
+        fetchQuery('publicado').catch(e => { console.log('[Sitemap] Query "publicado" info:', e.message); return []; }),
+        fetchQuery('publicadoNoSite').catch(e => { console.log('[Sitemap] Query "publicadoNoSite" info:', e.message); return []; })
+      ]);
+
+      const map = new Map();
+      [...docs1, ...docs2].forEach(doc => {
+        if (doc && doc.name) {
+          const id = doc.name.split('/').pop();
+          map.set(id, doc);
+        }
+      });
+      documents = Array.from(map.values());
+      console.log(`[Sitemap] Successfully retrieved ${documents.length} public properties`);
+    } catch (queryErr) {
+      console.log(`[Sitemap] Structured query search yielded: ${queryErr.message}`);
     }
 
     // 3. Helper to parse Firestore REST format dynamically
