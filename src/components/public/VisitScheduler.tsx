@@ -169,7 +169,23 @@ export default function VisitScheduler({ property }: VisitSchedulerProps) {
     console.log("Número destino WhatsApp:", numeroDestino);
     console.log("Mensagem WhatsApp:", mensagem);
     console.log("URL WhatsApp:", url);
-    window.location.href = url;
+    
+    try {
+      const newWindow = window.open(url, '_blank', 'noopener,noreferrer');
+      if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+        window.location.href = url;
+      }
+    } catch (e) {
+      try {
+        if (window.top && window.top !== window) {
+          window.top.location.href = url;
+        } else {
+          window.location.href = url;
+        }
+      } catch (err) {
+        window.location.href = url;
+      }
+    }
   };
 
   const formatarData = (data: Date | null) => {
@@ -500,7 +516,7 @@ ${property ? `
                 <div className="space-y-3">
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] pl-1">E-mail</label>
                   <input 
-                    type="email" required 
+                    type="email" 
                     className="w-full bg-gray-50 border border-transparent rounded-[1.5rem] py-5 px-7 text-sm font-medium focus:ring-4 focus:ring-gold/10 focus:border-gold/20 focus:bg-white outline-none transition-all placeholder:text-gray-300"
                     value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})}
                     placeholder="voce@exemplo.com"

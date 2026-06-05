@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useSettings, useOptions } from '../../hooks/useSettings';
 import PageWrapper from '../../components/PageWrapper';
 import { SafeImage } from '../../components/ui/SafeImage';
-import { formatCurrency, isValidPublicProperty, isMockProperty, cleanPhoneForWhatsapp, getSafeImageUrl, isImovelAlugado, matchesQuickSearch, normalizeText, buildPropertyWhatsAppMessage, getIptuValue, getValorTotalMensal, getValorMensal, getCardStats, isImovelPublico, getCodigoPublicoImovel, getLinkPublicoImovel, getFotoPrincipal } from '../../lib/utils';
+import { formatCurrency, isValidPublicProperty, isMockProperty, cleanPhoneForWhatsapp, getSafeImageUrl, isImovelAlugado, isImovelVendido, matchesQuickSearch, normalizeText, buildPropertyWhatsAppMessage, getIptuValue, getValorTotalMensal, getValorMensal, getCardStats, isImovelPublico, getCodigoPublicoImovel, getLinkPublicoImovel, getFotoPrincipal } from '../../lib/utils';
 import { PropertyPriceBadge } from '../../components/public/PropertyPriceBadge';
 import { PropertyCardCosts } from '../../components/public/PropertyCardCosts';
 import { useSEO } from '../../hooks/useSEO';
@@ -185,7 +185,12 @@ const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
             <span className="bg-primary-black/90 backdrop-blur-md text-white text-[9px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg border border-white/10 shadow-lg">
               {bizTypeNorm || property.businessType || "Imóvel"}
             </span>
-            {isImovelAlugado(property) && (
+            {isImovelVendido(property) && (
+              <span className="bg-[#EF4444] text-white text-[9px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg shadow-lg border border-red-500">
+                VENDIDO
+              </span>
+            )}
+            {!isImovelVendido(property) && isImovelAlugado(property) && (
               <span className="bg-primary-black border border-gold text-gold text-[9px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg shadow-lg">
                 JÁ ALUGADO / INDISPONÍVEL
               </span>
@@ -532,6 +537,16 @@ export default function PropertyList() {
         });
       }
 
+      // Filter by custom status filter (Todos, Disponível, Vendido, Alugado)
+      const sFilter = filters.statusFilter || 'todos';
+      if (sFilter === 'disponivel') {
+        data = data.filter((p: any) => !isImovelVendido(p) && !isImovelAlugado(p));
+      } else if (sFilter === 'vendido') {
+        data = data.filter((p: any) => isImovelVendido(p));
+      } else if (sFilter === 'alugado') {
+        data = data.filter((p: any) => isImovelAlugado(p) && !isImovelVendido(p));
+      }
+
       // 3. Other Filters
       if (filters.propertyType) {
         data = data.filter((p: any) => p.propertyType === filters.propertyType);
@@ -838,7 +853,7 @@ export default function PropertyList() {
                </p>
                <button 
                   onClick={() => {
-                    const defaultFilters = { businessType: 'Todos', propertyType: '', city: '', neighborhood: '', minPrice: '', maxPrice: '', bedrooms: '', bathrooms: '', garageSpaces: '', minArea: '', maxArea: '', destaque: false, leaseFilterStatus: 'todos', busca: '' };
+                    const defaultFilters = { businessType: 'Todos', propertyType: '', city: '', neighborhood: '', minPrice: '', maxPrice: '', bedrooms: '', bathrooms: '', garageSpaces: '', minArea: '', maxArea: '', destaque: false, leaseFilterStatus: 'todos', statusFilter: 'todos', busca: '' };
                     setSearchFilters(defaultFilters);
                     fetchProperties(defaultFilters);
                   }} 
@@ -926,6 +941,30 @@ export default function PropertyList() {
                              key={o.id}
                              onClick={() => setSearchFilters({...searchFilters, businessType: o.nome})}
                              className={`py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${searchFilters.businessType === o.nome ? 'bg-white text-primary-black shadow-xl' : 'text-gray-400 hover:text-primary-black font-bold'}`}
+                           >
+                             {o.label}
+                           </button>
+                         );
+                       })}
+                     </div>
+                  </div>
+
+                  <div className="space-y-5">
+                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Status do Imóvel</label>
+                     <div className="grid grid-cols-4 gap-1.5 bg-gray-50 p-2 rounded-2xl border border-gray-100">
+                       {[
+                         { id: 'todos', label: 'Todos' },
+                         { id: 'disponivel', label: 'Disponível' },
+                         { id: 'vendido', label: 'Vendido' },
+                         { id: 'alugado', label: 'Alugado' }
+                       ].map((o) => {
+                         const isSelected = searchFilters.statusFilter === o.id;
+                         return (
+                           <button
+                             key={o.id}
+                             type="button"
+                             onClick={() => setSearchFilters({...searchFilters, statusFilter: o.id})}
+                             className={`py-3 px-1 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isSelected ? 'bg-white text-primary-black shadow-md border border-gray-100 font-black' : 'text-gray-400 hover:text-primary-black font-bold'}`}
                            >
                              {o.label}
                            </button>

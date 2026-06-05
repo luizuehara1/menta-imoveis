@@ -350,6 +350,34 @@ export function isImovelAlugado(imovel: any): boolean {
   );
 }
 
+export function isImovelVendido(imovel: any): boolean {
+  if (!imovel) return false;
+  const status = String(imovel.status || "").toLowerCase();
+  const statusVenda = String(imovel.statusVenda || "").toLowerCase();
+
+  return (
+    imovel.vendido === true ||
+    status.includes("vendido") ||
+    statusVenda.includes("vendido")
+  );
+}
+
+export function podeAgendarVisita(imovel: any): boolean {
+  if (isImovelVendido(imovel)) return false;
+
+  if (imovel?.disponivelParaVisita === false) return false;
+
+  return true;
+}
+
+export function podeFazerProposta(imovel: any): boolean {
+  if (isImovelVendido(imovel)) return false;
+
+  if (imovel?.disponivelParaProposta === false) return false;
+
+  return true;
+}
+
 export function normalizeTipoNegocio(tipo: any): string {
   const value = String(tipo || "").toLowerCase();
 
@@ -771,6 +799,10 @@ export function buildPropertyWhatsAppMessage(imovel: any): string {
     "Imóvel disponível";
 
   const codigo = codigoPublico || "Não informado";
+
+  if (isImovelVendido(imovel)) {
+    return `Olá! Vi o imóvel vendido ${codigo} no site da Menta Imóveis e gostaria de conhecer opções semelhantes disponíveis.`;
+  }
 
   if (isImovelAlugado(imovel) && normalizeTipoNegocio(imovel.tipoNegocio || imovel.businessType) === "Venda e Locação") {
     const vVenda = imovel.priceVenda || imovel.valorVenda || 0;

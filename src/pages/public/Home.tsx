@@ -11,7 +11,7 @@ import { PremiumHeroBackground } from '../../components/three/PremiumHeroBackgro
 import { LuxuryShapeCanvas } from '../../components/three/AbstractLuxuryShape';
 import { useSettings, useOptions } from '../../hooks/useSettings';
 import { DEFAULT_SITE_CONFIG } from '../../constants/defaultSettings';
-import { formatCurrency, isValidPublicProperty, getSafeImageUrl, isImovelAlugado, getIptuValue, getValorMensal, normalizeTipoNegocio, getCardStats, getCodigoPublicoImovel, getFotoPrincipal } from '../../lib/utils';
+import { formatCurrency, isValidPublicProperty, getSafeImageUrl, isImovelAlugado, isImovelVendido, getIptuValue, getValorMensal, normalizeTipoNegocio, getCardStats, getCodigoPublicoImovel, getFotoPrincipal } from '../../lib/utils';
 import { PropertyPriceBadge } from '../../components/public/PropertyPriceBadge';
 import { PropertyCardCosts } from '../../components/public/PropertyCardCosts';
 import { useSEO } from '../../hooks/useSEO';
@@ -462,12 +462,17 @@ export default function Home() {
                       <div className="bg-primary-black/80 text-white text-[10px] font-bold uppercase px-3 py-1 rounded-full backdrop-blur-md self-start">
                         {property.businessType}
                       </div>
-                      {isImovelAlugado(property) && (
+                      {isImovelVendido(property) && (
+                        <div className="bg-red-600 border border-red-500 text-white text-[10px] font-black uppercase px-3 py-1 rounded-full backdrop-blur-sm shadow-xl self-start">
+                          VENDIDO
+                        </div>
+                      )}
+                      {!isImovelVendido(property) && isImovelAlugado(property) && (
                         <div className="bg-primary-black border border-gold text-gold text-[10px] font-black uppercase px-3 py-1 rounded-full backdrop-blur-sm shadow-xl self-start">
                           JÁ ALUGADO
                         </div>
                       )}
-                      {!isImovelAlugado(property) && (property.valorMetroQuadrado > 0 || property.valorMetroQuadradoLocacao > 0) && (
+                      {!isImovelVendido(property) && !isImovelAlugado(property) && (property.valorMetroQuadrado > 0 || property.valorMetroQuadradoLocacao > 0) && (
                         <div className="bg-gold text-primary-black text-[9px] font-black uppercase px-3 py-1 rounded-full backdrop-blur-md shadow-lg border border-gold/20 self-start">
                           {property.businessType === 'Locação' 
                             ? `${formatCurrency(property.valorMetroQuadradoLocacao)}/m²`

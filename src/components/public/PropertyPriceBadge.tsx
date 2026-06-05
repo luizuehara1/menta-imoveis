@@ -4,7 +4,8 @@ import {
   normalizeTipoNegocio, 
   getValorMensal, 
   toNumber, 
-  isImovelAlugado 
+  isImovelAlugado,
+  isImovelVendido
 } from '../../lib/utils';
 
 interface PropertyPriceBadgeProps {
@@ -18,6 +19,16 @@ export function PropertyPriceBadge({ imovel }: PropertyPriceBadgeProps) {
   const valorVenda = toNumber(imovel.priceVenda || imovel.valorVenda || imovel.valor_venda || 0);
   const valorMensal = getValorMensal(imovel);
   const alugado = isImovelAlugado(imovel);
+
+  if (isImovelVendido(imovel)) {
+    return (
+      <div className="absolute left-4 bottom-4 bg-[#dc2626] rounded-[10px] p-[10px_14px] shadow-[0_8px_24px_rgba(0,0,0,0.12)] z-10 max-w-[85%] flex flex-col gap-1">
+        <strong className="text-white font-extrabold text-[13px] block tracking-wide">
+          VENDIDO
+        </strong>
+      </div>
+    );
+  }
 
   // Se tipo = Venda
   if (tipo === 'Venda') {

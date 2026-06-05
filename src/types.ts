@@ -33,6 +33,9 @@ export interface Property {
   leaseNotes?: string;
   imovelAlugado?: boolean;
   disponivelParaVisita?: boolean;
+  disponivelParaProposta?: boolean;
+  vendido?: boolean;
+  statusVenda?: string;
   locacaoAtivaId?: string | null;
   dataInicioLocacao?: string;
   dataFimLocacao?: string;

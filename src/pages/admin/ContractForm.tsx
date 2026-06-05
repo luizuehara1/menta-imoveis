@@ -1192,11 +1192,22 @@ export default function AdminContractForm() {
       tipo: flatData.imovelTipo || existingDados.imovel?.tipo || ""
     };
 
-    const detalhesFinal = getDetalhesPagamento(docObj) || getDetalhesPagamento(flatData) || getDetalhesPagamento(existingDados.pagamento) || getDetalhesPagamento(existingDados.termos) || "";
+    // If editing existing document, prioritize saved payment details (even if empty string) and block fallback
+    const detalhesFinal = id 
+      ? (docObj.detalhesPagamento !== undefined 
+          ? docObj.detalhesPagamento 
+          : (existingDados.pagamento?.detalhesPagamento !== undefined 
+              ? existingDados.pagamento.detalhesPagamento 
+              : (existingDados.termos?.detalhesPagamento !== undefined 
+                  ? existingDados.termos.detalhesPagamento 
+                  : (getDetalhesPagamento(docObj) || getDetalhesPagamento(flatData) || ""))))
+      : (getDetalhesPagamento(docObj) || getDetalhesPagamento(flatData) || getDetalhesPagamento(existingDados.pagamento) || getDetalhesPagamento(existingDados.termos) || "");
 
     const pagamentoMerged = {
       ...existingDados.pagamento,
-      metodos: flatData.formasPagamento || existingDados.pagamento?.metodos || [],
+      metodos: id 
+        ? (existingDados.pagamento?.metodos || docObj.formasPagamento || flatData.formasPagamento || [])
+        : (flatData.formasPagamento || existingDados.pagamento?.metodos || []),
       valorExtenso: flatData.valorPorExtenso || existingDados.pagamento?.valorExtenso || "",
       outrasCondicoes: detalhesFinal,
       detalhesPagamento: detalhesFinal,
@@ -1209,7 +1220,9 @@ export default function AdminContractForm() {
 
     const termosMerged = {
       ...existingDados.termos,
-      metodos: flatData.formasPagamento || existingDados.termos?.metodos || [],
+      metodos: id 
+        ? (existingDados.termos?.metodos || docObj.formasPagamento || flatData.formasPagamento || [])
+        : (flatData.formasPagamento || existingDados.termos?.metodos || []),
       valorExtenso: flatData.valorPorExtenso || existingDados.termos?.valorExtenso || "",
       outrasCondicoes: detalhesFinal,
       detalhesPagamento: detalhesFinal,
@@ -1271,8 +1284,9 @@ export default function AdminContractForm() {
         if (docSnap.exists()) {
           let data = docSnap.data() as any;
 
-          // If it's an old contract, arras, or update, and proposalId is present, we complete the missing fields
-          if (data.tipoContrato !== 'proposta' && data.propostaId) {
+          // If we are editing an existing document, the saved contract is the absolute source of truth.
+          // We bypass merging fields from proposalId to prevent overwriting user edits with old proposal options/details.
+          if (false && data.tipoContrato !== 'proposta' && data.propostaId) {
             try {
               const propostaSnap = await getDoc(doc(db, "propostas", data.propostaId));
               if (propostaSnap.exists()) {

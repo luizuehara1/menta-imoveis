@@ -40,6 +40,7 @@ import {
   cleanPhoneForWhatsapp, 
   getSafeImageUrl, 
   isImovelAlugado, 
+  isImovelVendido,
   normalizeTipoNegocio,
   formatOptionWithQuantity,
   pluralizeLabel,
@@ -1287,38 +1288,58 @@ export default function PropertyDetail() {
                                </div>
                              )}
                           </div>
-
                         )}
+
                         {/* CTA button cluster */}
-                        <div className="space-y-3">
-                           <motion.a 
-                             whileHover={{ scale: 1.01, y: -1 }}
-                             whileTap={{ scale: 0.99 }}
-                             href={whatsappUrl}
-                             target="_blank"
-                             rel="noopener noreferrer"
-                             className="flex items-center justify-center gap-2.5 bg-emerald-500 text-white font-bold text-xs uppercase tracking-wider py-4.5 rounded-2xl shadow-md hover:bg-emerald-600 transition-all w-full"
-                           >
-                             <MessageCircle size={20} />
-                             Falar no WhatsApp
-                           </motion.a>
-                           <motion.button 
-                             whileHover={{ scale: 1.01, y: -1 }}
-                             whileTap={{ scale: 0.99 }}
-                             onClick={scrollToScheduler}
-                             className="flex items-center justify-center gap-2.5 bg-[#0F172A] text-white font-bold text-xs uppercase tracking-wider py-4.5 rounded-2xl shadow-md hover:bg-[#1E293B] transition-all w-full"
-                           >
-                             <Calendar size={18} className="text-gold" />
-                             Agendar Visita
-                           </motion.button>
-                           <Link 
-                             to={`/admin/propostas/nova?imovel=${encodeURIComponent(property.code || property.codigo || property.id)}`}
-                             className="flex items-center justify-center gap-2.5 bg-amber-50 border border-amber-200 text-amber-700 font-bold text-xs uppercase tracking-wider py-4.5 rounded-2xl shadow-sm hover:bg-amber-100 transition-all w-full no-underline"
-                           >
-                             <FileText size={18} />
-                             Enviar Proposta
-                           </Link>
-                        </div>
+                        {isImovelVendido(property) ? (
+                          <div className="space-y-4">
+                            <div className="bg-red-50 border border-red-200 text-red-800 rounded-2xl p-5 text-center shadow-sm">
+                              <p className="font-display font-black text-base uppercase tracking-tight text-red-600 mb-1">Este imóvel já foi vendido</p>
+                              <p className="text-[11px] text-slate-500 font-medium">Este imóvel continua online para fins de portfólio. Para conhecer opções similares, entre em contato via WhatsApp.</p>
+                            </div>
+                            <motion.a 
+                              whileHover={{ scale: 1.01, y: -1 }}
+                              whileTap={{ scale: 0.99 }}
+                              href={whatsappUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center justify-center gap-2.5 bg-emerald-500 text-white font-bold text-xs uppercase tracking-wider py-4.5 rounded-2xl shadow-md hover:bg-emerald-600 transition-all w-full"
+                            >
+                              <MessageCircle size={20} />
+                              Solicitar Similares no WhatsApp
+                            </motion.a>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                             <motion.a 
+                               whileHover={{ scale: 1.01, y: -1 }}
+                               whileTap={{ scale: 0.99 }}
+                               href={whatsappUrl}
+                               target="_blank"
+                               rel="noopener noreferrer"
+                               className="flex items-center justify-center gap-2.5 bg-emerald-500 text-white font-bold text-xs uppercase tracking-wider py-4.5 rounded-2xl shadow-md hover:bg-emerald-600 transition-all w-full"
+                             >
+                               <MessageCircle size={20} />
+                               Falar no WhatsApp
+                             </motion.a>
+                             <motion.button 
+                               whileHover={{ scale: 1.01, y: -1 }}
+                               whileTap={{ scale: 0.99 }}
+                               onClick={scrollToScheduler}
+                               className="flex items-center justify-center gap-2.5 bg-[#0F172A] text-white font-bold text-xs uppercase tracking-wider py-4.5 rounded-2xl shadow-md hover:bg-[#1E293B] transition-all w-full"
+                             >
+                               <Calendar size={18} className="text-gold" />
+                               Agendar Visita
+                             </motion.button>
+                             <Link 
+                               to={`/admin/propostas/nova?imovel=${encodeURIComponent(property.code || property.codigo || property.id)}`}
+                               className="flex items-center justify-center gap-2.5 bg-amber-50 border border-amber-200 text-amber-700 font-bold text-xs uppercase tracking-wider py-4.5 rounded-2xl shadow-sm hover:bg-amber-100 transition-all w-full no-underline"
+                             >
+                               <FileText size={18} />
+                               Enviar Proposta
+                             </Link>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -1374,7 +1395,7 @@ export default function PropertyDetail() {
         </div>
 
         {/* Visit Scheduler Section */}
-        {(!isImovelAlugado(property) || (property.businessType === 'Venda e Locação' && property.priceVenda)) ? (
+        {!isImovelVendido(property) && (!isImovelAlugado(property) || (property.businessType === 'Venda e Locação' && property.priceVenda)) ? (
           <section id="agendamento" className="max-w-4xl mx-auto px-4 md:px-8 mt-16 md:mt-24">
              <div className="bg-white p-6 md:p-12 rounded-[2.5rem] md:rounded-[3.5rem] border border-[#F1F5F9] shadow-xl mb-12">
                <div className="text-center max-w-2xl mx-auto mb-8 md:mb-12">

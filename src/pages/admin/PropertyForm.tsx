@@ -1188,24 +1188,48 @@ export default function AdminPropertyForm() {
       console.log("Dados finais enviados ao Firestore:", propertyData);
 
       const statusValue = String(data.status || "").trim();
-      const checkboxRented = data.rented === true;
-      const isAlugado = checkboxRented || statusValue.toLowerCase().includes("alugado") || statusValue.toLowerCase().includes("locado");
+      const isVendidoState = statusValue.toLowerCase().includes("vendido");
 
-      propertyData.imovelAlugado = isAlugado;
-      propertyData.rented = isAlugado;
-      if (isAlugado) {
-        propertyData.status = "Alugado";
+      if (isVendidoState) {
+        propertyData.status = "Vendido";
+        propertyData.statusVenda = "Vendido";
+        propertyData.vendido = true;
         propertyData.disponivelParaVisita = false;
         propertyData.availableForVisit = "Não";
+        propertyData.disponivelParaProposta = false;
+        propertyData.publicado = true;
+        propertyData.publicadoNoSite = true;
       } else {
-        if (propertyData.status === "Alugado" || propertyData.status === "Locado") {
+        propertyData.vendido = false;
+        if (statusValue.toLowerCase() === "disponível" || statusValue.toLowerCase() === "disponivel") {
           propertyData.status = "Disponível";
+          propertyData.statusVenda = "Disponível";
+          propertyData.disponivelParaVisita = true;
+          propertyData.availableForVisit = "Sim";
+          propertyData.disponivelParaProposta = true;
+        } else {
+          propertyData.disponivelParaProposta = data.disponivelParaProposta !== false;
         }
-        propertyData.disponivelParaVisita = data.availableForVisit !== "Não";
+
+        const checkboxRented = data.rented === true;
+        const isAlugado = checkboxRented || statusValue.toLowerCase().includes("alugado") || statusValue.toLowerCase().includes("locado");
+
+        propertyData.imovelAlugado = isAlugado;
+        propertyData.rented = isAlugado;
+        if (isAlugado) {
+          propertyData.status = "Alugado";
+          propertyData.disponivelParaVisita = false;
+          propertyData.availableForVisit = "Não";
+        } else {
+          if (propertyData.status === "Alugado" || propertyData.status === "Locado") {
+            propertyData.status = "Disponível";
+          }
+          propertyData.disponivelParaVisita = data.availableForVisit !== "Não";
+        }
       }
 
       // 8. AO SALVAR IMÓVEL NOVO OU EDITADO: garantir apenas as propriedades especificadas
-      const isPublicado = data.publicado === true;
+      const isPublicado = isVendidoState ? true : (data.publicado === true);
       propertyData.publicadoNoSite = isPublicado;
       propertyData.publicado = isPublicado;
 
