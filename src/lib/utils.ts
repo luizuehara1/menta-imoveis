@@ -104,14 +104,10 @@ export function getLinkPublicoImovel(imovel: any): string {
 
   if (!codigoPublico) {
     console.error("Imóvel sem código público:", imovel);
-    return window.location.origin + "/imoveis";
+    return "https://mentaimoveis.com/imoveis";
   }
 
-  const link = `${window.location.origin}/imovel/${encodeURIComponent(codigoPublico)}`;
-  console.log("Link público gerado:", link);
-  console.log("Código público gerado:", codigoPublico);
-
-  return link;
+  return `https://mentaimoveis.com/imovel/${encodeURIComponent(codigoPublico)}`;
 }
 
 /**
@@ -2463,6 +2459,7 @@ export function getParteAceitante(dados: any = {}) {
       ""
   };
 }
+
 
 
 

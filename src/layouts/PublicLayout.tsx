@@ -319,7 +319,7 @@ export default function PublicLayout() {
         try {
           let p: any = null;
           const codigoLimpo = decodeURIComponent(String(propertyId || "").trim());
-          const campos = ["codigo", "codigoImovel", "code", "slug"];
+          const campos = ["codigoImovel", "codigo", "codImovel", "referencia", "code", "slug"];
 
           for (const campo of campos) {
             const qPublicadoNoSite = query(
@@ -420,8 +420,12 @@ export default function PublicLayout() {
               return;
             }
           }
-        } catch (e) {
-          console.error("Error fetching and resolving layout property:", e);
+        } catch (e: any) {
+          if (e?.code === 'permission-denied') {
+            console.log("Acesso não autorizado ou imóvel não publicado:", e.message);
+          } else {
+            console.error("Error fetching and resolving layout property:", e);
+          }
         }
         
         // 5. WhatsApp da imobiliária nas configurações do site

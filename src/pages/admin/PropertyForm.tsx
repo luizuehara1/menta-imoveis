@@ -1266,7 +1266,8 @@ export default function AdminPropertyForm() {
 
       let propertyId = id;
 
-      const linkImovel = `${window.location.origin}/imovel/${data.code || propertyId || ''}`;
+      const codeValue = data.code || data.codigo || data.codigoImovel || data.referencia || propertyId || '';
+      const linkImovel = `https://mentaimoveis.com/imovel/${encodeURIComponent(codeValue)}`;
       propertyData.linkImovel = linkImovel;
 
       // 1. SALVAMENTO PRINCIPAL DO IMÓVEL (Must not trigger fake errors if secondary steps fail)
@@ -1288,7 +1289,8 @@ export default function AdminPropertyForm() {
       // Secondary: Update with correct ID link after creation
       if (!id && propertyId) {
         try {
-          const finalLink = `${window.location.origin}/imovel/${data.code || propertyId}`;
+          const codeValueFinal = data.code || data.codigo || data.codigoImovel || data.referencia || propertyId;
+          const finalLink = `https://mentaimoveis.com/imovel/${encodeURIComponent(codeValueFinal)}`;
           console.log("[PropertyForm] Atualizando link público do imóvel...");
           await updateDoc(doc(db, 'imoveis', propertyId), { linkImovel: finalLink });
         } catch (linkError: any) {
@@ -3120,7 +3122,7 @@ export default function AdminPropertyForm() {
     </div>
   );
 
-  const propertyLink = id ? `${window.location.origin}/imovel/${watch('code') || watch('codigo') || watch('codigoImovel') || id}` : '';
+  const propertyLink = id ? `https://mentaimoveis.com/imovel/${encodeURIComponent(watch('code') || watch('codigo') || watch('codigoImovel') || watch('referencia') || id)}` : '';
 
   if (id) {
     console.log("Gerando link público do imóvel:");

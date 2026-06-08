@@ -125,7 +125,7 @@ async function buscarImovelPorCodigoOuId(codigoOuId: string): Promise<any | null
 
   const imoveisRef = collection(db, "imoveis");
 
-  const campos = ["codigo", "codigoImovel", "codImovel", "referencia"];
+  const campos = ["codigoImovel", "codigo", "codImovel", "referencia", "code", "slug"];
 
   for (const campo of campos) {
     const qPublicadoNoSite = query(
@@ -408,6 +408,10 @@ export default function PropertyDetail() {
             console.log("Verificação de visibilidade do imóvel:", { isPublic, isMock, isAdmin, publicadoNoSite: p.publicadoNoSite, publicado: p.publicado });
 
             if ((isPublic || isAdmin) && !isMock) {
+              const codigoPublico = getCodigoPublicoImovel(p);
+              if (codigoPublico && decodeURIComponent(String(id || "")) !== codigoPublico) {
+                navigate(`/imovel/${encodeURIComponent(codigoPublico)}`, { replace: true });
+              }
               setProperty(p);
               setNotFound(false);
             } else {
