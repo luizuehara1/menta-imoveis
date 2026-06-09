@@ -45,7 +45,7 @@ import { useSettings } from '../../hooks/useSettings';
 import { Contract, ContractType, ContractStatus, Property } from '../../types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { maskCurrency, parseCurrencyToNumber, formatCurrency, valorMonetarioPorExtenso, normalizarDadosImovel, normalizarPessoa, textoConjuge, normalizarDadosDocumento, formatarDataBR, getOutrasCondicoes, montarTextoConjuge, getNomeComprador, getNomeVendedor, getCpfVendedor, getRgVendedor, getProfissaoVendedor, getEstadoCivilVendedor, getTelefoneVendedor, getEmailVendedor, getEnderecoVendedor, valorOuNaoInformado, getNomeEdificio, getEnderecoImovel, getTermosCondicoes, getFormaPagamento, getDetalhesPagamento, getParteAceitante, normalizarFormasPagamento } from '../../lib/utils';
+import { getProprietarioFromImovel, maskCurrency, parseCurrencyToNumber, formatCurrency, valorMonetarioPorExtenso, normalizarDadosImovel, normalizarPessoa, textoConjuge, normalizarDadosDocumento, formatarDataBR, getOutrasCondicoes, montarTextoConjuge, getNomeComprador, getNomeVendedor, getCpfVendedor, getRgVendedor, getProfissaoVendedor, getEstadoCivilVendedor, getTelefoneVendedor, getEmailVendedor, getEnderecoVendedor, valorOuNaoInformado, getNomeEdificio, getEnderecoImovel, getTermosCondicoes, getFormaPagamento, getDetalhesPagamento, getParteAceitante, normalizarFormasPagamento } from '../../lib/utils';
 import { staggerContainer, slideUp, fadeIn, scaleIn } from '../../constants/animations';
 import { ContractA4Preview } from '../../components/admin/ContractA4Preview';
 import jsPDF from 'jspdf';
@@ -746,6 +746,8 @@ export default function AdminContractForm() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
   const [propostas, setPropostas] = useState<any[]>([]);
+  const [propertyPendingSelect, setPropertyPendingSelect] = useState<Property | null>(null);
+  const [showPropertyConfirmModal, setShowPropertyConfirmModal] = useState(false);
   const [temConjugeComprador, setTemConjugeComprador] = useState(false);
   const [temConjugeVendedor, setTemConjugeVendedor] = useState(false);
   const [temConjugeLocador, setTemConjugeLocador] = useState(false);
@@ -1820,7 +1822,7 @@ export default function AdminContractForm() {
     }
   }, [contract.tipoContrato, contract.usarVendedorComoAceitante]);
 
-  const handlePropertySelect = (property: Property) => {
+  const applyPropertySelection = (property: Property, overwriteSeller: boolean) => {
     setSelectedProperty(property);
     setContract(prev => {
       const isArras = prev.tipoContrato === 'arras_confirmatorios';
@@ -1843,21 +1845,69 @@ export default function AdminContractForm() {
           endereco: montarEnderecoImovel(property),
           bairro: property.neighborhood || (property as any).bairro || '',
           cidade: property.city || (property as any).cidade || '',
-          estado: property.state || (property as any).estado || '',
+          estado: property.state || (property as any).uf || (property as any).estado || '',
           valorVenda: getValorVendaImovel(property),
           valorCondominio: property.condoFee || (property as any).valorCondominio || (property as any).condominio || "",
           valorIptu: property.iptu || (property as any).valorIptu || (property as any).iptu || ""
         }
       };
 
-      if (isArras) {
+      const propOwner = getProprietarioFromImovel(property);
+
+      if (overwriteSeller) {
         if (!updatedDados.vendedor) updatedDados.vendedor = {};
+        
         updatedDados.vendedor = {
           ...updatedDados.vendedor,
-          nome: property.ownerName || (property as any).proprietario || (property as any).nomeProprietario || '',
-          telefone: property.ownerPhone || '',
-          email: property.ownerEmail || ''
+          nome: propOwner.nome || '',
+          cpf: propOwner.cpf || '',
+          rg: propOwner.rg || '',
+          estadoCivil: propOwner.estadoCivil || "Solteiro(a)",
+          profissao: propOwner.profissao || '',
+          telefone: propOwner.telefone || '',
+          whatsapp: propOwner.whatsapp || '',
+          email: propOwner.email || '',
+          endereco: propOwner.endereco || '',
+          cep: propOwner.cep || '',
+          cidade: propOwner.cidade || '',
+          estado: propOwner.estado || '',
+          possuiConjuge: propOwner.possuiConjuge || false,
+          
+          // Spouse keys
+          conjugeNome: propOwner.conjuge?.nome || '',
+          conjugeCpf: propOwner.conjuge?.cpf || '',
+          conjugeRg: propOwner.conjuge?.rg || '',
+          conjugeEstadoCivil: propOwner.conjuge?.estadoCivil || "Casado(a)",
+          conjugeProfissao: propOwner.conjuge?.profissao || '',
+          conjugeTelefone: propOwner.conjuge?.telefone || '',
+          conjugeEmail: propOwner.conjuge?.email || '',
+          conjugeEndereco: propOwner.conjuge?.endereco || '',
+
+          // Backup duplicate spouse keys
+          vendedorConjugeNome: propOwner.conjuge?.nome || '',
+          vendedorConjugeCpf: propOwner.conjuge?.cpf || '',
+          vendedorConjugeRg: propOwner.conjuge?.rg || '',
+          vendedorConjugeEstadoCivil: propOwner.conjuge?.estadoCivil || "Casado(a)",
+          vendedorConjugeProfissao: propOwner.conjuge?.profissao || '',
+          vendedorConjugeTelefone: propOwner.conjuge?.telefone || '',
+          vendedorConjugeEmail: propOwner.conjuge?.email || '',
+          vendedorConjugeEndereco: propOwner.conjuge?.endereco || '',
         };
+
+        // Sync local conjunct toggle hook state too
+        setTemConjugeVendedor(propOwner.possuiConjuge || false);
+      }
+
+      if (isArras) {
+        if (!updatedDados.vendedor) updatedDados.vendedor = {};
+        if (overwriteSeller) {
+          updatedDados.vendedor = {
+            ...updatedDados.vendedor,
+            nome: propOwner.nome || '',
+            telefone: propOwner.telefone || '',
+            email: propOwner.email || ''
+          };
+        }
         if (!updatedDados.arras) updatedDados.arras = {};
         updatedDados.arras = {
           ...updatedDados.arras,
@@ -1886,15 +1936,34 @@ export default function AdminContractForm() {
         valorCondominio: property.condoFee || (property as any).valorCondominio || (property as any).condominio || "",
         valorIptu: property.iptu || (property as any).valorIptu || (property as any).iptu || "",
 
-        proprietario: property.ownerName || (property as any).proprietario || (property as any).nomeProprietario || "",
+        proprietario: propOwner.nome || "",
         corretorResponsavel: (property as any).corretorResponsavel || (property as any).brokerName || "",
 
         enderecoImovel: montarEnderecoImovel(property),
-        nomeVendedor: property.ownerName || (property as any).proprietario || (property as any).nomeProprietario || '',
+        nomeVendedor: propOwner.nome || '',
         valor: defaultVal,
         dados: updatedDados
       };
     });
+  };
+
+  const handlePropertySelect = (property: Property) => {
+    const v = contract.dados?.vendedor;
+    const hasManual = v && (
+      (v.nome && v.nome.trim() !== '') ||
+      (v.cpf && v.cpf.trim() !== '') ||
+      (v.rg && v.rg.trim() !== '') ||
+      (v.email && v.email.trim() !== '') ||
+      (v.telefone && v.telefone.trim() !== '') ||
+      (v.endereco && v.endereco.trim() !== '')
+    );
+
+    if (hasManual) {
+      setPropertyPendingSelect(property);
+      setShowPropertyConfirmModal(true);
+    } else {
+      applyPropertySelection(property, true);
+    }
   };
 
   const handleLoadProposta = (prop: any) => {
@@ -2831,6 +2900,53 @@ export default function AdminContractForm() {
             <Check size={12} />
           </div>
           <span className="font-semibold text-sm">{notification.message}</span>
+        </div>
+      )}
+
+      {/* Proprietário / Vendedor Data Replacement Confirmation Modal */}
+      {showPropertyConfirmModal && propertyPendingSelect && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[10000] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-gray-100 flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-4 text-amber-600">
+              <div className="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center">
+                <AlertCircle size={28} />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-900 text-lg">Substituir Vendedor?</h3>
+                <p className="text-xs text-gray-500">Dados manuais detectados no contrato</p>
+              </div>
+            </div>
+            
+            <p className="text-sm text-gray-600 leading-relaxed">
+              Você já digitou ou modificou alguns dados do vendedor manualmente neste formulário. 
+              Deseja <strong>substituir</strong> os dados de vendedor do contrato pelos dados completos cadastrados na ficha do imóvel <strong>{propertyPendingSelect.title || getTituloImovel(propertyPendingSelect)}</strong>?
+            </p>
+
+            <div className="grid grid-cols-2 gap-3 mt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  applyPropertySelection(propertyPendingSelect, false);
+                  setShowPropertyConfirmModal(false);
+                  setPropertyPendingSelect(null);
+                }}
+                className="px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-2xl text-sm transition-all text-center cursor-pointer"
+              >
+                Não, manter meus dados
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  applyPropertySelection(propertyPendingSelect, true);
+                  setShowPropertyConfirmModal(false);
+                  setPropertyPendingSelect(null);
+                }}
+                className="px-4 py-3 bg-gold hover:bg-amber-500 text-black font-semibold rounded-2xl text-sm shadow-md transition-all text-center cursor-pointer"
+              >
+                Sim, carregar do imóvel
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

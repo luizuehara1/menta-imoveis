@@ -99,6 +99,167 @@ export function getCodigoPublicoImovel(imovel: any): string {
   );
 }
 
+export function getProprietarioFromImovel(imovel: any = {}): any {
+  return {
+    nome:
+      imovel.proprietarioNome ||
+      imovel.nomeProprietario ||
+      imovel.vendedorNome ||
+      imovel.proprietario?.nome ||
+      "",
+
+    cpf:
+      imovel.proprietarioCpf ||
+      imovel.cpfProprietario ||
+      imovel.vendedorCpf ||
+      imovel.proprietario?.cpf ||
+      "",
+
+    rg:
+      imovel.proprietarioRg ||
+      imovel.rgProprietario ||
+      imovel.vendedorRg ||
+      imovel.proprietario?.rg ||
+      "",
+
+    estadoCivil:
+      imovel.proprietarioEstadoCivil ||
+      imovel.estadoCivilProprietario ||
+      imovel.vendedorEstadoCivil ||
+      imovel.proprietario?.estadoCivil ||
+      "",
+
+    profissao:
+      imovel.proprietarioProfissao ||
+      imovel.profissaoProprietario ||
+      imovel.vendedorProfissao ||
+      imovel.proprietario?.profissao ||
+      "",
+
+    telefone:
+      imovel.proprietarioTelefone ||
+      imovel.telefoneProprietario ||
+      imovel.vendedorTelefone ||
+      imovel.proprietario?.telefone ||
+      "",
+
+    whatsapp:
+      imovel.proprietarioWhatsapp ||
+      imovel.whatsappProprietario ||
+      imovel.vendedorWhatsapp ||
+      imovel.proprietario?.whatsapp ||
+      imovel.proprietarioTelefone ||
+      "",
+
+    email:
+      imovel.proprietarioEmail ||
+      imovel.emailProprietario ||
+      imovel.vendedorEmail ||
+      imovel.proprietario?.email ||
+      "",
+
+    endereco:
+      imovel.proprietarioEndereco ||
+      imovel.enderecoProprietario ||
+      imovel.vendedorEndereco ||
+      imovel.proprietario?.endereco ||
+      "",
+
+    cep:
+      imovel.proprietarioCep ||
+      imovel.cepProprietario ||
+      imovel.vendedorCep ||
+      imovel.proprietario?.cep ||
+      "",
+
+    cidade:
+      imovel.proprietarioCidade ||
+      imovel.cidadeProprietario ||
+      imovel.vendedorCidade ||
+      imovel.proprietario?.cidade ||
+      "",
+
+    estado:
+      imovel.proprietarioEstado ||
+      imovel.estadoProprietario ||
+      imovel.vendedorEstado ||
+      imovel.proprietario?.estado ||
+      "",
+
+    possuiConjuge:
+      imovel.possuiConjugeProprietario ||
+      imovel.proprietario?.possuiConjuge ||
+      false,
+
+    conjuge: {
+      nome:
+        imovel.proprietarioConjugeNome ||
+        imovel.conjugeProprietarioNome ||
+        imovel.proprietario?.conjuge?.nome ||
+        "",
+
+      cpf:
+        imovel.proprietarioConjugeCpf ||
+        imovel.conjugeProprietarioCpf ||
+        imovel.proprietario?.conjuge?.cpf ||
+        "",
+
+      rg:
+        imovel.proprietarioConjugeRg ||
+        imovel.conjugeProprietarioRg ||
+        imovel.proprietario?.conjuge?.rg ||
+        "",
+
+      profissao:
+        imovel.proprietarioConjugeProfissao ||
+        imovel.conjugeProprietarioProfissao ||
+        imovel.proprietario?.conjuge?.profissao ||
+        "",
+
+      estadoCivil:
+        imovel.proprietarioConjugeEstadoCivil ||
+        imovel.conjugeProprietarioEstadoCivil ||
+        imovel.proprietario?.conjuge?.estadoCivil ||
+        "",
+
+      telefone:
+        imovel.proprietarioConjugeTelefone ||
+        imovel.proprietario?.conjuge?.telefone ||
+        "",
+
+      whatsapp:
+        imovel.proprietarioConjugeWhatsapp ||
+        imovel.proprietario?.conjuge?.whatsapp ||
+        "",
+
+      email:
+        imovel.proprietarioConjugeEmail ||
+        imovel.proprietario?.conjuge?.email ||
+        "",
+
+      endereco:
+        imovel.proprietarioConjugeEndereco ||
+        imovel.proprietario?.conjuge?.endereco ||
+        "",
+
+      cep:
+        imovel.proprietarioConjugeCep ||
+        imovel.proprietario?.conjuge?.cep ||
+        "",
+
+      cidade:
+        imovel.proprietarioConjugeCidade ||
+        imovel.proprietario?.conjuge?.cidade ||
+        "",
+
+      estado:
+        imovel.proprietarioConjugeEstado ||
+        imovel.proprietario?.conjuge?.estado ||
+        ""
+    }
+  };
+}
+
 export function getLinkPublicoImovel(imovel: any): string {
   const codigoPublico = getCodigoPublicoImovel(imovel);
 

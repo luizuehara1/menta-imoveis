@@ -27,6 +27,7 @@ import {
   Info, 
   MapPin, 
   User, 
+  Users,
   Grid, 
   Image as ImageIcon,
   Sparkles,
@@ -61,7 +62,8 @@ import {
   formatOptionWithQuantity,
   shouldShowQuantity,
   getOptionQuantity,
-  getCardStats
+  getCardStats,
+  getProprietarioFromImovel
 } from '../../lib/utils';
 import { useOptions } from '../../hooks/useSettings';
 import { Property, Owner, Broker } from '../../types';
@@ -471,6 +473,32 @@ export default function AdminPropertyForm() {
       ownerPhone: '',
       ownerEmail: '',
       ownerNotes: '',
+      proprietarioNome: '',
+      proprietarioCpf: '',
+      proprietarioRg: '',
+      proprietarioEstadoCivil: '',
+      proprietarioProfissao: '',
+      proprietarioTelefone: '',
+      proprietarioWhatsapp: '',
+      proprietarioEmail: '',
+      proprietarioEndereco: '',
+      proprietarioCep: '',
+      proprietarioCidade: '',
+      proprietarioEstado: '',
+      possuiConjugeProprietario: false,
+      proprietarioConjugeNome: '',
+      proprietarioConjugeCpf: '',
+      proprietarioConjugeRg: '',
+      proprietarioConjugeProfissao: '',
+      proprietarioConjugeEstadoCivil: '',
+      proprietarioConjugeTelefone: '',
+      proprietarioConjugeWhatsapp: '',
+      proprietarioConjugeEmail: '',
+      proprietarioConjugeEndereco: '',
+      proprietarioConjugeCep: '',
+      proprietarioConjugeCidade: '',
+      proprietarioConjugeEstado: '',
+      proprietarioObservacoesInternas: '',
       description: '',
       fullDescription: '',
       internalNotes: '',
@@ -816,13 +844,55 @@ export default function AdminPropertyForm() {
             // Fetch owner info - isolated try-catch to prevent trapping the main load
             try {
               const ownerDoc = await getDoc(doc(db, 'imoveis', id, 'privado', 'proprietario'));
-              if (ownerDoc.exists()) {
-                const ownerData = ownerDoc.data();
-                setValue('ownerName', ownerData.name);
-                setValue('ownerPhone', ownerData.phone);
-                setValue('ownerEmail', ownerData.email);
-                setValue('ownerNotes', ownerData.notes);
-              }
+              const ownerObj = ownerDoc.exists() ? ownerDoc.data() : null;
+              
+              const combinedDataForParsing: any = {
+                ...data,
+                ...(ownerObj ? {
+                  proprietarioNome: ownerObj.name || ownerObj.proprietarioNome || ownerObj.nome,
+                  proprietarioTelefone: ownerObj.phone || ownerObj.proprietarioTelefone || ownerObj.telefone,
+                  proprietarioEmail: ownerObj.email || ownerObj.proprietarioEmail || ownerObj.email,
+                  proprietarioObservacoesInternas: ownerObj.notes || ownerObj.proprietarioObservacoesInternas || ownerObj.observacoesInternas,
+                  ...ownerObj
+                } : {})
+              };
+
+              const parsedProprietario = getProprietarioFromImovel(combinedDataForParsing);
+
+              setValue('proprietarioNome', parsedProprietario.nome);
+              setValue('proprietarioCpf', parsedProprietario.cpf);
+              setValue('proprietarioRg', parsedProprietario.rg);
+              setValue('proprietarioEstadoCivil', parsedProprietario.estadoCivil);
+              setValue('proprietarioProfissao', parsedProprietario.profissao);
+              setValue('proprietarioTelefone', parsedProprietario.telefone);
+              setValue('proprietarioWhatsapp', parsedProprietario.whatsapp);
+              setValue('proprietarioEmail', parsedProprietario.email);
+              setValue('proprietarioEndereco', parsedProprietario.endereco);
+              setValue('proprietarioCep', parsedProprietario.cep);
+              setValue('proprietarioCidade', parsedProprietario.cidade);
+              setValue('proprietarioEstado', parsedProprietario.estado);
+              setValue('possuiConjugeProprietario', parsedProprietario.possuiConjuge);
+
+              setValue('proprietarioConjugeNome', parsedProprietario.conjuge.nome);
+              setValue('proprietarioConjugeCpf', parsedProprietario.conjuge.cpf);
+              setValue('proprietarioConjugeRg', parsedProprietario.conjuge.rg);
+              setValue('proprietarioConjugeProfissao', parsedProprietario.conjuge.profissao);
+              setValue('proprietarioConjugeEstadoCivil', parsedProprietario.conjuge.estadoCivil);
+              setValue('proprietarioConjugeTelefone', parsedProprietario.conjuge.telefone);
+              setValue('proprietarioConjugeWhatsapp', parsedProprietario.conjuge.whatsapp);
+              setValue('proprietarioConjugeEmail', parsedProprietario.conjuge.email);
+              setValue('proprietarioConjugeEndereco', parsedProprietario.conjuge.endereco);
+              setValue('proprietarioConjugeCep', parsedProprietario.conjuge.cep);
+              setValue('proprietarioConjugeCidade', parsedProprietario.conjuge.cidade);
+              setValue('proprietarioConjugeEstado', parsedProprietario.conjuge.estado);
+
+              setValue('proprietarioObservacoesInternas', combinedDataForParsing.proprietarioObservacoesInternas || combinedDataForParsing.proprietario?.observacoesInternas || combinedDataForParsing.ownerNotes || "");
+
+              // Also keep legacy keys filled for compatibility
+              setValue('ownerName', parsedProprietario.nome);
+              setValue('ownerPhone', parsedProprietario.telefone);
+              setValue('ownerEmail', parsedProprietario.email);
+              setValue('ownerNotes', combinedDataForParsing.proprietarioObservacoesInternas || combinedDataForParsing.proprietario?.observacoesInternas || combinedDataForParsing.ownerNotes || "");
             } catch (ownerError: any) {
               console.warn("Imóvel carregado, mas houve erro ao carregar dados do proprietário (privado):", ownerError.message);
             }
@@ -1251,12 +1321,100 @@ export default function AdminPropertyForm() {
         propertyData.brokerCreci = '';
       }
       
-      // Separate owner info
+      // Separate owner info and save both at the root of the main document and nested proprietario object
+      propertyData.proprietarioNome = data.proprietarioNome || '';
+      propertyData.proprietarioCpf = data.proprietarioCpf || '';
+      propertyData.proprietarioRg = data.proprietarioRg || '';
+      propertyData.proprietarioEstadoCivil = data.proprietarioEstadoCivil || '';
+      propertyData.proprietarioProfissao = data.proprietarioProfissao || '';
+      propertyData.proprietarioTelefone = data.proprietarioTelefone || '';
+      propertyData.proprietarioWhatsapp = data.proprietarioWhatsapp || '';
+      propertyData.proprietarioEmail = data.proprietarioEmail || '';
+      propertyData.proprietarioEndereco = data.proprietarioEndereco || '';
+      propertyData.proprietarioCep = data.proprietarioCep || '';
+      propertyData.proprietarioCidade = data.proprietarioCidade || '';
+      propertyData.proprietarioEstado = data.proprietarioEstado || '';
+      propertyData.possuiConjugeProprietario = data.possuiConjugeProprietario || false;
+      
+      propertyData.proprietarioConjugeNome = data.proprietarioConjugeNome || '';
+      propertyData.proprietarioConjugeCpf = data.proprietarioConjugeCpf || '';
+      propertyData.proprietarioConjugeRg = data.proprietarioConjugeRg || '';
+      propertyData.proprietarioConjugeProfissao = data.proprietarioConjugeProfissao || '';
+      propertyData.proprietarioConjugeEstadoCivil = data.proprietarioConjugeEstadoCivil || '';
+      propertyData.proprietarioConjugeTelefone = data.proprietarioConjugeTelefone || '';
+      propertyData.proprietarioConjugeWhatsapp = data.proprietarioConjugeWhatsapp || '';
+      propertyData.proprietarioConjugeEmail = data.proprietarioConjugeEmail || '';
+      propertyData.proprietarioConjugeEndereco = data.proprietarioConjugeEndereco || '';
+      propertyData.proprietarioConjugeCep = data.proprietarioConjugeCep || '';
+      propertyData.proprietarioConjugeCidade = data.proprietarioConjugeCidade || '';
+      propertyData.proprietarioConjugeEstado = data.proprietarioConjugeEstado || '';
+      
+      propertyData.proprietarioObservacoesInternas = data.proprietarioObservacoesInternas || '';
+
+      propertyData.proprietario = {
+        nome: data.proprietarioNome || '',
+        cpf: data.proprietarioCpf || '',
+        rg: data.proprietarioRg || '',
+        estadoCivil: data.proprietarioEstadoCivil || '',
+        profissao: data.proprietarioProfissao || '',
+        telefone: data.proprietarioTelefone || '',
+        whatsapp: data.proprietarioWhatsapp || '',
+        email: data.proprietarioEmail || '',
+        endereco: data.proprietarioEndereco || '',
+        cep: data.proprietarioCep || '',
+        cidade: data.proprietarioCidade || '',
+        estado: data.proprietarioEstado || '',
+        possuiConjuge: data.possuiConjugeProprietario || false,
+        conjuge: {
+          nome: data.proprietarioConjugeNome || '',
+          cpf: data.proprietarioConjugeCpf || '',
+          rg: data.proprietarioConjugeRg || '',
+          profissao: data.proprietarioConjugeProfissao || '',
+          estadoCivil: data.proprietarioConjugeEstadoCivil || '',
+          telefone: data.proprietarioConjugeTelefone || '',
+          whatsapp: data.proprietarioConjugeWhatsapp || '',
+          email: data.proprietarioConjugeEmail || '',
+          endereco: data.proprietarioConjugeEndereco || '',
+          cep: data.proprietarioConjugeCep || '',
+          cidade: data.proprietarioConjugeCidade || '',
+          estado: data.proprietarioConjugeEstado || ''
+        },
+        observacoesInternas: data.proprietarioObservacoesInternas || ''
+      };
+
+      // Construct complete ownerData for subcollection 'privado/proprietario'
       const ownerData = {
-        name: data.ownerName || '',
-        phone: data.ownerPhone || '',
-        email: data.ownerEmail || '',
-        notes: data.ownerNotes || '',
+        name: data.proprietarioNome || '',
+        phone: data.proprietarioTelefone || '',
+        email: data.proprietarioEmail || '',
+        notes: data.proprietarioObservacoesInternas || '',
+        proprietarioNome: data.proprietarioNome || '',
+        proprietarioCpf: data.proprietarioCpf || '',
+        proprietarioRg: data.proprietarioRg || '',
+        proprietarioEstadoCivil: data.proprietarioEstadoCivil || '',
+        proprietarioProfissao: data.proprietarioProfissao || '',
+        proprietarioTelefone: data.proprietarioTelefone || '',
+        proprietarioWhatsapp: data.proprietarioWhatsapp || '',
+        proprietarioEmail: data.proprietarioEmail || '',
+        proprietarioEndereco: data.proprietarioEndereco || '',
+        proprietarioCep: data.proprietarioCep || '',
+        proprietarioCidade: data.proprietarioCidade || '',
+        proprietarioEstado: data.proprietarioEstado || '',
+        possuiConjugeProprietario: data.possuiConjugeProprietario || false,
+        proprietarioConjugeNome: data.proprietarioConjugeNome || '',
+        proprietarioConjugeCpf: data.proprietarioConjugeCpf || '',
+        proprietarioConjugeRg: data.proprietarioConjugeRg || '',
+        proprietarioConjugeProfissao: data.proprietarioConjugeProfissao || '',
+        proprietarioConjugeEstadoCivil: data.proprietarioConjugeEstadoCivil || '',
+        proprietarioConjugeTelefone: data.proprietarioConjugeTelefone || '',
+        proprietarioConjugeWhatsapp: data.proprietarioConjugeWhatsapp || '',
+        proprietarioConjugeEmail: data.proprietarioConjugeEmail || '',
+        proprietarioConjugeEndereco: data.proprietarioConjugeEndereco || '',
+        proprietarioConjugeCep: data.proprietarioConjugeCep || '',
+        proprietarioConjugeCidade: data.proprietarioConjugeCidade || '',
+        proprietarioConjugeEstado: data.proprietarioConjugeEstado || '',
+        proprietarioObservacoesInternas: data.proprietarioObservacoesInternas || '',
+        proprietario: propertyData.proprietario
       };
       
       delete propertyData.ownerName;
@@ -2256,28 +2414,182 @@ export default function AdminPropertyForm() {
           </div>
         );
       case 'prop':
+        const possuiConjuge = watch('possuiConjugeProprietario');
         return (
-          <div className="grid grid-cols-1 gap-6 animate-in fade-in slide-in-from-bottom-4">
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
             <div className="bg-amber-50 p-4 rounded-xl flex items-start gap-4 text-amber-800 border border-amber-100">
-               <Info size={24} className="shrink-0" />
+               <Info size={24} className="shrink-0 text-amber-600" />
                <p className="text-sm">Os dados do proprietário são <strong>estritamente privados</strong> e nunca serão exibidos no site público. Apenas administradores autorizados têm acesso.</p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700">Nome do Proprietário</label>
-                <input {...register('ownerName')} className="input-field" />
+
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-6">
+              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2 border-b border-gray-100 pb-3">
+                <User size={18} className="text-gold" /> Dados do Proprietário / Vendedor
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Linha 1: Nome Completo (ocupando 2 colunas no desktop) */}
+                <div className="space-y-1 md:col-span-2">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Nome Completo</label>
+                  <input {...register('proprietarioNome')} className="input-field w-full" placeholder="Nome completo do proprietário" />
+                </div>
+
+                {/* Linha 2: CPF e RG */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">CPF</label>
+                  <input {...register('proprietarioCpf')} className="input-field w-full" placeholder="000.000.000-00" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">RG</label>
+                  <input {...register('proprietarioRg')} className="input-field w-full" placeholder="Registro Geral" />
+                </div>
+
+                {/* Linha 3: Estado Civil e Profissão */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Estado Civil</label>
+                  <input {...register('proprietarioEstadoCivil')} className="input-field w-full" placeholder="Ex: Solteiro(a), Casado(a)" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Profissão</label>
+                  <input {...register('proprietarioProfissao')} className="input-field w-full" placeholder="Ex: Professor" />
+                </div>
+
+                {/* Linha 4: Telefone e WhatsApp */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Telefone</label>
+                  <input {...register('proprietarioTelefone')} className="input-field w-full" placeholder="(00) 00000-0000" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">WhatsApp</label>
+                  <input {...register('proprietarioWhatsapp')} className="input-field w-full" placeholder="(00) 00000-0000" />
+                </div>
+
+                {/* Linha 5: Email (ocupando 2 colunas) */}
+                <div className="space-y-1 md:col-span-2">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">E-mail</label>
+                  <input type="email" {...register('proprietarioEmail')} className="input-field w-full" placeholder="exemplo@email.com" />
+                </div>
+
+                {/* Linha 6: Endereço (ocupando 2 colunas) */}
+                <div className="space-y-1 md:col-span-2">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Endereço</label>
+                  <input {...register('proprietarioEndereco')} className="input-field w-full" placeholder="Rua, Número, Complemento, Bairro" />
+                </div>
+
+                {/* Linha 7: CEP, Cidade, Estado (grid interno para ficar em 3 colunas) */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 md:col-span-2">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">CEP</label>
+                    <input {...register('proprietarioCep')} className="input-field w-full" placeholder="00000-000" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Cidade</label>
+                    <input {...register('proprietarioCidade')} className="input-field w-full" placeholder="Cidade" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Estado</label>
+                    <input {...register('proprietarioEstado')} className="input-field w-full" placeholder="UF" />
+                  </div>
+                </div>
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700">Telefone</label>
-                <input {...register('ownerPhone')} className="input-field" />
+
+              {/* Checkbox: Possui cônjuge / companheiro(a) */}
+              <div className="flex items-center gap-3 pt-4 border-t border-gray-100">
+                <input
+                  type="checkbox"
+                  id="possuiConjugeProprietario"
+                  {...register('possuiConjugeProprietario')}
+                  className="h-5 w-5 rounded border-gray-300 text-gold focus:ring-gold transition-all"
+                />
+                <label htmlFor="possuiConjugeProprietario" className="text-xs font-bold text-gray-700 uppercase tracking-wide cursor-pointer">
+                  Possui cônjuge / companheiro(a)
+                </label>
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700">E-mail</label>
-                <input {...register('ownerEmail')} className="input-field" />
+            </div>
+
+            {/* Campos do Cônjuge se marcado */}
+            {possuiConjuge && (
+              <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-6 animate-in fade-in slide-in-from-top-4 duration-300">
+                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2 border-b border-gray-100 pb-3">
+                  <Users size={18} className="text-gold" /> Dados do Cônjuge / Companheiro(a)
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Linha 1: Nome Completo do Cônjuge */}
+                  <div className="space-y-1 md:col-span-2">
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Nome do cônjuge</label>
+                    <input {...register('proprietarioConjugeNome')} className="input-field w-full" placeholder="Nome completo do cônjuge" />
+                  </div>
+
+                  {/* Linha 2: CPF e RG do Cônjuge */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">CPF do cônjuge</label>
+                    <input {...register('proprietarioConjugeCpf')} className="input-field w-full" placeholder="000.000.000-00" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">RG do cônjuge</label>
+                    <input {...register('proprietarioConjugeRg')} className="input-field w-full" placeholder="Registro Geral do cônjuge" />
+                  </div>
+
+                  {/* Linha 3: Profissão e Estado Civil do Cônjuge */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Profissão do cônjuge</label>
+                    <input {...register('proprietarioConjugeProfissao')} className="input-field w-full" placeholder="Ex: Engenheiro(a)" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Estado civil do cônjuge</label>
+                    <input {...register('proprietarioConjugeEstadoCivil')} className="input-field w-full" placeholder="Ex: Casado(a)" />
+                  </div>
+
+                  {/* Linha 4: Telefone e WhatsApp do Cônjuge */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Telefone do cônjuge</label>
+                    <input {...register('proprietarioConjugeTelefone')} className="input-field w-full" placeholder="(00) 00000-0000" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">WhatsApp do cônjuge</label>
+                    <input {...register('proprietarioConjugeWhatsapp')} className="input-field w-full" placeholder="(00) 00000-0000" />
+                  </div>
+
+                  {/* Linha 5: E-mail do Cônjuge */}
+                  <div className="space-y-1 md:col-span-2">
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">E-mail do cônjuge</label>
+                    <input type="email" {...register('proprietarioConjugeEmail')} className="input-field w-full" placeholder="exemplo.conjuge@email.com" />
+                  </div>
+
+                  {/* Linha 6: Endereço do Cônjuge */}
+                  <div className="space-y-1 md:col-span-2">
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Endereço do cônjuge</label>
+                    <input {...register('proprietarioConjugeEndereco')} className="input-field w-full" placeholder="Rua, Número, Complemento, Bairro do cônjuge" />
+                  </div>
+
+                  {/* Linha 7: CEP, Cidade, Estado do Cônjuge */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 md:col-span-2">
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">CEP do cônjuge</label>
+                      <input {...register('proprietarioConjugeCep')} className="input-field w-full" placeholder="00000-000" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Cidade do cônjuge</label>
+                      <input {...register('proprietarioConjugeCidade')} className="input-field w-full" placeholder="Cidade" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Estado do cônjuge</label>
+                      <input {...register('proprietarioConjugeEstado')} className="input-field w-full" placeholder="UF" />
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-sm font-bold text-gray-700">Observações Internas</label>
-                <textarea {...register('ownerNotes')} className="input-field h-24" />
+            )}
+
+            {/* Observações Internas */}
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2 border-b border-gray-100 pb-3">
+                <FileText size={18} className="text-gold" /> Observações Internas
+              </h3>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Observações internas</label>
+                <textarea {...register('proprietarioObservacoesInternas')} className="input-field w-full h-32" placeholder="Observações e anotações internas confidenciais" />
               </div>
             </div>
           </div>
