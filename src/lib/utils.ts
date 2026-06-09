@@ -2451,7 +2451,16 @@ export function getParteAceitante(dados: any = {}) {
     endereco: "",
     cep: "",
     cidade: "",
-    estado: ""
+    estado: "",
+    conjugeNome: "",
+    conjugeCpf: "",
+    conjugeRg: "",
+    conjugeProfissao: "",
+    conjugeEmail: "",
+    conjugeTelefone: "",
+    conjugeEstadoCivil: "",
+    conjugeEndereco: "",
+    hasConjuge: false
   };
 
   const deveUsarVendedor =
@@ -2552,7 +2561,79 @@ export function getParteAceitante(dados: any = {}) {
         dados.vendedorEstado ||
         dados.proprietarioEstado ||
         dados.vendedor?.estado ||
-        ""
+        "",
+
+      conjugeNome:
+        dados.parteAceitanteConjugeNome ||
+        dados.vendedorConjugeNome ||
+        dados.proprietarioConjugeNome ||
+        dados.vendedor?.vendedorConjugeNome ||
+        dados.vendedor?.conjugeNome ||
+        "",
+
+      conjugeCpf:
+        dados.parteAceitanteConjugeCpf ||
+        dados.vendedorConjugeCpf ||
+        dados.proprietarioConjugeCpf ||
+        dados.vendedor?.vendedorConjugeCpf ||
+        dados.vendedor?.conjugeCpf ||
+        "",
+
+      conjugeRg:
+        dados.parteAceitanteConjugeRg ||
+        dados.vendedorConjugeRg ||
+        dados.proprietarioConjugeRg ||
+        dados.vendedor?.vendedorConjugeRg ||
+        dados.vendedor?.conjugeRg ||
+        "",
+
+      conjugeProfissao:
+        dados.parteAceitanteConjugeProfissao ||
+        dados.vendedorConjugeProfissao ||
+        dados.proprietarioConjugeProfissao ||
+        dados.vendedor?.vendedorConjugeProfissao ||
+        dados.vendedor?.conjugeProfissao ||
+        "",
+
+      conjugeEmail:
+        dados.parteAceitanteConjugeEmail ||
+        dados.vendedorConjugeEmail ||
+        dados.proprietarioConjugeEmail ||
+        dados.vendedor?.vendedorConjugeEmail ||
+        dados.vendedor?.conjugeEmail ||
+        "",
+
+      conjugeTelefone:
+        dados.parteAceitanteConjugeTelefone ||
+        dados.vendedorConjugeTelefone ||
+        dados.proprietarioConjugeTelefone ||
+        dados.vendedor?.vendedorConjugeTelefone ||
+        dados.vendedor?.conjugeTelefone ||
+        "",
+
+      conjugeEstadoCivil:
+        dados.parteAceitanteConjugeEstadoCivil ||
+        dados.vendedorConjugeEstadoCivil ||
+        dados.proprietarioConjugeEstadoCivil ||
+        dados.vendedor?.vendedorConjugeEstadoCivil ||
+        dados.vendedor?.conjugeEstadoCivil ||
+        "",
+
+      conjugeEndereco:
+        dados.parteAceitanteConjugeEndereco ||
+        dados.vendedorConjugeEndereco ||
+        dados.proprietarioConjugeEndereco ||
+        dados.vendedor?.vendedorConjugeEndereco ||
+        dados.vendedor?.conjugeEndereco ||
+        "",
+
+      hasConjuge: !!(
+        dados.parteAceitanteConjugeNome ||
+        dados.vendedorConjugeNome ||
+        dados.proprietarioConjugeNome ||
+        dados.vendedor?.vendedorConjugeNome ||
+        dados.vendedor?.conjugeNome
+      )
     };
   }
 
@@ -2645,7 +2726,79 @@ export function getParteAceitante(dados: any = {}) {
       dados.compradorEstado ||
       dados.proponenteEstado ||
       p.estado ||
-      ""
+      "",
+
+    conjugeNome:
+      dados.parteAceitanteConjugeNome ||
+      p.compradorConjugeNome ||
+      p.conjugeNome ||
+      dados.compradorConjugeNome ||
+      dados.conjugeNome ||
+      "",
+
+    conjugeCpf:
+      dados.parteAceitanteConjugeCpf ||
+      p.compradorConjugeCpf ||
+      p.conjugeCpf ||
+      dados.compradorConjugeCpf ||
+      dados.conjugeCpf ||
+      "",
+
+    conjugeRg:
+      dados.parteAceitanteConjugeRg ||
+      p.compradorConjugeRg ||
+      p.conjugeRg ||
+      dados.compradorConjugeRg ||
+      dados.conjugeRg ||
+      "",
+
+    conjugeProfissao:
+      dados.parteAceitanteConjugeProfissao ||
+      p.compradorConjugeProfissao ||
+      p.conjugeProfissao ||
+      dados.compradorConjugeProfissao ||
+      dados.conjugeProfissao ||
+      "",
+
+    conjugeEmail:
+      dados.parteAceitanteConjugeEmail ||
+      p.compradorConjugeEmail ||
+      p.conjugeEmail ||
+      dados.compradorConjugeEmail ||
+      dados.conjugeEmail ||
+      "",
+
+    conjugeTelefone:
+      dados.parteAceitanteConjugeTelefone ||
+      p.compradorConjugeTelefone ||
+      p.conjugeTelefone ||
+      dados.compradorConjugeTelefone ||
+      dados.conjugeTelefone ||
+      "",
+
+    conjugeEstadoCivil:
+      dados.parteAceitanteConjugeEstadoCivil ||
+      p.compradorConjugeEstadoCivil ||
+      p.conjugeEstadoCivil ||
+      dados.compradorConjugeEstadoCivil ||
+      dados.conjugeEstadoCivil ||
+      "",
+
+    conjugeEndereco:
+      dados.parteAceitanteConjugeEndereco ||
+      p.compradorConjugeEndereco ||
+      p.conjugeEndereco ||
+      dados.compradorConjugeEndereco ||
+      dados.conjugeEndereco ||
+      "",
+
+    hasConjuge: !!(
+      dados.parteAceitanteConjugeNome ||
+      p.compradorConjugeNome ||
+      p.conjugeNome ||
+      dados.compradorConjugeNome ||
+      dados.conjugeNome
+    )
   };
 }
 

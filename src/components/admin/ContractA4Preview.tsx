@@ -903,14 +903,14 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
       const parte = getParteAceitante(mergedDados);
       const imov = {
         ...dados.imovel,
-        titulo: dados.imovel?.titulo || contract.imovelTitulo || contract.imovelNomeEdificio || "",
-        endereco: dados.imovel?.endereco || contract.imovelEndereco || "",
-        bairro: dados.imovel?.bairro || contract.imovelBairro || "",
-        cidade: dados.imovel?.cidade || contract.imovelCidade || "",
-        estado: dados.imovel?.estado || contract.imovelEstado || "",
-        matricula: dados.imovel?.matricula || contract.imovelMatricula || "",
-        cri: dados.imovel?.cri || contract.imovelCri || "",
-        codigo: dados.imovel?.codigo || contract.imovelCodigo || contract.codigoImovel || ""
+        titulo: dados.imovel?.titulo || contract.imovelTitulo || contract.imovelNomeEdificio || dados.nomeEdificio || dados.tituloImovel || "",
+        endereco: dados.imovel?.endereco || contract.imovelEndereco || contract.enderecoImovel || dados.imovelEndereco || dados.enderecoImovel || "",
+        bairro: dados.imovel?.bairro || contract.imovelBairro || dados.bairro || "",
+        cidade: dados.imovel?.cidade || contract.imovelCidade || dados.cidade || "",
+        estado: dados.imovel?.estado || contract.imovelEstado || dados.estado || "",
+        matricula: dados.imovel?.matricula || contract.imovelMatricula || contract.matriculaImovel || dados.matriculaImovel || dados.numeroMatricula || dados.matricula || "",
+        cri: dados.imovel?.cri || contract.imovelCri || contract.criImovel || dados.criImovel || dados.cri || "",
+        codigo: dados.imovel?.codigo || contract.imovelCodigo || contract.codigoImovel || dados.codigoImovel || ""
       };
 
       // 1. Title Block
@@ -918,25 +918,40 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
         <div className="pdf-document-title font-display font-black text-black">
           ACEITE DE TERMOS DE PROPOSTA
         </div>,
-        15
+        14
       );
 
       // 2. Parte Aceitante Block
       addBlock(
-        <section className="section avoid-break">
+        <section className="section avoid-break clause-block">
           <h3 className="section-title">I - Identificação da Parte que Manifesta o Aceite</h3>
-          <div className="grid grid-cols-2 gap-y-1.5 gap-x-6 text-[9.5px]">
-            <p><strong>Nome/Razão Social:</strong> {safeText(parte.nome || "Não informado")}</p>
-            <p><strong>CPF/CNPJ:</strong> {safeText(parte.cpf || "Não informado")}</p>
-            <p><strong>RG/IE:</strong> {safeText(parte.rg || "Não informado")}</p>
+          <div className="grid grid-cols-2 gap-y-1 gap-x-6 text-[8.5px] leading-normal pt-1">
+            <p><strong>Nome Completo:</strong> {safeText(parte.nome || "Não informado")}</p>
+            <p><strong>CPF:</strong> {safeText(parte.cpf || "Não informado")}</p>
+            <p><strong>RG:</strong> {safeText(parte.rg || "Não informado")}</p>
             <p><strong>Estado Civil:</strong> {safeText(parte.estadoCivil || "Não informado")}</p>
             <p><strong>Profissão:</strong> {safeText(parte.profissao || "Não informado")}</p>
             <p><strong>Telefone:</strong> {safeText(parte.telefone || "Não informado")}</p>
-            <p className="col-span-2"><strong>E-mail:</strong> {safeText(parte.email || "Não informado")}</p>
+            <p><strong>E-mail:</strong> {safeText(parte.email || "Não informado")}</p>
+            <p><strong>WhatsApp:</strong> {safeText(parte.whatsapp || "Não informado")}</p>
             <p className="col-span-2"><strong>Endereço:</strong> {formatFullAddress(parte)}</p>
           </div>
+
+          {parte.hasConjuge && (
+            <div className="mt-1.5 pt-1.5 border-t border-gray-100">
+              <h4 className="font-bold text-[8px] uppercase tracking-wider text-gray-700 mb-1">Cônjuge / Companheiro(a)</h4>
+              <div className="grid grid-cols-2 gap-y-1 gap-x-6 text-[8px] leading-normal text-gray-600">
+                <p><strong>Nome Completo:</strong> {safeText(parte.conjugeNome || "Não informado")}</p>
+                <p><strong>CPF:</strong> {safeText(parte.conjugeCpf || "Não informado")}</p>
+                <p><strong>RG:</strong> {safeText(parte.conjugeRg || "Não informado")}</p>
+                <p><strong>Telefone:</strong> {safeText(parte.conjugeTelefone || "Não informado")}</p>
+                <p><strong>E-mail:</strong> {safeText(parte.conjugeEmail || "Não informado")}</p>
+                <p><strong>Profissão:</strong> {safeText(parte.conjugeProfissao || "Não informado")}</p>
+              </div>
+            </div>
+          )}
         </section>,
-        34
+        parte.hasConjuge ? 42 : 28
       );
 
       // 3. Objeto Aceite Block
@@ -946,26 +961,52 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
         mergedDados.valor ||
         mergedDados.valorContrato ||
         mergedDados.valorTotalNegociado ||
+        mergedDados.valorProposta ||
+        mergedDados.valorNegociado ||
         mergedDados.objeto?.valorAceite ||
         0
       );
 
+      let dataDocumentoBase = "";
+      if (mergedDados.dataProposta) {
+        dataDocumentoBase = formatarDataBR(mergedDados.dataProposta);
+      } else if (mergedDados.criadoEm) {
+        dataDocumentoBase = formatarDataBR(mergedDados.criadoEm);
+      } else if (mergedDados.data) {
+        dataDocumentoBase = mergedDados.data;
+      } else {
+        dataDocumentoBase = format(new Date(), "dd/MM/yyyy");
+      }
+
+      const formaPag = 
+        mergedDados.formaPagamento || 
+        (Array.isArray(mergedDados.formasPagamento) ? mergedDados.formasPagamento.join(", ") : "") || 
+        mergedDados.dados?.pagamento?.formaPagamento ||
+        "Não informada";
+
       addBlock(
-        <section className="section avoid-break">
+        <section className="section avoid-break clause-block">
           <h3 className="section-title">II - Objeto e Efeitos do Aceite</h3>
-          <p className="text-justify text-[9.5px] leading-relaxed mb-2">
-            A parte devidamente qualificada no Item I manifesta o seu inequívoco e pleno <strong>ACEITE</strong> aos termos e condições de pagamento propostos para a transação imobiliária do imóvel especificado baixo:
+          <p className="text-justify text-[8.5px] leading-normal mb-1.5 text-gray-700">
+            A parte qualificada no Item I manifesta o seu inequívoco e pleno <strong>ACEITE</strong> aos termos e condições de pagamento propostos para a transação imobiliária do bem imóvel especificado abaixo:
           </p>
-          <div className="grid grid-cols-2 gap-y-1.5 gap-x-6 text-[9.5px] mt-1">
-            <p className="col-span-2"><strong>Endereço do Imóvel:</strong> {formatFullAddress(imov || { heading: contract.enderecoImovel })}</p>
-            <p><strong>Código imobiliário:</strong> {safeText(imov.codigo || contract.codigoImovel || "Não informado")}</p>
-            <p><strong>Valor objeto do aceite:</strong> {safeMoney(vAceite)}</p>
+          <div className="bg-gray-50/55 border border-gray-150 rounded-xl p-2.5 grid grid-cols-2 gap-y-1 gap-x-6 text-[8.5px] leading-normal">
+            <p><strong>Edifício / Imóvel:</strong> {safeText(imov.titulo || "Não informado")}</p>
+            <p><strong>Código do Imóvel:</strong> {safeText(imov.codigo || "Não informado")}</p>
+            <p className="col-span-2"><strong>Endereço:</strong> {formatFullAddress(imov || { heading: contract.enderecoImovel })}</p>
+            <p><strong>Bairro:</strong> {safeText(imov.bairro || "Não informado")}</p>
+            <p><strong>Cidade/UF:</strong> {safeText(imov.cidade && imov.estado ? `${imov.cidade}/${imov.estado}` : imov.cidade || "Balneário Camboriú")}</p>
+            <p><strong>Matrícula:</strong> {safeText(imov.matricula || "Não informada")}</p>
+            <p><strong>CRI Registratório:</strong> {safeText(imov.cri || "Não informado")}</p>
+            <p className="col-span-2"><strong>Valor do Aceite:</strong> <span className="font-bold text-black">{safeMoney(vAceite)}</span> ({vAceite ? `${valorMonetarioPorExtenso(vAceite)}` : "Não informado"})</p>
+            <p><strong>Data Proposta Base:</strong> {safeText(dataDocumentoBase)}</p>
+            <p><strong>Forma de Pagamento:</strong> {safeText(formaPag)}</p>
           </div>
         </section>,
-        38
+        42
       );
 
-      // 4. Termos e condicoes
+      // 4. Termos e condicoes (Deduplicated)
       const condsFinal = 
         dados.condicoesFinal || 
         dados.condicoesPagamento || 
@@ -978,32 +1019,52 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
         contract.detalhesPagamento || 
         '';
 
+      const cleanConds = getCleanVal(condsFinal);
+      const cleanDetalhes = getCleanVal(rawDetalhes);
+      const cleanOutras = getCleanVal(rawOutras);
+
+      let finalCondsToRender = cleanConds;
+      let finalDetalhesToRender = "";
+      let finalOutrasToRender = "";
+
+      if (cleanDetalhes && cleanDetalhes.toLowerCase() !== cleanConds.toLowerCase()) {
+        finalDetalhesToRender = cleanDetalhes;
+      }
+      if (cleanOutras && 
+          cleanOutras.toLowerCase() !== cleanConds.toLowerCase() && 
+          cleanOutras.toLowerCase() !== cleanDetalhes.toLowerCase()) {
+        finalOutrasToRender = cleanOutras;
+      }
+
       addBlock(
-        <section className="section avoid-break">
+        <section className="section avoid-break clause-block">
           <h3 className="section-title">III - Termos e Condições da Proposta Aceita</h3>
-          {condsFinal ? (
-            <div className="p-2.5 bg-gray-50 border border-gray-150 rounded leading-relaxed text-[9px] text-gray-800 whitespace-pre-wrap text-justify">
-              {safeText(condsFinal)}
+          {finalCondsToRender ? (
+            <div className="p-2 bg-gray-50 border border-gray-150 rounded text-[8px] text-gray-800 whitespace-pre-wrap text-justify leading-relaxed">
+              {safeText(finalCondsToRender)}
             </div>
           ) : (
-            <p className="text-[9.5px] text-gray-500 italic">Condições finais não detalhadas por escrito.</p>
+            <p className="text-[8px] text-gray-400 italic">Condições de pagamento não detalhadas.</p>
           )}
 
-          {showDetalhes && (
-            <div className="mt-3 p-2 bg-gray-50 rounded border border-gray-150">
-              <h4 className="font-bold text-[9px] uppercase text-gray-700 pb-0.5 mb-1 border-b border-gray-200">Detalhes Adicionais</h4>
-              <p className="text-justify text-[9px] text-gray-800 whitespace-pre-wrap leading-relaxed">{rawDetalhes}</p>
+          {finalDetalhesToRender && (
+            <div className="mt-1.5 p-1.5 bg-gray-50 rounded border border-gray-150">
+              <h4 className="font-bold text-[8px] uppercase text-gray-700 pb-0.5 mb-1 border-b border-gray-150">Detalhes Adicionais de Pagamento</h4>
+              <p className="text-justify text-[8px] text-gray-800 whitespace-pre-wrap leading-relaxed">{finalDetalhesToRender}</p>
             </div>
           )}
 
-          {showOutras && (
-            <div className="mt-3 p-2 bg-gray-50 rounded border border-gray-150">
-              <h4 className="font-bold text-[9px] uppercase text-gray-700 pb-0.5 mb-1 border-b border-gray-200">Outras Condições</h4>
-              <p className="text-justify text-[9px] text-gray-800 whitespace-pre-wrap leading-relaxed">{rawOutras}</p>
+          {finalOutrasToRender && (
+            <div className="mt-1.5 p-1.5 bg-gray-50 rounded border border-gray-150">
+              <h4 className="font-bold text-[8px] uppercase text-gray-700 pb-0.5 mb-1 border-b border-gray-150">Outras Condições</h4>
+              <p className="text-justify text-[8px] text-gray-800 whitespace-pre-wrap leading-relaxed">{finalOutrasToRender}</p>
             </div>
           )}
         </section>,
-        20 + (condsFinal ? estimateHeight(condsFinal) + 12 : 0) + (showDetalhes ? estimateHeight(rawDetalhes) + 12 : 0) + (showOutras ? estimateHeight(rawOutras) + 12 : 0)
+        15 + 
+        (finalCondsToRender ? estimateHeight(finalCondsToRender, 95, 3.8) + 8 : 0) + 
+        (finalDetalhesToRender ? estimateHeight(finalDetalhesToRender, 95, 3.8) + 8 : 0) + 
+        (finalOutrasToRender ? estimateHeight(finalOutrasToRender, 95, 3.8) + 8 : 0)
       );
 
       // 5. Selected database Clauses (Individualized Blocks)
@@ -1012,29 +1073,29 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
         listSelection.forEach((c: any, idx: number) => {
           const cText = c.texto || '';
           addBlock(
-            <section className="section avoid-break mt-2 pt-2 border-t border-gray-150 text-[9px] text-gray-800">
-              {idx === 0 && <h3 className="section-title text-[9.5px] uppercase font-black text-black mb-2 border-b border-gray-200 pb-0.5">Cláusulas Vinculadas</h3>}
+            <section className="section avoid-break mt-1.5 pt-1.5 border-t border-gray-150 text-[8px] text-gray-800 clause-block">
+              {idx === 0 && <h3 className="section-title text-[8.5px] uppercase font-black text-black mb-1.5 border-b border-gray-200 pb-0.5">Cláusulas Vinculadas</h3>}
               <div className="text-justify leading-relaxed">
-                <p className="font-bold mb-0.5">Cláusula {idx + 1}ª - {c.titulo}:</p>
+                <p className="font-bold mb-0.5 text-black">Cláusula {idx + 1}ª - {c.titulo}:</p>
                 <p className="whitespace-pre-wrap pl-2 border-l border-gold/25 text-gray-700">{safeText(cText)}</p>
               </div>
             </section>,
-            estimateHeight(cText) + 12
+            estimateHeight(cText, 95, 3.8) + 8
           );
         });
       }
 
       // 6. Date Block
       addBlock(
-        <div className="mt-4 text-right font-bold text-[10px] text-black">
+        <div className="mt-3 text-right font-bold text-[9px] text-black pt-1">
           {safeText(mergedDados.local || 'Balneário Camboriú')}, {safeText(mergedDados.data || (mergedDados.dataProposta ? formatarDataBR(mergedDados.dataProposta) : "") || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }))}
         </div>,
-        12
+        10
       );
 
       // 7. Signatures
       addBlock(
-        <div className="pdf-signatures mt-6 pb-2 avoid-break">
+        <div className="pdf-signatures mt-4 pb-2 avoid-break signature-block">
           <div className="flex flex-col justify-end">
             <div className="pdf-signature-line text-black font-bold">
               {safeText(parte.nome || 'ACEITANTE / INTERESSADO')}
@@ -1048,7 +1109,7 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
             <div className="pdf-signature-role">Imobiliária Intermediadora</div>
           </div>
         </div>,
-        45
+        35
       );
     }
 
@@ -1284,7 +1345,14 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
         .pdf-compact-content section {
           margin-bottom: 4px !important;
         }
-        .avoid-break {
+        .avoid-break,
+        .clause-block,
+        .property-block,
+        .party-block,
+        .payment-block,
+        .signature-block,
+        .section-block,
+        .section {
           page-break-inside: avoid !important;
           break-inside: avoid !important;
         }
