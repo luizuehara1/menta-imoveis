@@ -40,38 +40,250 @@ const estimateHeight = (text: string, divisor: number = 95, mmPerLine: number = 
   return totalLines * mmPerLine;
 };
 
+export function limparParteEndereco(valor: any): string {
+  return String(valor || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/,\s*,/g, ",")
+    .replace(/\s+,/g, ",")
+    .replace(/,\s*$/g, "");
+}
+
+export function removerDuplicadosEndereco(partes: any[] = []): string[] {
+  const vistos = new Set();
+
+  return partes
+    .map(limparParteEndereco)
+    .filter(Boolean)
+    .filter((parte) => {
+      const chave = parte.toLowerCase();
+
+      if (vistos.has(chave)) {
+        return false;
+      }
+
+      vistos.add(chave);
+      return true;
+    });
+}
+
+export function montarEnderecoImovelPDF(imovel: any = {}): string {
+  if (!imovel) return "";
+  if (typeof imovel === 'string') return limparParteEndereco(imovel);
+
+  const enderecoBase =
+    imovel.imovelEndereco ||
+    imovel.enderecoImovel ||
+    imovel.endereco ||
+    imovel.street ||
+    imovel.address ||
+    "";
+
+  const numero =
+    imovel.numero ||
+    imovel.numeroImovel ||
+    imovel.number ||
+    "";
+
+  const complemento =
+    imovel.complemento ||
+    imovel.complementoImovel ||
+    imovel.complement ||
+    "";
+
+  const bairro =
+    imovel.bairro ||
+    imovel.bairroImovel ||
+    imovel.district ||
+    imovel.neighborhood ||
+    "";
+
+  const cidade =
+    imovel.cidade ||
+    imovel.cidadeImovel ||
+    imovel.city ||
+    "";
+
+  const estado =
+    imovel.estado ||
+    imovel.uf ||
+    imovel.estadoImovel ||
+    imovel.state ||
+    "";
+
+  let enderecoLimpo = limparParteEndereco(enderecoBase);
+
+  // Evitar adicionar bairro/cidade/estado se já estiverem no endereço base
+  const enderecoLower = enderecoLimpo.toLowerCase();
+
+  const partes: string[] = [];
+
+  if (enderecoLimpo) partes.push(enderecoLimpo);
+
+  if (numero && !enderecoLower.includes(String(numero).toLowerCase())) {
+    partes.push(`nº ${numero}`);
+  }
+
+  if (complemento && !enderecoLower.includes(String(complemento).toLowerCase())) {
+    partes.push(complemento);
+  }
+
+  if (bairro && !enderecoLower.includes(String(bairro).toLowerCase())) {
+    partes.push(bairro);
+  }
+
+  let cidadeUf = "";
+
+  if (cidade && estado) {
+    if (cidade.toLowerCase() === estado.toLowerCase()) {
+      cidadeUf = cidade;
+    } else {
+      cidadeUf = `${cidade}/${estado}`;
+    }
+  } else if (cidade) {
+    cidadeUf = cidade;
+  } else if (estado) {
+    cidadeUf = estado;
+  }
+
+  if (cidadeUf && !enderecoLower.includes(cidade.toLowerCase())) {
+    partes.push(cidadeUf);
+  }
+
+  return removerDuplicadosEndereco(partes).join(", ");
+}
+
+export function getDadosImovelPDF(dados: any = {}): any {
+  if (!dados) return {};
+  const imovelData = dados.imovel || {};
+  
+  const imovel = {
+    nomeEdificio:
+      dados.nomeEdificio ||
+      dados.edificio ||
+      dados.tituloImovel ||
+      dados.imovelTitulo ||
+      dados.titulo ||
+      imovelData.nomeEdificio ||
+      imovelData.edificio ||
+      imovelData.tituloImovel ||
+      imovelData.imovelTitulo ||
+      imovelData.titulo ||
+      "",
+
+    codigoImovel:
+      dados.codigoImovel ||
+      dados.codigo ||
+      dados.referencia ||
+      dados.id ||
+      imovelData.codigoImovel ||
+      imovelData.codigo ||
+      imovelData.referencia ||
+      imovelData.id ||
+      "",
+
+    endereco:
+      montarEnderecoImovelPDF(dados.imovel || dados),
+
+    bairro:
+      dados.bairro ||
+      dados.bairroImovel ||
+      imovelData.bairro ||
+      imovelData.bairroImovel ||
+      "",
+
+    cidade:
+      dados.cidade ||
+      dados.cidadeImovel ||
+      imovelData.cidade ||
+      imovelData.cidadeImovel ||
+      "",
+
+    estado:
+      dados.estado ||
+      dados.uf ||
+      dados.estadoImovel ||
+      imovelData.estado ||
+      imovelData.uf ||
+      imovelData.estadoImovel ||
+      "",
+
+    matricula:
+      dados.matriculaImovel ||
+      dados.numeroMatricula ||
+      dados.matricula ||
+      imovelData.matriculaImovel ||
+      imovelData.numeroMatricula ||
+      imovelData.matricula ||
+      "",
+
+    cri:
+      dados.criImovel ||
+      dados.criRegistrario ||
+      dados.cri ||
+      imovelData.criImovel ||
+      imovelData.criRegistrario ||
+      imovelData.cri ||
+      "",
+
+    valorAnunciado:
+      Number(
+        dados.valorAnunciado ||
+        dados.valorVenda ||
+        dados.valorImovel ||
+        imovelData.valorAnunciado ||
+        imovelData.valorVenda ||
+        imovelData.valorImovel ||
+        0
+      ),
+
+    valorDocumento:
+      Number(
+        dados.valorAceite ||
+        dados.valorProposta ||
+        dados.valorTotalNegociado ||
+        dados.valorNegociado ||
+        dados.valor ||
+        imovelData.valorAceite ||
+        imovelData.valorProposta ||
+        0
+      )
+  };
+
+  return imovel;
+}
+
+export function getTextoPagamentoPDF(dados: any = {}): string {
+  return getCleanVal(
+    dados.detalhesPagamento ||
+    dados.pagamento?.detalhesPagamento ||
+    dados.termos?.detalhesPagamento ||
+    dados.detalhesPagamentoContraproposta ||
+    dados.pagamento?.detalhesPagamentoContraproposta ||
+    dados.termos?.detalhesPagamentoContraproposta ||
+    dados.condicoesFinal ||
+    dados.condicoesPagamento ||
+    dados.pagamento?.condicoesPagamento ||
+    dados.termos?.condicoesPagamento ||
+    dados.condicoesDaProposta ||
+    dados.observacoesPagamento ||
+    ""
+  );
+}
+
+export function getOutrasCondicoesPDF(dados: any = {}): string {
+  return getCleanVal(
+    dados.outrasCondicoes ||
+    dados.pagamento?.outrasCondicoes ||
+    dados.termos?.outrasCondicoes ||
+    ""
+  );
+}
+
 const formatFullAddress = (obj: any): string => {
   if (!obj) return 'Não informado';
-  if (typeof obj === 'string') return obj;
-  const street = obj.endereco || obj.address || obj.street || (typeof obj.heading === 'string' ? obj.heading : '') || (typeof obj.headings === 'string' ? obj.headings : '');
-  const num = obj.numero || obj.number || '';
-  const numStr = num ? `Nº ${num}` : '';
-  const compl = obj.complemento || obj.complement || '';
-  const neighborhood = obj.bairro || obj.district || obj.neighborhood || '';
-  const city = obj.cidade || obj.city || '';
-  const state = obj.estado || obj.state || '';
-  const cep = obj.cep || '';
-
-  const parts = [
-    street,
-    numStr,
-    compl,
-    neighborhood,
-    city,
-    state
-  ];
-
-  const cleanParts = parts.map(s => String(s || '').trim()).filter(Boolean);
-  if (cleanParts.length === 0) {
-    if (typeof obj.enderecoImovel === 'string' && obj.enderecoImovel) return obj.enderecoImovel;
-    return 'Não informado';
-  }
-
-  let result = cleanParts.join(', ');
-  if (cep) {
-    result += ` - CEP: ${cep}`;
-  }
-  return result;
+  if (typeof obj === 'string') return limparParteEndereco(obj);
+  return montarEnderecoImovelPDF(obj);
 };
 
 // ============================================================================
@@ -197,17 +409,36 @@ export const PdfPropertyBlock: React.FC<PdfPropertyBlockProps> = ({
   dataAlternativa,
   contract = {}
 }) => {
-  const titulo = imovel.titulo || imovel.nomeEdificio || imovel.buildingName || contract.imovelTitulo || contract.imovelNomeEdificio ||"Imóvel";
-  const codigo = imovel.codigo || contract.imovelCodigo || contract.codigoImovel || "Não informado";
-  
-  const address = formatFullAddress(imovel || { endereco: contract.enderecoImovel });
-  const bairro = imovel.bairro || contract.imovelBairro || "Não informado";
-  const cidadeUf = imovel.cidade && imovel.estado 
-    ? `${imovel.cidade} / ${imovel.estado}` 
-    : (imovel.cidade || contract.imovelCidade || "Balneário Camboriú / SC");
+  // Combine all sources into a single object for robust parsing
+  const combined = { 
+    ...contract, 
+    ...imovel, 
+    imovel: imovel || contract.imovel 
+  };
+  const imovParsed = getDadosImovelPDF(combined);
 
-  const matricula = imovel.matricula || contract.imovelMatricula || contract.matriculaImovel || "Não informada";
-  const cri = imovel.cri || imovel.criImovel || imovel.cartorioRegistroImoveis || imovel.cartorioRegistro || contract.imovelCri || "Não informado";
+  const titulo = imovParsed.nomeEdificio || "Imóvel";
+  const codigo = imovParsed.codigoImovel || "Não informado";
+  const address = imovParsed.endereco || "Não informado";
+  const bairro = imovParsed.bairro || "Não informado";
+  
+  let cidadeUf = "Bali/SC"; // fallback
+  if (imovParsed.cidade && imovParsed.estado) {
+    if (imovParsed.cidade.toLowerCase() === imovParsed.estado.toLowerCase()) {
+      cidadeUf = imovParsed.cidade;
+    } else {
+      cidadeUf = `${imovParsed.cidade}/${imovParsed.estado}`;
+    }
+  } else if (imovParsed.cidade) {
+    cidadeUf = imovParsed.cidade;
+  } else if (imovParsed.estado) {
+    cidadeUf = imovParsed.estado;
+  } else {
+    cidadeUf = "Balneário Camboriú/SC";
+  }
+
+  const matricula = imovParsed.matricula || "Não informada";
+  const cri = imovParsed.cri || "Não informado";
 
   let labelValor = "Valor do Imóvel:";
   if (tipoContrato === 'aceite') labelValor = "Valor do Aceite:";
@@ -262,26 +493,8 @@ export const PdfPaymentBlock: React.FC<PdfPaymentBlockProps> = ({
   metodosDePagamento = [],
   formaPagamentoSimple = ""
 }) => {
-  const rawDetalhes = getCleanVal(
-    dados.detalhesPagamento ||
-    dados.pagamento?.detalhesPagamento ||
-    dados.termos?.detalhesPagamento ||
-    dados.detalhesPagamentoContraproposta ||
-    dados.pagamento?.detalhesPagamentoContraproposta ||
-    dados.termos?.detalhesPagamentoContraproposta ||
-    dados.condicoesFinal ||
-    dados.condicoesPagamento ||
-    dados.pagamento?.condicoesPagamento ||
-    dados.termos?.condicoesPagamento ||
-    ''
-  );
-
-  const rawOutras = getCleanVal(
-    dados.outrasCondicoes ||
-    dados.pagamento?.outrasCondicoes ||
-    dados.termos?.outrasCondicoes ||
-    ''
-  );
+  const rawDetalhes = getTextoPagamentoPDF(dados);
+  const rawOutras = getOutrasCondicoesPDF(dados);
 
   const showDetalhes = rawDetalhes.trim() !== "";
   const showOutras = rawOutras.trim() !== "" && !textosIguaisPDF(rawOutras, rawDetalhes);
@@ -301,77 +514,100 @@ export const PdfPaymentBlock: React.FC<PdfPaymentBlockProps> = ({
 
   return (
     <PdfSection title={sectionTitle}>
-      {tipoContrato !== 'locacao_temporaria' && tipoContrato !== 'arras_confirmatorios' && (
-        <p className="text-justify text-[8.5px] leading-normal mb-1.5 text-gray-800">
-          O valor total da transação é de <strong>{safeMoney(totalValor)}</strong> ({valorExtenso ? `${valorExtenso}` : 'Não informado'}).
-        </p>
-      )}
-
-      {tipoContrato === 'arras_confirmatorios' && (
-        <div className="grid grid-cols-2 gap-y-1.5 gap-x-6 text-[8.5px] text-gray-800 leading-normal mb-1.5">
-          <p><strong>Valor Total do Negócio:</strong> {safeMoney(totalValor)}</p>
-          <p><strong>Valor do Sinal/Arras:</strong> {safeMoney(Number(dados.arras?.valorArras || 0))}</p>
-          <p><strong>Forma do Sinal:</strong> {safeText(dados.arras?.formaPagamentoArras || "Não informado")}</p>
-          <p><strong>Vencimento do Sinal:</strong> {safeDate(dados.arras?.dataPagamentoArras)}</p>
-          {dados.arras?.condicoesDevolucao && (
-            <p className="col-span-2 text-[8px] text-gray-700 bg-gray-50/50 p-1.5 rounded border border-gray-150 mt-1">
-              <strong>Condições de devolução do sinal:</strong> {safeText(dados.arras.condicoesDevolucao)}
-            </p>
+      {tipoContrato === 'aceite' ? (
+        <div className="text-[8.5px] text-gray-800 leading-normal space-y-1.5">
+          <p><strong>Valor do Aceite:</strong> <span className="font-bold">{safeMoney(totalValor)}</span> {valorExtenso ? `(${valorExtenso})` : ''}</p>
+          {formaPagamentoSimple && (
+            <p><strong>Forma de Pagamento:</strong> {safeText(formaPagamentoSimple)}</p>
           )}
-          {dados.arras?.observacoes && (
-            <p className="col-span-2 text-[8px] text-gray-700 mt-1">
-              <strong>Observações Gerais:</strong> {safeText(dados.arras.observacoes)}
-            </p>
+          {showDetalhes && (
+            <div className="p-2 bg-gray-50/55 rounded border border-gray-150/80 leading-normal text-[8px] text-gray-800 whitespace-pre-wrap overflow-visible h-auto max-h-none text-justify mt-1">
+              <p className="font-bold text-[8px] uppercase tracking-wider text-gray-700 mb-0.5">Detalhes / Condições de Pagamento:</p>
+              <p className="text-justify whitespace-pre-wrap tracking-tight break-words">{rawDetalhes}</p>
+            </div>
+          )}
+          {showOutras && (
+            <div className="p-2 bg-gray-50/55 rounded border border-gray-150/80 leading-normal text-[8px] text-gray-800 whitespace-pre-wrap overflow-visible h-auto max-h-none text-justify mt-1">
+              <p className="font-bold text-[8px] uppercase tracking-wider text-gray-700 mb-0.5">Outras Condições:</p>
+              <p className="text-justify whitespace-pre-wrap tracking-tight break-words">{rawOutras}</p>
+            </div>
           )}
         </div>
-      )}
+      ) : (
+        <>
+          {tipoContrato !== 'locacao_temporaria' && tipoContrato !== 'arras_confirmatorios' && (
+            <p className="text-justify text-[8.5px] leading-normal mb-1.5 text-gray-800">
+              O valor total da transação é de <strong>{safeMoney(totalValor)}</strong> ({valorExtenso ? `${valorExtenso}` : 'Não informado'}).
+            </p>
+          )}
 
-      {tipoContrato === 'locacao_temporaria' && (
-        <div className="grid grid-cols-2 gap-y-1 gap-x-4 text-[8.5px] text-gray-800 leading-normal mb-1.5">
-          <p><strong>Valor da Diária:</strong> {safeMoney(dados.valores?.valorDiaria || 0)}</p>
-          <p><strong>Subtotal Diárias:</strong> {safeMoney(dados.valores?.subtotalDiarias || 0)}</p>
-          <p><strong>Taxa de Limpeza:</strong> {safeMoney(dados.valores?.taxaLimpeza || 0)}</p>
-          <p><strong>Taxa Caução/Garantia:</strong> {safeMoney(dados.valores?.taxaCaucao || 0)}</p>
-          <p className="col-span-2 text-primary-black font-extrabold text-[9px] border-t border-gray-100 pt-0.5">
-            TOTAL GERAL DA LOCAÇÃO: {safeMoney(dados.valores?.valorTotalLocacao || 0)}
-          </p>
-        </div>
-      )}
+          {tipoContrato === 'arras_confirmatorios' && (
+            <div className="grid grid-cols-2 gap-y-1.5 gap-x-6 text-[8.5px] text-gray-800 leading-normal mb-1.5">
+              <p><strong>Valor Total do Negócio:</strong> {safeMoney(totalValor)}</p>
+              <p><strong>Valor do Sinal/Arras:</strong> {safeMoney(Number(dados.arras?.valorArras || 0))}</p>
+              <p><strong>Forma do Sinal:</strong> {safeText(dados.arras?.formaPagamentoArras || "Não informado")}</p>
+              <p><strong>Vencimento do Sinal:</strong> {safeDate(dados.arras?.dataPagamentoArras)}</p>
+              {dados.arras?.condicoesDevolucao && (
+                <p className="col-span-2 text-[8px] text-gray-700 bg-gray-50/50 p-1.5 rounded border border-gray-150 mt-1">
+                  <strong>Condições de devolução do sinal:</strong> {safeText(dados.arras.condicoesDevolucao)}
+                </p>
+              )}
+              {dados.arras?.observacoes && (
+                <p className="col-span-2 text-[8px] text-gray-700 mt-1">
+                  <strong>Observações Gerais:</strong> {safeText(dados.arras.observacoes)}
+                </p>
+              )}
+            </div>
+          )}
 
-      {formaPagamentoSimple && tipoContrato === 'aceite' && (
-        <p className="text-[8.5px] text-gray-800 mb-1.5">
-          <strong>Forma de Pagamento Principal:</strong> {safeText(formaPagamentoSimple)}
-        </p>
-      )}
+          {tipoContrato === 'locacao_temporaria' && (
+            <div className="grid grid-cols-2 gap-y-1 gap-x-4 text-[8.5px] text-gray-800 leading-normal mb-1.5">
+              <p><strong>Valor da Diária:</strong> {safeMoney(dados.valores?.valorDiaria || 0)}</p>
+              <p><strong>Subtotal Diárias:</strong> {safeMoney(dados.valores?.subtotalDiarias || 0)}</p>
+              <p><strong>Taxa de Limpeza:</strong> {safeMoney(dados.valores?.taxaLimpeza || 0)}</p>
+              <p><strong>Taxa Caução/Garantia:</strong> {safeMoney(dados.valores?.taxaCaucao || 0)}</p>
+              <p className="col-span-2 text-primary-black font-extrabold text-[9px] border-t border-gray-100 pt-0.5">
+                TOTAL GERAL DA LOCAÇÃO: {safeMoney(dados.valores?.valorTotalLocacao || 0)}
+              </p>
+            </div>
+          )}
 
-      {metodosDePagamento && metodosDePagamento.length > 0 && (
-        <div className="mb-2 pl-2">
-          <p className="font-bold text-[8px] uppercase tracking-wider text-gray-700 mb-0.5">Condições de Pagamento de Preferência:</p>
-          {metodosDePagamento.map((item: any, index: number) => {
-            const subValue = Number(item.valor) || 0;
-            return (
-              <div key={index} className="text-[8px] text-gray-800 leading-normal pl-2 my-0.5 relative border-l border-gold/30">
-                • <strong>{safeText(item.tipo || 'Parcela')}</strong>: {safeMoney(subValue)}
-                {item.vencimento && ` com vencimento em ${safeDate(item.vencimento)}`}
-                {item.observacao && ` (${safeText(item.observacao)})`}
-              </div>
-            );
-          })}
-        </div>
-      )}
+          {formaPagamentoSimple && (
+            <p className="text-[8.5px] text-gray-800 mb-1.5">
+              <strong>Forma de Pagamento Principal:</strong> {safeText(formaPagamentoSimple)}
+            </p>
+          )}
 
-      {showDetalhes && (
-        <div className="p-2 bg-gray-50/55 rounded border border-gray-150/80 leading-normal text-[8px] text-gray-800 whitespace-pre-wrap overflow-visible h-auto max-h-none text-justify mt-1.5">
-          <p className="font-bold text-[8px] uppercase tracking-wider text-gray-700 mb-0.5">Detalhes / Condições de Pagamento:</p>
-          <p className="text-justify whitespace-pre-wrap tracking-tight break-words">{rawDetalhes}</p>
-        </div>
-      )}
+          {metodosDePagamento && metodosDePagamento.length > 0 && (
+            <div className="mb-2 pl-2">
+              <p className="font-bold text-[8px] uppercase tracking-wider text-gray-700 mb-0.5">Condições de Pagamento de Preferência:</p>
+              {metodosDePagamento.map((item: any, index: number) => {
+                const subValue = Number(item.valor) || 0;
+                return (
+                  <div key={index} className="text-[8px] text-gray-800 leading-normal pl-2 my-0.5 relative border-l border-gold/30">
+                    • <strong>{safeText(item.tipo || 'Parcela')}</strong>: {safeMoney(subValue)}
+                    {item.vencimento && ` com vencimento em ${safeDate(item.vencimento)}`}
+                    {item.observacao && ` (${safeText(item.observacao)})`}
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
-      {showOutras && (
-        <div className="mt-1.5 p-2 bg-gray-50/55 rounded border border-gray-150/80 leading-normal text-[8px] text-gray-800 whitespace-pre-wrap overflow-visible h-auto max-h-none text-justify">
-          <p className="font-bold text-[8px] uppercase tracking-wider text-gray-700 mb-0.5">Outras Condições:</p>
-          <p className="text-justify whitespace-pre-wrap tracking-tight break-words">{rawOutras}</p>
-        </div>
+          {showDetalhes && (
+            <div className="p-2 bg-gray-50/55 rounded border border-gray-150/80 leading-normal text-[8px] text-gray-800 whitespace-pre-wrap overflow-visible h-auto max-h-none text-justify mt-1.5">
+              <p className="font-bold text-[8px] uppercase tracking-wider text-gray-700 mb-0.5">Detalhes / Condições de Pagamento:</p>
+              <p className="text-justify whitespace-pre-wrap tracking-tight break-words">{rawDetalhes}</p>
+            </div>
+          )}
+
+          {showOutras && (
+            <div className="mt-1.5 p-2 bg-gray-50/55 rounded border border-gray-150/80 leading-normal text-[8px] text-gray-800 whitespace-pre-wrap overflow-visible h-auto max-h-none text-justify">
+              <p className="font-bold text-[8px] uppercase tracking-wider text-gray-700 mb-0.5">Outras Condições:</p>
+              <p className="text-justify whitespace-pre-wrap tracking-tight break-words">{rawOutras}</p>
+            </div>
+          )}
+        </>
       )}
     </PdfSection>
   );
@@ -941,7 +1177,10 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
 
       // 6.5. Cláusulas Adicionais / Personalizadas (Custom text box content)
       const customClausulasText = getCleanVal(dados.clausulas || dados.clausulasPersonalizadas || '');
-      if (customClausulasText) {
+      const isDuplicateCustomClause = 
+        textosIguaisPDF(customClausulasText, rawDetalhes) || 
+        textosIguaisPDF(customClausulasText, rawOutras);
+      if (customClausulasText && !isDuplicateCustomClause) {
         addBlock(
           <PdfSection title="Cláusulas Adicionais">
             <p className="text-justify text-[8px] text-gray-800 whitespace-pre-wrap leading-relaxed bg-white p-2 border border-gray-150 rounded">{customClausulasText}</p>
@@ -950,18 +1189,15 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
         );
       }
 
-      // 7. Date Place
+      // 7. Date & Signatures Block (Combined so they flow together and never break across pages)
       addBlock(
-        <div className="mt-3 text-right font-bold text-[9px] text-black pt-1">
-          {safeText(dados.local || 'Balneário Camboriú')}, {safeText(dados.data || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }))}
+        <div className="pdf-date-signatures mt-3 avoid-break signature-block text-[8.5px]">
+          <div className="text-right font-bold text-[9px] text-black pt-1 mb-3">
+            {safeText(dados.local || 'Balneário Camboriú')}, {safeText(dados.data || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }))}
+          </div>
+          <PdfSignatures dados={dados} tipoContrato={tipoContrato} contract={contract} empresa={empresa} parteAceitante={contraParteAceitante} />
         </div>,
-        8
-      );
-
-      // 8. Signatures Block
-      addBlock(
-        <PdfSignatures dados={dados} tipoContrato={tipoContrato} contract={contract} empresa={empresa} parteAceitante={contraParteAceitante} />,
-        24
+        32
       );
 
     } else if (tipoContrato === 'arras_confirmatorios') {
@@ -1053,11 +1289,11 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
       );
 
       // 6. Selected Clauses (Individualized Blocks)
-      const listClauses = (dados.clausulasSelecionadas || []).filter(
+      const listClausesArras = (dados.clausulasSelecionadas || []).filter(
         (c: any) => c && c.texto && c.texto.trim() !== ""
       );
-      if (listClauses.length > 0) {
-        listClauses.forEach((c: any, idx: number) => {
+      if (listClausesArras.length > 0) {
+        listClausesArras.forEach((c: any, idx: number) => {
           addBlock(
             <PdfClausesBlock clausulas={[c]} sectionTitle={idx === 0 ? "Cláusulas e Condições Gerais" : ""} startIndex={idx + 1} />,
             estimateHeight(c.texto || '', 95, 3.0) + 6
@@ -1066,28 +1302,28 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
       }
 
       // 6.5. Cláusulas Adicionais / Personalizadas (Custom text box content)
-      const customClausulasText = getCleanVal(dados.clausulas || dados.clausulasPersonalizadas || '');
-      if (customClausulasText) {
+      const customClausulasTextArras = getCleanVal(dados.clausulas || dados.clausulasPersonalizadas || '');
+      const isDuplicateCustomClauseArras = 
+        textosIguaisPDF(customClausulasTextArras, rawDetalhes) || 
+        textosIguaisPDF(customClausulasTextArras, rawOutras);
+      if (customClausulasTextArras && !isDuplicateCustomClauseArras) {
         addBlock(
           <PdfSection title="Cláusulas Adicionais">
-            <p className="text-justify text-[8px] text-gray-800 whitespace-pre-wrap leading-relaxed bg-white p-2 border border-gray-150 rounded">{customClausulasText}</p>
+            <p className="text-justify text-[8px] text-gray-800 whitespace-pre-wrap leading-relaxed bg-white p-2 border border-gray-150 rounded">{customClausulasTextArras}</p>
           </PdfSection>,
-          10 + estimateHeight(customClausulasText, 95, 3.0)
+          10 + estimateHeight(customClausulasTextArras, 95, 3.0)
         );
       }
 
-      // 7. Date Block
+      // 7. Date & Signatures Block (Combined so they flow together and never break across pages)
       addBlock(
-        <div className="mt-4 text-right font-bold text-[10px] text-black">
-          {safeText(dados.local || 'Balneário Camboriú')}, {safeText(dados.data || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }))}
+        <div className="pdf-date-signatures mt-4 avoid-break signature-block text-[8.5px]">
+          <div className="text-right font-bold text-[10px] text-black mb-3">
+            {safeText(dados.local || 'Balneário Camboriú')}, {safeText(dados.data || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }))}
+          </div>
+          <PdfSignatures dados={dados} tipoContrato={tipoContrato} contract={contract} empresa={empresa} />
         </div>,
-        8
-      );
-
-      // 8. Signatures Block
-      addBlock(
-        <PdfSignatures dados={dados} tipoContrato={tipoContrato} contract={contract} empresa={empresa} />,
-        24
+        32
       );
 
     } else if (tipoContrato === 'locacao_temporaria') {
@@ -1225,13 +1461,18 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
 
       // 10. Additional text Clauses (clausulas)
       if (dados.clausulas && dados.clausulas.trim()) {
-        const customClausesText = dados.clausulas.trim();
-        addBlock(
-          <PdfSection title="Cláusulas Adicionais do Contrato">
-            <p className="text-justify text-[8px] text-gray-800 whitespace-pre-wrap leading-relaxed bg-white p-2 border border-gray-150 rounded">{customClausesText}</p>
-          </PdfSection>,
-          10 + estimateHeight(customClausesText, 95, 3.0)
-        );
+        const customClausesTextLoc = dados.clausulas.trim();
+        const isDuplicateCustomClauseLoc = 
+          textosIguaisPDF(customClausesTextLoc, rawDetalhes) || 
+          textosIguaisPDF(customClausesTextLoc, rawOutras);
+        if (!isDuplicateCustomClauseLoc) {
+          addBlock(
+            <PdfSection title="Cláusulas Adicionais do Contrato">
+              <p className="text-justify text-[8px] text-gray-800 whitespace-pre-wrap leading-relaxed bg-white p-2 border border-gray-150 rounded">{customClausesTextLoc}</p>
+            </PdfSection>,
+            11 + estimateHeight(customClausesTextLoc, 95, 3.0)
+          );
+        }
       }
 
       // 11. Selected database Clauses (Individualized Blocks)
@@ -1248,18 +1489,15 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
         });
       }
 
-      // 12. Date Block
+      // 12. Date & Signatures Block (Combined so they flow together and never break across pages)
       addBlock(
-        <div className="mt-4 text-right font-bold text-[10px] text-black border-t border-gray-100 pt-2">
-          {safeText(dados.local || 'Balneário Camboriú')}, {safeText(dados.data || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }))}
+        <div className="pdf-date-signatures mt-4 avoid-break signature-block text-[8.5px]">
+          <div className="text-right font-bold text-[10px] text-black border-t border-gray-100 pt-2 mb-3">
+            {safeText(dados.local || 'Balneário Camboriú')}, {safeText(dados.data || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }))}
+          </div>
+          <PdfSignatures dados={dados} tipoContrato={tipoContrato} contract={contract} empresa={empresa} />
         </div>,
-        8
-      );
-
-      // 13. Signatures
-      addBlock(
-        <PdfSignatures dados={dados} tipoContrato={tipoContrato} contract={contract} empresa={empresa} />,
-        24
+        32
       );
 
     } else if (tipoContrato === 'aceite') {
@@ -1366,11 +1604,11 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
       );
 
       // 4. database Clauses
-      const listSelection = (dados.clausulasSelecionadas || []).filter(
+      const listSelectionAceite = (dados.clausulasSelecionadas || []).filter(
         (c: any) => c && c.texto && c.texto.trim() !== ""
       );
-      if (listSelection.length > 0) {
-        listSelection.forEach((c: any, idx: number) => {
+      if (listSelectionAceite.length > 0) {
+        listSelectionAceite.forEach((c: any, idx: number) => {
           addBlock(
             <PdfClausesBlock clausulas={[c]} sectionTitle={idx === 0 ? "Cláusulas Vinculadas" : ""} startIndex={idx + 1} />,
             estimateHeight(c.texto || '', 95, 3.0) + 6
@@ -1379,63 +1617,97 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
       }
 
       // 4.5. Cláusulas Adicionais / Personalizadas (Custom text box content)
-      const customClausulasText = getCleanVal(dados.clausulas || dados.clausulasPersonalizadas || '');
-      if (customClausulasText) {
+      const customClausulasTextAceite = getCleanVal(dados.clausulas || dados.clausulasPersonalizadas || '');
+      const isDuplicateCustomClauseAceite = 
+        textosIguaisPDF(customClausulasTextAceite, rawDetalhes) || 
+        textosIguaisPDF(customClausulasTextAceite, rawOutras);
+      if (customClausulasTextAceite && !isDuplicateCustomClauseAceite) {
         addBlock(
           <PdfSection title="Cláusulas Adicionais">
-            <p className="text-justify text-[8px] text-gray-800 whitespace-pre-wrap leading-relaxed bg-white p-2 border border-gray-150 rounded">{customClausulasText}</p>
+            <p className="text-justify text-[8px] text-gray-800 whitespace-pre-wrap leading-relaxed bg-white p-2 border border-gray-150 rounded">{customClausulasTextAceite}</p>
           </PdfSection>,
-          10 + estimateHeight(customClausulasText, 95, 3.0)
+          10 + estimateHeight(customClausulasTextAceite, 95, 3.0)
         );
       }
 
-      // 5. Date Block
+      // 5. Date & Signatures Block (Combined so they flow together and never break across pages)
       addBlock(
-        <div className="mt-3 text-right font-bold text-[9px] text-black pt-1">
-          {safeText(mergedDados.local || 'Balneário Camboriú')}, {safeText(mergedDados.data || (mergedDados.dataProposta ? formatarDataBR(mergedDados.dataProposta) : "") || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }))}
+        <div className="pdf-date-signatures mt-3 avoid-break signature-block text-[8.5px]">
+          <div className="text-right font-bold text-[9px] text-black pt-1 mb-3">
+            {safeText(mergedDados.local || 'Balneário Camboriú')}, {safeText(mergedDados.data || (mergedDados.dataProposta ? formatarDataBR(mergedDados.dataProposta) : "") || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }))}
+          </div>
+          <PdfSignatures dados={dados} tipoContrato={tipoContrato} contract={contract} empresa={empresa} parteAceitante={parte} />
         </div>,
-        8
-      );
-
-      // 6. Signatures
-      addBlock(
-        <PdfSignatures dados={dados} tipoContrato={tipoContrato} contract={contract} empresa={empresa} parteAceitante={parte} />,
-        24
+        32
       );
     }
 
     // --- Dynamic Slicing/Pagination Algorithm ---
-    const pages: { render: () => React.JSX.Element; estimatedHeight: number }[][] = [[]];
-    let currentPageHeight = 0;
-
-    // Available target heights in mm (extremely safe & defensive to prevent any sub-pixel/rounding browser overflow)
     const MAX_HEIGHT_FIRST = 225; // 297mm (Total) - 14mm (MarginTop) - 20mm (MarginBottom) - 34mm (Header) - 24mm (Padding & Footer space)
     const MAX_HEIGHT_SUBSEQUENT = 248; // 297mm (Total) - 14mm (MarginTop) - 20mm (MarginBottom) - 10mm (Mini Header) - 23mm (Padding & Footer space)
 
+    // 1. Simulate standard paging to check page count and last page height
+    const tempPages: { render: () => React.JSX.Element; estimatedHeight: number }[][] = [[]];
+    let tempHeight = 0;
     blocks.forEach((block) => {
-      const isFirstPage = pages.length === 1;
-      const spaceLimit = isFirstPage ? MAX_HEIGHT_FIRST : MAX_HEIGHT_SUBSEQUENT;
-
-      if (currentPageHeight + block.estimatedHeight > spaceLimit) {
-        // Start a fresh new page
-        pages.push([block]);
-        currentPageHeight = block.estimatedHeight;
+      const isFirstPage = tempPages.length === 1;
+      const limit = isFirstPage ? MAX_HEIGHT_FIRST : MAX_HEIGHT_SUBSEQUENT;
+      if (tempHeight + block.estimatedHeight > limit) {
+        tempPages.push([block]);
+        tempHeight = block.estimatedHeight;
       } else {
-        pages[pages.length - 1].push(block);
-        currentPageHeight += block.estimatedHeight;
+        tempPages[tempPages.length - 1].push(block);
+        tempHeight += block.estimatedHeight;
       }
     });
 
-    return pages;
+    const totalNormalHeight = blocks.reduce((sum, b) => sum + b.estimatedHeight, 0);
+    const lastPageHeight = tempHeight;
+
+    // We detect if:
+    // 1. Total normal height is slightly larger than 1 page limit (up to 25% bigger)
+    const isOverPage1Slightly = totalNormalHeight > MAX_HEIGHT_FIRST && totalNormalHeight <= MAX_HEIGHT_FIRST * 1.25;
+    // 2. OR if standard page division leaves a very small orphaned last page (less than 55mm, which usually is just date + signatures)
+    const hasOrphanedLastPage = tempPages.length > 1 && lastPageHeight <= 55;
+    // 3. OR if clauses are short but slightly overflow (e.g. up to 4 clauses)
+    const listClauses = (dados.clausulasSelecionadas || []).filter((c: any) => c && c.texto && c.texto.trim() !== "");
+    const hasFewClauses = listClauses.length <= 4 && totalNormalHeight > MAX_HEIGHT_FIRST && totalNormalHeight <= MAX_HEIGHT_FIRST * 1.30;
+
+    const shouldUseCompactMode = isOverPage1Slightly || hasOrphanedLastPage || hasFewClauses;
+
+    // Apply compact scaling to estimation if compact mode is triggered
+    const scaleFactor = shouldUseCompactMode ? 0.78 : 1.0;
+    const targetMaxFirst = shouldUseCompactMode ? 232 : MAX_HEIGHT_FIRST; // compact margins give slightly more breathing height
+    const targetMaxSubsequent = shouldUseCompactMode ? 252 : MAX_HEIGHT_SUBSEQUENT;
+
+    const pages: { render: () => React.JSX.Element; estimatedHeight: number }[][] = [[]];
+    let currentPageHeight = 0;
+
+    blocks.forEach((block) => {
+      const isFirstPage = pages.length === 1;
+      const spaceLimit = isFirstPage ? targetMaxFirst : targetMaxSubsequent;
+      const blockHeightScaled = block.estimatedHeight * scaleFactor;
+
+      if (currentPageHeight + blockHeightScaled > spaceLimit) {
+        // Start a fresh new page
+        pages.push([block]);
+        currentPageHeight = blockHeightScaled;
+      } else {
+        pages[pages.length - 1].push(block);
+        currentPageHeight += blockHeightScaled;
+      }
+    });
+
+    return { pages, shouldUseCompactMode };
   };
 
-  const pages = buildContractPages();
+  const { pages, shouldUseCompactMode } = buildContractPages();
 
   return (
     <div 
       id="contrato-pdf" 
       ref={printRef} 
-      className={`pdf-export-container font-sans bg-transparent mx-auto ${isCompact ? 'pdf-compact' : ''}`}
+      className={`pdf-export-container font-sans bg-transparent mx-auto ${isCompact ? 'pdf-compact' : ''} ${shouldUseCompactMode ? 'pdf-compact-mode' : ''}`}
       style={{
         boxSizing: 'border-box'
       }}
@@ -1447,7 +1719,7 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
           style={{
             width: '210mm',
             height: '295mm', // Slightly below 297 to strictly prevent any page count overflows during physical print
-            padding: isCompact ? '24px 42px 30px 42px' : '15mm 14mm 20mm 14mm',
+            padding: shouldUseCompactMode ? '8mm 10mm 12mm 10mm' : (isCompact ? '24px 42px 30px 42px' : '15mm 14mm 20mm 14mm'),
             boxSizing: 'border-box',
             position: 'relative',
             pageBreakAfter: 'always',
@@ -1469,7 +1741,7 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
 
           {/* Header on page 1, elegant top bar on pages 2+ */}
           {pageIndex === 0 ? (
-            isCompact ? renderCompactHeader() : renderHeader()
+            (shouldUseCompactMode || isCompact) ? renderCompactHeader() : renderHeader()
           ) : (
             <div className="flex items-center justify-between border-b border-gray-200 pb-1 mb-3 text-[7.5px] uppercase tracking-wider text-gray-400 select-none no-print">
               <span>{safeText(contract.dados?.proponente?.nome || contract.nomeCliente || 'Contrato')}</span>
@@ -1487,7 +1759,7 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
           </div>
 
           {/* Footer on each page */}
-          {isCompact ? renderCompactFooter(pageIndex + 1, pages.length) : renderFooter(pageIndex + 1, pages.length)}
+          {(shouldUseCompactMode || isCompact) ? renderCompactFooter(pageIndex + 1, pages.length) : renderFooter(pageIndex + 1, pages.length)}
         </div>
       ))}
 
@@ -1577,11 +1849,12 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
           text-transform: uppercase;
         }
         .pdf-signatures {
-          margin-top: auto;
-          padding-top: 10px;
+          margin-top: 12px;
+          padding-top: 4px;
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 16px;
+          gap: 24px;
+          align-items: end;
           page-break-inside: avoid !important;
           break-inside: avoid !important;
         }
@@ -1641,6 +1914,88 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
         .signature-block {
           page-break-inside: avoid !important;
           break-inside: avoid !important;
+          margin-top: 18px !important;
+          position: relative !important;
+          page-break-before: auto !important;
+          break-before: auto !important;
+        }
+
+        /* Dynamic Compact Mode Overrides */
+        .pdf-compact-mode {
+          font-size: 7.2px !important;
+        }
+        
+        .pdf-compact-mode p,
+        .pdf-compact-mode div,
+        .pdf-compact-mode span,
+        .pdf-compact-mode td,
+        .pdf-compact-mode strong,
+        .pdf-compact-mode li {
+          font-size: 7.2px !important;
+          line-height: 1.18 !important;
+        }
+
+        .pdf-compact-mode .section {
+          margin-bottom: 3px !important;
+        }
+        
+        .pdf-compact-mode .section-title {
+          font-size: 7.8px !important;
+          margin: 3px 0 2px 0 !important;
+          padding-bottom: 1px !important;
+          border-bottom: 1px solid #e1e3e7 !important;
+        }
+
+        .pdf-compact-mode .clause-block {
+          margin-bottom: 2px !important;
+          padding-bottom: 1.5px !important;
+        }
+
+        .pdf-compact-mode .clause-block p {
+          line-height: 1.18 !important;
+          font-size: 7.2px !important;
+        }
+
+        .pdf-compact-mode .signature-block {
+          margin-top: 8px !important;
+        }
+
+        .pdf-compact-mode .pdf-signatures {
+          margin-top: 8px !important;
+          gap: 12px !important;
+          display: grid !important;
+          grid-template-columns: 1fr 1fr !important;
+        }
+
+        .pdf-compact-mode .pdf-signature-line {
+          font-size: 7.5px !important;
+          border-top: 0.8px solid #111827 !important;
+          padding-top: 1.5px !important;
+        }
+
+        .pdf-compact-mode .pdf-signature-role {
+          font-size: 6.8px !important;
+          margin-top: 0.5px !important;
+        }
+
+        .pdf-compact-mode .pdf-watermark {
+          opacity: 0.025 !important;
+        }
+        .pdf-compact-mode .pdf-watermark img {
+          width: 55% !important;
+        }
+
+        .pdf-compact-mode .pdf-page {
+          padding: 8mm 10mm 12mm 10mm !important;
+        }
+
+        .pdf-compact-mode .pdf-document-title {
+          font-size: 9.5px !important;
+          margin: 4px 0 4px 0 !important;
+        }
+
+        .pdf-compact-mode .grid-cols-2 {
+          gap: 1.5px 12px !important;
         }
       `}</style>
     </div>
