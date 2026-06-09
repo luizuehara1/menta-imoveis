@@ -61,11 +61,20 @@ export const VisitPdfTemplate = React.forwardRef<HTMLDivElement, VisitPdfTemplat
     return String(value);
   };
 
+  const formatCompanyAddress = () => {
+    const parts = [
+      settings.empresa.endereco,
+      settings.empresa.numero ? `Nº ${settings.empresa.numero}` : '',
+      settings.empresa.complemento || '',
+    ].filter(Boolean).join(', ');
+    return safeText(parts, 'Av. Brasil, 2636');
+  };
+
   // Fallback company data
   const company = {
     nome: safeText(settings.empresa.nome, 'Menta Negócios Imobiliários'),
     razaoSocial: safeText(settings.empresa.razaoSocial, 'A & E Negócios Imobiliários Ltda'),
-    endereco: safeText(settings.empresa.endereco, 'Av. Brasil, 2636'),
+    endereco: formatCompanyAddress(),
     telefone: safeText(settings.empresa.telefone, '(47) 99291-4069'),
     email: safeText(settings.empresa.email, 'contato@mentaimoveis.com.br'),
     cnpj: safeText(settings.empresa.cnpj, '63.572.479/0001-50'),

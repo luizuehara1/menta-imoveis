@@ -1,8 +1,16 @@
 import React from 'react';
-import { Contract, ContractType } from '../../types';
+import { Contract } from '../../types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { formatCurrency, isValidImageUrl, safeText, safeMoney, safeDate, valorMonetarioPorExtenso, getTituloImovel, formatarDataBR, getOutrasCondicoes, montarTextoConjuge, getNomeComprador, getNomeVendedor, getCpfVendedor, getRgVendedor, getProfissaoVendedor, getEstadoCivilVendedor, getTelefoneVendedor, getEmailVendedor, getEnderecoVendedor, getDetalhesPagamento, valorOuNaoInformado, getTermosCondicoes, getFormaPagamento, getParteAceitante, getCondicoesPagamentoFinal } from '../../lib/utils';
+import { 
+  isValidImageUrl, 
+  safeText, 
+  safeMoney, 
+  safeDate, 
+  valorMonetarioPorExtenso, 
+  getParteAceitante,
+  formatarDataBR
+} from '../../lib/utils';
 import { useSettings } from '../../hooks/useSettings';
 
 interface ContractA4PreviewProps {
@@ -10,13 +18,52 @@ interface ContractA4PreviewProps {
   printRef?: React.RefObject<HTMLDivElement>;
 }
 
-export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, printRef }) => {
-  const { tipoContrato, dados } = contract;
+export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: originalContract, printRef }) => {
+  const contract = originalContract as any;
+  const { tipoContrato, dados = {} } = contract;
   const { settings } = useSettings();
-  const empresa = settings.empresa;
+  const empresa = (settings.empresa || {}) as any;
 
   const isCompact = tipoContrato !== 'locacao_temporaria';
 
+  // HELPER Functions
+  const getCleanVal = (val: any): string => (typeof val === 'string' ? val.trim() : '');
+
+  const formatFullAddress = (obj: any): string => {
+    if (!obj) return 'Não informado';
+    if (typeof obj === 'string') return obj;
+    const street = obj.endereco || obj.address || obj.street || (typeof obj.heading === 'string' ? obj.heading : '') || (typeof obj.headings === 'string' ? obj.headings : '');
+    const num = obj.numero || obj.number || '';
+    const numStr = num ? `Nº ${num}` : '';
+    const compl = obj.complemento || obj.complement || '';
+    const neighborhood = obj.bairro || obj.district || obj.neighborhood || '';
+    const city = obj.cidade || obj.city || '';
+    const state = obj.estado || obj.state || '';
+    const cep = obj.cep || '';
+
+    const parts = [
+      street,
+      numStr,
+      compl,
+      neighborhood,
+      city,
+      state
+    ];
+
+    const cleanParts = parts.map(s => String(s || '').trim()).filter(Boolean);
+    if (cleanParts.length === 0) {
+      if (typeof obj.enderecoImovel === 'string' && obj.enderecoImovel) return obj.enderecoImovel;
+      return 'Não informado';
+    }
+
+    let result = cleanParts.join(', ');
+    if (cep) {
+      result += ` - CEP: ${cep}`;
+    }
+    return result;
+  };
+
+  // Global Watermark & Headers/Footers Renders (Top-level)
   const renderHeader = () => {
     const logoUrl = empresa.logoCabecalhoUrl || '/logo.png';
     const addressLine = [
@@ -32,15 +79,13 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
           <img 
             src={logoUrl} 
             alt={safeText(empresa.nome)} 
-            className="h-20 w-auto object-contain shrink-0" 
+            className="h-16 w-auto object-contain shrink-0" 
             crossOrigin="anonymous"
             referrerPolicy="no-referrer"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-            }}
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
           />
         )}
-        <div className="flex-grow text-right text-[9px] text-gray-700 font-bold uppercase tracking-widest leading-normal">
+        <div className="flex-grow text-right text-[8.5px] text-gray-700 font-bold uppercase tracking-widest leading-normal">
           <h2 className="text-xs font-display font-black text-primary-black uppercase tracking-[0.1em] mb-0.5">
             {safeText(empresa.nome || 'MENTA NEGÓCIOS IMOBILIÁRIOS')}
           </h2>
@@ -53,7 +98,6 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
           <p>
             {empresa.telefone ? `Tel: ${safeText(empresa.telefone)}` : ''}
             {empresa.email ? ` | ${safeText(empresa.email)}` : ''}
-            {empresa.site ? ` | ${safeText(empresa.site)}` : ''}
           </p>
         </div>
       </div>
@@ -77,9 +121,7 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
             alt={safeText(empresa.nome)} 
             crossOrigin="anonymous"
             referrerPolicy="no-referrer"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-            }}
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
           />
         )}
         <div className="flex-grow text-right">
@@ -88,15 +130,10 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
           </h2>
           <div className="company-info">
             {empresa.razaoSocial && <span className="block mb-0.5 font-bold uppercase">{safeText(empresa.razaoSocial)}</span>}
-            <p className="m-0 text-gray-500">
+            <p className="m-0 text-gray-500 text-[8px]">
               {empresa.cnpj ? `CNPJ: ${safeText(empresa.cnpj)}` : ''}
               {empresa.creciPj ? ` | CRECI PJ: ${safeText(empresa.creciPj)}` : ''}
               {addressLine ? ` | ${addressLine}` : ''}
-            </p>
-            <p className="m-0 text-gray-500">
-              {empresa.telefone ? `Tel: ${safeText(empresa.telefone)}` : ''}
-              {empresa.email ? ` | ${safeText(empresa.email)}` : ''}
-              {empresa.site ? ` | ${safeText(empresa.site)}` : ''}
             </p>
           </div>
         </div>
@@ -107,18 +144,17 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
   const renderFooter = (pageNumber: number, totalPages?: number) => {
     const footerCustom = empresa.rodapeContratos || '';
     return (
-      <div className="mt-auto pt-3 border-t border-gray-100 flex items-end justify-between text-[8px] text-gray-400 font-medium w-full">
+      <div className="mt-auto pt-3 border-t border-gray-150 flex items-end justify-between text-[7.5px] text-gray-400 font-medium w-full">
         <div className="max-w-[75%] leading-tight">
           <p className="font-bold text-gray-500 mb-0.5">
             {footerCustom || `${safeText(empresa.nome)} | CNPJ: ${safeText(empresa.cnpj)} | CRECI PJ: ${safeText(empresa.creciPj)}`}
           </p>
-          <p>{safeText(empresa.razaoSocial)} • {safeText(empresa.endereco)} • {safeText(empresa.site)}</p>
+          <p>{safeText(empresa.razaoSocial)} • {safeText(empresa.endereco)}</p>
         </div>
-        <div className="flex flex-col items-end gap-0.5 text-[8px] uppercase tracking-widest opacity-60">
+        <div className="flex flex-col items-end gap-0.5 text-[7.5px] uppercase tracking-widest opacity-60">
           <div className="px-2 py-0.5 bg-gray-50 rounded-full border border-gray-100 text-gray-500 font-bold">
             Página {pageNumber} {totalPages ? `de ${totalPages}` : ''}
           </div>
-          <p>Emitido por Menta Imóveis</p>
         </div>
       </div>
     );
@@ -129,364 +165,133 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
     return (
       <div className="pdf-footer">
         <div className="max-w-[75%] leading-tight text-left">
-          <p className="font-bold text-gray-500 mb-0.5 animate-pulse text-gray-400">
+          <p className="font-bold text-gray-500 mb-0.5 text-gray-400">
             {footerCustom || `${safeText(empresa.nome)} | CNPJ: ${safeText(empresa.cnpj)} | CRECI PJ: ${safeText(empresa.creciPj)}`}
           </p>
-          <p>{safeText(empresa.razaoSocial)} • {safeText(empresa.endereco)} • {safeText(empresa.site)}</p>
+          <p>{safeText(empresa.razaoSocial)} • {safeText(empresa.endereco)}</p>
         </div>
-        <div className="flex flex-col items-end gap-0.5 text-[8px] uppercase tracking-widest opacity-60">
-          <div className="px-2 py-0.5 bg-gray-50 rounded-full border border-gray-100 text-gray-500 font-bold">
+        <div className="flex flex-col items-end gap-0.5 text-[7.5px] uppercase tracking-widest opacity-60">
+          <div className="px-2 py-0.5 bg-gray-50 rounded-full border border-gray-100 text-gray-600 font-extrabold">
             Página {pageNumber} {totalPages ? `de ${totalPages}` : ''}
           </div>
-          <p>Emitido por Menta Imóveis</p>
         </div>
       </div>
     );
   };
 
-  const renderWatermark = () => {
-    const url = empresa.marcaDaguaUrl || '/watermark.png';
-    if (isCompact) {
-      return (
-        <div className="pdf-watermark">
-          <img 
-            src={url} 
-            alt="Marca d'água" 
-            crossOrigin="anonymous"
-            referrerPolicy="no-referrer"
-            onError={(e) => {
-              e.currentTarget.src = '/watermark.png';
-            }}
-          />
-        </div>
-      );
+  // Resolve Duplicate Text between Payment Details and Other Conditions
+  const rawDetalhes = getCleanVal(
+    dados.detalhesPagamento ||
+    dados.pagamento?.detalhesPagamento ||
+    dados.termos?.detalhesPagamento ||
+    dados.detalhesPagamentoContraproposta ||
+    dados.pagamento?.detalhesPagamentoContraproposta ||
+    dados.termos?.detalhesPagamentoContraproposta ||
+    contract.detalhesPagamento ||
+    contract.detalhesPagamentoContraproposta ||
+    ''
+  );
+
+  const rawOutras = getCleanVal(
+    dados.outrasCondicoes ||
+    dados.pagamento?.outrasCondicoes ||
+    dados.termos?.outrasCondicoes ||
+    contract.outrasCondicoes ||
+    ''
+  );
+
+  let showDetalhes = false;
+  let showOutras = false;
+
+  if (rawDetalhes) {
+    showDetalhes = true;
+    if (rawOutras && rawOutras.toLowerCase() !== rawDetalhes.toLowerCase()) {
+      showOutras = true;
     }
-    return (
-      <div className="absolute inset-x-0 top-0 bottom-0 pointer-events-none overflow-hidden z-0">
-        {[0, 1, 2, 3, 4, 5].map((pageIndex) => (
-          <div 
-            key={pageIndex}
-            className="absolute left-0 right-0 flex items-center justify-center"
-            style={{ 
-              top: `${pageIndex * 297}mm`, 
-              height: '297mm',
-              opacity: 0.06 
-            }}
-          >
-            <img 
-              src={url} 
-              alt="Marca d'água" 
-              className="w-[85%] max-w-[650px] h-auto object-contain"
-              crossOrigin="anonymous"
-              referrerPolicy="no-referrer"
-              onError={(e) => {
-                e.currentTarget.src = '/watermark.png';
-              }}
-            />
-          </div>
-        ))}
-      </div>
-    );
-  };
+  } else if (rawOutras) {
+    showOutras = true;
+  }
 
-  const renderClausulasSelecionadas = () => {
-    const list = dados.clausulasSelecionadas || [];
-    if (list.length === 0) return null;
-
-    return (
-      <section className="section prevent-page-break mt-4 pt-3 border-t border-gray-150">
-        <h3 className="section-title text-[9.5px] uppercase font-black text-black">Cláusulas e Condições Gerais</h3>
-        <div className="space-y-3 mt-2">
-          {list.map((c: any, idx: number) => (
-            <div key={c.id || idx} className="text-justify leading-relaxed text-[9px] text-gray-800">
-              <p className="font-bold mb-0.5">Cláusula {idx + 1}ª - {c.titulo}:</p>
-              <p className="whitespace-pre-wrap pl-2 border-l border-gold/20">{safeText(c.texto)}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-    );
-  };
-
-  const renderLocacaoTemporaria = () => {
-    const l = dados.locador || {};
-    const t = dados.locatario || {};
-    const i = dados.imovel || {};
-    const p = dados.prazo || {};
-    const v = dados.valores || {};
-    const r = dados.regras || {};
-    const a = dados.assinaturas || {};
-
-    // Standardize commissions
-    const percComissao = v.percentualComissaoImobiliaria ?? 20;
-    const valorComissao = v.valorComissaoImobiliaria ?? ((Number(v.valorTotalLocacao) || 0) * percComissao / 100);
-    const valorRepasse = v.valorRepassadoProprietario ?? v.valorRepasseLocador ?? ((Number(v.valorTotalLocacao) || 0) - valorComissao);
-
-    return (
-      <div className="space-y-3 text-black font-sans leading-relaxed text-[10.5px] relative z-10">
-        <div className="text-center space-y-0.5 mb-2">
-          <h1 className="text-sm font-bold uppercase tracking-tight border-b border-gray-100 pb-1">CONTRATO DE LOCAÇÃO TEMPORÁRIA DE IMÓVEL</h1>
-        </div>
-
-        <p className="text-justify indent-6 leading-normal">
-          Pelo presente instrumento particular, de um lado o <strong>LOCADOR</strong>, qualificado neste contrato, e de outro lado o <strong>LOCATÁRIO</strong>, também qualificado, têm entre si justo e contratado a locação temporária do imóvel descrito, mediante as cláusulas e condições abaixo.
-        </p>
-
-        {/* SECTION I - LOCADOR */}
-        <section className="space-y-1">
-          <h3 className="font-bold uppercase bg-gray-50 px-2 py-0.5 border-l-2 border-primary-black text-[9px]">I - Dados do Locador (Proprietário)</h3>
-          <div className="grid grid-cols-2 gap-y-0.5 gap-x-4 pl-2">
-            <p className="col-span-2"><strong>Nome/Razão Social:</strong> {safeText(l.nome)}</p>
-            <div className="flex gap-4">
-              <p><strong>CPF/CNPJ:</strong> {safeText(l.cpfCnpj || l.cpf || l.cnpj)}</p>
-              <p><strong>RG/IE:</strong> {safeText(l.rgIe || l.rg)}</p>
-            </div>
-            <div className="flex gap-4">
-              <p><strong>Telefone:</strong> {safeText(l.telefone || l.phone)}{l.whatsapp ? ` / WhatsApp: ${safeText(l.whatsapp)}` : ''}</p>
-              <p><strong>E-mail:</strong> {safeText(l.email)}</p>
-            </div>
-            <p className="col-span-2"><strong>Endereço:</strong> {safeText(l.endereco || 'Não informado')}{l.cep ? ` - CEP: ${safeText(l.cep)}` : ''}{l.cidade ? ` - ${safeText(l.cidade)}/${safeText(l.estado || '')}` : ''}</p>
-            {(l.locadorConjugeNome || l.conjugeNome) && (
-              <div className="col-span-2 grid grid-cols-2 gap-y-0.5 gap-x-4 border-t border-gray-100/50 pt-1 mt-0.5">
-                <p><strong>Cônjuge do Locador:</strong> {l.locadorConjugeNome || l.conjugeNome}</p>
-                <p><strong>CPF Cônjuge:</strong> {l.locadorConjugeCpf || l.conjugeCpf || "Não informado"}</p>
-                {(l.locadorConjugeRg || l.conjugeRg) && <p><strong>RG Cônjuge:</strong> {l.locadorConjugeRg || l.conjugeRg}</p>}
-                {(l.locadorConjugeProfissao || l.conjugeProfissao) && <p><strong>Profissão Cônjuge:</strong> {l.locadorConjugeProfissao || l.conjugeProfissao}</p>}
-                {(l.locadorConjugeTelefone || l.conjugeTelefone) && <p><strong>Telefone Cônjuge:</strong> {l.locadorConjugeTelefone || l.conjugeTelefone}</p>}
-                {(l.locadorConjugeEmail || l.conjugeEmail) && <p><strong>E-mail Cônjuge:</strong> {l.locadorConjugeEmail || l.conjugeEmail}</p>}
-                {(l.locadorConjugeEndereco || l.conjugeEndereco) && <p className="col-span-2"><strong>Endereço Cônjuge:</strong> {l.locadorConjugeEndereco || l.conjugeEndereco}</p>}
-              </div>
-            )}
-            <p className="col-span-2"><strong>Dados Bancários para Repasse:</strong> {safeText(l.dadosBancarios || l.banco || 'Não informado')}</p>
-            <div className="flex gap-4">
-              <p><strong>Comissão Imobiliária:</strong> {percComissao}% ({safeMoney(valorComissao)})</p>
-              <p><strong>Valor Líquido de Repasse:</strong> {safeMoney(valorRepasse)}</p>
-            </div>
-            <div className="flex gap-4 text-gray-500">
-              <p><strong>Data Prevista de Repasse:</strong> {safeDate(v.dataPrevistaRepasseLocador || p.dataPrevistaRepasse || 'Não definida')}</p>
-              <p><strong>Status do Repasse:</strong> <span className="uppercase font-bold text-xs">{safeText(v.statusRepasseLocador || 'pendente')}</span></p>
-            </div>
-          </div>
-        </section>
-
-        {/* SECTION II - LOCATÁRIO */}
-        <section className="space-y-1">
-          <h3 className="font-bold uppercase bg-gray-50 px-2 py-0.5 border-l-2 border-primary-black text-[9px]">II - Dados do Locatário (Hóspede/Inquilino)</h3>
-          <div className="grid grid-cols-2 gap-y-0.5 gap-x-4 pl-2">
-            <p className="col-span-2"><strong>Nome Completo:</strong> {safeText(t.nome)}</p>
-            <div className="flex gap-4">
-              <p><strong>CPF:</strong> {safeText(t.cpf || t.documento)}</p>
-              <p><strong>RG:</strong> {safeText(t.rg)}</p>
-            </div>
-            <div className="flex gap-4">
-              <p><strong>Telefone:</strong> {safeText(t.telefone || t.celular || t.phone)}{t.whatsapp ? ` / WhatsApp: ${safeText(t.whatsapp)}` : ''}</p>
-              <p><strong>E-mail:</strong> {safeText(t.email)}</p>
-            </div>
-            <p className="col-span-2"><strong>Endereço Residencial:</strong> {safeText(t.endereco || 'Não informado')}{t.cep ? ` - CEP: ${safeText(t.cep)}` : ''}{t.cidade ? ` - ${safeText(t.cidade)}/${safeText(t.estado || '')}` : ''}</p>
-            {(t.locatarioConjugeNome || t.conjugeNome) && (
-              <div className="col-span-2 grid grid-cols-2 gap-y-0.5 gap-x-4 border-t border-gray-100/50 pt-1 mt-0.5">
-                <p><strong>Cônjuge do Locatário:</strong> {t.locatarioConjugeNome || t.conjugeNome}</p>
-                <p><strong>CPF Cônjuge:</strong> {t.locatarioConjugeCpf || t.conjugeCpf || "Não informado"}</p>
-                {(t.locatarioConjugeRg || t.conjugeRg) && <p><strong>RG Cônjuge:</strong> {t.locatarioConjugeRg || t.conjugeRg}</p>}
-                {(t.locatarioConjugeProfissao || t.conjugeProfissao) && <p><strong>Profissão Cônjuge:</strong> {t.locatarioConjugeProfissao || t.conjugeProfissao}</p>}
-                {(t.locatarioConjugeTelefone || t.conjugeTelefone) && <p><strong>Telefone Cônjuge:</strong> {t.locatarioConjugeTelefone || t.conjugeTelefone}</p>}
-                {(t.locatarioConjugeEmail || t.conjugeEmail) && <p><strong>E-mail Cônjuge:</strong> {t.locatarioConjugeEmail || t.conjugeEmail}</p>}
-                {(t.locatarioConjugeEndereco || t.conjugeEndereco) && <p className="col-span-2"><strong>Endereço Cônjuge:</strong> {t.locatarioConjugeEndereco || t.conjugeEndereco}</p>}
-              </div>
-            )}
-            <div className="flex gap-4">
-              <p><strong>Status Pagamento Locatário:</strong> <span className="uppercase font-bold text-xs">{safeText(v.statusPagamentoLocatario || 'pendente')}</span></p>
-              <p><strong>Saldo em Aberto Locatário:</strong> {safeMoney(v.saldoAbertoLocatario || 0)}</p>
-            </div>
-          </div>
-        </section>
-
-        {/* SECTION II.1 - FIADOR (Opcional - Se Houver) */}
-        {dados.fiador?.nome && (
-          <section className="space-y-1">
-            <h3 className="font-bold uppercase bg-gray-50 px-2 py-0.5 border-l-2 border-primary-black text-[9px]">II.1 - Dados do Fiador</h3>
-            <div className="grid grid-cols-2 gap-y-0.5 gap-x-4 pl-2">
-              <p className="col-span-2"><strong>Nome Completo:</strong> {safeText(dados.fiador.nome)}</p>
-              <div className="flex gap-4">
-                <p><strong>CPF/CNPJ:</strong> {safeText(dados.fiador.cpfCnpj)}</p>
-                <p><strong>Telefone:</strong> {safeText(dados.fiador.telefone)}</p>
-              </div>
-              <div className="flex gap-4">
-                <p><strong>E-mail:</strong> {safeText(dados.fiador.email)}</p>
-                <p><strong>Endereço:</strong> {safeText(dados.fiador.endereco || 'Não informado')}</p>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* SECTION III - IMÓVEL */}
-        <section className="space-y-1">
-          <h3 className="font-bold uppercase bg-gray-50 px-2 py-0.5 border-l-2 border-primary-black text-[9px]">III - Dados do Imóvel</h3>
-          <div className="grid grid-cols-2 gap-y-0.5 gap-x-4 pl-2">
-            <p className="col-span-2"><strong>Imóvel/Endereço:</strong> {safeText(contract.enderecoImovel)}</p>
-            <p><strong>Tipo:</strong> {safeText(i.tipo || 'Não informado')} (Cód: {safeText(i.codigo)})</p>
-            <p><strong>Mobiliado:</strong> {safeText(i.mobiliado || 'Sim')}</p>
-            {i.itensInclusos && <p className="col-span-2"><strong>Itens inclusos:</strong> {safeText(i.itensInclusos)}</p>}
-          </div>
-        </section>
-
-        {/* SECTION IV - PRAZO */}
-        <section className="space-y-1">
-          <h3 className="font-bold uppercase bg-gray-50 px-2 py-0.5 border-l-2 border-primary-black text-[9px]">IV - Prazo da Locação</h3>
-          <div className="grid grid-cols-2 gap-y-0.5 gap-x-4 pl-2">
-            <div className="flex gap-4 col-span-2">
-              <p><strong>Início:</strong> {safeDate(p.dataInicio)} às {safeText(p.horarioEntrada || '14:00')}</p>
-              <p><strong>Término:</strong> {safeDate(p.dataTermino)} às {safeText(p.horarioSaida || '10:00')}</p>
-            </div>
-            <p><strong>Duração:</strong> {safeText(p.quantidadeDias || '0')} dias</p>
-            <p><strong>Finalidade:</strong> {safeText(p.finalidade || 'Temporada')}</p>
-          </div>
-        </section>
-
-        {/* SECTION V - VALORES */}
-        <section className="space-y-1">
-          <h3 className="font-bold uppercase bg-gray-50 px-2 py-0.5 border-l-2 border-primary-black text-[9px]">V - Valores e Detalhamento</h3>
-          <div className="grid grid-cols-2 gap-y-0.5 gap-x-4 pl-2 bg-gray-50/50 p-1.5 rounded-lg border border-gray-100">
-            <p><strong>Valor Diária:</strong> {safeMoney(v.valorDiario)}</p>
-            <p><strong>Subtotal Diárias ({safeText(p.quantidadeDias || '0')} dias):</strong> {safeMoney(v.valorTotalLocacao)}</p>
-            <p><strong>Taxa de Limpeza:</strong> {safeMoney(v.taxaLimpeza)}</p>
-            <p><strong>Caução (Garantia):</strong> {safeMoney(v.taxaCaucao)}</p>
-            {Number(v.taxasAdicionais) > 0 && <p><strong>Taxas Adicionais/Outros:</strong> {safeMoney(v.taxasAdicionais)}</p>}
-            {Number(v.desconto) > 0 && <p className="text-red-500"><strong>Desconto Especial:</strong> - {safeMoney(v.desconto)}</p>}
-            <p className="text-xs font-bold text-primary-black col-span-2 border-t border-gray-200 mt-1 pt-1 flex justify-between">
-              <span>VALOR TOTAL PAGO PELO LOCATÁRIO:</span>
-              <span>{safeMoney(v.valorFinal)}</span>
-            </p>
-            <p className="col-span-2 mt-0.5"><strong>Forma de Pagamento:</strong> {safeText(v.formaPagamento)}</p>
-            {v.condicoesPagamento && <p className="col-span-2"><strong>Condições:</strong> {safeText(v.condicoesPagamento)}</p>}
-            {(() => {
-              const detalhesPagamentoFinal = getDetalhesPagamento(dados) || getDetalhesPagamento(contract);
-              if (!detalhesPagamentoFinal) return null;
-              const textoJaTemClausula = detalhesPagamentoFinal
-                .trim()
-                .toUpperCase()
-                .startsWith("CLÁUSULA");
-              return (
-                <div className="col-span-2 mt-2 border-t border-gray-100 pt-2 text-[9.5px]">
-                  {textoJaTemClausula ? (
-                    <div style={{ whiteSpace: "pre-line" }} className="leading-relaxed whitespace-pre-line bg-gray-50/50 p-2 rounded border border-gray-100">
-                      {detalhesPagamentoFinal}
-                    </div>
-                  ) : (
-                    <div className="leading-relaxed bg-gray-50/50 p-2 rounded border border-gray-100">
-                      <strong>Detalhes do pagamento / contraproposta:</strong>
-                      <div style={{ whiteSpace: "pre-line" }} className="whitespace-pre-line mt-1">
-                        {detalhesPagamentoFinal}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-          </div>
-        </section>
-        
-        {/* CLAUSES TEXT BASE */}
-        <div className="space-y-1.5 text-justify leading-snug">
-          <p><strong>Cláusula 1ª - Do Objeto:</strong> O presente contrato tem como objeto a locação temporária do imóvel identificado neste instrumento, destinado exclusivamente à finalidade informada pelas partes.</p>
-          <p><strong>Cláusula 2ª - Do Prazo:</strong> A locação terá início na data informada no campo “Data de início” e término na data informada no campo “Data de término”, devendo o LOCATÁRIO desocupar o imóvel até o horário de saída estabelecido.</p>
-          <p><strong>Cláusula 3ª - Do Valor:</strong> O LOCATÁRIO pagará ao LOCADOR o valor total informado neste contrato, composto pelo valor da diária, quantidade de dias, taxas adicionais, caução, taxa de limpeza e eventuais descontos.</p>
-          <p><strong>Cláusula 4ª - Da Conservação:</strong> O LOCATÁRIO declara receber o imóvel em boas condições de uso e conservação, comprometendo-se a devolvê-lo no mesmo estado, salvo desgastes naturais decorrente do uso normal.</p>
-          <p><strong>Cláusula 5ª - Das Regras de Uso:</strong> O LOCATÁRIO compromete-se a respeitar as regras descritas neste contrato, incluindo limites de hóspedes, horários, regras de condomínio, proibição de eventos, animais ou outras condições específicas, quando aplicáveis.</p>
-          {Number(v.taxaCaucao) > 0 && (
-            <p><strong>Cláusula 6ª - Da Garantia Caução:</strong> Fica estipulada a garantia por depósito caução sob o valor de {safeMoney(v.taxaCaucao)}, de responsabilidade do LOCATÁRIO, a ser restituído ao final do contrato após a entrega das chaves e vistoria de saída satisfatória, resguardado o direito de retenção em caso de avarias ou inadimplementos.</p>
-          )}
-        </div>
-
-        {/* CUSTOM CLAUSES IF ANY */}
-        {dados.clausulas && (
-           <div className="space-y-1 text-justify pt-1.5 border-t border-gray-100">
-             <h3 className="font-bold uppercase text-[9px]">Cláusulas Adicionais</h3>
-             <p className="whitespace-pre-wrap leading-normal text-[10px] bg-gray-50/50 p-1.5 rounded">{safeText(dados.clausulas)}</p>
-           </div>
-        )}
-
-        {renderClausulasSelecionadas()}
-
-        {/* ASSINATURAS */}
-        <div className="pt-6 space-y-6">
-          <p className="text-right font-medium text-[9.5px]">
-            {safeText(contract.local || empresa.cidade || 'Balneário Camboriú')}, {safeText(contract.data || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }))}
-          </p>
-          
-          <div className="grid grid-cols-2 gap-x-12 gap-y-6 text-[9.5px]">
-            <div className="border-t border-black pt-1 block text-center">
-              <p className="font-bold">{safeText(l.nome || 'LOCADOR')}</p>
-              <p className="text-[8px] uppercase text-gray-500">LOCADOR</p>
-            </div>
-            <div className="border-t border-black pt-1 block text-center">
-              <p className="font-bold">{safeText(t.nome || 'LOCATÁRIO')}</p>
-              <p className="text-[8px] uppercase text-gray-500">LOCATÁRIO</p>
-            </div>
-            <div className="border-t border-black pt-1 block text-center col-span-2 max-w-[200px] mx-auto w-full">
-              <p className="font-bold text-transparent select-none leading-[1px]">_</p>
-              <p className="font-bold text-gray-700">{safeText(empresa.nome)}</p>
-              <p className="text-[8px] uppercase text-gray-500">INTERMEDIADORA</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const renderPropostaOrContraproposta = (isContra = false) => {
-    const p = dados.proponente || {};
-    const contraParteAceitante = getParteAceitante({
-      ...dados,
-      ...contract,
-      parteAceitanteTipo: "vendedor",
-      tipoDocumento: "contraproposta"
+  // Text height estimator (in mm)
+  const estimateHeight = (text: string, divisor: number = 85, mmPerLine: number = 4.2): number => {
+    if (!text) return 0;
+    const lines = text.split('\n');
+    let totalLines = 0;
+    lines.forEach(line => {
+      totalLines += Math.max(1, Math.ceil(line.length / divisor));
     });
-    const imovelMatricula = (contract as any).imovelMatricula || dados.imovel?.matricula || "Matrícula não informada";
-    const imovelCriRaw = (contract as any).imovelCri || dados.imovel?.cri || dados.imovel?.criImovel || dados.imovel?.cartorioRegistroImoveis || dados.imovel?.cartorioRegistro || dados.imovel?.cartorioImovel || "";
-    const imovelCri = String(imovelCriRaw).trim() || "Não informado";
-    const imovelTituloRaw = (contract as any).imovelTitulo || (contract as any).imovelNomeEdificio || dados.imovel?.titulo || dados.imovel?.buildingName || dados.imovel?.nomeEdificio || dados.imovel?.condoName || "";
-    const tituloFinal = (imovelTituloRaw && imovelTituloRaw !== "Imóvel") ? imovelTituloRaw : "Imóvel";
-    
-    const outrasCondVal = getOutrasCondicoes(dados) || getOutrasCondicoes(contract) || getOutrasCondicoes(dados?.pagamento) || getOutrasCondicoes(dados?.termos) || "";
-    
-    // Extracted spouse info
-    const spouseNome = p.compradorConjugeNome || p.conjugeNome || dados.compradorConjugeNome || "";
-    const spouseCpf = p.compradorConjugeCpf || p.conjugeCpf || dados.compradorConjugeCpf || "";
-    const spouseRg = p.compradorConjugeRg || p.conjugeRg || dados.compradorConjugeRg || "";
-    const spouseProfissao = p.compradorConjugeProfissao || p.conjugeProfissao || dados.compradorConjugeProfissao || "";
-    const spouseEmail = p.compradorConjugeEmail || p.conjugeEmail || dados.compradorConjugeEmail || "";
-    const spouseTelefone = p.compradorConjugeTelefone || p.conjugeTelefone || dados.compradorConjugeTelefone || "";
-    const spouseEstadoCivil = p.compradorConjugeEstadoCivil || p.conjugeEstadoCivil || dados.compradorConjugeEstadoCivil || "";
-    const spouseEndereco = p.compradorConjugeEndereco || p.conjugeEndereco || dados.compradorConjugeEndereco || "";
+    return totalLines * mmPerLine;
+  };
 
-    // Extracted seller spouse info
-    const vendedorConjugeNome = dados.vendedorConjugeNome || (contract as any).vendedorConjugeNome || dados.proprietarioConjugeNome || (contract as any).proprietarioConjugeNome || "";
-    const vendedorConjugeCpf = dados.vendedorConjugeCpf || (contract as any).vendedorConjugeCpf || dados.proprietarioConjugeCpf || (contract as any).proprietarioConjugeCpf || "";
-    const vendedorConjugeRg = dados.vendedorConjugeRg || (contract as any).vendedorConjugeRg || dados.proprietarioConjugeRg || (contract as any).proprietarioConjugeRg || "";
-    const vendedorConjugeProfissao = dados.vendedorConjugeProfissao || (contract as any).vendedorConjugeProfissao || dados.proprietarioConjugeProfissao || (contract as any).proprietarioConjugeProfissao || "";
+  // Dynamic Blocks Compiler based on Contract Types
+  const buildContractPages = () => {
+    const blocks: { render: () => React.JSX.Element; estimatedHeight: number }[] = [];
 
-    const metodosDePagamento = dados.pagamento?.metodos || dados.termos?.metodos || (contract as any).formasPagamento || [];
+    const addBlock = (element: React.JSX.Element, height: number) => {
+      blocks.push({ render: () => element, estimatedHeight: height });
+    };
 
-    return (
-      <div className="pdf-compact-content relative z-10 w-full font-sans">
-        <div className="pdf-document-title">
+    // Dynamic blocks depending on Contract Types
+    if (tipoContrato === 'proposta' || tipoContrato === 'contraproposta') {
+      const isContra = tipoContrato === 'contraproposta';
+      const p = dados.proponente || {};
+      const comp = dados.comprador || {};
+      const vend = dados.vendedor || {};
+      const imov = dados.imovel || {};
+
+      const contraParteAceitante = getParteAceitante({
+        ...dados,
+        ...contract,
+        parteAceitanteTipo: "vendedor",
+        tipoDocumento: "contraproposta"
+      });
+
+      const imovelMatricula = (contract as any).imovelMatricula || imov.matricula || "Matrícula não informada";
+      const imovelCriRaw = (contract as any).imovelCri || imov.cri || imov.criImovel || imov.cartorioRegistroImoveis || imov.cartorioRegistro || imov.cartorioImovel || "";
+      const imovelCri = String(imovelCriRaw).trim() || "Não informado";
+      const imovelTituloRaw = (contract as any).imovelTitulo || (contract as any).imovelNomeEdificio || imov.titulo || imov.buildingName || imov.nomeEdificio || imov.condoName || "";
+      const tituloFinal = (imovelTituloRaw && imovelTituloRaw !== "Imóvel") ? imovelTituloRaw : "Imóvel";
+
+      const spouseNome = p.compradorConjugeNome || p.conjugeNome || dados.compradorConjugeNome || "";
+      const spouseCpf = p.compradorConjugeCpf || p.conjugeCpf || dados.compradorConjugeCpf || "";
+      const spouseRg = p.compradorConjugeRg || p.conjugeRg || dados.compradorConjugeRg || "";
+      const spouseProfissao = p.compradorConjugeProfissao || p.conjugeProfissao || dados.compradorConjugeProfissao || "";
+      const spouseEmail = p.compradorConjugeEmail || p.conjugeEmail || dados.compradorConjugeEmail || "";
+      const spouseTelefone = p.compradorConjugeTelefone || p.conjugeTelefone || dados.compradorConjugeTelefone || "";
+      const spouseEstadoCivil = p.compradorConjugeEstadoCivil || p.conjugeEstadoCivil || dados.compradorConjugeEstadoCivil || "";
+      const spouseEndereco = p.compradorConjugeEndereco || p.conjugeEndereco || dados.compradorConjugeEndereco || "";
+
+      const vendedorConjugeNome = dados.vendedorConjugeNome || (contract as any).vendedorConjugeNome || dados.proprietarioConjugeNome || (contract as any).proprietarioConjugeNome || "";
+      const vendedorConjugeCpf = dados.vendedorConjugeCpf || (contract as any).vendedorConjugeCpf || dados.proprietarioConjugeCpf || (contract as any).proprietarioConjugeCpf || "";
+      const vendedorConjugeRg = dados.vendedorConjugeRg || (contract as any).vendedorConjugeRg || dados.proprietarioConjugeRg || (contract as any).proprietarioConjugeRg || "";
+      const vendedorConjugeProfissao = dados.vendedorConjugeProfissao || (contract as any).vendedorConjugeProfissao || dados.proprietarioConjugeProfissao || (contract as any).proprietarioConjugeProfissao || "";
+
+      const metodosDePagamento = dados.pagamento?.metodos || dados.termos?.metodos || (contract as any).formasPagamento || [];
+
+      // 1. Title Block
+      addBlock(
+        <div className="pdf-document-title font-display font-black text-black">
           {isContra ? "CONTRAPROPOSTA DE COMPRA E VENDA" : "PROPOSTA DE COMPRA E VENDA DE IMÓVEL"}
-        </div>
+        </div>,
+        15
+      );
 
+      // 2. Proponente Block
+      const firstSectionHeight = spouseNome || vendedorConjugeNome ? 55 : 34;
+      addBlock(
         <section className="section avoid-break">
           {isContra ? (
             <>
               <h3 className="section-title">I - Proprietário Vendedor</h3>
-              <div className="grid grid-cols-2 gap-y-1.5 gap-x-6 text-[10px]">
-                <p><strong>Nome:</strong> {contraParteAceitante.nome || "Não informado"}</p>
-                <p><strong>CPF:</strong> {contraParteAceitante.cpf || "Não informado"}</p>
-                <p><strong>RG:</strong> {contraParteAceitante.rg || "Não informado"}</p>
-                <p><strong>Estado Civil:</strong> {contraParteAceitante.estadoCivil || "Não informado"}</p>
-                <p><strong>Profissão:</strong> {contraParteAceitante.profissao || "Não informado"}</p>
-                <p><strong>Telefone:</strong> {contraParteAceitante.telefone || "Não informado"}{contraParteAceitante.whatsapp ? ` / WhatsApp: ${contraParteAceitante.whatsapp}` : ''}</p>
-                <p className="col-span-2"><strong>E-mail:</strong> {contraParteAceitante.email || "Não informado"}</p>
-                <p className="col-span-2"><strong>Endereço:</strong> {contraParteAceitante.endereco || "Não informado"}{contraParteAceitante.cep ? ` - CEP: ${contraParteAceitante.cep}` : ''}{contraParteAceitante.cidade ? ` - ${contraParteAceitante.cidade}/${contraParteAceitante.estado}` : ''}</p>
+              <div className="grid grid-cols-2 gap-y-1.5 gap-x-6 text-[9.5px]">
+                <p><strong>Nome:</strong> {safeText(contraParteAceitante.nome || "Não informado")}</p>
+                <p><strong>CPF:</strong> {safeText(contraParteAceitante.cpf || "Não informado")}</p>
+                <p><strong>RG:</strong> {safeText(contraParteAceitante.rg || "Não informado")}</p>
+                <p><strong>Estado Civil:</strong> {safeText(contraParteAceitante.estadoCivil || "Não informado")}</p>
+                <p><strong>Profissão:</strong> {safeText(contraParteAceitante.profissao || "Não informado")}</p>
+                <p><strong>Telefone:</strong> {safeText(contraParteAceitante.telefone || "Não informado")}</p>
+                <p className="col-span-2"><strong>E-mail:</strong> {safeText(contraParteAceitante.email || "Não informado")}</p>
+                <p className="col-span-2"><strong>Endereço:</strong> {formatFullAddress(contraParteAceitante)}</p>
                 
                 {vendedorConjugeNome && (
                   <>
@@ -501,15 +306,15 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
           ) : (
             <>
               <h3 className="section-title">I - Proponente Comprador</h3>
-              <div className="grid grid-cols-2 gap-y-1.5 gap-x-6 text-[10px]">
-                <p><strong>Nome:</strong> {p.nome || contract.nomeCliente || "Não informado"}</p>
-                <p><strong>CPF:</strong> {p.cpf || "Não informado"}</p>
-                <p><strong>RG:</strong> {p.rg || "Não informado"}</p>
-                <p><strong>Estado Civil:</strong> {p.estadoCivil || "Não informado"}</p>
-                <p><strong>Profissão:</strong> {p.profissao || "Não informado"}</p>
-                <p><strong>Telefone:</strong> {p.telefone || "Não informado"}{p.whatsapp || p.celular ? ` / WhatsApp: ${p.whatsapp || p.celular}` : ''}</p>
-                <p className="col-span-2"><strong>E-mail:</strong> {p.email || '---'}</p>
-                <p className="col-span-2"><strong>Endereço:</strong> {p.endereco || '---'}{p.cep ? ` - CEP: ${p.cep}` : ''}{p.cidade ? ` - ${p.cidade}/${p.estado || ''}` : ''}</p>
+              <div className="grid grid-cols-2 gap-y-1.5 gap-x-6 text-[9.5px]">
+                <p><strong>Nome:</strong> {safeText(p.nome || contract.nomeCliente || "Não informado")}</p>
+                <p><strong>CPF:</strong> {safeText(p.cpf || "Não informado")}</p>
+                <p><strong>RG:</strong> {safeText(p.rg || "Não informado")}</p>
+                <p><strong>Estado Civil:</strong> {safeText(p.estadoCivil || "Não informado")}</p>
+                <p><strong>Profissão:</strong> {safeText(p.profissao || "Não informado")}</p>
+                <p><strong>Telefone:</strong> {safeText(p.telefone || "Não informado")}</p>
+                <p className="col-span-2"><strong>E-mail:</strong> {safeText(p.email || 'Não informado')}</p>
+                <p className="col-span-2"><strong>Endereço:</strong> {formatFullAddress(p)}</p>
                 
                 {spouseNome && (
                   <>
@@ -526,477 +331,815 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
               </div>
             </>
           )}
-        </section>
+        </section>,
+        firstSectionHeight
+      );
 
-        {isContra && (
+      // 3. Comprador details block (only if isContra)
+      if (isContra) {
+        addBlock(
           <section className="section avoid-break">
             <h3 className="section-title">Dados do Comprador</h3>
-            <div className="grid grid-cols-2 gap-y-1.5 gap-x-6 text-[10px]">
-              <p><strong>Nome:</strong> {p.nome || contract.nomeCliente || "Não informado"}</p>
-              <p><strong>CPF:</strong> {p.cpf || "Não informado"}</p>
-              <p><strong>RG:</strong> {p.rg || "Não informado"}</p>
-              <p><strong>Telefone:</strong> {p.telefone || "Não informado"}</p>
-              <p><strong>E-mail:</strong> {p.email || "Não informado"}</p>
+            <div className="grid grid-cols-2 gap-y-1.5 gap-x-6 text-[9.5px]">
+              <p><strong>Nome:</strong> {safeText(comp.nome || contract.nomeCliente || "Não informado")}</p>
+              <p><strong>CPF/CNPJ:</strong> {safeText(comp.cpfCnpj || comp.cpf || (contract as any).comprador?.documento || "Não informado")}</p>
+              <p><strong>RG:</strong> {safeText(comp.rg || (contract as any).comprador?.rg || "Não informado")}</p>
+              <p><strong>Estado Civil:</strong> {safeText(comp.estadoCivil || (contract as any).comprador?.estadoCivil || "Não informado")}</p>
+              <p><strong>Profissão:</strong> {safeText(comp.profissao || (contract as any).comprador?.profissao || "Não informado")}</p>
+              <p><strong>Telefone:</strong> {safeText(comp.telefone || (contract as any).comprador?.telefone || "Não informado")}</p>
+              <p className="col-span-2"><strong>E-mail:</strong> {safeText(comp.email || (contract as any).comprador?.email || "Não informado")}</p>
+              <p className="col-span-2"><strong>Endereço residencial:</strong> {formatFullAddress(comp || (contract as any).comprador)}</p>
+              
+              {spouseNome && (
+                <>
+                  <p><strong>Cônjuge do Comprador:</strong> {spouseNome}</p>
+                  <p><strong>CPF Cônjuge:</strong> {spouseCpf || "Não informado"}</p>
+                  {spouseRg && <p><strong>RG Cônjuge:</strong> {spouseRg}</p>}
+                  {spouseProfissao && <p><strong>Profissão Cônjuge:</strong> {spouseProfissao}</p>}
+                </>
+              )}
             </div>
-          </section>
-        )}
+          </section>,
+          spouseNome ? 55 : 34
+        );
+      }
 
+      // 4. Imovel Block
+      addBlock(
         <section className="section avoid-break">
           <h3 className="section-title">II - Identificação do Imóvel</h3>
-          <div className="grid grid-cols-2 gap-y-1.5 gap-x-6 text-[10px]">
-            <p><strong>Código:</strong> {(contract as any).imovelCodigo || dados.imovel?.codigo || "Não informado"}</p>
-            <p><strong>Edifício:</strong> {tituloFinal}</p>
-            <p className="col-span-2"><strong>Endereço:</strong> {contract.enderecoImovel || dados.imovel?.endereco || "Não informado"}</p>
-            <p><strong>Bairro:</strong> {(contract as any).imovelBairro || dados.imovel?.bairro || "Não informado"}</p>
-            <p><strong>Cidade/UF:</strong> {((contract as any).imovelCidade || dados.imovel?.cidade) ? `${(contract as any).imovelCidade || dados.imovel?.cidade || ""}${((contract as any).imovelEstado || dados.imovel?.estado) ? ` / ${(contract as any).imovelEstado || dados.imovel?.estado}` : ""}` : "Não informado"}</p>
-            <p><strong>Matrícula do imóvel:</strong> {imovelMatricula}</p>
-            <p><strong>CRI do imóvel:</strong> {imovelCri}</p>
-            <p><strong>Valor anunciado:</strong> {(contract as any).valorImovel ? formatCurrency(Number((contract as any).valorImovel)) : "Sob Consulta"}</p>
-            <p><strong>{isContra ? "Valor da contraproposta:" : "Valor da proposta:"}</strong> {contract.valor ? formatCurrency(Number(contract.valor)) : "Não informado"}</p>
+          <div className="grid grid-cols-2 gap-y-1.5 gap-x-6 text-[9.5px]">
+            <p className="col-span-2"><strong>Nome/Empreendimento:</strong> {safeText(tituloFinal)}</p>
+            <p className="col-span-2"><strong>Endereço do Imóvel:</strong> {formatFullAddress(imov || { endereco: contract.enderecoImovel })}</p>
+            <p><strong>Matrícula nº:</strong> {safeText(imovelMatricula)}</p>
+            <p><strong>Origem/CRI:</strong> {safeText(imovelCri)}</p>
+            <p><strong>Inscrição Imobiliária/Cadastro:</strong> {safeText(imov.inscricaoImobiliaria || imov.cadastroImobiliario || (contract as any).cadastroImobiliario || "Não informado")}</p>
+            <p><strong>Código do Imóvel:</strong> {safeText(imov.codigo || contract.codigoImovel || "Não informado")}</p>
           </div>
-          {tituloFinal && tituloFinal !== "Imóvel" ? (
-            <p className="mt-2 text-xs italic text-gray-600">
-              O imóvel objeto desta {isContra ? "contraproposta" : "proposta"}, localizado no <strong>{tituloFinal}</strong>, encontra-se matriculado sob nº <strong>{imovelMatricula}</strong>, junto ao <strong>{imovelCri}</strong>.
-            </p>
-          ) : (
-            <p className="mt-2 text-xs italic text-gray-600">
-              O imóvel objeto desta {isContra ? "contraproposta" : "proposta"} encontra-se matriculado sob nº <strong>{imovelMatricula}</strong>, junto ao <strong>{imovelCri}</strong>.
-            </p>
-          )}
-        </section>
+          <p className="mt-2 text-justify text-[9px] italic text-gray-600 leading-normal">
+            O imóvel objeto desta {isContra ? 'contraproposta' : 'proposta'} é aceito pelo proponente nas condições físicas em que se encontra, declarando ter vistoriado o mesmo.
+          </p>
+        </section>,
+        38
+      );
 
-        <section className="section prevent-page-break">
+      // 5. Pagamento Block
+      const totalValor = Number(dados.pagamento?.valorTotal || dados.termos?.valorTotal || contract.valorContrato || 0);
+      const valorExtenso = totalValor ? valorMonetarioPorExtenso(totalValor) : '';
+
+      addBlock(
+        <section className="section avoid-break">
           <h3 className="section-title">III - Valor e Forma de Pagamento</h3>
-          <div className="space-y-1 text-[10px]">
-            {isContra ? (
-              <p>A parte vendedora apresenta contraproposta ao proponente comprador, referente ao imóvel acima descrito, no valor de <strong>{formatCurrency(contract.valor)}</strong> ({dados.pagamento?.valorExtenso || dados.termos?.valorExtenso || (contract as any).valorPorExtenso || valorMonetarioPorExtenso(contract.valor)}).</p>
-            ) : (
-              <p>O proponente oferece pelo imóvel acima descrito o valor de <strong>{formatCurrency(contract.valor)}</strong> ({dados.pagamento?.valorExtenso || dados.termos?.valorExtenso || (contract as any).valorPorExtenso || valorMonetarioPorExtenso(contract.valor)}).</p>
-            )}
-            
-            {metodosDePagamento && metodosDePagamento.length > 0 && (
-              <div className="leading-tight">
-                <p className="font-semibold text-gray-800">Condições de Pagamento de Preferência:</p>
-                <ul className="list-disc pl-4 mt-0.5 space-y-0.5">
-                  {metodosDePagamento.map((m: string) => (
-                    <li key={m}>{m}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {outrasCondVal && (
-              <div className="bg-gray-50/50 p-1.5 rounded border border-gray-100/80 mt-1 whitespace-pre-line">
-                <strong>Outras Condições:</strong> {outrasCondVal}
-              </div>
-            )}
+          <p className="text-justify text-[9.5px] leading-relaxed">
+            O proponente oferece pelo imóvel acima descrito o valor total de <strong>{safeMoney(totalValor)}</strong> ({valorExtenso ? `${valorExtenso}` : 'Não informado'}), que será pago conforme as condições e prazos abaixo descritos:
+          </p>
 
-            {(() => {
-              const detalhesPagamentoFinal = getDetalhesPagamento(dados) || getDetalhesPagamento(contract);
-              if (!detalhesPagamentoFinal) return null;
-              const textoJaTemClausula = detalhesPagamentoFinal
-                .trim()
-                .toUpperCase()
-                .startsWith("CLÁUSULA");
-              return (
-                <div className="mt-2 text-[9.5px]">
-                  {textoJaTemClausula ? (
-                    <div style={{ whiteSpace: "pre-line" }} className="leading-relaxed bg-gray-50/50 p-2.5 rounded border border-gray-100 mt-1">
-                      {detalhesPagamentoFinal}
-                    </div>
-                  ) : (
-                    <div className="leading-relaxed bg-gray-50/50 p-2.5 rounded border border-gray-100 mt-1">
-                      <strong className="block mb-1">Detalhes do pagamento / contraproposta:</strong>
-                      <div style={{ whiteSpace: "pre-line" }}>
-                        {detalhesPagamentoFinal}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-          </div>
-        </section>
-
-        {renderClausulasSelecionadas()}
-
-        <div className="mt-4 text-right font-bold text-[9.5px]">
-          {dados.local || "Balneário Camboriú"}, {dados.data || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
-        </div>
-
-        <div className="pdf-signatures shrink-0">
-          {isContra ? (
-            <>
-              <div className="flex flex-col justify-end">
-                <div className="pdf-signature-line">
-                  {getNomeVendedor(dados) || getNomeVendedor(contract) || "Proprietário Vendedor"}
-                </div>
-                <div className="pdf-signature-role">Proprietário Vendedor</div>
-              </div>
-              <div className="flex flex-col justify-end">
-                <div className="pdf-signature-line">
-                  {p.nome || contract.nomeCliente || "Proponente Comprador"}
-                </div>
-                <div className="pdf-signature-role">Proponente Comprador</div>
-              </div>
-              <div className="flex flex-col justify-end col-span-2 max-w-[200px] mx-auto w-full mt-2">
-                <div className="pdf-signature-line">
-                  {safeText(empresa.nome)}
-                </div>
-                <div className="pdf-signature-role">Intermediadora / Testemunha</div>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="flex flex-col justify-end">
-                <div className="pdf-signature-line">
-                  {p.nome || contract.nomeCliente || "Proponente Comprador"}
-                </div>
-                <div className="pdf-signature-role">Proponente Comprador</div>
-              </div>
-              <div className="flex flex-col justify-end">
-                <div className="pdf-signature-line">
-                  {safeText(empresa.nome)}
-                </div>
-                <div className="pdf-signature-role">Intermediadora / Testemunha</div>
-              </div>
-            </>
+          {metodosDePagamento && metodosDePagamento.length > 0 && (
+            <div className="mt-2 space-y-1 pl-4">
+              {metodosDePagamento.map((item: any, index: number) => {
+                const subValue = Number(item.valor) || 0;
+                return (
+                  <div key={index} className="text-[9px] text-gray-800 list-item list-disc">
+                    <strong>{safeText(item.tipo || 'Parcela')}</strong>: {safeMoney(subValue)}
+                    {item.vencimento && ` com vencimento em ${safeDate(item.vencimento)}`}
+                    {item.observacao && ` (${safeText(item.observacao)})`}
+                  </div>
+                );
+              })}
+            </div>
           )}
-        </div>
-      </div>
-    );
-  };
 
-  const renderProposta = () => renderPropostaOrContraproposta(false);
-  const renderContraproposta = () => renderPropostaOrContraproposta(true);
-
-  const renderAceite = () => {
-    const a = dados.aceitante || {};
-    const p = dados.proponente || {};
-
-    const parteAceitante = getParteAceitante({ ...dados, ...contract });
-
-    console.log("formData completo:", contract);
-    console.log("parteAceitanteTipo:", (contract as any).parteAceitanteTipo || dados.parteAceitanteTipo);
-    console.log("parteAceitante detectada:", parteAceitante);
-    console.log("vendedorNome:", (contract as any).vendedorNome || dados.vendedorNome);
-    console.log("compradorNome:", (contract as any).compradorNome || dados.compradorNome);
-    
-    // Extracted buyers/proponents data
-    const compradorNome = valorOuNaoInformado(
-      (contract as any).compradorNome,
-      (contract as any).proponenteNome,
-      (contract as any).nomeCompleto,
-      contract.nomeCliente,
-      getNomeComprador(contract),
-      getNomeComprador(dados),
-      a.nome,
-      p.nome
-    );
-    const compradorCpf = a.cpf || p.cpf || (contract as any).compradorCpf || (contract as any).proponenteCpf || (contract as any).cpf || "";
-    const compradorRg = a.rg || p.rg || (contract as any).compradorRg || (contract as any).proponenteRg || (contract as any).rg || "";
-    const compradorEstadoCivil = a.estadoCivil || p.estadoCivil || (contract as any).compradorEstadoCivil || (contract as any).proponenteEstadoCivil || "Solteiro(a)";
-    const compradorProfissao = a.profissao || p.profissao || (contract as any).compradorProfissao || (contract as any).proponenteProfissao || "";
-    const compradorTelefone = a.telefone || p.telefone || (contract as any).compradorTelefone || (contract as any).proponenteTelefone || "";
-    const compradorWhatsapp = a.whatsapp || p.whatsapp || a.celular || p.whatsapp || (contract as any).compradorWhatsapp || (contract as any).proponenteWhatsapp || "";
-    const compradorEmail = a.email || p.email || (contract as any).compradorEmail || (contract as any).proponenteEmail || "";
-    const compradorEndereco = a.endereco || p.endereco || (contract as any).compradorEndereco || (contract as any).proponenteEndereco || "";
-    const compradorCep = a.cep || p.cep || (contract as any).compradorCep || (contract as any).proponenteCep || "";
-    const compradorCidade = a.cidade || p.cidade || (contract as any).compradorCidade || (contract as any).proponenteCidade || "";
-    const compradorEstado = a.estado || p.estado || (contract as any).compradorEstado || (contract as any).proponenteEstado || "";
-
-    // Spouse data
-    const spouseNome = a.vendedorConjugeNome || a.compradorConjugeNome || a.conjugeNome || a.aceitanteConjugeNome || p.compradorConjugeNome || p.conjugeNome || (contract as any).compradorConjugeNome || (contract as any).proponenteConjugeNome || "";
-    const spouseCpf = a.vendedorConjugeCpf || a.compradorConjugeCpf || a.conjugeCpf || a.aceitanteConjugeCpf || p.compradorConjugeCpf || p.conjugeCpf || (contract as any).compradorConjugeCpf || (contract as any).proponenteConjugeCpf || "";
-    const spouseRg = a.vendedorConjugeRg || a.compradorConjugeRg || a.conjugeRg || p.compradorConjugeRg || (contract as any).compradorConjugeRg || "";
-    const spouseProfissao = a.vendedorConjugeProfissao || a.compradorConjugeProfissao || a.conjugeProfissao || p.compradorConjugeProfissao || (contract as any).compradorConjugeProfissao || "";
-    const spouseTelefone = a.vendedorConjugeTelefone || a.compradorConjugeTelefone || a.conjugeTelefone || p.compradorConjugeTelefone || (contract as any).compradorConjugeTelefone || "";
-    const spouseEmail = a.vendedorConjugeEmail || a.compradorConjugeEmail || a.conjugeEmail || p.compradorConjugeEmail || (contract as any).compradorConjugeEmail || "";
-    const spouseEndereco = a.vendedorConjugeEndereco || a.compradorConjugeEndereco || a.conjugeEndereco || p.compradorConjugeEndereco || (contract as any).compradorConjugeEndereco || "";
-
-    const valorAceiteFinal =
-      contract.valor ||
-      (contract as any).valorAceite ||
-      (contract as any).valorTotalNegociado ||
-      (contract as any).valorProposta ||
-      (contract as any).valorNegociado ||
-      (contract as any).valorContraproposta ||
-      dados.objeto?.valorAceite ||
-      0;
-
-    const dataDocumentoBase =
-      (contract as any).dataDocumentoBase ||
-      (contract as any).dataProposta ||
-      (contract as any).criadoEm ||
-      (contract as any).createdAt ||
-      (contract as any).dataCriacao ||
-      dados.objeto?.dataDocumentoBase ||
-      "";
-
-    const imovelEndereco = contract.enderecoImovel || (contract as any).imovelEndereco || dados.imovel?.endereco || "Não informado";
-    const imovelBairro = (contract as any).imovelBairro || dados.imovel?.bairro || "Não informado";
-    const imovelCidade = (contract as any).imovelCidade || dados.imovel?.cidade || "Não informado";
-    const imovelEstado = (contract as any).imovelEstado || dados.imovel?.estado || "Não informado";
-    const imovelCodigo = (contract as any).imovelCodigo || dados.imovel?.codigo || "Não informado";
-    const imovelTitulo = contract.imovelTitulo || (contract as any).imovelNomeEdificio || (contract as any).imovelTitulo || dados.imovel?.titulo || "Não informado";
-    const imovelMatricula = (contract as any).imovelMatricula || dados.imovel?.matricula || "Não informado";
-    const imovelCri = String((contract as any).imovelCri || dados.imovel?.cri || dados.imovel?.criImovel || "").trim() || "Não informado";
-
-    const condicoesFinal = getCondicoesPagamentoFinal(contract) || getCondicoesPagamentoFinal(dados) || "";
-    const outrasFinal = (contract as any).outrasCondicoes || (contract as any).outrasCondicoesFinal || dados.outrasCondicoes || "";
-
-    const localFinal = dados.local || contract.local || "Balneário Camboriú - SC";
-    const dataFinal = dados.data || contract.data || "";
-
-    return (
-      <div className="pdf-compact-content relative z-10 w-full bg-white font-sans text-[10px]">
-        <div className="pdf-document-title">
-          ACEITE DE TERMOS DE PROPOSTA
-        </div>
-
-        <section className="section avoid-break">
-          <h3 className="section-title">I - Identificação da Parte que Manifesta o Aceite</h3>
-          <div className="grid grid-cols-2 gap-y-1.5 gap-x-6">
-            <p><strong>Nome Completo:</strong> {parteAceitante.nome || 'Não informado'}</p>
-            <p><strong>CPF:</strong> {parteAceitante.cpf || 'Não informado'}</p>
-            <p><strong>RG:</strong> {parteAceitante.rg || 'Não informado'}</p>
-            <p><strong>Estado Civil:</strong> {parteAceitante.estadoCivil || 'Não informado'}</p>
-            <p><strong>Profissão:</strong> {parteAceitante.profissao || 'Não informado'}</p>
-            <p><strong>Telefone:</strong> {parteAceitante.telefone || 'Não informado'}{parteAceitante.whatsapp ? ` / WhatsApp: ${parteAceitante.whatsapp}` : ''}</p>
-            <p className="col-span-2"><strong>E-mail:</strong> {parteAceitante.email || 'Não informado'}</p>
-            <p className="col-span-2"><strong>Endereço Residencial:</strong> {parteAceitante.endereco || 'Não informado'}{parteAceitante.cep ? ` - CEP: ${parteAceitante.cep}` : ''}{parteAceitante.cidade ? ` - ${parteAceitante.cidade}/${parteAceitante.estado}` : ''}</p>
-          </div>
-        </section>
-
-        <section className="section avoid-break">
-          <h3 className="section-title">II - Objeto e Efeitos do Aceite</h3>
-          <div className="space-y-2">
-            <p className="font-bold text-xs p-1.5 bg-gray-50 rounded text-center border border-dashed border-gray-300 uppercase leading-none">
-              {dados.objeto?.tipoAceite === 'contraproposta' 
-                ? "ACEITA INTEGRALMENTE A CONTRAPROPOSTA APRESENTADA" 
-                : "ACEITA INTEGRALMENTE A PROPOSTA APRESENTADA"}
-            </p>
-            <div className="grid grid-cols-2 gap-y-1.5 gap-x-6">
-              <p><strong>Nome do Edifício:</strong> {imovelTitulo || "Não informado"}</p>
-              <p><strong>Endereço:</strong> {imovelEndereco || "Não informado"}</p>
-              <p><strong>Bairro:</strong> {imovelBairro || "Não informado"}</p>
-              <p><strong>Cidade/UF:</strong> {imovelCidade || "Não informado"} / {imovelEstado || "Não informado"}</p>
-              <p><strong>Matrícula do imóvel:</strong> {imovelMatricula || "Não informado"}</p>
-              <p><strong>CRI do imóvel:</strong> {imovelCri || "Não informado"}</p>
-              <p><strong>Valor do Aceite:</strong> {formatCurrency(valorAceiteFinal)}</p>
-              <p><strong>Data do Documento Base:</strong> {formatarDataBR(dataDocumentoBase)}</p>
-              <p className="col-span-2"><strong>Forma de Pagamento:</strong> {(contract as any).formaPagamento || getFormaPagamento(contract) || getFormaPagamento(dados) || "Não informado"}</p>
-              <p className="col-span-2"><strong>Condições de Pagamento:</strong> {condicoesFinal || "Não informado"}</p>
+          {showDetalhes && (
+            <div className="mt-3 p-2 bg-gray-50 rounded border border-gray-150">
+              <h4 className="font-bold text-[9px] uppercase text-gray-700 border-b border-gray-200 pb-0.5 mb-1">Detalhes do pagamento / contraproposta</h4>
+              <p className="text-justify text-[9px] text-gray-800 whitespace-pre-wrap leading-relaxed">{rawDetalhes}</p>
             </div>
-          </div>
-        </section>
+          )}
 
-        <section className="section avoid-break">
-          <h3 className="section-title">III - TERMOS E CONDIÇÕES DA PROPOSTA ACEITA</h3>
-          <div className="leading-relaxed text-justify pl-2 border-l border-gold/20 text-[9.5px]">
-            <p className="font-semibold text-gray-800 mb-1">Condições de pagamento:</p>
-            <div style={{ whiteSpace: "pre-line" }}>
-              {condicoesFinal || "Não informado"}
+          {showOutras && (
+            <div className="mt-3 p-2 bg-gray-50 rounded border border-gray-150">
+              <h4 className="font-bold text-[9px] uppercase text-gray-700 border-b border-gray-200 pb-0.5 mb-1">Outras Condições</h4>
+              <p className="text-justify text-[9px] text-gray-800 whitespace-pre-wrap leading-relaxed">{rawOutras}</p>
             </div>
-          </div>
-        </section>
+          )}
+        </section>,
+        25 + (metodosDePagamento.length * 4) + (showDetalhes ? estimateHeight(rawDetalhes) + 12 : 0) + (showOutras ? estimateHeight(rawOutras) + 12 : 0)
+      );
 
-        {renderClausulasSelecionadas()}
+      // 6. Selected Clauses (Each clause rendered as a separate block to ensure zero text cutoffs across pages!)
+      const listClauses = dados.clausulasSelecionadas || [];
+      if (listClauses.length > 0) {
+        listClauses.forEach((c: any, idx: number) => {
+          const cText = c.texto || '';
+          const estimatedClauseHeight = estimateHeight(cText) + 12;
 
-        <div className="mt-8 text-right font-bold text-[9.5px]">
-          {localFinal}, {dataFinal}
-        </div>
+          addBlock(
+            <section className="section mt-2 pt-2 border-t border-gray-150 avoid-break leading-relaxed text-[9px] text-gray-800">
+              {idx === 0 && (
+                <h3 className="section-title text-[9.5px] uppercase font-black text-black mb-2 border-b border-gray-200 pb-0.5">
+                  Cláusulas e Condições Gerais
+                </h3>
+              )}
+              <div className="text-justify">
+                <p className="font-bold mb-0.5 text-[9.5px]">Cláusula {idx + 1}ª - {c.titulo || 'Cláusula Adicional'}:</p>
+                <p className="whitespace-pre-wrap pl-2 border-l border-gold/25 text-gray-700">{safeText(cText)}</p>
+              </div>
+            </section>,
+            estimatedClauseHeight
+          );
+        });
+      }
 
-        <div className="pdf-signatures shrink-0">
+      // 7. Date Place
+      addBlock(
+        <div className="mt-4 text-right font-bold text-[10px] text-black">
+          {safeText(dados.local || 'Balneário Camboriú')}, {safeText(dados.data || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }))}
+        </div>,
+        12
+      );
+
+      // 8. Signatures Block (Forced as a single block)
+      addBlock(
+        <div className="pdf-signatures mt-6 pb-2 avoid-break">
           <div className="flex flex-col justify-end">
-            <div className="pdf-signature-line">
-              {parteAceitante.nome || "Assinatura da Parte Aceitante"}
+            <div className="pdf-signature-line text-black font-bold">
+              {safeText(contract.nomeCliente || p.nome || comp.nome || 'COMPRADOR')}
             </div>
-            <div className="pdf-signature-role">Assinatura da Parte Aceitante</div>
+            <div className="pdf-signature-role">Comprador / Proponente</div>
           </div>
           <div className="flex flex-col justify-end">
-            <div className="pdf-signature-line">
+            <div className="pdf-signature-line text-black font-bold">
+              {safeText(contract.nomeVendedor || vend.nome || contraParteAceitante.nome || 'VENDEDOR')}
+            </div>
+            <div className="pdf-signature-role">Vendedor / Proprietário</div>
+          </div>
+          <div className="flex flex-col justify-end col-span-2 max-w-[200px] mx-auto w-full mt-3">
+            <div className="pdf-signature-line text-gray-800 font-bold">
               {safeText(empresa.nome)}
             </div>
             <div className="pdf-signature-role">Intermediadora / Testemunha</div>
           </div>
-        </div>
-      </div>
-    );
-  };
+        </div>,
+        45
+      );
 
-  const renderArrasConfirmatorios = () => {
-    const comp = dados.proponente || {};
-    const vend = dados.vendedor || (contract as any).vendedor || {};
-    const arr = dados.arras || {};
-    const imov = dados.imovel || {};
+    } else if (tipoContrato === 'arras_confirmatorios') {
+      const comp = dados.proponente || {};
+      const vend = dados.vendedor || (contract as any).vendedor || {};
+      const arr = dados.arras || {};
+      const imov = dados.imovel || {};
 
-    return (
-      <div className="pdf-compact-content relative z-10 w-full">
+      const spouseNome = comp.compradorConjugeNome || comp.conjugeNome || "";
+      const spouseCpf = comp.compradorConjugeCpf || comp.conjugeCpf || "";
+      const spouseRg = comp.compradorConjugeRg || comp.conjugeRg || "";
+
+      const vendSpouseNome = vend.vendedorConjugeNome || vend.conjugeNome || "";
+      const vendSpouseCpf = vend.vendedorConjugeCpf || vend.conjugeCpf || "";
+      const vendSpouseRg = vend.vendedorConjugeRg || vend.conjugeRg || "";
+
+      // 1. Title
+      addBlock(
         <div className="pdf-document-title font-display font-black text-black">
           CONTRATO DE ARRAS CONFIRMATÓRIAS E COMPROMISSO DE COMPRA E VENDA
-        </div>
+        </div>,
+        15
+      );
 
-        {/* COMPRADOR */}
+      // 2. Comprador
+      addBlock(
         <section className="section avoid-break">
           <h3 className="section-title">I - Comprador / Proponente</h3>
-          <div className="grid grid-cols-2 gap-y-1 gap-x-6">
+          <div className="grid grid-cols-2 gap-y-1.5 gap-x-6 text-[9.5px]">
             <p><strong>Nome:</strong> {safeText(contract.nomeCliente || comp.nome)}</p>
             <p><strong>CPF/CNPJ:</strong> {safeText(comp.cpf || comp.cpfCnpj || (contract as any).comprador?.documento || "---")}</p>
             <p><strong>RG:</strong> {safeText(comp.rg || (contract as any).comprador?.rg || "---")}</p>
             <p><strong>Estado Civil:</strong> {safeText(comp.estadoCivil || (contract as any).comprador?.estadoCivil || "---")}</p>
             <p><strong>Profissão:</strong> {safeText(comp.profissao || (contract as any).comprador?.profissao || "---")}</p>
-            <p><strong>Telefone:</strong> {safeText(comp.telefone || (contract as any).comprador?.telefone || "---")}{comp.whatsapp ? ` / WhatsApp: ${safeText(comp.whatsapp)}` : ''}</p>
+            <p><strong>Telefone:</strong> {safeText(comp.telefone || (contract as any).comprador?.telefone || "---")}</p>
             <p className="col-span-2"><strong>E-mail:</strong> {safeText(comp.email || (contract as any).comprador?.email || "---")}</p>
-            <p className="col-span-2"><strong>Endereço:</strong> {safeText(comp.endereco || (contract as any).comprador?.endereco || "---")}{comp.cep ? ` - CEP: ${safeText(comp.cep)}` : ''}{comp.cidade ? ` - ${safeText(comp.cidade)}/${safeText(comp.estado || '')}` : ''}</p>
-            {(comp.compradorConjugeNome || comp.conjugeNome) && (
+            <p className="col-span-2"><strong>Endereço:</strong> {formatFullAddress(comp || (contract as any).comprador)}</p>
+            
+            {spouseNome && (
               <>
-                <p><strong>Cônjuge do Comprador:</strong> {comp.compradorConjugeNome || comp.conjugeNome}</p>
-                <p><strong>CPF Cônjuge:</strong> {comp.compradorConjugeCpf || comp.conjugeCpf || "Não informado"}</p>
-                {(comp.compradorConjugeRg || comp.conjugeRg) && <p><strong>RG Cônjuge:</strong> {comp.compradorConjugeRg || comp.conjugeRg}</p>}
-                {(comp.compradorConjugeProfissao || comp.conjugeProfissao) && <p><strong>Profissão Cônjuge:</strong> {comp.compradorConjugeProfissao || comp.conjugeProfissao}</p>}
-                {(comp.compradorConjugeTelefone || comp.conjugeTelefone) && <p><strong>Telefone Cônjuge:</strong> {comp.compradorConjugeTelefone || comp.conjugeTelefone}</p>}
-                {(comp.compradorConjugeEmail || comp.conjugeEmail) && <p><strong>E-mail Cônjuge:</strong> {comp.compradorConjugeEmail || comp.conjugeEmail}</p>}
-                {(comp.compradorConjugeEndereco || comp.conjugeEndereco) && <p className="col-span-2"><strong>Endereço Cônjuge:</strong> {comp.compradorConjugeEndereco || comp.conjugeEndereco}</p>}
+                <p><strong>Cônjuge Comprador:</strong> {spouseNome}</p>
+                <p><strong>CPF Cônjuge:</strong> {spouseCpf || "Não informado"}</p>
+                {spouseRg && <p><strong>RG Cônjuge:</strong> {spouseRg}</p>}
               </>
             )}
           </div>
-        </section>
+        </section>,
+        spouseNome ? 55 : 34
+      );
 
-        {/* VENDEDOR */}
+      // 3. Vendedor
+      addBlock(
         <section className="section avoid-break">
           <h3 className="section-title">II - Vendedor / Proprietário</h3>
-          <div className="grid grid-cols-2 gap-y-1 gap-x-6">
+          <div className="grid grid-cols-2 gap-y-1.5 gap-x-6 text-[9.5px]">
             <p><strong>Nome:</strong> {safeText(contract.nomeVendedor || vend.nome)}</p>
             <p><strong>CPF/CNPJ:</strong> {safeText(vend.cpf || vend.cpfCnpj || (contract as any).vendedor?.documento || "---")}</p>
             <p><strong>RG:</strong> {safeText(vend.rg || (contract as any).vendedor?.rg || "---")}</p>
             <p><strong>Estado Civil:</strong> {safeText(vend.estadoCivil || (contract as any).vendedor?.estadoCivil || "---")}</p>
             <p><strong>Profissão:</strong> {safeText(vend.profissao || (contract as any).vendedor?.profissao || "---")}</p>
-            <p><strong>Telefone:</strong> {safeText(vend.telefone || (contract as any).vendedor?.telefone || "---")}{vend.whatsapp ? ` / WhatsApp: ${safeText(vend.whatsapp)}` : ''}</p>
+            <p><strong>Telefone:</strong> {safeText(vend.telefone || (contract as any).vendedor?.telefone || "---")}</p>
             <p className="col-span-2"><strong>E-mail:</strong> {safeText(vend.email || (contract as any).vendedor?.email || "---")}</p>
-            <p className="col-span-2"><strong>Endereço:</strong> {safeText(vend.endereco || (contract as any).vendedor?.endereco || "---")}{vend.cep ? ` - CEP: ${safeText(vend.cep)}` : ''}{vend.cidade ? ` - ${safeText(vend.cidade)}/${safeText(vend.estado || '')}` : ''}</p>
-            {(vend.vendedorConjugeNome || vend.conjugeNome) && (
+            <p className="col-span-2"><strong>Endereço:</strong> {formatFullAddress(vend || (contract as any).vendedor)}</p>
+            
+            {vendSpouseNome && (
               <>
-                <p><strong>Cônjuge do Vendedor:</strong> {vend.vendedorConjugeNome || vend.conjugeNome}</p>
-                <p><strong>CPF Cônjuge:</strong> {vend.vendedorConjugeCpf || vend.conjugeCpf || "Não informado"}</p>
-                {(vend.vendedorConjugeRg || vend.conjugeRg) && <p><strong>RG Cônjuge:</strong> {vend.vendedorConjugeRg || vend.conjugeRg}</p>}
-                {(vend.vendedorConjugeProfissao || vend.conjugeProfissao) && <p><strong>Profissão Cônjuge:</strong> {vend.vendedorConjugeProfissao || vend.conjugeProfissao}</p>}
-                {(vend.vendedorConjugeTelefone || vend.conjugeTelefone) && <p><strong>Telefone Cônjuge:</strong> {vend.vendedorConjugeTelefone || vend.conjugeTelefone}</p>}
-                {(vend.vendedorConjugeEmail || vend.conjugeEmail) && <p><strong>E-mail Cônjuge:</strong> {vend.vendedorConjugeEmail || vend.conjugeEmail}</p>}
-                {(vend.vendedorConjugeEndereco || vend.conjugeEndereco) && <p className="col-span-2"><strong>Endereço Cônjuge:</strong> {vend.vendedorConjugeEndereco || vend.conjugeEndereco}</p>}
+                <p><strong>Cônjuge Vendedor:</strong> {vendSpouseNome}</p>
+                <p><strong>CPF Cônjuge:</strong> {vendSpouseCpf || "Não informado"}</p>
+                {vendSpouseRg && <p><strong>RG Cônjuge:</strong> {vendSpouseRg}</p>}
               </>
             )}
           </div>
-        </section>
+        </section>,
+        vendSpouseNome ? 55 : 34
+      );
 
-        {/* IMÓVEL */}
+      // 4. Imovel
+      const imovelMatricula = imov.matricula || (contract as any).imovelMatricula || "Não informada";
+      const cartorioCompleto = imov.cri || imov.cartorioRegistroImoveis || "Não informado";
+      addBlock(
         <section className="section avoid-break">
           <h3 className="section-title">III - Identificação do Imóvel</h3>
-          <div className="grid grid-cols-2 gap-y-1 gap-x-6">
-            <p className="col-span-2"><strong>Endereço:</strong> {safeText(contract.enderecoImovel || imov.endereco || "Não informado")}</p>
-            <p><strong>Matrícula nº:</strong> {safeText(imov.matricula || (contract as any)?.imovelMatricula || "Não informada")}</p>
-            <p><strong>CRI:</strong> {safeText(imov.cri || (contract as any)?.imovelCri || "Não informado")}</p>
-            <p><strong>Tipo:</strong> {safeText(imov.tipo || "Não informado")}</p>
-            <p className="col-span-2"><strong>Descrição:</strong> {safeText(imov.descricao || imov.titulo || "")}</p>
+          <div className="grid grid-cols-2 gap-y-1.5 gap-x-6 text-[9.5px]">
+            <p className="col-span-2"><strong>Imóvel/Endereço:</strong> {formatFullAddress(imov || { heading: contract.enderecoImovel })}</p>
+            <p><strong>Matrícula nº:</strong> {safeText(imovelMatricula)}</p>
+            <p><strong>CRI/Cartório:</strong> {safeText(cartorioCompleto)}</p>
+            <p><strong>Inscrição Cadastral:</strong> {safeText(imov.inscricaoImobiliaria || (contract as any).cadastroImobiliario || "Não informado")}</p>
+            <p><strong>Código do Imóvel:</strong> {safeText(imov.codigo || contract.codigoImovel || "Não informado")}</p>
           </div>
-        </section>
+        </section>,
+        30
+      );
 
-        {/* DADOS DAS ARRAS */}
+      // 5. Arras e Condicoes
+      const valorTotal = Number(arr.valorTotalNegocio || contract.valorContrato || 0);
+      const valorArras = Number(arr.valorArras || 0);
+      const devExtenso = arr.condicoesDevolucao || '';
+      const obsText = arr.observacoes || '';
+
+      addBlock(
         <section className="section avoid-break">
-          <h3 className="section-title">IV - Condições das Arras e do Negócio</h3>
-          <div className="grid grid-cols-2 gap-y-1 gap-x-6 bg-gray-50/50 p-2 rounded border border-gray-100">
-            <p><strong>Valor Total do Imóvel:</strong> {safeMoney(arr.valorImovel || contract.valorImovel || contract.valor)}</p>
-            <p><strong>Valor das Arras / Sinal:</strong> {safeMoney(arr.valorArras || (contract as any).valorArras)}</p>
-            <p><strong>Forma de Pagamento:</strong> {safeText(arr.formaPagamentoArras || (contract as any).formaPagamentoArras || "Não informada")}</p>
-            <p><strong>Data do Pagamento:</strong> {safeText(arr.dataPagamentoArras || (contract as any).dataPagamentoArras || "Não informada")}</p>
-            <p><strong>Prazo Contrato Definitivo:</strong> {safeText(arr.prazoContratoDefinitivo || (contract as any).prazoContratoDefinitivo || "Não informado")}</p>
-            <p><strong>Prazo para Escritura:</strong> {safeText(arr.prazoEscritura || (contract as any).prazoEscritura || "Não informado")}</p>
-            {arr.condicoesDevolucao && <p className="col-span-2"><strong>Condições para Devolução:</strong> {safeText(arr.condicoesDevolucao)}</p>}
-            {arr.condicoesDesistenciaComprador && <p className="col-span-2"><strong>Desistência do Comprador:</strong> {safeText(arr.condicoesDesistenciaComprador)}</p>}
-            {arr.condicoesDesistenciaVendedor && <p className="col-span-2"><strong>Desistência do Vendedor:</strong> {safeText(arr.condicoesDesistenciaVendedor)}</p>}
-            {contract.observacoes && <p className="col-span-2"><strong>Observações Adicionais:</strong> {safeText(contract.observacoes)}</p>}
-            {(() => {
-              const detalhesPagamentoFinal = getDetalhesPagamento(dados) || getDetalhesPagamento(contract);
-              if (!detalhesPagamentoFinal) return null;
-              const textoJaTemClausula = detalhesPagamentoFinal
-                .trim()
-                .toUpperCase()
-                .startsWith("CLÁUSULA");
-              return (
-                <div className="col-span-2 mt-2 border-t border-gray-100 pt-2 text-[9.5px]">
-                  {textoJaTemClausula ? (
-                    <div style={{ whiteSpace: "pre-line" }} className="leading-relaxed whitespace-pre-line">
-                      {detalhesPagamentoFinal}
-                    </div>
-                  ) : (
-                    <div className="leading-relaxed">
-                      <strong>Detalhes do pagamento / contraproposta:</strong>
-                      <div style={{ whiteSpace: "pre-line" }} className="whitespace-pre-line mt-1">
-                        {detalhesPagamentoFinal}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
+          <h3 className="section-title">IV - Das Arras e Condições do Negócio</h3>
+          <div className="grid grid-cols-2 gap-y-1.5 gap-x-6 text-[9.5px]">
+            <p><strong>Valor Total do Negócio:</strong> {safeMoney(valorTotal)}</p>
+            <p><strong>Valor do Sinal/Arras:</strong> {safeMoney(valorArras)}</p>
+            <p><strong>Forma do Sinal:</strong> {safeText(arr.formaPagamentoArras || "Não informado")}</p>
+            <p><strong>Vencimento do Sinal:</strong> {safeDate(arr.dataPagamentoArras)}</p>
           </div>
-        </section>
 
-        {renderClausulasSelecionadas()}
+          {devExtenso && (
+            <div className="mt-2 text-[9px] text-gray-700 bg-gray-50 p-2 rounded border border-gray-150">
+              <strong className="text-[9.5px] block text-gray-800 uppercase mb-0.5">Condições de devolução do sinal:</strong> 
+              {safeText(devExtenso)}
+            </div>
+          )}
 
-        <div className="mt-4 text-right font-bold text-[9.5px]">
+          {obsText && (
+            <div className="mt-2 text-[9px] text-gray-700 whitespace-pre-wrap leading-relaxed">
+              <strong>Observações Gerais:</strong> {safeText(obsText)}
+            </div>
+          )}
+
+          {showDetalhes && (
+            <div className="mt-3 p-2 bg-gray-50 rounded border border-gray-150">
+              <h4 className="font-bold text-[9px] uppercase text-gray-750 pb-0.5 mb-1 border-b border-gray-200">Detalhes do pagamento</h4>
+              <p className="text-justify text-[9px] text-gray-800 whitespace-pre-wrap leading-relaxed">{rawDetalhes}</p>
+            </div>
+          )}
+
+          {showOutras && (
+            <div className="mt-3 p-2 bg-gray-50 rounded border border-gray-150">
+              <h4 className="font-bold text-[9px] uppercase text-gray-750 pb-0.5 mb-1 border-b border-gray-200">Outras Condições</h4>
+              <p className="text-justify text-[9px] text-gray-800 whitespace-pre-wrap leading-relaxed">{rawOutras}</p>
+            </div>
+          )}
+        </section>,
+        35 + (devExtenso ? estimateHeight(devExtenso) + 8 : 0) + (obsText ? estimateHeight(obsText) + 8 : 0) + (showDetalhes ? estimateHeight(rawDetalhes) + 12 : 0) + (showOutras ? estimateHeight(rawOutras) + 12 : 0)
+      );
+
+      // 6. Selected Clauses (Individualized Blocks)
+      const listClauses = dados.clausulasSelecionadas || [];
+      if (listClauses.length > 0) {
+        listClauses.forEach((c: any, idx: number) => {
+          const cText = c.texto || '';
+          addBlock(
+            <section className="section avoid-break mt-2 pt-2 border-t border-gray-150 text-[9px] text-gray-800">
+              {idx === 0 && <h3 className="section-title text-[9.5px] uppercase font-black text-black mb-2 border-b border-gray-200 pb-0.5">Cláusulas e Condições Gerais</h3>}
+              <div className="text-justify leading-relaxed">
+                <p className="font-bold mb-0.5">Cláusula {idx + 1}ª - {c.titulo}:</p>
+                <p className="whitespace-pre-wrap pl-2 border-l border-gold/25 text-gray-700">{safeText(cText)}</p>
+              </div>
+            </section>,
+            estimateHeight(cText) + 12
+          );
+        });
+      }
+
+      // 7. Date Block
+      addBlock(
+        <div className="mt-4 text-right font-bold text-[10px] text-black">
           {safeText(dados.local || 'Balneário Camboriú')}, {safeText(dados.data || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }))}
-        </div>
+        </div>,
+        12
+      );
 
-        <div className="pdf-signatures shrink-0">
+      // 8. Signatures Block
+      addBlock(
+        <div className="pdf-signatures mt-6 pb-2 avoid-break">
           <div className="flex flex-col justify-end">
-            <div className="pdf-signature-line">
+            <div className="pdf-signature-line text-black font-bold">
               {safeText(contract.nomeCliente || comp.nome || 'COMPRADOR')}
             </div>
             <div className="pdf-signature-role">Comprador</div>
           </div>
           <div className="flex flex-col justify-end">
-            <div className="pdf-signature-line">
+            <div className="pdf-signature-line text-black font-bold">
               {safeText(contract.nomeVendedor || vend.nome || 'VENDEDOR')}
             </div>
             <div className="pdf-signature-role">Vendedor / Proprietário</div>
           </div>
-          <div className="flex flex-col justify-end col-span-2 max-w-[200px] mx-auto w-full mt-2">
-            <div className="pdf-signature-line">
+          <div className="flex flex-col justify-end col-span-2 max-w-[200px] mx-auto w-full mt-3">
+            <div className="pdf-signature-line text-gray-800 font-bold">
               {safeText(empresa.nome)}
             </div>
             <div className="pdf-signature-role">Intermediadora / Testemunha</div>
           </div>
-        </div>
-      </div>
-    );
+        </div>,
+        45
+      );
+
+    } else if (tipoContrato === 'locacao_temporaria') {
+      const l = dados.locador || {};
+      const t = dados.locatario || {};
+      const imov = dados.imovel || {};
+      const p = dados.prazo || {};
+      const v = dados.valores || {};
+      const r = dados.regras || {};
+
+      const percComissao = v.percentualComissaoImobiliaria ?? 20;
+      const valorComissao = v.valorComissaoImobiliaria ?? ((Number(v.valorTotalLocacao) || 0) * percComissao / 100);
+      const valorRepasse = v.valorRepassadoProprietario ?? v.valorRepasseLocador ?? ((Number(v.valorTotalLocacao) || 0) - valorComissao);
+
+      // 1. Title Block
+      addBlock(
+        <div className="text-center space-y-0.5 mb-2">
+          <h1 className="text-xs font-bold uppercase tracking-tight border-b border-gray-200 pb-1 text-black">CONTRATO DE LOCAÇÃO TEMPORÁRIA DE IMÓVEL</h1>
+        </div>,
+        14
+      );
+
+      // 2. Intro Text
+      addBlock(
+        <p className="text-justify indent-6 text-[9.5px] text-gray-800 mt-2 leading-relaxed">
+          Pelo presente instrumento particular, de um lado o <strong>LOCADOR</strong>, qualificado neste contrato, e de outro lado o <strong>LOCATÁRIO</strong>, também qualificado, têm entre si justo e contratado a locação temporária do imóvel descrito, mediante as cláusulas e condições abaixo.
+        </p>,
+        15
+      );
+
+      // 3. Locador Block
+      addBlock(
+        <section className="space-y-1 mt-2 avoid-break">
+          <h3 className="font-bold uppercase bg-gray-50 px-2 py-0.5 border-l-2 border-primary-black text-[9px] text-black">I - Dados do Locador (Proprietário)</h3>
+          <div className="grid grid-cols-2 gap-y-0.5 gap-x-4 pl-2 text-[9.5px] text-gray-800">
+            <p className="col-span-2"><strong>Nome/Razão Social:</strong> {safeText(l.nome)}</p>
+            <p><strong>CPF/CNPJ:</strong> {safeText(l.cpfCnpj || l.cpf || l.cnpj)}</p>
+            <p><strong>RG/IE:</strong> {safeText(l.rgIe || l.rg)}</p>
+            <p><strong>Telefone:</strong> {safeText(l.telefone || l.phone)}</p>
+            <p><strong>E-mail:</strong> {safeText(l.email)}</p>
+            <p className="col-span-2"><strong>Endereço:</strong> {formatFullAddress(l)}</p>
+            <p className="col-span-2"><strong>Dados Bancários:</strong> {safeText(l.dadosBancarios || l.banco || 'Não informado')}</p>
+            <p><strong>Comissão Imobiliária:</strong> {percComissao}% ({safeMoney(valorComissao)})</p>
+            <p><strong>Líquido de Repasse:</strong> {safeMoney(valorRepasse)}</p>
+          </div>
+        </section>,
+        34
+      );
+
+      // 4. Locatario Block
+      addBlock(
+        <section className="space-y-1 mt-2 avoid-break">
+          <h3 className="font-bold uppercase bg-gray-50 px-2 py-0.5 border-l-2 border-primary-black text-[9px] text-black">II - Dados do Locatário (Hóspede/Inquilino)</h3>
+          <div className="grid grid-cols-2 gap-y-0.5 gap-x-4 pl-2 text-[9.5px] text-gray-800">
+            <p className="col-span-2"><strong>Nome Completo:</strong> {safeText(t.nome)}</p>
+            <p><strong>CPF:</strong> {safeText(t.cpf || t.documento)}</p>
+            <p><strong>RG:</strong> {safeText(t.rg)}</p>
+            <p><strong>Telefone:</strong> {safeText(t.telefone || t.celular || t.phone)}</p>
+            <p><strong>E-mail:</strong> {safeText(t.email)}</p>
+            <p className="col-span-2"><strong>Endereço Residencial:</strong> {formatFullAddress(t)}</p>
+          </div>
+        </section>,
+        30
+      );
+
+      // 5. Fiador (Optional)
+      if (dados.fiador && dados.fiador.nome) {
+        addBlock(
+          <section className="space-y-1 mt-2 avoid-break">
+            <h3 className="font-bold uppercase bg-gray-50 px-2 py-0.5 border-l-2 border-primary-black text-[9px] text-black">II.1 - Dados do Fiador</h3>
+            <div className="grid grid-cols-2 gap-y-0.5 gap-x-4 pl-2 text-[9.5px] text-gray-800">
+              <p className="col-span-2"><strong>Nome Completo:</strong> {safeText(dados.fiador.nome)}</p>
+              <p><strong>CPF/CNPJ:</strong> {safeText(dados.fiador.cpfCnpj)}</p>
+              <p><strong>Telefone:</strong> {safeText(dados.fiador.telefone)}</p>
+              <p><strong>E-mail:</strong> {safeText(dados.fiador.email)}</p>
+              <p className="col-span-2"><strong>Endereço:</strong> {formatFullAddress(dados.fiador)}</p>
+            </div>
+          </section>,
+          25
+        );
+      }
+
+      // 6. Imovel Locacao
+      addBlock(
+        <section className="space-y-1 mt-2 avoid-break">
+          <h3 className="font-bold uppercase bg-gray-50 px-2 py-0.5 border-l-2 border-primary-black text-[9px] text-black">III - Dados do Imóvel</h3>
+          <div className="grid grid-cols-2 gap-y-0.5 gap-x-4 pl-2 text-[9.5px] text-gray-800">
+            <p className="col-span-2"><strong>Imóvel/Endereço:</strong> {formatFullAddress(imov || { headings: contract.enderecoImovel })}</p>
+            <p><strong>Tipo:</strong> {safeText(imov.tipo || 'Não informado')} (Cód: {safeText(imov.codigo)})</p>
+            <p><strong>Mobiliado:</strong> {safeText(imov.mobiliado || 'Sim')}</p>
+            {imov.itensInclusos && <p className="col-span-2"><strong>Itens inclusos:</strong> {safeText(imov.itensInclusos)}</p>}
+          </div>
+        </section>,
+        25
+      );
+
+      // 7. Prazo Locacao
+      addBlock(
+        <section className="space-y-1 mt-2 avoid-break">
+          <h3 className="font-bold uppercase bg-gray-50 px-2 py-0.5 border-l-2 border-primary-black text-[9px] text-black">IV - Prazo da Locação</h3>
+          <div className="grid grid-cols-2 gap-y-0.5 gap-x-4 pl-2 text-[9.5px] text-gray-800">
+            <p><strong>Início:</strong> {safeDate(p.dataInicio)} às {safeText(p.horarioEntrada || '14:00')}</p>
+            <p><strong>Término:</strong> {safeDate(p.dataTermino)} às {safeText(p.horarioSaida || '10:00')}</p>
+            <p className="col-span-2 font-bold text-[9px] text-gray-600">Total de diárias: {Number(p.totalDiarias) || 0} diária(s)</p>
+          </div>
+        </section>,
+        18
+      );
+
+      // 8. Valores e Detalhamento
+      addBlock(
+        <section className="space-y-1 mt-2 avoid-break">
+          <h3 className="font-bold uppercase bg-gray-50 px-2 py-0.5 border-l-2 border-primary-black text-[9px] text-black">V - Valores e Detalhamento</h3>
+          <div className="grid grid-cols-2 gap-y-0.5 gap-x-4 pl-2 text-[9.5px] text-gray-800">
+            <p><strong>Valor da Diária:</strong> {safeMoney(v.valorDiaria || 0)}</p>
+            <p><strong>Subtotal Diárias:</strong> {safeMoney(v.subtotalDiarias || 0)}</p>
+            <p><strong>Taxa de Limpeza:</strong> {safeMoney(v.taxaLimpeza || 0)}</p>
+            <p><strong>Taxa Caução/Garantia:</strong> {safeMoney(v.taxaCaucao || 0)}</p>
+            <p className="col-span-2 text-primary-black font-extrabold text-[10px]">TOTAL GERAL DA LOCAÇÃO: {safeMoney(v.valorTotalLocacao || 0)}</p>
+            {v.condicoesPagamento && <p className="col-span-2 text-[9px] text-gray-600"><strong>Condições de Pagamento:</strong> {safeText(v.condicoesPagamento)}</p>}
+          </div>
+
+          {showDetalhes && (
+            <div className="mt-2 p-2 bg-gray-50 rounded border border-gray-150 text-[9px] text-gray-800">
+              <strong className="block text-gray-700 uppercase mb-0.5">Detalhes adicionais de pagamento:</strong>
+              <p className="whitespace-pre-wrap">{rawDetalhes}</p>
+            </div>
+          )}
+
+          {showOutras && (
+            <div className="mt-2 p-2 bg-gray-50 rounded border border-gray-150 text-[9px] text-gray-800">
+              <strong className="block text-gray-700 uppercase mb-0.5">Outras Condições:</strong>
+              <p className="whitespace-pre-wrap">{rawOutras}</p>
+            </div>
+          )}
+        </section>,
+        35 + (showDetalhes ? estimateHeight(rawDetalhes) + 12 : 0) + (showOutras ? estimateHeight(rawOutras) + 12 : 0)
+      );
+
+      // 9. Standard static locacao clauses (each paragraph rendered individually to avoid overlaps)
+      const clausesList = [
+        { title: "Cláusula 1ª - Da Destinação", text: "O imóvel locado destina-se exclusivamente a uso residencial temporário (turismo), sendo vedada a sublocação, cessão ou empréstimo, total ou parcial, sob pena de rescisão contratual imediata e multa." },
+        { title: "Cláusula 2ª - Das Limitações de Hóspedes", text: `O limite máximo de pessoas no imóvel é de ${safeText(r.limiteHospedes || 'Não informado')} hóspede(s). A permanência de pessoas acima do limite estipulado acarretará em multa diária adicional de 20% do valor da diária acumulada por pessoa excedente.` },
+        { title: "Cláusula 3ª - Das Obrigações do Locatário", text: "O LOCATÁRIO obriga-se a manter o imóvel nas mesmas condições de higiene, limpeza e conservação em que o recebeu, respeitando as normas internas e regulamento do condomínio, inclusive horários de silêncio (lei de contravenções penais)." },
+        { title: "Cláusula 4ª - Das Vistorias e Danos", text: "Caso ocorra qualquer dano estrutural, em móvel, eletrodoméstico ou utente decorrente de dolo ou culpa, o LOCATÁRIO autoriza o desconto correspondente do valor da caução descrita no item V ou indenização direta imediatamente." },
+        { title: "Cláusula 5ª - Da Desocupação", text: "O LOCATÁRIO desocupará o imóvel impreterivelmente na data e horários estabelecidos sob pena de multa de 1 (uma) diária cheia para cada hora de atraso, mais as diárias correntes." }
+      ];
+
+      clausesList.forEach((c) => {
+        addBlock(
+          <div className="text-justify leading-relaxed text-[9px] text-gray-800 mt-2 p-2 rounded border border-gray-100/50 avoid-break bg-gray-50/20">
+            <strong className="block text-gray-900 border-b border-gray-100/80 pb-0.5 mb-1">{c.title}</strong>
+            <p>{c.text}</p>
+          </div>,
+          15
+        );
+      });
+
+      // Optional Caucao Cláusula
+      if (Number(v.taxaCaucao) > 0) {
+        addBlock(
+          <div className="text-justify leading-relaxed text-[9px] text-gray-800 mt-2 p-2 rounded border border-gray-100/50 avoid-break bg-gray-50/20">
+            <strong className="block text-gray-900 border-b border-gray-100/80 pb-0.5 mb-1">Cláusula 6ª - Da Caução/Garantia</strong>
+            <p>O LOCATÁRIO prestou a título de garantia e reembolso de eventuais perdas e danos, caução no valor de {safeMoney(v.taxaCaucao)}, que será devolvido integralmente em até 48 horas úteis após a vistoria de saída, caso nenhum dano seja verificado.</p>
+          </div>,
+          16
+        );
+      }
+
+      // 10. Additional text Clauses (clausulas)
+      if (dados.clausulas && dados.clausulas.trim()) {
+        const customClausesText = dados.clausulas.trim();
+        addBlock(
+          <section className="space-y-1 mt-2 avoid-break">
+            <h3 className="font-bold uppercase bg-gray-50 px-2 py-0.5 border-l-2 border-primary-black text-[9px] text-black">Cláusulas Adicionais do Contrato</h3>
+            <p className="text-justify text-[9px] text-gray-800 whitespace-pre-wrap leading-relaxed bg-white p-2 border border-gray-150 rounded">{customClausesText}</p>
+          </section>,
+          12 + estimateHeight(customClausesText)
+        );
+      }
+
+      // 11. Selected database Clauses (Individualized Blocks)
+      const listSelection = dados.clausulasSelecionadas || [];
+      if (listSelection.length > 0) {
+        listSelection.forEach((c: any, idx: number) => {
+          const cText = c.texto || '';
+          addBlock(
+            <section className="section avoid-break mt-2 pt-2 border-t border-gray-150 text-[9px] text-gray-800">
+              {idx === 0 && <h3 className="section-title text-[9.5px] uppercase font-black text-black mb-2 border-b border-gray-200 pb-0.5">Cláusulas e Condições do Acervo</h3>}
+              <div className="text-justify leading-relaxed">
+                <p className="font-bold mb-0.5">Cláusula {idx + 6}ª - {c.titulo}:</p>
+                <p className="whitespace-pre-wrap pl-2 border-l border-gold/25 text-gray-700">{safeText(cText)}</p>
+              </div>
+            </section>,
+            estimateHeight(cText) + 12
+          );
+        });
+      }
+
+      // 12. Date Block
+      addBlock(
+        <div className="mt-4 text-right font-bold text-[10px] text-black border-t border-gray-100 pt-2">
+          {safeText(dados.local || 'Balneário Camboriú')}, {safeText(dados.data || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }))}
+        </div>,
+        14
+      );
+
+      // 13. Signatures
+      addBlock(
+        <div className="pdf-signatures mt-6 pb-2 avoid-break text-[9.5px]">
+          <div className="border-t border-black pt-1 block text-center">
+            <p className="font-bold text-black">{safeText(l.nome || 'LOCADOR')}</p>
+            <p className="text-[7.5px] uppercase text-gray-500">LOCADOR</p>
+          </div>
+          <div className="border-t border-black pt-1 block text-center">
+            <p className="font-bold text-black">{safeText(t.nome || 'LOCATÁRIO')}</p>
+            <p className="text-[7.5px] uppercase text-gray-500">LOCATÁRIO</p>
+          </div>
+          <div className="border-t border-black pt-1 block text-center col-span-2 max-w-[200px] mx-auto w-full">
+            <p className="font-bold text-gray-700">{safeText(empresa.nome)}</p>
+            <p className="text-[7.5px] uppercase text-gray-500">INTERMEDIADORA</p>
+          </div>
+        </div>,
+        45
+      );
+
+    } else if (tipoContrato === 'aceite') {
+      const mergedDados = {
+        ...contract,
+        ...dados
+      };
+      const parte = getParteAceitante(mergedDados);
+      const imov = {
+        ...dados.imovel,
+        titulo: dados.imovel?.titulo || contract.imovelTitulo || contract.imovelNomeEdificio || "",
+        endereco: dados.imovel?.endereco || contract.imovelEndereco || "",
+        bairro: dados.imovel?.bairro || contract.imovelBairro || "",
+        cidade: dados.imovel?.cidade || contract.imovelCidade || "",
+        estado: dados.imovel?.estado || contract.imovelEstado || "",
+        matricula: dados.imovel?.matricula || contract.imovelMatricula || "",
+        cri: dados.imovel?.cri || contract.imovelCri || "",
+        codigo: dados.imovel?.codigo || contract.imovelCodigo || contract.codigoImovel || ""
+      };
+
+      // 1. Title Block
+      addBlock(
+        <div className="pdf-document-title font-display font-black text-black">
+          ACEITE DE TERMOS DE PROPOSTA
+        </div>,
+        15
+      );
+
+      // 2. Parte Aceitante Block
+      addBlock(
+        <section className="section avoid-break">
+          <h3 className="section-title">I - Identificação da Parte que Manifesta o Aceite</h3>
+          <div className="grid grid-cols-2 gap-y-1.5 gap-x-6 text-[9.5px]">
+            <p><strong>Nome/Razão Social:</strong> {safeText(parte.nome || "Não informado")}</p>
+            <p><strong>CPF/CNPJ:</strong> {safeText(parte.cpf || "Não informado")}</p>
+            <p><strong>RG/IE:</strong> {safeText(parte.rg || "Não informado")}</p>
+            <p><strong>Estado Civil:</strong> {safeText(parte.estadoCivil || "Não informado")}</p>
+            <p><strong>Profissão:</strong> {safeText(parte.profissao || "Não informado")}</p>
+            <p><strong>Telefone:</strong> {safeText(parte.telefone || "Não informado")}</p>
+            <p className="col-span-2"><strong>E-mail:</strong> {safeText(parte.email || "Não informado")}</p>
+            <p className="col-span-2"><strong>Endereço:</strong> {formatFullAddress(parte)}</p>
+          </div>
+        </section>,
+        34
+      );
+
+      // 3. Objeto Aceite Block
+      const vAceite = Number(
+        mergedDados.valorAceite ||
+        mergedDados.valorTotal ||
+        mergedDados.valor ||
+        mergedDados.valorContrato ||
+        mergedDados.valorTotalNegociado ||
+        mergedDados.objeto?.valorAceite ||
+        0
+      );
+
+      addBlock(
+        <section className="section avoid-break">
+          <h3 className="section-title">II - Objeto e Efeitos do Aceite</h3>
+          <p className="text-justify text-[9.5px] leading-relaxed mb-2">
+            A parte devidamente qualificada no Item I manifesta o seu inequívoco e pleno <strong>ACEITE</strong> aos termos e condições de pagamento propostos para a transação imobiliária do imóvel especificado baixo:
+          </p>
+          <div className="grid grid-cols-2 gap-y-1.5 gap-x-6 text-[9.5px] mt-1">
+            <p className="col-span-2"><strong>Endereço do Imóvel:</strong> {formatFullAddress(imov || { heading: contract.enderecoImovel })}</p>
+            <p><strong>Código imobiliário:</strong> {safeText(imov.codigo || contract.codigoImovel || "Não informado")}</p>
+            <p><strong>Valor objeto do aceite:</strong> {safeMoney(vAceite)}</p>
+          </div>
+        </section>,
+        38
+      );
+
+      // 4. Termos e condicoes
+      const condsFinal = 
+        dados.condicoesFinal || 
+        dados.condicoesPagamento || 
+        dados.detalhesPagamento || 
+        dados.pagamento?.condicoesPagamento || 
+        dados.pagamento?.detalhesPagamento || 
+        dados.termos?.condicoesPagamento || 
+        dados.termos?.detalhesPagamento || 
+        contract.condicoesPagamento || 
+        contract.detalhesPagamento || 
+        '';
+
+      addBlock(
+        <section className="section avoid-break">
+          <h3 className="section-title">III - Termos e Condições da Proposta Aceita</h3>
+          {condsFinal ? (
+            <div className="p-2.5 bg-gray-50 border border-gray-150 rounded leading-relaxed text-[9px] text-gray-800 whitespace-pre-wrap text-justify">
+              {safeText(condsFinal)}
+            </div>
+          ) : (
+            <p className="text-[9.5px] text-gray-500 italic">Condições finais não detalhadas por escrito.</p>
+          )}
+
+          {showDetalhes && (
+            <div className="mt-3 p-2 bg-gray-50 rounded border border-gray-150">
+              <h4 className="font-bold text-[9px] uppercase text-gray-700 pb-0.5 mb-1 border-b border-gray-200">Detalhes Adicionais</h4>
+              <p className="text-justify text-[9px] text-gray-800 whitespace-pre-wrap leading-relaxed">{rawDetalhes}</p>
+            </div>
+          )}
+
+          {showOutras && (
+            <div className="mt-3 p-2 bg-gray-50 rounded border border-gray-150">
+              <h4 className="font-bold text-[9px] uppercase text-gray-700 pb-0.5 mb-1 border-b border-gray-200">Outras Condições</h4>
+              <p className="text-justify text-[9px] text-gray-800 whitespace-pre-wrap leading-relaxed">{rawOutras}</p>
+            </div>
+          )}
+        </section>,
+        20 + (condsFinal ? estimateHeight(condsFinal) + 12 : 0) + (showDetalhes ? estimateHeight(rawDetalhes) + 12 : 0) + (showOutras ? estimateHeight(rawOutras) + 12 : 0)
+      );
+
+      // 5. Selected database Clauses (Individualized Blocks)
+      const listSelection = dados.clausulasSelecionadas || [];
+      if (listSelection.length > 0) {
+        listSelection.forEach((c: any, idx: number) => {
+          const cText = c.texto || '';
+          addBlock(
+            <section className="section avoid-break mt-2 pt-2 border-t border-gray-150 text-[9px] text-gray-800">
+              {idx === 0 && <h3 className="section-title text-[9.5px] uppercase font-black text-black mb-2 border-b border-gray-200 pb-0.5">Cláusulas Vinculadas</h3>}
+              <div className="text-justify leading-relaxed">
+                <p className="font-bold mb-0.5">Cláusula {idx + 1}ª - {c.titulo}:</p>
+                <p className="whitespace-pre-wrap pl-2 border-l border-gold/25 text-gray-700">{safeText(cText)}</p>
+              </div>
+            </section>,
+            estimateHeight(cText) + 12
+          );
+        });
+      }
+
+      // 6. Date Block
+      addBlock(
+        <div className="mt-4 text-right font-bold text-[10px] text-black">
+          {safeText(mergedDados.local || 'Balneário Camboriú')}, {safeText(mergedDados.data || (mergedDados.dataProposta ? formatarDataBR(mergedDados.dataProposta) : "") || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }))}
+        </div>,
+        12
+      );
+
+      // 7. Signatures
+      addBlock(
+        <div className="pdf-signatures mt-6 pb-2 avoid-break">
+          <div className="flex flex-col justify-end">
+            <div className="pdf-signature-line text-black font-bold">
+              {safeText(parte.nome || 'ACEITANTE / INTERESSADO')}
+            </div>
+            <div className="pdf-signature-role">Parte Aceitante</div>
+          </div>
+          <div className="flex flex-col justify-end">
+            <div className="pdf-signature-line text-black font-bold">
+              {safeText(empresa.nome)}
+            </div>
+            <div className="pdf-signature-role">Imobiliária Intermediadora</div>
+          </div>
+        </div>,
+        45
+      );
+    }
+
+    // --- Dynamic Slicing/Pagination Algorithm ---
+    const pages: { render: () => React.JSX.Element; estimatedHeight: number }[][] = [[]];
+    let currentPageHeight = 0;
+
+    // Available target heights in mm (extremely safe & defensive to prevent any sub-pixel/rounding browser overflow)
+    const MAX_HEIGHT_FIRST = 205; // 297mm (Total) - 14mm (MarginTop) - 20mm (MarginBottom) - 34mm (Header) - 24mm (Padding & Footer space)
+    const MAX_HEIGHT_SUBSEQUENT = 230; // 297mm (Total) - 14mm (MarginTop) - 20mm (MarginBottom) - 10mm (Mini Header) - 23mm (Padding & Footer space)
+
+    blocks.forEach((block) => {
+      const isFirstPage = pages.length === 1;
+      const spaceLimit = isFirstPage ? MAX_HEIGHT_FIRST : MAX_HEIGHT_SUBSEQUENT;
+
+      if (currentPageHeight + block.estimatedHeight > spaceLimit) {
+        // Start a fresh new page
+        pages.push([block]);
+        currentPageHeight = block.estimatedHeight;
+      } else {
+        pages[pages.length - 1].push(block);
+        currentPageHeight += block.estimatedHeight;
+      }
+    });
+
+    return pages;
   };
+
+  const pages = buildContractPages();
 
   return (
     <div 
-      id="contrato-pdf"
-      ref={printRef}
-      className={`pdf-export bg-white mx-auto print:shadow-none print:m-0 print:p-0 relative flex flex-col ${isCompact ? 'pdf-compact' : ''}`}
+      id="contrato-pdf" 
+      ref={printRef} 
+      className={`pdf-export-container font-sans bg-transparent mx-auto ${isCompact ? 'pdf-compact' : ''}`}
       style={{
-        width: '210mm',
-        minHeight: '297mm',
-        padding: isCompact ? '28px 42px 36px 42px' : '14mm',
-        boxShadow: 'none',
         boxSizing: 'border-box'
       }}
     >
-      {renderWatermark()}
-      {isCompact ? renderCompactHeader() : renderHeader()}
-      
-      <div className="flex-grow">
-        {tipoContrato === 'proposta' && renderProposta()}
-        {tipoContrato === 'contraproposta' && renderContraproposta()}
-        {tipoContrato === 'aceite' && renderAceite()}
-        {tipoContrato === 'locacao_temporaria' && renderLocacaoTemporaria()}
-        {tipoContrato === 'arras_confirmatorios' && renderArrasConfirmatorios()}
-      </div>
+      {pages.map((pageBlocks, pageIndex) => (
+        <div 
+          key={pageIndex}
+          className={`pdf-page bg-white relative flex flex-col justify-between print:shadow-none print:m-0`}
+          style={{
+            width: '210mm',
+            height: '295mm', // Slightly below 297 to strictly prevent any page count overflows during physical print
+            padding: isCompact ? '24px 42px 30px 42px' : '15mm 14mm 20mm 14mm',
+            boxSizing: 'border-box',
+            position: 'relative',
+            pageBreakAfter: 'always',
+            breakAfter: 'page',
+            margin: '0 auto 24px auto',
+            minHeight: '295mm'
+          }}
+        >
+          {/* Watermark in each page */}
+          <div className="pdf-watermark">
+            <img 
+              src={empresa.marcaDaguaUrl || '/watermark.png'} 
+              alt="Marca d'água" 
+              crossOrigin="anonymous"
+              referrerPolicy="no-referrer"
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            />
+          </div>
 
-      {isCompact ? renderCompactFooter(1) : renderFooter(1)}
-      
+          {/* Header on page 1, elegant top bar on pages 2+ */}
+          {pageIndex === 0 ? (
+            isCompact ? renderCompactHeader() : renderHeader()
+          ) : (
+            <div className="flex items-center justify-between border-b border-gray-200 pb-1 mb-3 text-[7.5px] uppercase tracking-wider text-gray-400 select-none no-print">
+              <span>{safeText(contract.dados?.proponente?.nome || contract.nomeCliente || 'Contrato')}</span>
+              <span>{safeText(empresa.nome || 'Menta Imóveis')}</span>
+            </div>
+          )}
+
+          {/* Content Block Wrapper */}
+          <div className="flex-grow flex flex-col justify-start overflow-hidden relative z-10">
+            {pageBlocks.map((block, bIndex) => (
+              <React.Fragment key={bIndex}>
+                {block.render()}
+              </React.Fragment>
+            ))}
+          </div>
+
+          {/* Footer on each page */}
+          {isCompact ? renderCompactFooter(pageIndex + 1, pages.length) : renderFooter(pageIndex + 1, pages.length)}
+        </div>
+      ))}
+
+      {/* Styled Sheets for perfect PDF outputs and preview displays */}
       <style>{`
         @media print {
           @page {
@@ -1005,102 +1148,115 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
           }
           body {
             -webkit-print-color-adjust: exact;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          .pdf-page {
+            margin: 0 !important;
+            box-shadow: none !important;
+            page-break-after: always !important;
+            break-after: page !important;
+            height: 295mm !important;
+            min-height: 295mm !important;
           }
           .no-print {
             display: none !important;
           }
         }
 
+        .pdf-page {
+          box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+          border: 1px solid #f1f2f4;
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
         .pdf-compact p {
-          margin: 3px 0 !important;
+          margin: 2px 0 !important;
           line-height: 1.25 !important;
         }
         .pdf-compact h1,
         .pdf-compact h2,
         .pdf-compact h3 {
-          margin: 4px 0 6px 0 !important;
+          margin: 3px 0 5px 0 !important;
           line-height: 1.15 !important;
         }
         .pdf-compact .section {
-          margin-bottom: 6px !important;
+          margin-bottom: 5px !important;
         }
         .pdf-compact .section-title {
-          font-size: 10px !important;
-          font-weight: 700 !important;
-          margin: 6px 0 4px 0 !important;
-          padding-bottom: 2px !important;
-          border-bottom: 1px solid #e5e7eb !important;
+          font-size: 9.5px !important;
+          font-weight: 800 !important;
+          margin: 5px 0 3px 0 !important;
+          padding-bottom: 1.5px !important;
+          border-bottom: 1.1px solid #e1e3e7 !important;
           text-transform: uppercase !important;
+          color: #000000 !important;
           letter-spacing: 0.5px !important;
-        }
-        .pdf-compact ul {
-          margin: 2px 0 2px 12px !important;
-          padding: 0 !important;
-        }
-        .pdf-compact li {
-          margin: 1px 0 !important;
         }
         .pdf-compact-header {
           display: flex;
           align-items: center;
           gap: 12px;
-          border-bottom: 1px solid #e5e7eb;
+          border-bottom: 2px solid #111827;
           padding-bottom: 6px;
           margin-bottom: 8px;
         }
         .pdf-compact-header img {
-          width: 72px;
-          height: 72px;
+          width: 60px;
+          height: 60px;
           object-fit: contain;
         }
         .pdf-compact-header .company-name {
-          font-size: 13px;
-          font-weight: 800;
+          font-size: 11px;
+          font-weight: 900;
           letter-spacing: 0.5px;
         }
         .pdf-compact-header .company-info {
-          font-size: 8px;
+          font-size: 7.5px;
           line-height: 1.25;
-          color: #6b7280;
+          color: #4b5563;
         }
         .pdf-document-title {
           text-align: center;
-          font-size: 13px;
-          font-weight: 800;
+          font-size: 12px;
+          font-weight: 900;
           letter-spacing: 1.5px;
-          margin: 8px 0 10px 0;
+          margin: 6px 0 8px 0;
           text-transform: uppercase;
         }
         .pdf-signatures {
-          margin-top: 20px;
+          margin-top: auto;
+          padding-top: 10px;
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 20px;
-          page-break-inside: avoid;
-          break-inside: avoid;
+          gap: 16px;
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
         }
         .pdf-signature-line {
           border-top: 1px solid #111827;
-          padding-top: 4px;
+          padding-top: 3px;
           text-align: center;
-          font-size: 9.5px;
-          font-weight: 600;
+          font-size: 9px;
+          font-weight: 750;
         }
         .pdf-signature-role {
-          font-size: 8px;
-          color: #6b7280;
-          margin-top: 1px;
+          font-size: 7.5px;
+          color: #4b5563;
+          margin-top: 0.5px;
           text-align: center;
+          text-transform: uppercase;
+          letter-spacing: 0.3px;
         }
         .pdf-footer {
           position: absolute;
           left: 42px;
           right: 42px;
-          bottom: 16px;
+          bottom: 14px;
           border-top: 1px solid #e5e7eb;
-          padding-top: 4px;
-          font-size: 8px;
-          color: #9ca3af;
+          padding-top: 3px;
+          font-size: 7.5px;
+          color: #6b7280;
           display: flex;
           justify-content: space-between;
           align-items: center;
@@ -1113,20 +1269,20 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract, 
           justify-content: center;
           z-index: 0;
           pointer-events: none;
-          opacity: 0.04;
+          opacity: 0.035;
         }
         .pdf-watermark img {
-          width: 80%;
-          max-width: 580px;
+          width: 75%;
+          max-width: 500px;
           object-fit: contain;
         }
         .pdf-compact-content {
-          font-size: 10px !important;
+          font-size: 9.5px !important;
           line-height: 1.25 !important;
           color: #111827;
         }
         .pdf-compact-content section {
-          margin-bottom: 5px !important;
+          margin-bottom: 4px !important;
         }
         .avoid-break {
           page-break-inside: avoid !important;

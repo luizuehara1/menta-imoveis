@@ -468,6 +468,8 @@ export default function AdminPropertyForm() {
       city: '',
       neighborhood: '',
       address: '',
+      numero: '',
+      complemento: '',
       googleMapsLink: '',
       ownerName: '',
       ownerPhone: '',
@@ -482,6 +484,8 @@ export default function AdminPropertyForm() {
       proprietarioWhatsapp: '',
       proprietarioEmail: '',
       proprietarioEndereco: '',
+      proprietarioNumero: '',
+      proprietarioComplemento: '',
       proprietarioCep: '',
       proprietarioCidade: '',
       proprietarioEstado: '',
@@ -495,6 +499,8 @@ export default function AdminPropertyForm() {
       proprietarioConjugeWhatsapp: '',
       proprietarioConjugeEmail: '',
       proprietarioConjugeEndereco: '',
+      proprietarioConjugeNumero: '',
+      proprietarioConjugeComplemento: '',
       proprietarioConjugeCep: '',
       proprietarioConjugeCidade: '',
       proprietarioConjugeEstado: '',
@@ -868,6 +874,8 @@ export default function AdminPropertyForm() {
               setValue('proprietarioWhatsapp', parsedProprietario.whatsapp);
               setValue('proprietarioEmail', parsedProprietario.email);
               setValue('proprietarioEndereco', parsedProprietario.endereco);
+              setValue('proprietarioNumero', parsedProprietario.numero || '');
+              setValue('proprietarioComplemento', parsedProprietario.complemento || '');
               setValue('proprietarioCep', parsedProprietario.cep);
               setValue('proprietarioCidade', parsedProprietario.cidade);
               setValue('proprietarioEstado', parsedProprietario.estado);
@@ -882,6 +890,8 @@ export default function AdminPropertyForm() {
               setValue('proprietarioConjugeWhatsapp', parsedProprietario.conjuge.whatsapp);
               setValue('proprietarioConjugeEmail', parsedProprietario.conjuge.email);
               setValue('proprietarioConjugeEndereco', parsedProprietario.conjuge.endereco);
+              setValue('proprietarioConjugeNumero', parsedProprietario.conjuge.numero || '');
+              setValue('proprietarioConjugeComplemento', parsedProprietario.conjuge.complemento || '');
               setValue('proprietarioConjugeCep', parsedProprietario.conjuge.cep);
               setValue('proprietarioConjugeCidade', parsedProprietario.conjuge.cidade);
               setValue('proprietarioConjugeEstado', parsedProprietario.conjuge.estado);
@@ -1331,6 +1341,8 @@ export default function AdminPropertyForm() {
       propertyData.proprietarioWhatsapp = data.proprietarioWhatsapp || '';
       propertyData.proprietarioEmail = data.proprietarioEmail || '';
       propertyData.proprietarioEndereco = data.proprietarioEndereco || '';
+      propertyData.proprietarioNumero = data.proprietarioNumero || '';
+      propertyData.proprietarioComplemento = data.proprietarioComplemento || '';
       propertyData.proprietarioCep = data.proprietarioCep || '';
       propertyData.proprietarioCidade = data.proprietarioCidade || '';
       propertyData.proprietarioEstado = data.proprietarioEstado || '';
@@ -1345,6 +1357,8 @@ export default function AdminPropertyForm() {
       propertyData.proprietarioConjugeWhatsapp = data.proprietarioConjugeWhatsapp || '';
       propertyData.proprietarioConjugeEmail = data.proprietarioConjugeEmail || '';
       propertyData.proprietarioConjugeEndereco = data.proprietarioConjugeEndereco || '';
+      propertyData.proprietarioConjugeNumero = data.proprietarioConjugeNumero || '';
+      propertyData.proprietarioConjugeComplemento = data.proprietarioConjugeComplemento || '';
       propertyData.proprietarioConjugeCep = data.proprietarioConjugeCep || '';
       propertyData.proprietarioConjugeCidade = data.proprietarioConjugeCidade || '';
       propertyData.proprietarioConjugeEstado = data.proprietarioConjugeEstado || '';
@@ -1361,6 +1375,8 @@ export default function AdminPropertyForm() {
         whatsapp: data.proprietarioWhatsapp || '',
         email: data.proprietarioEmail || '',
         endereco: data.proprietarioEndereco || '',
+        numero: data.proprietarioNumero || '',
+        complemento: data.proprietarioComplemento || '',
         cep: data.proprietarioCep || '',
         cidade: data.proprietarioCidade || '',
         estado: data.proprietarioEstado || '',
@@ -1375,6 +1391,8 @@ export default function AdminPropertyForm() {
           whatsapp: data.proprietarioConjugeWhatsapp || '',
           email: data.proprietarioConjugeEmail || '',
           endereco: data.proprietarioConjugeEndereco || '',
+          numero: data.proprietarioConjugeNumero || '',
+          complemento: data.proprietarioConjugeComplemento || '',
           cep: data.proprietarioConjugeCep || '',
           cidade: data.proprietarioConjugeCidade || '',
           estado: data.proprietarioConjugeEstado || ''
@@ -1397,6 +1415,8 @@ export default function AdminPropertyForm() {
         proprietarioWhatsapp: data.proprietarioWhatsapp || '',
         proprietarioEmail: data.proprietarioEmail || '',
         proprietarioEndereco: data.proprietarioEndereco || '',
+        proprietarioNumero: data.proprietarioNumero || '',
+        proprietarioComplemento: data.proprietarioComplemento || '',
         proprietarioCep: data.proprietarioCep || '',
         proprietarioCidade: data.proprietarioCidade || '',
         proprietarioEstado: data.proprietarioEstado || '',
@@ -1410,6 +1430,8 @@ export default function AdminPropertyForm() {
         proprietarioConjugeWhatsapp: data.proprietarioConjugeWhatsapp || '',
         proprietarioConjugeEmail: data.proprietarioConjugeEmail || '',
         proprietarioConjugeEndereco: data.proprietarioConjugeEndereco || '',
+        proprietarioConjugeNumero: data.proprietarioConjugeNumero || '',
+        proprietarioConjugeComplemento: data.proprietarioConjugeComplemento || '',
         proprietarioConjugeCep: data.proprietarioConjugeCep || '',
         proprietarioConjugeCidade: data.proprietarioConjugeCidade || '',
         proprietarioConjugeEstado: data.proprietarioConjugeEstado || '',
@@ -2391,8 +2413,18 @@ export default function AdminPropertyForm() {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-bold text-gray-700">Endereço</label>
-              <input {...register('address')} className="input-field" />
+              <label className="text-sm font-bold text-gray-700">Endereço <span className="text-red-500">*</span></label>
+              <input {...register('address', { required: true })} className="input-field" placeholder="Rua / Avenida" required />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-700">Número <span className="text-red-500">*</span></label>
+                <input {...register('numero', { required: true })} className="input-field" placeholder="Nº" required />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-700">Complemento</label>
+                <input {...register('complemento')} className="input-field" placeholder="Apto, Sala, etc." />
+              </div>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-bold text-gray-700">Link Google Maps</label>
@@ -2470,10 +2502,20 @@ export default function AdminPropertyForm() {
                   <input type="email" {...register('proprietarioEmail')} className="input-field w-full" placeholder="exemplo@email.com" />
                 </div>
 
-                {/* Linha 6: Endereço (ocupando 2 colunas) */}
-                <div className="space-y-1 md:col-span-2">
-                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Endereço</label>
-                  <input {...register('proprietarioEndereco')} className="input-field w-full" placeholder="Rua, Número, Complemento, Bairro" />
+                {/* Linha 6: Endereço, Número, Complemento (ocupando colunas) */}
+                <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="md:col-span-2 space-y-1">
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Endereço <span className="text-red-500">*</span></label>
+                    <input {...register('proprietarioEndereco', { required: true })} className="input-field w-full" placeholder="Rua / Avenida" required />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Número <span className="text-red-500">*</span></label>
+                    <input {...register('proprietarioNumero', { required: true })} className="input-field w-full" placeholder="Nº" required />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Complemento</label>
+                    <input {...register('proprietarioComplemento')} className="input-field w-full" placeholder="Apto, Sala, etc." />
+                  </div>
                 </div>
 
                 {/* Linha 7: CEP, Cidade, Estado (grid interno para ficar em 3 colunas) */}
@@ -2558,9 +2600,19 @@ export default function AdminPropertyForm() {
                   </div>
 
                   {/* Linha 6: Endereço do Cônjuge */}
-                  <div className="space-y-1 md:col-span-2">
-                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Endereço do cônjuge</label>
-                    <input {...register('proprietarioConjugeEndereco')} className="input-field w-full" placeholder="Rua, Número, Complemento, Bairro do cônjuge" />
+                  <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="md:col-span-2 space-y-1">
+                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Endereço do cônjuge</label>
+                      <input {...register('proprietarioConjugeEndereco')} className="input-field w-full" placeholder="Rua / Avenida do cônjuge" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Número do cônjuge</label>
+                      <input {...register('proprietarioConjugeNumero')} className="input-field w-full" placeholder="Nº" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Complemento do cônjuge</label>
+                      <input {...register('proprietarioConjugeComplemento')} className="input-field w-full" placeholder="Apto, Sala, etc." />
+                    </div>
                   </div>
 
                   {/* Linha 7: CEP, Cidade, Estado do Cônjuge */}

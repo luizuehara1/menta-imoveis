@@ -42,6 +42,8 @@ export const DEFAULT_SITE_CONFIG: SiteConfig = {
     email: "contato@mentaimoveis.com.br",
     site: "www.mentaimoveis.com.br",
     endereco: "Av. Brasil, 2636",
+    numero: "2636",
+    complemento: "",
     bairro: "Centro",
     cidade: "Balneário Camboriú",
     estado: "SC",

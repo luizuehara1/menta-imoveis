@@ -187,14 +187,25 @@ function getCodigoImovel(imovel: any): string {
 }
 
 function montarEnderecoImovel(imovel: any): string {
-  return [
-    imovel?.endereco || imovel?.address,
-    imovel?.numero || imovel?.number,
-    imovel?.complemento || imovel?.complement,
-    imovel?.bairro || imovel?.neighborhood,
-    imovel?.cidade || imovel?.city,
-    imovel?.estado || imovel?.state
-  ].filter(Boolean).join(", ");
+  if (!imovel) return "";
+  const street = imovel?.endereco || imovel?.address || "";
+  const num = imovel?.numero || imovel?.number || "";
+  const numStr = num ? `Nº ${num}` : "";
+  const compl = imovel?.complemento || imovel?.complement || "";
+  const neighborhood = imovel?.bairro || imovel?.neighborhood || imovel?.district || "";
+  const city = imovel?.cidade || imovel?.city || "";
+  const state = imovel?.estado || imovel?.state || "";
+
+  const parts = [
+    street,
+    numStr,
+    compl,
+    neighborhood,
+    city,
+    state
+  ];
+
+  return parts.map(s => String(s || "").trim()).filter(Boolean).join(", ");
 }
 
 async function buscarImovelPorCodigoOuId(codigoOuId: string) {
@@ -1843,6 +1854,8 @@ export default function AdminContractForm() {
           codigo: getCodigoImovel(property),
           titulo: tituloFinal,
           endereco: montarEnderecoImovel(property),
+          numero: property.numero || (property as any).numero || '',
+          complemento: property.complemento || (property as any).complemento || '',
           bairro: property.neighborhood || (property as any).bairro || '',
           cidade: property.city || (property as any).cidade || '',
           estado: property.state || (property as any).uf || (property as any).estado || '',
@@ -1868,6 +1881,8 @@ export default function AdminContractForm() {
           whatsapp: propOwner.whatsapp || '',
           email: propOwner.email || '',
           endereco: propOwner.endereco || '',
+          numero: propOwner.numero || '',
+          complemento: propOwner.complemento || '',
           cep: propOwner.cep || '',
           cidade: propOwner.cidade || '',
           estado: propOwner.estado || '',
@@ -1882,6 +1897,8 @@ export default function AdminContractForm() {
           conjugeTelefone: propOwner.conjuge?.telefone || '',
           conjugeEmail: propOwner.conjuge?.email || '',
           conjugeEndereco: propOwner.conjuge?.endereco || '',
+          conjugeNumero: propOwner.conjuge?.numero || '',
+          conjugeComplemento: propOwner.conjuge?.complemento || '',
 
           // Backup duplicate spouse keys
           vendedorConjugeNome: propOwner.conjuge?.nome || '',
@@ -1892,6 +1909,8 @@ export default function AdminContractForm() {
           vendedorConjugeTelefone: propOwner.conjuge?.telefone || '',
           vendedorConjugeEmail: propOwner.conjuge?.email || '',
           vendedorConjugeEndereco: propOwner.conjuge?.endereco || '',
+          vendedorConjugeNumero: propOwner.conjuge?.numero || '',
+          vendedorConjugeComplemento: propOwner.conjuge?.complemento || '',
         };
 
         // Sync local conjunct toggle hook state too
@@ -2383,10 +2402,19 @@ export default function AdminContractForm() {
         detalhesPagamento: detalhesFinal
       });
 
+      const metodosDePagamentoSelec = contract.dados?.[contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos']?.metodos || (contract as any).formasPagamento || [];
+      dadosContrato.formasPagamento = Array.isArray(metodosDePagamentoSelec) ? metodosDePagamentoSelec : [];
+      
+      const formaPagamentoString = Array.isArray(metodosDePagamentoSelec) && metodosDePagamentoSelec.length > 0 
+        ? metodosDePagamentoSelec.join(', ') 
+        : (contract as any).formaPagamento || "";
+      
+      dadosContrato.formaPagamento = formaPagamentoString;
+
       if (contract.tipoContrato === 'proposta') {
         dadosContrato.valorImovel = Number(imovelNormalizado.valorImovel || 0);
         dadosContrato.valorProposta = Number(contract.valor || 0);
-        dadosContrato.formaPagamento = contract.dados?.pagamento?.outrasCondicoes || contract.dados?.pagamento?.descricao || "";
+        dadosContrato.formaPagamento = formaPagamentoString || contract.dados?.pagamento?.outrasCondicoes || contract.dados?.pagamento?.descricao || "";
         dadosContrato.observacoes = contract.dados?.pagamento?.observacoes || contract.dados?.observacoes || "";
         dadosContrato.status = contract.status || "Pendente";
       }
@@ -2702,46 +2730,138 @@ export default function AdminContractForm() {
         }
       });
       
-      const imgData = canvas.toDataURL('image/png');
+      // Check if multi-page elements are designed (using the new paginated preview structure)
+      const pageElements = element.querySelectorAll('.pdf-page');
       const pdf = new jsPDF('p', 'mm', 'a4');
-      
-      const imgProps = pdf.getImageProperties(imgData);
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-      
-      // Calculate the total height of the image on the PDF while maintaining aspect ratio
-      const imgHeightInPdf = (imgProps.height * pdfWidth) / imgProps.width;
-      
-      let heightLeft = imgHeightInPdf;
-      let position = 0;
 
-      // Function to add footer to each page
-      const addPageDecorations = (pageNum: number, totalPages: number) => {
-        pdf.setFontSize(8);
-        pdf.setTextColor(180, 180, 180);
-        const footerText = `${companyName} • CNPJ: ${companyCnpj} • CRECI PJ: ${companyCreci}`;
-        const pageText = `Página ${pageNum} de ${totalPages}`;
+      if (pageElements && pageElements.length > 0) {
+        // We can capture pages one by one to ensure perfect pagination and zero content cutoffs!
+        for (let i = 0; i < pageElements.length; i++) {
+          const pageEl = pageElements[i] as HTMLElement;
+          if (i > 0) {
+            pdf.addPage();
+          }
+          
+          const canvas = await html2canvas(pageEl, {
+            scale: 2.2, // Slightly higher quality for crisp text
+            useCORS: true,
+            logging: false,
+            backgroundColor: '#ffffff',
+            allowTaint: true,
+            onclone: (clonedDoc) => {
+              // Get the cloned elements and sanitize its colors (avoiding any oklab/oklch render issues in Safari/Firefox html2canvas)
+              const elements = clonedDoc.querySelectorAll("*");
+              elements.forEach((el) => {
+                const htmlEl = el as HTMLElement;
+                const style = window.getComputedStyle(el);
+                const properties = ['backgroundColor', 'color', 'borderColor', 'borderTopColor', 'borderBottomColor', 'borderLeftColor', 'borderRightColor', 'outlineColor', 'fill', 'stroke'];
+                
+                properties.forEach(prop => {
+                  try {
+                    const value = (style as any)[prop];
+                    if (value && (
+                      value.includes("oklab") || 
+                      value.includes("oklch") || 
+                      value.includes("color-mix") || 
+                      value.includes("lab(") || 
+                      value.includes("lch(")
+                    )) {
+                      if (prop.toLowerCase().includes('background')) {
+                        htmlEl.style.setProperty(prop, "#ffffff", "important");
+                      } else if (prop.toLowerCase().includes('color')) {
+                        htmlEl.style.setProperty(prop, "#111827", "important");
+                      } else if (prop.toLowerCase().includes('border')) {
+                        htmlEl.style.setProperty(prop, "#e5e7eb", "important");
+                      } else {
+                        htmlEl.style.setProperty(prop, "inherit", "important");
+                      }
+                    }
+                  } catch (e) {}
+                });
+              });
+            }
+          });
+
+          const imgData = canvas.toDataURL('image/png');
+          pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+        }
+      } else {
+        // Fallback to legacy single element capture & slice
+        const canvas = await html2canvas(element, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+          allowTaint: true,
+          onclone: (clonedDoc) => {
+            const elements = clonedDoc.querySelectorAll("*");
+            elements.forEach((el) => {
+              const htmlEl = el as HTMLElement;
+              const style = window.getComputedStyle(el);
+              const properties = ['backgroundColor', 'color', 'borderColor', 'borderTopColor', 'borderBottomColor', 'borderLeftColor', 'borderRightColor', 'outlineColor', 'fill', 'stroke'];
+              
+              properties.forEach(prop => {
+                try {
+                  const value = (style as any)[prop];
+                  if (value && (
+                    value.includes("oklab") || 
+                    value.includes("oklch") || 
+                    value.includes("color-mix") || 
+                    value.includes("lab(") || 
+                    value.includes("lch(")
+                  )) {
+                    if (prop.toLowerCase().includes('background')) {
+                      htmlEl.style.setProperty(prop, "#ffffff", "important");
+                    } else if (prop.toLowerCase().includes('color')) {
+                      htmlEl.style.setProperty(prop, "#111827", "important");
+                    } else if (prop.toLowerCase().includes('border')) {
+                      htmlEl.style.setProperty(prop, "#e5e7eb", "important");
+                    } else {
+                      htmlEl.style.setProperty(prop, "inherit", "important");
+                    }
+                  }
+                } catch (e) {}
+              });
+            });
+          }
+        });
         
-        pdf.text(footerText, pdfWidth / 2, pdfHeight - 10, { align: 'center' });
-        pdf.text(pageText, pdfWidth - 15, pdfHeight - 10, { align: 'right' });
-      };
+        const imgData = canvas.toDataURL('image/png');
+        const imgProps = pdf.getImageProperties(imgData);
+        const imgHeightInPdf = (imgProps.height * pdfWidth) / imgProps.width;
+        
+        let heightLeft = imgHeightInPdf;
+        let position = 0;
 
-      const totalPages = Math.ceil(imgHeightInPdf / (pdfHeight - 20)) || 1; // Subtract margin
+        const addPageDecorations = (pageNum: number, totalPages: number) => {
+          pdf.setFontSize(8);
+          pdf.setTextColor(180, 180, 180);
+          const footerText = `${companyName} • CNPJ: ${companyCnpj} • CRECI PJ: ${companyCreci}`;
+          const pageText = `Página ${pageNum} de ${totalPages}`;
+          
+          pdf.text(footerText, pdfWidth / 2, pdfHeight - 10, { align: 'center' });
+          pdf.text(pageText, pdfWidth - 15, pdfHeight - 10, { align: 'right' });
+        };
 
-      // First page
-      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeightInPdf);
-      addPageDecorations(1, totalPages);
-      heightLeft -= pdfHeight;
+        const totalPages = Math.ceil(imgHeightInPdf / (pdfHeight - 20)) || 1;
 
-      // Add additional pages if needed
-      let currentPage = 2;
-      while (heightLeft > 0 && currentPage <= totalPages) {
-        position = (currentPage - 1) * -pdfHeight;
-        pdf.addPage();
+        // First page
         pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeightInPdf);
-        addPageDecorations(currentPage, totalPages);
+        addPageDecorations(1, totalPages);
         heightLeft -= pdfHeight;
-        currentPage++;
+
+        // Add additional pages if needed
+        let currentPage = 2;
+        while (heightLeft > 0 && currentPage <= totalPages) {
+          position = (currentPage - 1) * -pdfHeight;
+          pdf.addPage();
+          pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeightInPdf);
+          addPageDecorations(currentPage, totalPages);
+          heightLeft -= pdfHeight;
+          currentPage++;
+        }
       }
       
       pdf.save(`Contrato_${contract.nomeCliente || 'Pendente'}_${format(new Date(), 'dd_MM_yyyy')}.pdf`);
@@ -2780,7 +2900,18 @@ export default function AdminContractForm() {
     } else {
       currentMetodos.push(metodo);
     }
-    updateDados(section, 'metodos', currentMetodos);
+    setContract(prev => ({
+      ...prev,
+      formasPagamento: currentMetodos,
+      formaPagamento: currentMetodos.join(', '),
+      dados: {
+        ...prev.dados,
+        [section]: {
+          ...prev.dados[section],
+          metodos: currentMetodos
+        }
+      }
+    }));
   };
 
   const handleAddClauseFromSys = (sysClause: any) => {
@@ -3171,7 +3302,11 @@ export default function AdminContractForm() {
                             <input type="text" className="input-field" placeholder="WhatsApp" value={contract.dados.locador?.whatsapp || ''} onChange={e => updateDados('locador', 'whatsapp', e.target.value)} />
                           </div>
                           <input type="email" className="input-field" placeholder="E-mail" value={contract.dados.locador?.email || ''} onChange={e => updateDados('locador', 'email', e.target.value)} />
-                          <input type="text" className="input-field" placeholder="Endereço Residencial" value={contract.dados.locador?.endereco || ''} onChange={e => updateDados('locador', 'endereco', e.target.value)} />
+                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                             <input type="text" className="input-field" placeholder="Endereço Residencial *" value={contract.dados.locador?.endereco || ''} onChange={e => updateDados('locador', 'endereco', e.target.value)} required />
+                             <input type="text" className="input-field" placeholder="Número *" value={contract.dados.locador?.numero || ''} onChange={e => updateDados('locador', 'numero', e.target.value)} required />
+                             <input type="text" className="input-field" placeholder="Complemento" value={contract.dados.locador?.complemento || ''} onChange={e => updateDados('locador', 'complemento', e.target.value)} />
+                           </div>
                           <div className="grid grid-cols-3 gap-4">
                             <input type="text" className="col-span-1 input-field" placeholder="CEP" value={contract.dados.locador?.cep || ''} onChange={e => updateDados('locador', 'cep', e.target.value)} />
                             <input type="text" className="col-span-1 input-field" placeholder="Cidade" value={contract.dados.locador?.cidade || ''} onChange={e => updateDados('locador', 'cidade', e.target.value)} />
@@ -3270,16 +3405,38 @@ export default function AdminContractForm() {
                                   }}
                                 />
                               </div>
-                              <input
-                                type="text"
-                                className="input-field"
-                                placeholder="Endereço Residencial do Cônjuge"
-                                value={contract.dados.locador?.locadorConjugeEndereco || contract.dados.locador?.conjugeEndereco || ''}
-                                onChange={e => {
-                                  updateDados('locador', 'locadorConjugeEndereco', e.target.value);
-                                  updateDados('locador', 'conjugeEndereco', e.target.value);
-                                }}
-                              />
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <input
+                                  type="text"
+                                  className="input-field"
+                                  placeholder="Endereço Residencial do Cônjuge"
+                                  value={contract.dados.locador?.locadorConjugeEndereco || contract.dados.locador?.conjugeEndereco || ''}
+                                  onChange={e => {
+                                    updateDados('locador', 'locadorConjugeEndereco', e.target.value);
+                                    updateDados('locador', 'conjugeEndereco', e.target.value);
+                                  }}
+                                />
+                                <input
+                                  type="text"
+                                  className="input-field"
+                                  placeholder="Número do Cônjuge"
+                                  value={contract.dados.locador?.locadorConjugeNumero || contract.dados.locador?.conjugeNumero || ''}
+                                  onChange={e => {
+                                    updateDados('locador', 'locadorConjugeNumero', e.target.value);
+                                    updateDados('locador', 'conjugeNumero', e.target.value);
+                                  }}
+                                />
+                                <input
+                                  type="text"
+                                  className="input-field"
+                                  placeholder="Complemento do Cônjuge"
+                                  value={contract.dados.locador?.locadorConjugeComplemento || contract.dados.locador?.conjugeComplemento || ''}
+                                  onChange={e => {
+                                    updateDados('locador', 'locadorConjugeComplemento', e.target.value);
+                                    updateDados('locador', 'conjugeComplemento', e.target.value);
+                                  }}
+                                />
+                              </div>
                             </div>
                           )}
                         </div>
@@ -3309,7 +3466,11 @@ export default function AdminContractForm() {
                             <input type="text" className="input-field" placeholder="WhatsApp" value={contract.dados.locatario?.whatsapp || ''} onChange={e => updateDados('locatario', 'whatsapp', e.target.value)} />
                           </div>
                           <input type="email" className="input-field" placeholder="E-mail" value={contract.dados.locatario?.email || ''} onChange={e => updateDados('locatario', 'email', e.target.value)} />
-                          <input type="text" className="input-field" placeholder="Endereço Residencial" value={contract.dados.locatario?.endereco || ''} onChange={e => updateDados('locatario', 'endereco', e.target.value)} />
+                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                             <input type="text" className="input-field" placeholder="Endereço Residencial *" value={contract.dados.locatario?.endereco || ''} onChange={e => updateDados('locatario', 'endereco', e.target.value)} required />
+                             <input type="text" className="input-field" placeholder="Número *" value={contract.dados.locatario?.numero || ''} onChange={e => updateDados('locatario', 'numero', e.target.value)} required />
+                             <input type="text" className="input-field" placeholder="Complemento" value={contract.dados.locatario?.complemento || ''} onChange={e => updateDados('locatario', 'complemento', e.target.value)} />
+                           </div>
                           <div className="grid grid-cols-3 gap-4">
                             <input type="text" className="col-span-1 input-field" placeholder="CEP" value={contract.dados.locatario?.cep || ''} onChange={e => updateDados('locatario', 'cep', e.target.value)} />
                             <input type="text" className="col-span-1 input-field" placeholder="Cidade" value={contract.dados.locatario?.cidade || ''} onChange={e => updateDados('locatario', 'cidade', e.target.value)} />
@@ -3408,16 +3569,38 @@ export default function AdminContractForm() {
                                   }}
                                 />
                               </div>
-                              <input
-                                type="text"
-                                className="input-field"
-                                placeholder="Endereço Residencial do Cônjuge"
-                                value={contract.dados.locatario?.locatarioConjugeEndereco || contract.dados.locatario?.conjugeEndereco || ''}
-                                onChange={e => {
-                                  updateDados('locatario', 'locatarioConjugeEndereco', e.target.value);
-                                  updateDados('locatario', 'conjugeEndereco', e.target.value);
-                                }}
-                              />
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <input
+                                  type="text"
+                                  className="input-field"
+                                  placeholder="Endereço Residencial do Cônjuge"
+                                  value={contract.dados.locatario?.locatarioConjugeEndereco || contract.dados.locatario?.conjugeEndereco || ''}
+                                  onChange={e => {
+                                    updateDados('locatario', 'locatarioConjugeEndereco', e.target.value);
+                                    updateDados('locatario', 'conjugeEndereco', e.target.value);
+                                  }}
+                                />
+                                <input
+                                  type="text"
+                                  className="input-field"
+                                  placeholder="Número do Cônjuge"
+                                  value={contract.dados.locatario?.locatarioConjugeNumero || contract.dados.locatario?.conjugeNumero || ''}
+                                  onChange={e => {
+                                    updateDados('locatario', 'locatarioConjugeNumero', e.target.value);
+                                    updateDados('locatario', 'conjugeNumero', e.target.value);
+                                  }}
+                                />
+                                <input
+                                  type="text"
+                                  className="input-field"
+                                  placeholder="Complemento do Cônjuge"
+                                  value={contract.dados.locatario?.locatarioConjugeComplemento || contract.dados.locatario?.conjugeComplemento || ''}
+                                  onChange={e => {
+                                    updateDados('locatario', 'locatarioConjugeComplemento', e.target.value);
+                                    updateDados('locatario', 'conjugeComplemento', e.target.value);
+                                  }}
+                                />
+                              </div>
                             </div>
                           )}
                         </div>
@@ -3449,10 +3632,20 @@ export default function AdminContractForm() {
                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">E-mail</label>
                             <input type="email" className="input-field" placeholder="E-mail" value={contract.dados.fiador?.email || ''} onChange={e => updateDados('fiador', 'email', e.target.value)} />
                           </div>
-                          <div className="space-y-2">
-                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Endereço Residencial do Fiador</label>
-                            <input type="text" className="input-field" placeholder="Endereço Completo" value={contract.dados.fiador?.endereco || ''} onChange={e => updateDados('fiador', 'endereco', e.target.value)} />
-                          </div>
+                           <div className="space-y-2">
+                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Endereço Residencial do Fiador <span className="text-red-500">*</span></label>
+                             <input type="text" className="input-field" placeholder="Endereço Completo" value={contract.dados.fiador?.endereco || ''} onChange={e => updateDados('fiador', 'endereco', e.target.value)} required />
+                           </div>
+                           <div className="grid grid-cols-2 gap-4">
+                             <div className="space-y-2">
+                               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Número <span className="text-red-500">*</span></label>
+                               <input type="text" className="input-field" placeholder="Número" value={contract.dados.fiador?.numero || ''} onChange={e => updateDados('fiador', 'numero', e.target.value)} required />
+                             </div>
+                             <div className="space-y-2">
+                               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Complemento</label>
+                               <input type="text" className="input-field" placeholder="Complemento" value={contract.dados.fiador?.complemento || ''} onChange={e => updateDados('fiador', 'complemento', e.target.value)} />
+                             </div>
+                           </div>
                         </div>
                       </div>
                     </div>
@@ -3695,10 +3888,20 @@ export default function AdminContractForm() {
                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">E-mail</label>
                             <input type="email" className="input-field" value={contract.dados.proponente?.email || ''} onChange={e => updateDados('proponente', 'email', e.target.value)} />
                           </div>
-                          <div className="space-y-2">
-                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Endereço Residencial</label>
-                            <input type="text" className="input-field" value={contract.dados.proponente?.endereco || ''} onChange={e => updateDados('proponente', 'endereco', e.target.value)} />
-                          </div>
+                           <div className="space-y-2">
+                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Endereço Residencial <span className="text-red-500">*</span></label>
+                             <input type="text" className="input-field" value={contract.dados.proponente?.endereco || ''} onChange={e => updateDados('proponente', 'endereco', e.target.value)} required />
+                           </div>
+                           <div className="grid grid-cols-2 gap-4">
+                             <div className="space-y-2">
+                               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Número <span className="text-red-500">*</span></label>
+                               <input type="text" className="input-field" placeholder="Número" value={contract.dados.proponente?.numero || ''} onChange={e => updateDados('proponente', 'numero', e.target.value)} required />
+                             </div>
+                             <div className="space-y-2">
+                               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Complemento</label>
+                               <input type="text" className="input-field" placeholder="Complemento" value={contract.dados.proponente?.complemento || ''} onChange={e => updateDados('proponente', 'complemento', e.target.value)} />
+                             </div>
+                           </div>
                           <div className="grid grid-cols-3 gap-4">
                             <div className="space-y-2 col-span-1">
                               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">CEP</label>
@@ -3827,19 +4030,47 @@ export default function AdminContractForm() {
                                   />
                                 </div>
                               </div>
-                              <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Endereço Residencial</label>
-                                <input
-                                  type="text"
-                                  className="input-field"
-                                  placeholder="Endereço Residencial do Cônjuge"
-                                  value={contract.dados.proponente?.compradorConjugeEndereco || contract.dados.proponente?.conjugeEndereco || ''}
-                                  onChange={e => {
-                                    updateDados('proponente', 'compradorConjugeEndereco', e.target.value);
-                                    updateDados('proponente', 'conjugeEndereco', e.target.value);
-                                  }}
-                                />
-                              </div>
+                               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                 <div className="sm:col-span-1 space-y-2">
+                                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Endereço Residencial</label>
+                                   <input
+                                     type="text"
+                                     className="input-field"
+                                     placeholder="Endereço Residencial do Cônjuge"
+                                     value={contract.dados.proponente?.compradorConjugeEndereco || contract.dados.proponente?.conjugeEndereco || ''}
+                                     onChange={e => {
+                                       updateDados('proponente', 'compradorConjugeEndereco', e.target.value);
+                                       updateDados('proponente', 'conjugeEndereco', e.target.value);
+                                     }}
+                                   />
+                                 </div>
+                                 <div className="space-y-2">
+                                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Número do Cônjuge</label>
+                                   <input
+                                     type="text"
+                                     className="input-field"
+                                     placeholder="Número"
+                                     value={contract.dados.proponente?.compradorConjugeNumero || contract.dados.proponente?.conjugeNumero || ''}
+                                     onChange={e => {
+                                       updateDados('proponente', 'compradorConjugeNumero', e.target.value);
+                                       updateDados('proponente', 'conjugeNumero', e.target.value);
+                                     }}
+                                   />
+                                 </div>
+                                 <div className="space-y-2">
+                                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Complemento do Cônjuge</label>
+                                   <input
+                                     type="text"
+                                     className="input-field"
+                                     placeholder="Complemento"
+                                     value={contract.dados.proponente?.compradorConjugeComplemento || contract.dados.proponente?.conjugeComplemento || ''}
+                                     onChange={e => {
+                                       updateDados('proponente', 'compradorConjugeComplemento', e.target.value);
+                                       updateDados('proponente', 'conjugeComplemento', e.target.value);
+                                     }}
+                                   />
+                                 </div>
+                               </div>
                             </div>
                           )}
                         </div>
@@ -3940,13 +4171,29 @@ export default function AdminContractForm() {
                               updateDados('aceitante', 'email', e.target.value);
                             }} />
                           </div>
-                          <div className="space-y-2">
-                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Endereço</label>
-                            <input type="text" className="input-field" placeholder="Endereço" value={contract.dados.vendedor?.endereco || contract.dados.aceitante?.endereco || ''} onChange={e => {
-                              updateDados('vendedor', 'endereco', e.target.value);
-                              updateDados('aceitante', 'endereco', e.target.value);
-                            }} />
-                          </div>
+                           <div className="space-y-2">
+                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Endereço <span className="text-red-500">*</span></label>
+                             <input type="text" className="input-field" placeholder="Endereço" value={contract.dados.vendedor?.endereco || contract.dados.aceitante?.endereco || ''} onChange={e => {
+                               updateDados('vendedor', 'endereco', e.target.value);
+                               updateDados('aceitante', 'endereco', e.target.value);
+                             }} required />
+                           </div>
+                           <div className="grid grid-cols-2 gap-4">
+                             <div className="space-y-2">
+                               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Número <span className="text-red-500">*</span></label>
+                               <input type="text" className="input-field" placeholder="Número" value={contract.dados.vendedor?.numero || contract.dados.aceitante?.numero || ''} onChange={e => {
+                                 updateDados('vendedor', 'numero', e.target.value);
+                                 updateDados('aceitante', 'numero', e.target.value);
+                               }} required />
+                             </div>
+                             <div className="space-y-2">
+                               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Complemento</label>
+                               <input type="text" className="input-field" placeholder="Complemento" value={contract.dados.vendedor?.complemento || contract.dados.aceitante?.complemento || ''} onChange={e => {
+                                 updateDados('vendedor', 'complemento', e.target.value);
+                                 updateDados('aceitante', 'complemento', e.target.value);
+                               }} />
+                             </div>
+                           </div>
                           <div className="grid grid-cols-3 gap-4">
                             <div className="space-y-2 col-span-1">
                               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">CEP</label>
@@ -4084,19 +4331,47 @@ export default function AdminContractForm() {
                                   />
                                 </div>
                               </div>
-                              <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Endereço Residencial</label>
-                                <input
-                                  type="text"
-                                  className="input-field"
-                                  placeholder="Endereço Residencial do Cônjuge"
-                                  value={contract.dados.vendedor?.vendedorConjugeEndereco || contract.dados.vendedor?.conjugeEndereco || ''}
-                                  onChange={e => {
-                                    updateDados('vendedor', 'vendedorConjugeEndereco', e.target.value);
-                                    updateDados('vendedor', 'conjugeEndereco', e.target.value);
-                                  }}
-                                />
-                              </div>
+                               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                 <div className="sm:col-span-1 space-y-2">
+                                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Endereço Residencial</label>
+                                   <input
+                                     type="text"
+                                     className="input-field"
+                                     placeholder="Endereço Residencial do Cônjuge"
+                                     value={contract.dados.vendedor?.vendedorConjugeEndereco || contract.dados.vendedor?.conjugeEndereco || ''}
+                                     onChange={e => {
+                                       updateDados('vendedor', 'vendedorConjugeEndereco', e.target.value);
+                                       updateDados('vendedor', 'conjugeEndereco', e.target.value);
+                                     }}
+                                   />
+                                 </div>
+                                 <div className="space-y-2">
+                                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Número do Cônjuge</label>
+                                   <input
+                                     type="text"
+                                     className="input-field"
+                                     placeholder="Número"
+                                     value={contract.dados.vendedor?.vendedorConjugeNumero || contract.dados.vendedor?.conjugeNumero || ''}
+                                     onChange={e => {
+                                       updateDados('vendedor', 'vendedorConjugeNumero', e.target.value);
+                                       updateDados('vendedor', 'conjugeNumero', e.target.value);
+                                     }}
+                                   />
+                                 </div>
+                                 <div className="space-y-2">
+                                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Complemento do Cônjuge</label>
+                                   <input
+                                     type="text"
+                                     className="input-field"
+                                     placeholder="Complemento"
+                                     value={contract.dados.vendedor?.vendedorConjugeComplemento || contract.dados.vendedor?.conjugeComplemento || ''}
+                                     onChange={e => {
+                                       updateDados('vendedor', 'vendedorConjugeComplemento', e.target.value);
+                                       updateDados('vendedor', 'conjugeComplemento', e.target.value);
+                                     }}
+                                   />
+                                 </div>
+                               </div>
                             </div>
                           )}
                         </div>
@@ -4418,7 +4693,7 @@ export default function AdminContractForm() {
                           <div className="space-y-4">
                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Formas de Pagamento</label>
                             <div className="grid grid-cols-2 gap-3">
-                              {['À vista', 'Financiamento', 'FGTS', 'Parcelamento Direto', 'Sinal', 'Permuta', 'Outras'].map(m => (
+                              {['À vista', 'Financiamento', 'Consórcio', 'FGTS', 'Parcelamento Direto', 'Sinal', 'Permuta', 'Outras'].map(m => (
                                 <button
                                   key={m}
                                   onClick={() => toggleMetodo(contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos', m)}

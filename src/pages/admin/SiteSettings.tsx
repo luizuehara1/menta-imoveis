@@ -82,6 +82,8 @@ const SiteSettings = () => {
             email: data.empresaEmail || data.empresa?.email || DEFAULT_SITE_CONFIG.empresa.email,
             site: data.empresaSite || data.empresa?.site || DEFAULT_SITE_CONFIG.empresa.site,
             endereco: data.empresaEndereco || data.empresa?.endereco || DEFAULT_SITE_CONFIG.empresa.endereco,
+            numero: data.empresaNumero || data.empresa?.numero || DEFAULT_SITE_CONFIG.empresa.numero || "",
+            complemento: data.empresaComplemento || data.empresa?.complemento || DEFAULT_SITE_CONFIG.empresa.complemento || "",
             bairro: data.empresaBairro || data.empresa?.bairro || DEFAULT_SITE_CONFIG.empresa.bairro,
             cidade: data.empresaCidade || data.empresa?.cidade || DEFAULT_SITE_CONFIG.empresa.cidade,
             estado: data.empresaEstado || data.empresa?.estado || DEFAULT_SITE_CONFIG.empresa.estado,
@@ -213,6 +215,8 @@ const SiteSettings = () => {
         empresaEmail: settings.empresa.email || "",
         empresaSite: settings.empresa.site || "",
         empresaEndereco: settings.empresa.endereco || "",
+        empresaNumero: settings.empresa.numero || "",
+        empresaComplemento: settings.empresa.complemento || "",
         empresaBairro: settings.empresa.bairro || "",
         empresaCidade: settings.empresa.cidade || "",
         empresaEstado: settings.empresa.estado || "",
@@ -795,12 +799,34 @@ const SiteSettings = () => {
                       />
                     </div>
 
-                    <div className="md:col-span-2 lg:col-span-3 space-y-2">
-                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Endereço Completo</label>
+                    <div className="space-y-2">
+                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Endereço <span className="text-red-500">*</span></label>
                       <input 
                         type="text" 
                         value={settings.empresa.endereco}
                         onChange={(e) => handleNestedChange('empresa', 'endereco', e.target.value)}
+                        className="admin-input" 
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Número <span className="text-red-500">*</span></label>
+                      <input 
+                        type="text" 
+                        value={settings.empresa.numero || ""}
+                        onChange={(e) => handleNestedChange('empresa', 'numero', e.target.value)}
+                        className="admin-input" 
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Complemento</label>
+                      <input 
+                        type="text" 
+                        value={settings.empresa.complemento || ""}
+                        onChange={(e) => handleNestedChange('empresa', 'complemento', e.target.value)}
                         className="admin-input" 
                       />
                     </div>

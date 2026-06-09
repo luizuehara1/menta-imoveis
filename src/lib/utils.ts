@@ -165,6 +165,22 @@ export function getProprietarioFromImovel(imovel: any = {}): any {
       imovel.proprietario?.endereco ||
       "",
 
+    numero:
+      imovel.proprietarioNumero ||
+      imovel.numeroProprietario ||
+      imovel.vendedorNumero ||
+      imovel.proprietario?.numero ||
+      imovel.proprietario?.number ||
+      "",
+
+    complemento:
+      imovel.proprietarioComplemento ||
+      imovel.complementoProprietario ||
+      imovel.vendedorComplemento ||
+      imovel.proprietario?.complemento ||
+      imovel.proprietario?.complement ||
+      "",
+
     cep:
       imovel.proprietarioCep ||
       imovel.cepProprietario ||
@@ -240,6 +256,18 @@ export function getProprietarioFromImovel(imovel: any = {}): any {
       endereco:
         imovel.proprietarioConjugeEndereco ||
         imovel.proprietario?.conjuge?.endereco ||
+        "",
+
+      numero:
+        imovel.proprietarioConjugeNumero ||
+        imovel.proprietario?.conjuge?.numero ||
+        imovel.proprietario?.conjuge?.number ||
+        "",
+
+      complemento:
+        imovel.proprietarioConjugeComplemento ||
+        imovel.proprietario?.conjuge?.complemento ||
+        imovel.proprietario?.conjuge?.complement ||
         "",
 
       cep:

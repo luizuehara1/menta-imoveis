@@ -58,6 +58,8 @@ export interface Property {
   address: string;
   number: string;
   complement?: string;
+  numero?: string;
+  complemento?: string;
   referencePoint?: string;
   googleMapsLink?: string;
   
@@ -438,6 +440,8 @@ export interface SiteConfig {
     email: string;
     site?: string;
     endereco: string;
+    numero?: string;
+    complemento?: string;
     bairro?: string;
     cidade?: string;
     estado?: string;
