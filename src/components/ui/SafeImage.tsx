@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { ImageOff } from 'lucide-react';
 import { cn, getSafeImageUrl } from '../../lib/utils';
+import { getOptimizedCloudinaryUrl } from '../../utils/image';
 
 interface SafeImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   fallbackSrc?: string;
   className?: string;
   priority?: boolean;
+  widthSize?: number;
 }
 
 export const SafeImage: React.FC<SafeImageProps> = ({ 
@@ -14,6 +16,7 @@ export const SafeImage: React.FC<SafeImageProps> = ({
   className, 
   priority = false,
   fallbackSrc,
+  widthSize = 800,
   ...props 
 }) => {
   const [error, setError] = useState(false);
@@ -21,6 +24,7 @@ export const SafeImage: React.FC<SafeImageProps> = ({
   
   // Use robust helper for initial URL and fallback
   const safeSrc = getSafeImageUrl(src, fallbackSrc || "https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&q=80&w=800");
+  const optimizedSrc = getOptimizedCloudinaryUrl(safeSrc, widthSize);
 
   useEffect(() => {
     setError(false);
@@ -58,7 +62,7 @@ export const SafeImage: React.FC<SafeImageProps> = ({
         </div>
       )}
       <img
-        src={error ? (fallbackSrc || "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&q=80&w=1200") : safeSrc}
+        src={error ? (fallbackSrc || "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&q=80&w=1200") : optimizedSrc}
         alt={alt}
         className={cn("w-full h-full object-cover transition-opacity duration-300", loading ? "opacity-0" : "opacity-100")}
         referrerPolicy="no-referrer"
@@ -66,6 +70,7 @@ export const SafeImage: React.FC<SafeImageProps> = ({
         onError={handleImageError}
         onLoad={() => setLoading(false)}
         loading={priority ? "eager" : props.loading || "lazy"}
+        decoding={priority ? "sync" : "async"}
         {...props}
       />
     </div>

@@ -7,30 +7,38 @@ import app from './lib/firebase';
 import PublicLayout from './layouts/PublicLayout';
 import AdminLayout from './layouts/AdminLayout';
 
-// Public Pages
-import Home from './pages/public/Home';
-import PropertyList from './pages/public/PropertyList';
-import PropertyDetail from './pages/public/PropertyDetail';
-import About from './pages/public/About';
-import Brokers from './pages/public/Brokers';
-import Contact from './pages/public/Contact';
-import NotFound from './pages/public/NotFound';
+// Lazy load pages to support code splitting
+const Home = React.lazy(() => import('./pages/public/Home'));
+const PropertyList = React.lazy(() => import('./pages/public/PropertyList'));
+const PropertyDetail = React.lazy(() => import('./pages/public/PropertyDetail'));
+const About = React.lazy(() => import('./pages/public/About'));
+const Brokers = React.lazy(() => import('./pages/public/Brokers'));
+const Contact = React.lazy(() => import('./pages/public/Contact'));
+const NotFound = React.lazy(() => import('./pages/public/NotFound'));
 
-// Admin Pages
-import AdminDashboard from './pages/admin/Dashboard';
-import AdminPropertyList from './pages/admin/PropertyList';
-import AdminPropertyForm from './pages/admin/PropertyForm';
-import AdminVisits from './pages/admin/Visits';
-import AdminBrokers from './pages/admin/Brokers';
-import AdminFinance from './pages/admin/Finance';
-import AdminRents from './pages/admin/Rents';
-import AdminContracts from './pages/admin/Contracts';
-import AdminContractForm from './pages/admin/ContractForm';
-import AdminSiteSettings from './pages/admin/SiteSettings';
-import AdminLeaseSettings from './pages/admin/LeaseSettings';
-import AdminNeighborhoods from './pages/admin/Neighborhoods';
-import AdminContractClauses from './pages/admin/ContractClauses';
-import AdminLogin from './pages/admin/Login';
+const AdminDashboard = React.lazy(() => import('./pages/admin/Dashboard'));
+const AdminPropertyList = React.lazy(() => import('./pages/admin/PropertyList'));
+const AdminPropertyForm = React.lazy(() => import('./pages/admin/PropertyForm'));
+const AdminVisits = React.lazy(() => import('./pages/admin/Visits'));
+const AdminBrokers = React.lazy(() => import('./pages/admin/Brokers'));
+const AdminFinance = React.lazy(() => import('./pages/admin/Finance'));
+const AdminRents = React.lazy(() => import('./pages/admin/Rents'));
+const AdminContracts = React.lazy(() => import('./pages/admin/Contracts'));
+const AdminContractForm = React.lazy(() => import('./pages/admin/ContractForm'));
+const AdminSiteSettings = React.lazy(() => import('./pages/admin/SiteSettings'));
+const AdminLeaseSettings = React.lazy(() => import('./pages/admin/LeaseSettings'));
+const AdminNeighborhoods = React.lazy(() => import('./pages/admin/Neighborhoods'));
+const AdminContractClauses = React.lazy(() => import('./pages/admin/ContractClauses'));
+const AdminLogin = React.lazy(() => import('./pages/admin/Login'));
+
+const PageLoadingSpinner: React.FC = () => (
+  <div className="h-screen w-screen flex flex-col items-center justify-center bg-gray-50/50">
+    <div className="w-10 h-10 border-4 border-gold border-t-transparent rounded-full animate-spin mb-3"></div>
+    <p className="font-display font-medium text-primary-black animate-pulse tracking-widest text-[10px] uppercase text-center">
+      Carregando...
+    </p>
+  </div>
+);
 
 const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isAdmin, loading, logout } = useAuth();
@@ -84,49 +92,51 @@ const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 function AppRoutes() {
   return (
     <Router>
-      <Routes>
-        {/* Public Site */}
-        <Route element={<PublicLayout />}>
-          <Route path="/" element={<Home />} />
-          <Route path="/imoveis" element={<PropertyList />} />
-          <Route path="/imovel/:id" element={<PropertyDetail />} />
-          <Route path="/sobre" element={<About />} />
-          <Route path="/corretores" element={<Brokers />} />
-          <Route path="/contato" element={<Contact />} />
-          <Route path="*" element={<NotFound />} />
-        </Route>
+      <React.Suspense fallback={<PageLoadingSpinner />}>
+        <Routes>
+          {/* Public Site */}
+          <Route element={<PublicLayout />}>
+            <Route path="/" element={<Home />} />
+            <Route path="/imoveis" element={<PropertyList />} />
+            <Route path="/imovel/:id" element={<PropertyDetail />} />
+            <Route path="/sobre" element={<About />} />
+            <Route path="/corretores" element={<Brokers />} />
+            <Route path="/contato" element={<Contact />} />
+            <Route path="*" element={<NotFound />} />
+          </Route>
 
-        {/* Admin Login */}
-        <Route path="/admin/login" element={<AdminLogin />} />
+          {/* Admin Login */}
+          <Route path="/admin/login" element={<AdminLogin />} />
 
-        {/* Admin Dashboard */}
-        <Route
-          path="/admin/*"
-          element={
-            <AdminRoute>
-              <AdminLayout />
-            </AdminRoute>
-          }
-        >
-          <Route index element={<AdminDashboard />} />
-          <Route path="imoveis" element={<AdminPropertyList />} />
-          <Route path="imoveis/novo" element={<AdminPropertyForm />} />
-          <Route path="imoveis/editar/:id" element={<AdminPropertyForm />} />
-          <Route path="visitas" element={<AdminVisits />} />
-          <Route path="corretores" element={<AdminBrokers />} />
-          <Route path="locacoes" element={<AdminRents />} />
-          <Route path="financeiro" element={<AdminFinance />} />
-          <Route path="contratos" element={<AdminContracts />} />
-          <Route path="contratos/novo" element={<AdminContractForm />} />
-          <Route path="contratos/editar/:id" element={<AdminContractForm />} />
-          <Route path="propostas/nova" element={<AdminContractForm />} />
-          <Route path="propostas/editar/:id" element={<AdminContractForm />} />
-          <Route path="configuracoes-locacao" element={<AdminLeaseSettings />} />
-          <Route path="bairros" element={<AdminNeighborhoods />} />
-          <Route path="clausulas-contrato" element={<AdminContractClauses />} />
-          <Route path="configuracoes-site" element={<AdminSiteSettings />} />
-        </Route>
-      </Routes>
+          {/* Admin Dashboard */}
+          <Route
+            path="/admin/*"
+            element={
+              <AdminRoute>
+                <AdminLayout />
+              </AdminRoute>
+            }
+          >
+            <Route index element={<AdminDashboard />} />
+            <Route path="imoveis" element={<AdminPropertyList />} />
+            <Route path="imoveis/novo" element={<AdminPropertyForm />} />
+            <Route path="imoveis/editar/:id" element={<AdminPropertyForm />} />
+            <Route path="visitas" element={<AdminVisits />} />
+            <Route path="corretores" element={<AdminBrokers />} />
+            <Route path="locacoes" element={<AdminRents />} />
+            <Route path="financeiro" element={<AdminFinance />} />
+            <Route path="contratos" element={<AdminContracts />} />
+            <Route path="contratos/novo" element={<AdminContractForm />} />
+            <Route path="contratos/editar/:id" element={<AdminContractForm />} />
+            <Route path="propostas/nova" element={<AdminContractForm />} />
+            <Route path="propostas/editar/:id" element={<AdminContractForm />} />
+            <Route path="configuracoes-locacao" element={<AdminLeaseSettings />} />
+            <Route path="bairros" element={<AdminNeighborhoods />} />
+            <Route path="clausulas-contrato" element={<AdminContractClauses />} />
+            <Route path="configuracoes-site" element={<AdminSiteSettings />} />
+          </Route>
+        </Routes>
+      </React.Suspense>
     </Router>
   );
 }

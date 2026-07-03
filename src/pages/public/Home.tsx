@@ -361,7 +361,7 @@ export default function Home() {
           });
         }
 
-        setFeaturedProperties(featured.slice(0, 3));
+        setFeaturedProperties(featured.slice(0, 6));
       } catch (error: any) {
         console.error("Erro ao carregar imóveis:", error);
         const code = error?.code || 'Desconhecido';

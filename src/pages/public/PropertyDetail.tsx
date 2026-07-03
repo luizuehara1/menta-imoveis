@@ -602,6 +602,7 @@ export default function PropertyDetail() {
                         src={galleryImages[activeImage]}
                         alt={`${property.title} - Imagem ${activeImage + 1}`}
                         className="w-full h-full object-cover"
+                        widthSize={1200}
                       />
                       {/* Interactive watermark overlay for public page */}
                       {galleryImagesWithMeta[activeImage]?.aplicarMarcaDagua && (
@@ -648,7 +649,7 @@ export default function PropertyDetail() {
                         onClick={() => setActiveImage(idx)}
                         className={`property-thumbnail ${activeImage === idx ? 'active' : 'opacity-60 hover:opacity-100'}`}
                       >
-                        <SafeImage src={img} className="w-full h-full object-cover animate-fadeIn" />
+                        <SafeImage src={img} className="w-full h-full object-cover animate-fadeIn" widthSize={400} />
                       </button>
                     ))}
                   </div>

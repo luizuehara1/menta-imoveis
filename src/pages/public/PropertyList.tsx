@@ -431,6 +431,7 @@ export default function PropertyList() {
   const [showFilters, setShowFilters] = useState(false);
   const [sortBy, setSortBy] = useState('recentes');
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(12);
 
   // Search Filters
   const [searchFilters, setSearchFilters] = useState<any>({
@@ -479,6 +480,7 @@ export default function PropertyList() {
   const fetchProperties = async (filters: any) => {
     setLoading(true);
     setLoadError(null);
+    setVisibleCount(12);
     console.log("Origem atual:", window.location.origin);
     console.log("URL atual:", window.location.href);
     console.log("Buscando imóveis da coleção imoveis...");
@@ -863,23 +865,38 @@ export default function PropertyList() {
                 </button>
             </motion.div>
           ) : (
-            <motion.div 
-              variants={staggerContainer}
-              initial="initial"
-              animate="animate"
-              className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-10 pb-24"
-            >
-              <AnimatePresence mode="popLayout">
-                {sortedProperties.map((property, idx) => (
-                  <PropertyCard 
-                    key={property.id} 
-                    property={property} 
-                    index={idx} 
-                    agencyWhatsApp={settings.empresa.whatsapp}
-                  />
-                ))}
-              </AnimatePresence>
-            </motion.div>
+            <>
+              <motion.div 
+                variants={staggerContainer}
+                initial="initial"
+                animate="animate"
+                className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-10 pb-12"
+              >
+                <AnimatePresence mode="popLayout">
+                  {sortedProperties.slice(0, visibleCount).map((property, idx) => (
+                    <PropertyCard 
+                      key={property.id} 
+                      property={property} 
+                      index={idx} 
+                      agencyWhatsApp={settings.empresa.whatsapp}
+                    />
+                  ))}
+                </AnimatePresence>
+              </motion.div>
+
+              {sortedProperties.length > visibleCount && (
+                <div className="flex justify-center pb-24">
+                  <motion.button 
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setVisibleCount(prev => prev + 12)}
+                    className="btn-gold !px-12 !py-4.5 !text-[11px] font-black uppercase tracking-[0.2em] !rounded-2xl shadow-xl shadow-gold/20 flex items-center gap-2"
+                  >
+                    Carregar Mais Imóveis
+                  </motion.button>
+                </div>
+              )}
+            </>
           )}
         </div>
 

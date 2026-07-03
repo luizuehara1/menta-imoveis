@@ -60,6 +60,8 @@ import {
 } from "../../constants/animations";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import html2canvas from "html2canvas";
+import { ReceiptRenderer } from "../../lib/pdf/ReceiptRenderer";
 
 const getWatermarkData = (
   url: string,
@@ -216,6 +218,11 @@ export default function AdminRents() {
   const [receiptType, setReceiptType] = useState<"locatario" | "locador">("locatario");
   const [receiptDatabaseId, setReceiptDatabaseId] = useState<string | null>(null);
   const [savingReceipt, setSavingReceipt] = useState(false);
+  const [activeReceiptPdf, setActiveReceiptPdf] = useState<{
+    data: any;
+    type: "locatario" | "locador";
+  } | null>(null);
+  const receiptPdfRef = React.useRef<HTMLDivElement>(null);
   const [receiptForm, setReceiptForm] = useState({
     nomePagadorRecebedor: "",
     cpfCnpj: "",
@@ -998,7 +1005,115 @@ export default function AdminRents() {
     }
   };
 
+  const renderReceiptPDF_Vector = async (type: "locatario" | "locador") => {
+    try {
+      const mappedData = {
+        ...receiptForm,
+        valorTotal: type === "locatario" ? receiptForm.valorTotal : receiptForm.valorRepassadoProprietario
+      };
+
+      setActiveReceiptPdf({ data: mappedData, type });
+      await new Promise((resolve) => setTimeout(resolve, 450));
+
+      if (!receiptPdfRef.current) {
+        throw new Error("Elemento do PDF não renderizado.");
+      }
+
+      const canvas = await html2canvas(receiptPdfRef.current, {
+        scale: 3.5,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        allowTaint: true
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+
+      const suffix = type === "locatario" ? "Locatario" : "Locador";
+      const codeSuffix = receiptForm.codigoImovel ? safeText(receiptForm.codigoImovel) : "EDITADO";
+      const nameSuffix = safeText(receiptForm.nomePagadorRecebedor).replace(/\s+/g, "_");
+      pdf.save(`Recibo_Aluguel_Editado_${suffix}_${codeSuffix}_${nameSuffix}.pdf`);
+
+      setActiveReceiptPdf(null);
+    } catch (error) {
+      console.error("Erro ao gerar recibo PDF editado:", error);
+      alert("Não foi possível gerar o recibo. Verifique os dados e tente novamente.");
+      setActiveReceiptPdf(null);
+    }
+  };
+
+  const renderReceiptDirect_Vector = async (lease: Lease, type: "locatario" | "locador") => {
+    try {
+      const mappedData = {
+        enderecoImovel: lease.propertyAddress || "",
+        codigoImovel: lease.propertyCode || "",
+        nomePagadorRecebedor: type === "locatario" ? lease.tenantName : lease.ownerName,
+        cpfCnpj: type === "locatario" ? lease.tenantCpf : (lease as any).ownerCpf || "",
+        valorTotal: type === "locatario" ? lease.valorTotalPagar : lease.valorRepassadoProprietario,
+        valorAluguel: lease.valorAluguel || 0,
+        valorCondominio: lease.valorCondominio || 0,
+        valorIptu: lease.valorIptu || 0,
+        valorTaxaLixo: lease.valorTaxaLixo || 0,
+        valorTaxaGas: lease.valorTaxaGas || 0,
+        valorTaxaAgua: lease.valorTaxaAgua || 0,
+        valorTaxaLuz: lease.valorTaxaLuz || 0,
+        valorSeguroIncendio: lease.valorSeguroIncendio || 0,
+        valorGarantiaCaucao: lease.valorGarantiaCaucao || 0,
+        valorOutros: lease.valorOutros || 0,
+        valorDesconto: lease.valorDesconto || 0,
+        valorComissaoImobiliaria: lease.valorComissaoImobiliaria || 0,
+        formaPagamento: "Boleto/PIX",
+        observacoes: lease.observacoes || "",
+        textoExtra: "",
+        garantiaLocaticia: lease.garantiaLocaticia || "",
+        cidadeData: `${empresa.cidade || "Balneário Camboriú"}, SC`,
+        dataPagamento: new Date().toISOString().split("T")[0],
+        emitenteAssinatura: empresa.nome || "Menta Negócios Imobiliários"
+      };
+
+      setActiveReceiptPdf({ data: mappedData, type });
+      await new Promise((resolve) => setTimeout(resolve, 450));
+
+      if (!receiptPdfRef.current) {
+        throw new Error("Elemento do PDF não renderizado.");
+      }
+
+      const canvas = await html2canvas(receiptPdfRef.current, {
+        scale: 3.5,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        allowTaint: true
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+
+      const suffix = type === "locatario" ? "Locatario" : "Locador";
+      const codeSuffix = lease.propertyCode ? safeText(lease.propertyCode) : "LEASE";
+      const nameSuffix = safeText(type === "locatario" ? lease.tenantName : lease.ownerName).replace(/\s+/g, "_");
+      pdf.save(`Recibo_Aluguel_${suffix}_${codeSuffix}_${nameSuffix}.pdf`);
+
+      setActiveReceiptPdf(null);
+    } catch (e) {
+      console.error("Erro ao gerar recibo de aluguel:", e);
+      alert("Não foi possível gerar o recibo. Verifique os dados e tente novamente.");
+      setActiveReceiptPdf(null);
+    }
+  };
+
   const generateEditedReceiptPDF = async (type: "locatario" | "locador") => {
+    await renderReceiptPDF_Vector(type);
+    return;
     try {
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.getWidth();
@@ -1009,7 +1124,7 @@ export default function AdminRents() {
       try {
         const { base64, aspectRatio } = await getWatermarkData(
           watermarkUrl,
-          0.11,
+          0.04,
         );
         const wWidth = 140;
         const wHeight = wWidth * aspectRatio;
@@ -1283,6 +1398,8 @@ export default function AdminRents() {
     lease: Lease,
     type: "locatario" | "locador" = "locatario",
   ) => {
+    await renderReceiptDirect_Vector(lease, type);
+    return;
     try {
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.getWidth();
@@ -1294,8 +1411,8 @@ export default function AdminRents() {
       try {
         const { base64, aspectRatio } = await getWatermarkData(
           watermarkUrl,
-          0.11,
-        ); // medium-low opacity watermark (11%)
+          0.04,
+        ); // low opacity watermark (4%)
         const wWidth = 140; // occupies a good portion of the sheet
         const wHeight = wWidth * aspectRatio;
         const wX = (pageWidth - wWidth) / 2;
@@ -3320,6 +3437,18 @@ export default function AdminRents() {
           </div>
         )}
       </AnimatePresence>
+
+      {activeReceiptPdf && (
+        <div style={{ position: "absolute", left: "-9999px", top: "-9999px" }}>
+          <div ref={receiptPdfRef}>
+            <ReceiptRenderer 
+              receiptData={activeReceiptPdf.data} 
+              type={activeReceiptPdf.type} 
+              company={empresa} 
+            />
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }

@@ -1,7 +1,22 @@
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from './firebase';
 
+let cachedProperties: any[] | null = null;
+let cacheTimestamp = 0;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache
+
+export async function clearPublicImoveisCache(): Promise<void> {
+  cachedProperties = null;
+  cacheTimestamp = 0;
+}
+
 export async function fetchPublicImoveis(): Promise<any[]> {
+  const now = Date.now();
+  if (cachedProperties && (now - cacheTimestamp < CACHE_DURATION)) {
+    console.log("[CACHE] Returning cached public properties. Count:", cachedProperties.length);
+    return cachedProperties;
+  }
+
   console.log("-----------------------------------------");
   console.log("[DEBUG] INICIANDO REQUISIÇÃO DE IMÓVEIS");
   console.log("Firebase projectId:", db.app.options.projectId);
@@ -47,9 +62,11 @@ export async function fetchPublicImoveis(): Promise<any[]> {
     const lista = Array.from(map.values());
 
     console.log("Total imóveis publicados (deduplicados):", lista.length);
-    console.log("Imóveis publicados:", lista);
     console.log("[DEBUG] REQUISIÇÃO CONCLUÍDA COM SUCESSO");
     console.log("-----------------------------------------");
+
+    cachedProperties = lista;
+    cacheTimestamp = now;
 
     return lista;
   } catch (error: any) {
@@ -57,7 +74,6 @@ export async function fetchPublicImoveis(): Promise<any[]> {
     console.error("[DEBUG] FALHA AO BUSCAR IMÓVEIS DO FIRESTORE");
     console.error("Código do erro:", error?.code);
     console.error("Mensagem do erro:", error?.message);
-    console.error("Objeto error completo:", error);
     console.error("-----------------------------------------");
     throw error;
   }
