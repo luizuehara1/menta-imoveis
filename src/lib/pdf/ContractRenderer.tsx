@@ -209,51 +209,11 @@ export const ContractRenderer: React.FC<ContractRendererProps> = ({ contract, co
       )
     },
     {
-      id: 'values',
-      render: () => (
-        <div className="section-block mb-4 w-full">
-          <h3 className="text-[11.5pt] font-bold text-slate-950 uppercase tracking-wider border-b border-slate-300 pb-0.5 mb-2">
-            IV - DOS VALORES E CONDIÇÕES DA NEGOCIAÇÃO
-          </h3>
-          <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-[11.5pt] leading-normal mb-2">
-            <p className="col-span-2 text-[12pt] font-bold text-slate-950">
-              Valor Total do Contrato: {safeMoney(pag.valorTotal || contract.valorContrato || 0)}
-            </p>
-            
-            {isLocacao ? (
-              <>
-                <p><strong>Data de Início:</strong> {safeDate(dados.dataInicio)}</p>
-                <p><strong>Data de Término:</strong> {safeDate(dados.dataTermino)}</p>
-                <p><strong>Check-in / Out:</strong> {safeText(dados.horarioEntrada || '14:00')} / {safeText(dados.horarioSaida || '10:00')}</p>
-                <p><strong>Total de Diárias:</strong> {Number(dados.totalDiarias) || 0} diária(s)</p>
-                <p><strong>Taxa de Limpeza:</strong> {safeMoney(pag.taxaLimpeza || 0)}</p>
-                <p><strong>Caução/Garantia:</strong> {safeMoney(pag.taxaCaucao || 0)}</p>
-              </>
-            ) : (
-              <>
-                <p><strong>Sinal de Negócio (Arras):</strong> {safeMoney(pag.valorSinal || pag.entrada || 0)}</p>
-                <p><strong>Financiamento Bancário:</strong> {safeMoney(pag.valorFinanciamento || 0)}</p>
-                <p><strong>FGTS:</strong> {safeMoney(pag.valorFgts || 0)}</p>
-                <p><strong>Parcelamento Direto:</strong> {safeMoney(pag.valorParcelas || 0)}</p>
-              </>
-            )}
-          </div>
-          
-          {pag.detalhesPagamento && (
-            <div className="text-[11.5pt] text-slate-900 leading-normal mb-2">
-              <strong>Forma de Pagamento e Detalhes de Quitação:</strong>
-              <p className="text-justify whitespace-pre-wrap mt-0.5 text-slate-800 text-[11.5pt]">{pag.detalhesPagamento}</p>
-            </div>
-          )}
-        </div>
-      )
-    },
-    {
       id: 'clauses_heading_and_clause_1',
       render: () => (
         <div className="section-block w-full">
           <h3 className="text-[11.5pt] font-bold text-slate-950 uppercase tracking-wider border-b border-slate-300 pb-0.5 mb-2">
-            V - DAS CLÁUSULAS E CONDIÇÕES CONTRATUAIS
+            IV - DAS CLÁUSULAS E CONDIÇÕES CONTRATUAIS
           </h3>
           {isLocacao ? (
             <div className="text-justify text-[11.5pt] leading-normal">

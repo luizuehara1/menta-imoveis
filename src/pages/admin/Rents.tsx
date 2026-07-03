@@ -156,6 +156,41 @@ const toNumber = (value: any): number => {
   return Number.isFinite(number) ? number : 0;
 };
 
+const formatCompetencia = (monthStr?: string): string => {
+  if (!monthStr) {
+    const today = new Date();
+    monthStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+  }
+  const parts = monthStr.split("-");
+  if (parts.length === 2) {
+    const year = parts[0];
+    const month = parseInt(parts[1], 10);
+    const months = [
+      "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+      "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+    ];
+    if (month >= 1 && month <= 12) {
+      return `${months[month - 1]}/${year}`;
+    }
+  }
+  return monthStr || "";
+};
+
+const calculateDueDate = (dueDay?: number, monthStr?: string): string => {
+  if (!dueDay) return "";
+  if (!monthStr) {
+    const today = new Date();
+    monthStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+  }
+  const parts = monthStr.split("-");
+  if (parts.length === 2) {
+    const year = parts[0];
+    const monthStrFormatted = parts[1];
+    return `${year}-${monthStrFormatted}-${String(dueDay).padStart(2, "0")}`;
+  }
+  return "";
+};
+
 export default function AdminRents() {
   const { settings } = useSettings();
   const empresa = (settings?.empresa || {}) as any;
@@ -249,7 +284,18 @@ export default function AdminRents() {
     observacoes: "",
     textoExtra: "",
     cidadeData: "",
-    emitenteAssinatura: ""
+    emitenteAssinatura: "",
+    tipoImovel: "",
+    tituloImovel: "",
+    numeroImovel: "",
+    complementoImovel: "",
+    bairroImovel: "",
+    cidadeEstadoImovel: "",
+    cepImovel: "",
+    nomeLocador: "",
+    nomeLocatario: "",
+    mesReferencia: "",
+    dataVencimento: ""
   });
 
   useEffect(() => {
@@ -849,6 +895,9 @@ export default function AdminRents() {
     }
     setSavingReceipt(false);
 
+    const prop = properties.find(p => p.id === lease.propertyId);
+    const ownerName = lease.ownerName || prop?.ownerName || "";
+
     if (savedDoc && savedDoc.dadosRecibo) {
       setReceiptDatabaseId(savedDoc.id);
       setReceiptForm({
@@ -877,12 +926,23 @@ export default function AdminRents() {
         observacoes: savedDoc.dadosRecibo.observacoes || lease.observacoes || "",
         textoExtra: savedDoc.dadosRecibo.textoExtra || "",
         cidadeData: savedDoc.dadosRecibo.cidadeData || `${lease.propertyCity || empresa.cidade || "Balneário Camboriú"}, SC`,
-        emitenteAssinatura: savedDoc.dadosRecibo.emitenteAssinatura || empresa.nome || "Menta Negócios Imobiliários"
+        emitenteAssinatura: savedDoc.dadosRecibo.emitenteAssinatura || empresa.nome || "Menta Negócios Imobiliários",
+        
+        // New fields
+        tipoImovel: savedDoc.dadosRecibo.tipoImovel || prop?.propertyType || "",
+        tituloImovel: savedDoc.dadosRecibo.tituloImovel || lease.propertyTitle || prop?.title || "",
+        numeroImovel: savedDoc.dadosRecibo.numeroImovel || prop?.number || prop?.numero || "",
+        complementoImovel: savedDoc.dadosRecibo.complementoImovel || prop?.complement || prop?.complemento || "",
+        bairroImovel: savedDoc.dadosRecibo.bairroImovel || lease.propertyNeighborhood || prop?.neighborhood || "",
+        cidadeEstadoImovel: savedDoc.dadosRecibo.cidadeEstadoImovel || (prop ? `${prop.city || lease.propertyCity || ""}/${prop.state || ""}` : `${lease.propertyCity || ""}`),
+        cepImovel: savedDoc.dadosRecibo.cepImovel || prop?.cep || "",
+        nomeLocador: savedDoc.dadosRecibo.nomeLocador || ownerName || "",
+        nomeLocatario: savedDoc.dadosRecibo.nomeLocatario || lease.tenantName || "",
+        mesReferencia: savedDoc.dadosRecibo.mesReferencia || formatCompetencia(lease.lastPaymentMonth),
+        dataVencimento: savedDoc.dadosRecibo.dataVencimento || (lease.dueDay ? calculateDueDate(lease.dueDay, lease.lastPaymentMonth) : "")
       });
     } else {
       setReceiptDatabaseId(null);
-      const prop = properties.find(p => p.id === lease.propertyId);
-      const ownerName = lease.ownerName || prop?.ownerName || "";
       
       const fireInsuranceVal = Number(
         (lease as any).valorSeguroIncendio ||
@@ -934,7 +994,20 @@ export default function AdminRents() {
         observacoes: lease.observacoes || "",
         textoExtra: "",
         cidadeData: `${lease.propertyCity || empresa.cidade || "Balneário Camboriú"}, ${new Date().toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" })}`,
-        emitenteAssinatura: empresa.nome || "Menta Negócios Imobiliários"
+        emitenteAssinatura: empresa.nome || "Menta Negócios Imobiliários",
+        
+        // New fields
+        tipoImovel: prop?.propertyType || "",
+        tituloImovel: lease.propertyTitle || prop?.title || "",
+        numeroImovel: prop?.number || prop?.numero || "",
+        complementoImovel: prop?.complement || prop?.complemento || "",
+        bairroImovel: lease.propertyNeighborhood || prop?.neighborhood || "",
+        cidadeEstadoImovel: prop ? `${prop.city || lease.propertyCity || ""}/${prop.state || ""}` : `${lease.propertyCity || ""}`,
+        cepImovel: prop?.cep || "",
+        nomeLocador: ownerName,
+        nomeLocatario: lease.tenantName || "",
+        mesReferencia: formatCompetencia(lease.lastPaymentMonth),
+        dataVencimento: lease.dueDay ? calculateDueDate(lease.dueDay, lease.lastPaymentMonth) : ""
       };
 
       const recalculated = recalculateReceiptTotal(defaultForm, type);
@@ -1024,7 +1097,62 @@ export default function AdminRents() {
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
-        allowTaint: true
+        allowTaint: true,
+        onclone: (clonedDoc) => {
+          const elements = clonedDoc.querySelectorAll("*");
+          elements.forEach((el) => {
+            const htmlEl = el as HTMLElement;
+            try {
+              const style = window.getComputedStyle(el);
+              const properties = [
+                'backgroundColor', 'color', 'borderColor', 
+                'borderTopColor', 'borderBottomColor', 
+                'borderLeftColor', 'borderRightColor', 
+                'outlineColor', 'fill', 'stroke'
+              ];
+              
+              properties.forEach(prop => {
+                try {
+                  const value = (style as any)[prop];
+                  if (value && (
+                    value.includes("oklab") || 
+                    value.includes("oklch") || 
+                    value.includes("color-mix") || 
+                    value.includes("lab(") || 
+                    value.includes("lch(")
+                  )) {
+                    if (prop.toLowerCase().includes('background')) {
+                      htmlEl.style.setProperty(prop, "#ffffff", "important");
+                    } else if (prop.toLowerCase().includes('color')) {
+                      htmlEl.style.setProperty(prop, "#111827", "important");
+                    } else if (prop.toLowerCase().includes('border')) {
+                      htmlEl.style.setProperty(prop, "#e5e7eb", "important");
+                    } else {
+                      htmlEl.style.setProperty(prop, "transparent", "important");
+                    }
+                  }
+                } catch (e) {
+                  // Ignore
+                }
+              });
+            } catch (e) {
+              // Ignore
+            }
+          });
+
+          clonedDoc.querySelectorAll("style").forEach((styleEl) => {
+            try {
+              if (styleEl.textContent) {
+                styleEl.textContent = styleEl.textContent
+                  .replace(/oklch\([^)]+\)/g, "#111827")
+                  .replace(/oklab\([^)]+\)/g, "#111827")
+                  .replace(/color-mix\([^)]+\)/g, "#e5e7eb");
+              }
+            } catch (e) {
+              console.error("Error sanitizing style element:", e);
+            }
+          });
+        }
       });
 
       const imgData = canvas.toDataURL('image/png');
@@ -1049,10 +1177,13 @@ export default function AdminRents() {
 
   const renderReceiptDirect_Vector = async (lease: Lease, type: "locatario" | "locador") => {
     try {
+      const prop = properties.find(p => p.id === lease.propertyId);
+      const ownerName = lease.ownerName || prop?.ownerName || "";
+
       const mappedData = {
-        enderecoImovel: lease.propertyAddress || "",
-        codigoImovel: lease.propertyCode || "",
-        nomePagadorRecebedor: type === "locatario" ? lease.tenantName : lease.ownerName,
+        enderecoImovel: lease.propertyAddress || prop?.address || "",
+        codigoImovel: lease.propertyCode || prop?.code || "",
+        nomePagadorRecebedor: type === "locatario" ? lease.tenantName : ownerName,
         cpfCnpj: type === "locatario" ? lease.tenantCpf : (lease as any).ownerCpf || "",
         valorTotal: type === "locatario" ? lease.valorTotalPagar : lease.valorRepassadoProprietario,
         valorAluguel: lease.valorAluguel || 0,
@@ -1073,7 +1204,20 @@ export default function AdminRents() {
         garantiaLocaticia: lease.garantiaLocaticia || "",
         cidadeData: `${empresa.cidade || "Balneário Camboriú"}, SC`,
         dataPagamento: new Date().toISOString().split("T")[0],
-        emitenteAssinatura: empresa.nome || "Menta Negócios Imobiliários"
+        emitenteAssinatura: empresa.nome || "Menta Negócios Imobiliários",
+        
+        // New fields
+        tipoImovel: prop?.propertyType || "",
+        tituloImovel: lease.propertyTitle || prop?.title || "",
+        numeroImovel: prop?.number || prop?.numero || "",
+        complementoImovel: prop?.complement || prop?.complemento || "",
+        bairroImovel: lease.propertyNeighborhood || prop?.neighborhood || "",
+        cidadeEstadoImovel: prop ? `${prop.city || lease.propertyCity || ""}/${prop.state || ""}` : `${lease.propertyCity || ""}`,
+        cepImovel: prop?.cep || "",
+        nomeLocador: ownerName,
+        nomeLocatario: lease.tenantName || "",
+        mesReferencia: formatCompetencia(lease.lastPaymentMonth),
+        dataVencimento: lease.dueDay ? calculateDueDate(lease.dueDay, lease.lastPaymentMonth) : ""
       };
 
       setActiveReceiptPdf({ data: mappedData, type });
@@ -1088,7 +1232,62 @@ export default function AdminRents() {
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
-        allowTaint: true
+        allowTaint: true,
+        onclone: (clonedDoc) => {
+          const elements = clonedDoc.querySelectorAll("*");
+          elements.forEach((el) => {
+            const htmlEl = el as HTMLElement;
+            try {
+              const style = window.getComputedStyle(el);
+              const properties = [
+                'backgroundColor', 'color', 'borderColor', 
+                'borderTopColor', 'borderBottomColor', 
+                'borderLeftColor', 'borderRightColor', 
+                'outlineColor', 'fill', 'stroke'
+              ];
+              
+              properties.forEach(prop => {
+                try {
+                  const value = (style as any)[prop];
+                  if (value && (
+                    value.includes("oklab") || 
+                    value.includes("oklch") || 
+                    value.includes("color-mix") || 
+                    value.includes("lab(") || 
+                    value.includes("lch(")
+                  )) {
+                    if (prop.toLowerCase().includes('background')) {
+                      htmlEl.style.setProperty(prop, "#ffffff", "important");
+                    } else if (prop.toLowerCase().includes('color')) {
+                      htmlEl.style.setProperty(prop, "#111827", "important");
+                    } else if (prop.toLowerCase().includes('border')) {
+                      htmlEl.style.setProperty(prop, "#e5e7eb", "important");
+                    } else {
+                      htmlEl.style.setProperty(prop, "transparent", "important");
+                    }
+                  }
+                } catch (e) {
+                  // Ignore
+                }
+              });
+            } catch (e) {
+              // Ignore
+            }
+          });
+
+          clonedDoc.querySelectorAll("style").forEach((styleEl) => {
+            try {
+              if (styleEl.textContent) {
+                styleEl.textContent = styleEl.textContent
+                  .replace(/oklch\([^)]+\)/g, "#111827")
+                  .replace(/oklab\([^)]+\)/g, "#111827")
+                  .replace(/color-mix\([^)]+\)/g, "#e5e7eb");
+              }
+            } catch (e) {
+              console.error("Error sanitizing style element:", e);
+            }
+          });
+        }
       });
 
       const imgData = canvas.toDataURL('image/png');
@@ -3117,6 +3316,106 @@ export default function AdminRents() {
                         className="input-field"
                         value={receiptForm.codigoImovel}
                         onChange={(e) => handleReceiptFieldChange("codigoImovel", e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                        Tipo de Imóvel
+                      </label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        value={receiptForm.tipoImovel || ""}
+                        onChange={(e) => handleReceiptFieldChange("tipoImovel", e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                        Título do Imóvel
+                      </label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        value={receiptForm.tituloImovel || ""}
+                        onChange={(e) => handleReceiptFieldChange("tituloImovel", e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                        Bairro
+                      </label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        value={receiptForm.bairroImovel || ""}
+                        onChange={(e) => handleReceiptFieldChange("bairroImovel", e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                        Cidade/UF
+                      </label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        value={receiptForm.cidadeEstadoImovel || ""}
+                        onChange={(e) => handleReceiptFieldChange("cidadeEstadoImovel", e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                        CEP
+                      </label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        value={receiptForm.cepImovel || ""}
+                        onChange={(e) => handleReceiptFieldChange("cepImovel", e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                        Proprietário (Locador)
+                      </label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        value={receiptForm.nomeLocador || ""}
+                        onChange={(e) => handleReceiptFieldChange("nomeLocador", e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                        Inquilino (Locatário)
+                      </label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        value={receiptForm.nomeLocatario || ""}
+                        onChange={(e) => handleReceiptFieldChange("nomeLocatario", e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                        Mês de Referência (Competência)
+                      </label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        value={receiptForm.mesReferencia || ""}
+                        placeholder="Ex: Julho/2026"
+                        onChange={(e) => handleReceiptFieldChange("mesReferencia", e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                        Data de Vencimento
+                      </label>
+                      <input
+                        type="date"
+                        className="input-field"
+                        value={receiptForm.dataVencimento || ""}
+                        onChange={(e) => handleReceiptFieldChange("dataVencimento", e.target.value)}
                       />
                     </div>
                   </div>

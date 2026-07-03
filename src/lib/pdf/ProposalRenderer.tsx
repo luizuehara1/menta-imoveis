@@ -131,7 +131,7 @@ export const ProposalRenderer: React.FC<ProposalRendererProps> = ({ contract, co
 
           {/* INTRO */}
           <p className="text-justify text-[11.5pt] text-slate-900 leading-relaxed mb-4 indent-6">
-            Pelo presente instrumento, o proponente comprador qualificado no Item I apresenta a presente proposta irrevogável e irretratável para a aquisição do imóvel descrito no Item III, de propriedade do vendedor qualificado no Item II, mediante as cláusulas e condições de pagamento propostas no Item IV.
+            Pelo presente instrumento, o proponente comprador qualificado no Item I apresenta a presente proposta irrevogável e irretratável para a aquisição do imóvel descrito no Item III, de propriedade do vendedor qualificado no Item II, mediante as cláusulas e condições estabelecidas neste instrumento.
           </p>
         </div>
       )
@@ -195,39 +195,6 @@ export const ProposalRenderer: React.FC<ProposalRendererProps> = ({ contract, co
           </div>
         </div>
       )
-    },
-    {
-      id: 'financial_proposal',
-      render: () => (
-        <div className="section-block mb-4 w-full">
-          <h3 className="text-[11.5pt] font-bold text-slate-950 uppercase tracking-wider border-b border-slate-300 pb-0.5 mb-2">
-            IV - PROPOSTA FINANCEIRA E CONDIÇÕES DE PAGAMENTO
-          </h3>
-          <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-[11.5pt] leading-normal mb-3">
-            <p className="col-span-2 text-[12pt] font-bold text-slate-950">
-              Valor Total Proposto: {safeMoney(pag.valorTotal || contract.valorContrato || 0)}
-            </p>
-            <p><strong>Sinal/Entrada:</strong> {safeMoney(pag.valorSinal || pag.entrada || 0)}</p>
-            <p><strong>Financiamento Bancário:</strong> {safeMoney(pag.valorFinanciamento || 0)}</p>
-            <p><strong>Uso de FGTS:</strong> {safeMoney(pag.valorFgts || 0)}</p>
-            <p><strong>Permuta de Bens:</strong> {safeMoney(pag.valorPermuta || 0)}</p>
-            <p><strong>Parcelas Diretas:</strong> {safeMoney(pag.valorParcelas || 0)}</p>
-            {pag.qtdParcelas > 0 && <p><strong>Qtd. Parcelas:</strong> {safeText(pag.qtdParcelas)} parcelas</p>}
-          </div>
-          {pag.detalhesPagamento && (
-            <div className="text-[11.5pt] text-slate-900 leading-normal mb-2">
-              <strong>Detalhamento da Forma de Pagamento:</strong>
-              <p className="text-justify whitespace-pre-wrap mt-0.5 text-slate-800 text-[11.5pt]">{pag.detalhesPagamento}</p>
-            </div>
-          )}
-          {pag.observacoes && (
-            <div className="text-[11.5pt] text-slate-900 leading-normal mb-2">
-              <strong>Observações Gerais:</strong>
-              <p className="text-justify whitespace-pre-wrap mt-0.5 text-slate-800 text-[11.5pt]">{pag.observacoes}</p>
-            </div>
-          )}
-        </div>
-      )
     }
   ];
 
@@ -258,7 +225,7 @@ export const ProposalRenderer: React.FC<ProposalRendererProps> = ({ contract, co
         render: () => (
           <div className="section-block w-full">
             <h3 className="text-[11.5pt] font-bold text-slate-950 uppercase tracking-wider border-b border-slate-300 pb-0.5 mb-2">
-              V - CONDIÇÕES GERAIS E CLÁUSULAS ADICIONAIS
+              IV - CONDIÇÕES GERAIS E CLÁUSULAS ADICIONAIS
             </h3>
             <div className="text-justify text-[11.5pt] leading-normal">
               {clausesToRender[0].title && <p className="font-bold text-slate-950 mb-0.5">{clausesToRender[0].title}</p>}

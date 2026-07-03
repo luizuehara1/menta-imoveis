@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { collection, query, getDocs, addDoc, serverTimestamp, deleteDoc, doc, orderBy, where, updateDoc } from 'firebase/firestore';
+import { collection, query, getDocs, addDoc, serverTimestamp, deleteDoc, doc, orderBy, where, updateDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { 
@@ -189,6 +189,214 @@ function cleanFirestoreData(obj: any): any {
   return obj;
 }
 
+// -------------------------------------------------------------
+// USER REQUESTED INTENTIONAL HELPER FUNCTIONS
+// -------------------------------------------------------------
+
+function getDateFromTransaction(transaction: any): string {
+  if (!transaction) return '';
+  const dateVal = transaction.dataCompetencia || 
+                  transaction.dataPagamento || 
+                  transaction.dataVencimento || 
+                  transaction.createdAt || 
+                  transaction.data || 
+                  transaction.date;
+                  
+  if (!dateVal) return '';
+
+  if (typeof dateVal === 'object') {
+    if (typeof dateVal.toDate === 'function') {
+      try {
+        return dateVal.toDate().toISOString().split('T')[0];
+      } catch (e) {}
+    }
+    if (dateVal.seconds !== undefined) {
+      try {
+        return new Date(dateVal.seconds * 1000).toISOString().split('T')[0];
+      } catch (e) {}
+    }
+    if (dateVal instanceof Date) {
+      try {
+        return dateVal.toISOString().split('T')[0];
+      } catch (e) {}
+    }
+  }
+
+  if (typeof dateVal === 'string') {
+    return dateVal.split('T')[0];
+  }
+
+  return String(dateVal).split('T')[0];
+}
+
+function filterTransactionsByPeriod(transactions: any[], startDate: string, endDate: string): any[] {
+  return transactions.filter(t => {
+    const tDate = getDateFromTransaction(t);
+    if (!tDate) return false;
+    const matchesStart = !startDate || tDate >= startDate;
+    const matchesEnd = !endDate || tDate <= endDate;
+    return matchesStart && matchesEnd;
+  });
+}
+
+function calculateFinancialSummary(transactions: any[]) {
+  let gastosOperacionais = 0;
+  let receitasComissao = 0;
+  let entradasTotais = 0;
+  let saidasTotais = 0;
+
+  transactions.forEach(t => {
+    const val = Number(t.valor) || 0;
+    
+    // 1. Gastos Operacionais: tipo = "Saída" ou "Despesa" ou "Gasto" ou categoria seja gasto operacional
+    const tipo = String(t.tipo || '').toLowerCase();
+    const cat = String(t.categoria || '').toLowerCase();
+    
+    const isGasto = tipo === 'saida' || tipo === 'saída' || tipo === 'despesa' || tipo === 'gasto' ||
+                    cat === 'operacional' || cat.includes('gasto') || cat.includes('despesa') || cat.includes('operacional') ||
+                    EXPENSE_CATEGORIES.map(c => c.toLowerCase()).includes(cat);
+                    
+    if (isGasto) {
+      gastosOperacionais += val;
+      saidasTotais += val;
+    } else {
+      if (tipo === 'saida' || tipo === 'saída' || tipo === 'despesa' || tipo === 'gasto') {
+        saidasTotais += val;
+      }
+    }
+    
+    // 2. Receitas de Comissão: tipo = "Entrada" ou "Receita" ou "Comissão" e categoria contenha "Comissão"
+    const isComissao = (tipo === 'entrada' || tipo === 'receita' || tipo === 'comissão' || tipo === 'comissao') &&
+                       (cat.includes('comissão') || cat.includes('comissao'));
+                       
+    if (isComissao) {
+      receitasComissao += val;
+    }
+    
+    // 4. Saldo do mês (Entradas totais)
+    const isEntrada = tipo === 'entrada' || tipo === 'receita' || tipo === 'comissão' || tipo === 'comissao';
+    if (isEntrada) {
+      entradasTotais += val;
+    }
+  });
+
+  return {
+    gastosOperacionais,
+    receitasComissao,
+    lucroLiquido: receitasComissao - gastosOperacionais,
+    saldoMes: entradasTotais - saidasTotais,
+    entradasTotais,
+    saidasTotais
+  };
+}
+
+const PERIOD_OPTIONS = [
+  { value: 'este_mes', label: 'Este mês' },
+  { value: 'mes_anterior', label: 'Mês anterior' },
+  { value: 'proximo_mes', label: 'Próximo mês' },
+  { value: '01', label: 'Janeiro' },
+  { value: '02', label: 'Fevereiro' },
+  { value: '03', label: 'Março' },
+  { value: '04', label: 'Abril' },
+  { value: '05', label: 'Maio' },
+  { value: '06', label: 'Junho' },
+  { value: '07', label: 'Julho' },
+  { value: '08', label: 'Agosto' },
+  { value: '09', label: 'Setembro' },
+  { value: '10', label: 'Outubro' },
+  { value: '11', label: 'Novembro' },
+  { value: '12', label: 'Dezembro' },
+  { value: 'ano', label: 'Ano' },
+  { value: 'personalizado', label: 'Período personalizado' }
+];
+
+const getPeriodDates = (period: string, customStart: string, customEnd: string) => {
+  const today = new Date();
+  const year = today.getFullYear(); // 2026
+  const month = today.getMonth(); // 6 (July is index 6)
+
+  let start = '';
+  let end = '';
+  let prevStart = '';
+  let prevEnd = '';
+
+  const formatLocalDate = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  if (period === 'este_mes') {
+    const sDate = new Date(year, month, 1);
+    const eDate = new Date(year, month + 1, 0);
+    start = formatLocalDate(sDate);
+    end = formatLocalDate(eDate);
+
+    const psDate = new Date(year, month - 1, 1);
+    const peDate = new Date(year, month, 0);
+    prevStart = formatLocalDate(psDate);
+    prevEnd = formatLocalDate(peDate);
+  } else if (period === 'mes_anterior') {
+    const sDate = new Date(year, month - 1, 1);
+    const eDate = new Date(year, month, 0);
+    start = formatLocalDate(sDate);
+    end = formatLocalDate(eDate);
+
+    const psDate = new Date(year, month - 2, 1);
+    const peDate = new Date(year, month - 1, 0);
+    prevStart = formatLocalDate(psDate);
+    prevEnd = formatLocalDate(peDate);
+  } else if (period === 'proximo_mes') {
+    const sDate = new Date(year, month + 1, 1);
+    const eDate = new Date(year, month + 2, 0);
+    start = formatLocalDate(sDate);
+    end = formatLocalDate(eDate);
+
+    const psDate = new Date(year, month, 1);
+    const peDate = new Date(year, month + 1, 0);
+    prevStart = formatLocalDate(psDate);
+    prevEnd = formatLocalDate(peDate);
+  } else if (period === 'ano') {
+    start = `${year}-01-01`;
+    end = `${year}-12-31`;
+
+    prevStart = `${year - 1}-01-01`;
+    prevEnd = `${year - 1}-12-31`;
+  } else if (period === 'personalizado') {
+    start = customStart;
+    end = customEnd;
+    
+    if (customStart && customEnd) {
+      const s = new Date(customStart + 'T12:00:00');
+      const e = new Date(customEnd + 'T12:00:00');
+      const diffTime = Math.abs(e.getTime() - s.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+      
+      const ps = new Date(s);
+      ps.setDate(ps.getDate() - diffDays);
+      const pe = new Date(e);
+      pe.setDate(pe.getDate() - diffDays);
+      
+      prevStart = formatLocalDate(ps);
+      prevEnd = formatLocalDate(pe);
+    }
+  } else {
+    const mIdx = parseInt(period, 10) - 1;
+    const sDate = new Date(year, mIdx, 1);
+    const eDate = new Date(year, mIdx + 1, 0);
+    start = formatLocalDate(sDate);
+    end = formatLocalDate(eDate);
+
+    const psDate = new Date(year, mIdx - 1, 1);
+    const peDate = new Date(year, mIdx, 0);
+    prevStart = formatLocalDate(psDate);
+    prevEnd = formatLocalDate(peDate);
+  }
+
+  return { start, end, prevStart, prevEnd };
+};
+
 export default function AdminFinance() {
   const { user, isAdmin } = useAuth();
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -214,6 +422,7 @@ export default function AdminFinance() {
   const [filterCategory, setFilterCategory] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [referencePeriod, setReferencePeriod] = useState<string>('este_mes');
 
   // Form State
   const [formData, setFormData] = useState<Partial<FinanceRecord>>({
@@ -235,79 +444,121 @@ export default function AdminFinance() {
   });
 
   useEffect(() => {
-    fetchData();
+    // Set initial date range for 'este_mes' on mount
+    const dates = getPeriodDates('este_mes', '', '');
+    setStartDate(dates.start);
+    setEndDate(dates.end);
+
+    setLoading(true);
+    let unsubFinanceiro = () => {};
+    let unsubGastos = () => {};
+    let unsubReceitas = () => {};
+
+    let rawFinanceiro: any[] = [];
+    let rawGastos: any[] = [];
+    let rawReceitas: any[] = [];
+
+    const combineAndSetRecords = () => {
+      const allData = [...rawFinanceiro, ...rawGastos, ...rawReceitas].sort((a, b) => {
+        const dateA = getDateFromTransaction(a);
+        const dateB = getDateFromTransaction(b);
+        return dateB.localeCompare(dateA);
+      });
+      setRecords(allData);
+    };
+
+    // 1. Listen to 'financeiro' in real-time
+    try {
+      unsubFinanceiro = onSnapshot(
+        query(collection(db, 'financeiro'), orderBy('data', 'desc')),
+        (snapshot) => {
+          rawFinanceiro = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            sourceCollection: 'financeiro'
+          }));
+          combineAndSetRecords();
+          setLoading(false);
+        },
+        (error) => {
+          console.error("Erro real-time no financeiro:", error);
+          setLoading(false);
+        }
+      );
+    } catch (err) {
+      console.error("Erro ao assinar financeiro:", err);
+    }
+
+    // 2. Listen to 'gastos' (legacy) in real-time
+    try {
+      unsubGastos = onSnapshot(
+        query(collection(db, 'gastos'), orderBy('date', 'desc')),
+        (snapshot) => {
+          rawGastos = snapshot.docs.map(doc => {
+            const d = doc.data();
+            return {
+              id: doc.id,
+              tipo: 'saida',
+              data: d.date || '',
+              valor: d.value || 0,
+              descricao: d.description || '',
+              categoria: d.category || 'Outros',
+              responsavel: d.responsible || 'Admin',
+              formaPagamento: d.paymentMethod || 'Outro',
+              status: 'confirmado',
+              sourceCollection: 'gastos'
+            };
+          });
+          combineAndSetRecords();
+        },
+        (error) => {
+          console.error("Erro real-time legacy gastos:", error);
+        }
+      );
+    } catch (err) {
+      console.error("Erro ao assinar legacy gastos:", err);
+    }
+
+    // 3. Listen to 'receitas' (legacy) in real-time
+    try {
+      unsubReceitas = onSnapshot(
+        query(collection(db, 'receitas'), orderBy('date', 'desc')),
+        (snapshot) => {
+          rawReceitas = snapshot.docs.map(doc => {
+            const d = doc.data();
+            return {
+              id: doc.id,
+              tipo: 'entrada',
+              data: d.date || '',
+              valor: d.value || 0,
+              descricao: d.description || '',
+              categoria: d.type || 'Outros',
+              status: 'confirmado',
+              responsavel: 'Admin',
+              sourceCollection: 'receitas'
+            };
+          });
+          combineAndSetRecords();
+        },
+        (error) => {
+          console.error("Erro real-time legacy receitas:", error);
+        }
+      );
+    } catch (err) {
+      console.error("Erro ao assinar legacy receitas:", err);
+    }
+
     fetchIntegrations();
+
+    return () => {
+      unsubFinanceiro();
+      unsubGastos();
+      unsubReceitas();
+    };
   }, []);
 
   const fetchData = async () => {
-    setLoading(true);
-    try {
-      let financeiroData: Array<FinanceRecord & { sourceCollection: string }> = [];
-      let legacyGastos: Array<FinanceRecord & { sourceCollection: string }> = [];
-      let legacyReceitas: Array<FinanceRecord & { sourceCollection: string }> = [];
-
-      // 1. Fetch financeiro
-      try {
-        const financeiroSnap = await getDocs(query(collection(db, 'financeiro'), orderBy('data', 'desc')));
-        financeiroData = financeiroSnap.docs.map(doc => ({ 
-          id: doc.id, 
-          ...doc.data(), 
-          sourceCollection: 'financeiro' 
-        } as FinanceRecord & { sourceCollection: string }));
-      } catch (err: any) {
-        console.error("Erro ao ler collection 'financeiro' do Firestore (Caminho: financeiro):", err?.code, err?.message, err);
-      }
-
-      // 2. Fetch gastos (legacy)
-      try {
-        const legacyGastosSnap = await getDocs(query(collection(db, 'gastos'), orderBy('date', 'desc')));
-        legacyGastos = legacyGastosSnap.docs.map(doc => {
-          const d = doc.data();
-          return {
-            id: doc.id,
-            tipo: 'saida',
-            data: d.date || '',
-            valor: d.value || 0,
-            descricao: d.description || '',
-            categoria: d.category || 'Outros',
-            responsavel: d.responsible || 'Admin',
-            formaPagamento: d.paymentMethod || 'Outro',
-            status: 'confirmado',
-            sourceCollection: 'gastos'
-          } as FinanceRecord & { sourceCollection: string };
-        });
-      } catch (err: any) {
-        console.error("Erro ao ler collection legacy 'gastos' do Firestore (Caminho: gastos):", err?.code, err?.message, err);
-      }
-
-      // 3. Fetch receitas (legacy)
-      try {
-        const legacyReceitasSnap = await getDocs(query(collection(db, 'receitas'), orderBy('date', 'desc')));
-        legacyReceitas = legacyReceitasSnap.docs.map(doc => {
-          const d = doc.data();
-          return {
-            id: doc.id,
-            tipo: 'entrada',
-            data: d.date || '',
-            valor: d.value || 0,
-            descricao: d.description || '',
-            categoria: d.type || 'Outros',
-            status: 'confirmado',
-            responsavel: 'Admin',
-            sourceCollection: 'receitas'
-          } as FinanceRecord & { sourceCollection: string };
-        });
-      } catch (err: any) {
-        console.error("Erro ao ler collection legacy 'receitas' do Firestore (Caminho: receitas):", err?.code, err?.message, err);
-      }
-
-      const allData = [...financeiroData, ...legacyGastos, ...legacyReceitas].sort((a,b) => b.data.localeCompare(a.data));
-      setRecords(allData);
-    } catch (error) {
-      console.error("Error fetching finance data:", error);
-    } finally {
-      setLoading(false);
-    }
+    // Kept as a no-op fallback for any legacy code calling it
   };
 
   const fetchIntegrations = async () => {
@@ -525,6 +776,10 @@ export default function AdminFinance() {
     }
   };
 
+  const periodDates = useMemo(() => {
+    return getPeriodDates(referencePeriod, startDate, endDate);
+  }, [referencePeriod, startDate, endDate]);
+
   const filteredRecords = useMemo(() => {
     return records.filter(record => {
       const matchesTab = activeTab === 'todos' || 
@@ -537,35 +792,47 @@ export default function AdminFinance() {
                            record.codigoImovel?.toLowerCase().includes(searchQuery.toLowerCase());
       
       const matchesCategory = !filterCategory || record.categoria === filterCategory;
-      const matchesStartDate = !startDate || record.data >= startDate;
-      const matchesEndDate = !endDate || record.data <= endDate;
+      
+      const rDate = getDateFromTransaction(record);
+      const matchesStartDate = !startDate || rDate >= startDate;
+      const matchesEndDate = !endDate || rDate <= endDate;
 
       return matchesTab && matchesSearch && matchesCategory && matchesStartDate && matchesEndDate;
     });
   }, [records, activeTab, searchQuery, filterCategory, startDate, endDate]);
 
   const stats = useMemo(() => {
-    const today = new Date();
-    const currentMonthStr = today.toISOString().slice(0, 7);
+    const currentPeriodTransactions = filterTransactionsByPeriod(records, periodDates.start, periodDates.end);
+    const prevPeriodTransactions = filterTransactionsByPeriod(records, periodDates.prevStart, periodDates.prevEnd);
 
-    const inflows = records.filter(r => r.tipo === 'entrada' && r.categoria === 'Receita de Comissão');
-    const outflows = records.filter(r => r.tipo === 'saida');
+    const currentSummary = calculateFinancialSummary(currentPeriodTransactions);
+    const prevSummary = calculateFinancialSummary(prevPeriodTransactions);
 
-    const totalInflow = inflows.reduce((acc, curr) => acc + curr.valor, 0);
-    const totalOutflow = outflows.reduce((acc, curr) => acc + curr.valor, 0);
+    const calculatePercentageChange = (current: number, previous: number) => {
+      if (previous === 0) {
+        return current > 0 ? '+100%' : '0%';
+      }
+      const change = ((current - previous) / previous) * 100;
+      const sign = change >= 0 ? '+' : '';
+      return `${sign}${change.toFixed(0)}%`;
+    };
 
-    const monthInflow = inflows.filter(r => r.data.startsWith(currentMonthStr)).reduce((acc, curr) => acc + curr.valor, 0);
-    const monthOutflow = outflows.filter(r => r.data.startsWith(currentMonthStr)).reduce((acc, curr) => acc + curr.valor, 0);
+    const compGastos = calculatePercentageChange(currentSummary.gastosOperacionais, prevSummary.gastosOperacionais);
+    const compReceitas = calculatePercentageChange(currentSummary.receitasComissao, prevSummary.receitasComissao);
+    const compLucro = calculatePercentageChange(currentSummary.lucroLiquido, prevSummary.lucroLiquido);
+    const compSaldo = calculatePercentageChange(currentSummary.saldoMes, prevSummary.saldoMes);
 
     return {
-      totalInflow,
-      totalOutflow,
-      balance: totalInflow - totalOutflow,
-      monthInflow,
-      monthOutflow,
-      monthBalance: monthInflow - monthOutflow
+      current: currentSummary,
+      previous: prevSummary,
+      comparisons: {
+        gastos: compGastos,
+        receitas: compReceitas,
+        lucro: compLucro,
+        saldo: compSaldo
+      }
     };
-  }, [records]);
+  }, [records, periodDates]);
 
   const exportPDF = async () => {
     try {
@@ -734,26 +1001,52 @@ export default function AdminFinance() {
           <h1 className="text-4xl font-display font-bold text-primary-black tracking-tight">Fluxo de Caixa</h1>
           <p className="text-gray-400 mt-2 text-lg font-light leading-relaxed">Controle completo de entradas e saídas da imobiliária.</p>
         </div>
-        <div className="flex items-center gap-4">
-          <motion.button 
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={exportPDF}
-            className="flex items-center gap-2 px-6 py-4 border border-gray-200 rounded-2xl text-gray-500 hover:text-primary-black hover:bg-gray-50 transition-all font-black text-[10px] uppercase tracking-widest"
-          >
-            <FileDown size={18} /> Exportar PDF
-          </motion.button>
-          <motion.button 
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => setShowModal(true)}
-            className="btn-gold !bg-primary-black !text-white hover:!bg-gold hover:!text-primary-black !rounded-2xl !py-4 !px-8 shadow-xl shadow-primary-black/10 flex items-center gap-3"
-          >
-            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
-              <Plus size={20} className="text-gold" />
-            </div>
-            <span className="uppercase text-xs font-black tracking-widest leading-none">Novo Lançamento</span>
-          </motion.button>
+        <div className="flex flex-wrap items-center gap-6">
+          {/* Mês de referência selector */}
+          <div className="flex flex-col gap-1.5 min-w-[200px]">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+              Mês de referência
+            </label>
+            <select
+              value={referencePeriod}
+              onChange={(e) => {
+                const val = e.target.value;
+                setReferencePeriod(val);
+                const dates = getPeriodDates(val, startDate, endDate);
+                setStartDate(dates.start);
+                setEndDate(dates.end);
+              }}
+              className="bg-white border border-gray-200 rounded-2xl py-3 px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-gold/20 hover:border-gray-300 transition-all text-primary-black shadow-sm"
+            >
+              {PERIOD_OPTIONS.map(opt => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-4 self-end">
+            <motion.button 
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={exportPDF}
+              className="flex items-center gap-2 px-6 py-4 border border-gray-200 rounded-2xl text-gray-500 hover:text-primary-black hover:bg-gray-50 transition-all font-black text-[10px] uppercase tracking-widest"
+            >
+              <FileDown size={18} /> Exportar PDF
+            </motion.button>
+            <motion.button 
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setShowModal(true)}
+              className="btn-gold !bg-primary-black !text-white hover:!bg-gold hover:!text-primary-black !rounded-2xl !py-4 !px-8 shadow-xl shadow-primary-black/10 flex items-center gap-3"
+            >
+              <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
+                <Plus size={20} className="text-gold" />
+              </div>
+              <span className="uppercase text-xs font-black tracking-widest leading-none">Novo Lançamento</span>
+            </motion.button>
+          </div>
         </div>
       </motion.div>
 
@@ -770,10 +1063,14 @@ export default function AdminFinance() {
             <div className="flex items-center gap-3 text-red-500 mb-4 font-black uppercase text-[10px] tracking-[0.2em]">
                <div className="w-8 h-8 rounded-xl bg-red-50 flex items-center justify-center"><TrendingDown size={18} /></div> Gastos Operacionais
             </div>
-            <h3 className="text-3xl font-bold text-primary-black tracking-tighter">{formatCurrency(stats.totalOutflow)}</h3>
+            <h3 className="text-3xl font-bold text-primary-black tracking-tighter">
+              {formatCurrency(stats.current.gastosOperacionais)}
+            </h3>
             <div className="mt-4 flex items-center justify-between text-[10px]">
-               <span className="text-gray-400 font-medium uppercase tracking-widest">Este mês:</span>
-               <span className="font-bold text-red-500">{formatCurrency(stats.monthOutflow)}</span>
+               <span className="text-gray-400 font-medium uppercase tracking-widest">Comparativo:</span>
+               <span className="font-bold text-red-500">
+                 {stats.comparisons.gastos} vs período anterior
+               </span>
             </div>
          </motion.div>
 
@@ -785,25 +1082,33 @@ export default function AdminFinance() {
             <div className="flex items-center gap-3 text-emerald-500 mb-4 font-black uppercase text-[10px] tracking-[0.2em]">
                <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center"><TrendingUp size={18} /></div> Receitas de Comissão
             </div>
-            <h3 className="text-3xl font-bold text-primary-black tracking-tighter">{formatCurrency(stats.totalInflow)}</h3>
+            <h3 className="text-3xl font-bold text-primary-black tracking-tighter">
+              {formatCurrency(stats.current.receitasComissao)}
+            </h3>
             <div className="mt-4 flex items-center justify-between text-[10px]">
-               <span className="text-gray-400 font-medium uppercase tracking-widest">Este mês:</span>
-               <span className="font-bold text-emerald-500">{formatCurrency(stats.monthInflow)}</span>
+               <span className="text-gray-400 font-medium uppercase tracking-widest">Comparativo:</span>
+               <span className="font-bold text-emerald-500">
+                 {stats.comparisons.receitas} vs período anterior
+               </span>
             </div>
          </motion.div>
 
          <motion.div 
            variants={slideUp}
            whileHover={{ y: -5 }}
-           className={`${stats.balance >= 0 ? 'bg-primary-black text-white' : 'bg-red-600 text-white'} p-8 rounded-[2rem] shadow-2xl relative overflow-hidden group`}
+           className={`${stats.current.lucroLiquido >= 0 ? 'bg-primary-black text-white' : 'bg-red-600 text-white'} p-8 rounded-[2rem] shadow-2xl relative overflow-hidden group`}
          >
             <div className="flex items-center gap-3 text-gold mb-4 font-black uppercase text-[10px] tracking-[0.2em]">
                <div className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center"><DollarSign size={18} /></div> Lucro Líquido
             </div>
-            <h3 className="text-3xl font-bold tracking-tighter">{formatCurrency(stats.balance)}</h3>
+            <h3 className="text-3xl font-bold tracking-tighter">
+              {formatCurrency(stats.current.lucroLiquido)}
+            </h3>
             <div className="mt-4 flex items-center justify-between text-[10px]">
                <span className="text-white/40 font-medium uppercase tracking-widest">Saldo do mês:</span>
-               <span className="font-bold text-gold">{formatCurrency(stats.monthBalance)}</span>
+               <span className="font-bold text-gold">
+                 {formatCurrency(stats.current.saldoMes)} ({stats.comparisons.lucro} vs anterior)
+               </span>
             </div>
          </motion.div>
       </motion.div>
@@ -942,7 +1247,15 @@ export default function AdminFinance() {
                       <td className="p-8 pl-12 text-sm text-gray-500 font-bold whitespace-nowrap">
                         <div className="flex items-center gap-3">
                           <Calendar size={14} className="text-gray-300" />
-                          {new Date(item.data + 'T00:00:00').toLocaleDateString('pt-BR')}
+                          {(() => {
+                            const dateStr = getDateFromTransaction(item);
+                            if (!dateStr) return '---';
+                            const parts = dateStr.split('-');
+                            if (parts.length === 3) {
+                              return `${parts[2]}/${parts[1]}/${parts[0]}`;
+                            }
+                            return dateStr;
+                          })()}
                         </div>
                       </td>
                       <td className="p-8">
