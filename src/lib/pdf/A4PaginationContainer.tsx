@@ -28,8 +28,29 @@ export const A4PaginationContainer: React.FC<A4PaginationContainerProps> = ({
   const headerMeasureRef = useRef<HTMLDivElement>(null);
   const footerMeasureRef = useRef<HTMLDivElement>(null);
 
+  const lastBlocksHashRef = useRef<string>('');
+  const lastCompanyStrRef = useRef<string>('');
+  const activeTimerRef = useRef<any>(null);
+
+  const blocksIdString = blocks.map(b => `${b.id}-${!!b.isSignature}`).join('|');
+  const companyStr = JSON.stringify(company || {});
+
   useEffect(() => {
+    const blocksChanged = blocksIdString !== lastBlocksHashRef.current;
+    const companyChanged = companyStr !== lastCompanyStrRef.current;
+
+    if (!blocksChanged && !companyChanged) {
+      return;
+    }
+
+    lastBlocksHashRef.current = blocksIdString;
+    lastCompanyStrRef.current = companyStr;
+
     setIsReady(false);
+
+    if (activeTimerRef.current) {
+      clearTimeout(activeTimerRef.current);
+    }
     
     const measureAndPaginate = () => {
       if (!measureContainerRef.current) return;
@@ -92,15 +113,22 @@ export const A4PaginationContainer: React.FC<A4PaginationContainerProps> = ({
 
       setPaginatedPages(pagesList);
       setIsReady(true);
+      activeTimerRef.current = null;
     };
 
     // Small delay to allow fonts and dynamic styling to settle before measuring
-    const timer = setTimeout(() => {
+    activeTimerRef.current = setTimeout(() => {
       measureAndPaginate();
     }, 150);
 
-    return () => clearTimeout(timer);
-  }, [blocks, company]);
+    return () => {
+      if (activeTimerRef.current) {
+        clearTimeout(activeTimerRef.current);
+        activeTimerRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blocksIdString, companyStr]);
 
   return (
     <div className="pdf-pagination-wrapper w-full">

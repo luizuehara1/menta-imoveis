@@ -236,6 +236,7 @@ export const ReceiptRenderer: React.FC<ReceiptRendererProps> = ({ receiptData, t
                     alt="QR Code PIX para Pagamento"
                     className="w-full h-full object-contain block mx-auto"
                     referrerPolicy="no-referrer"
+                    crossOrigin="anonymous"
                     onError={(e) => { e.currentTarget.style.display = 'none'; }}
                   />
                 </div>
@@ -263,13 +264,36 @@ export const ReceiptRenderer: React.FC<ReceiptRendererProps> = ({ receiptData, t
     });
   }
 
+  const formatSignatureDate = (dateStr?: string) => {
+    if (!dateStr) return format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+    try {
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const day = parseInt(parts[2], 10);
+        const d = new Date(year, month, day);
+        if (!isNaN(d.getTime())) {
+          return format(d, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+        }
+      }
+      const d2 = new Date(dateStr);
+      if (!isNaN(d2.getTime())) {
+        return format(d2, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+      }
+      return format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+    } catch (e) {
+      return format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+    }
+  };
+
   blocks.push({
     id: 'signatures',
     isSignature: true,
     render: () => (
       <div className="signature-block w-full mt-4">
         <div className="text-right text-[11.5pt] font-medium text-slate-900 mb-6">
-          {safeText(r.cidadeData || 'Balneário Camboriú, SC')}, {r.dataPagamento ? format(new Date(r.dataPagamento), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+          {safeText(r.cidadeData || 'Balneário Camboriú, SC')}, {formatSignatureDate(r.dataPagamento)}
         </div>
 
         <div className="flex flex-col items-center justify-center text-center mt-6">

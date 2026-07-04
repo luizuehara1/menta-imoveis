@@ -258,6 +258,23 @@ export default function AdminRents() {
     type: "locatario" | "locador";
   } | null>(null);
   const receiptPdfRef = React.useRef<HTMLDivElement>(null);
+  const [loadingReceiptId, setLoadingReceiptId] = useState<string | null>(null);
+  const [toastState, setToastState] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  const toast = {
+    success: (msg: string) => {
+      setToastState({ message: msg, type: 'success' });
+      setTimeout(() => {
+        setToastState(null);
+      }, 4000);
+    },
+    error: (msg: string) => {
+      setToastState({ message: msg, type: 'error' });
+      setTimeout(() => {
+        setToastState(null);
+      }, 4000);
+    }
+  };
   const [receiptForm, setReceiptForm] = useState({
     nomePagadorRecebedor: "",
     cpfCnpj: "",
@@ -1086,10 +1103,19 @@ export default function AdminRents() {
       };
 
       setActiveReceiptPdf({ data: mappedData, type });
-      await new Promise((resolve) => setTimeout(resolve, 450));
 
-      if (!receiptPdfRef.current) {
-        throw new Error("Elemento do PDF não renderizado.");
+      // Wait for the A4PaginationContainer to be completely ready and rendered in DOM
+      let ready = false;
+      for (let i = 0; i < 30; i++) {
+        if (receiptPdfRef.current && receiptPdfRef.current.querySelector('.pdf-document-pages')) {
+          ready = true;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+
+      if (!ready || !receiptPdfRef.current) {
+        throw new Error("Elemento do PDF não renderizado ou demorou muito para responder.");
       }
 
       const canvas = await html2canvas(receiptPdfRef.current, {
@@ -1163,8 +1189,9 @@ export default function AdminRents() {
       pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
 
       const suffix = type === "locatario" ? "Locatario" : "Locador";
-      const codeSuffix = receiptForm.codigoImovel ? safeText(receiptForm.codigoImovel) : "EDITADO";
-      const nameSuffix = safeText(receiptForm.nomePagadorRecebedor).replace(/\s+/g, "_");
+      const sanitizeFilename = (str: string) => safeText(str).replace(/[^a-zA-Z0-9_\-]/g, "_").replace(/__+/g, "_");
+      const codeSuffix = receiptForm.codigoImovel ? sanitizeFilename(receiptForm.codigoImovel) : "EDITADO";
+      const nameSuffix = sanitizeFilename(receiptForm.nomePagadorRecebedor || "Pessoa");
       pdf.save(`Recibo_Aluguel_Editado_${suffix}_${codeSuffix}_${nameSuffix}.pdf`);
 
       setActiveReceiptPdf(null);
@@ -1221,10 +1248,19 @@ export default function AdminRents() {
       };
 
       setActiveReceiptPdf({ data: mappedData, type });
-      await new Promise((resolve) => setTimeout(resolve, 450));
 
-      if (!receiptPdfRef.current) {
-        throw new Error("Elemento do PDF não renderizado.");
+      // Wait for the A4PaginationContainer to be completely ready and rendered in DOM
+      let ready = false;
+      for (let i = 0; i < 30; i++) {
+        if (receiptPdfRef.current && receiptPdfRef.current.querySelector('.pdf-document-pages')) {
+          ready = true;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+
+      if (!ready || !receiptPdfRef.current) {
+        throw new Error("Elemento do PDF não renderizado ou demorou muito para responder.");
       }
 
       const canvas = await html2canvas(receiptPdfRef.current, {
@@ -1298,8 +1334,10 @@ export default function AdminRents() {
       pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
 
       const suffix = type === "locatario" ? "Locatario" : "Locador";
-      const codeSuffix = lease.propertyCode ? safeText(lease.propertyCode) : "LEASE";
-      const nameSuffix = safeText(type === "locatario" ? lease.tenantName : lease.ownerName).replace(/\s+/g, "_");
+      const sanitizeFilename = (str: string) => safeText(str).replace(/[^a-zA-Z0-9_\-]/g, "_").replace(/__+/g, "_");
+      const codeSuffix = lease.propertyCode ? sanitizeFilename(lease.propertyCode) : "LEASE";
+      const rawName = type === "locatario" ? lease.tenantName : lease.ownerName;
+      const nameSuffix = sanitizeFilename(rawName || "Pessoa");
       pdf.save(`Recibo_Aluguel_${suffix}_${codeSuffix}_${nameSuffix}.pdf`);
 
       setActiveReceiptPdf(null);
@@ -1580,10 +1618,11 @@ export default function AdminRents() {
       );
 
       const suffix = type === "locatario" ? "Locatario" : "Locador";
-      const codeSuffix = receiptForm.codigoImovel ? safeText(receiptForm.codigoImovel) : "EDITADO";
-      const nameSuffix = safeText(receiptForm.nomePagadorRecebedor).replace(/\s+/g, "_");
+      const sanitizeFilename = (str: string) => safeText(str).replace(/[^a-zA-Z0-9_\-]/g, "_").replace(/__+/g, "_");
+      const codeSuffix = receiptForm.codigoImovel ? sanitizeFilename(receiptForm.codigoImovel) : "EDITADO";
+      const nameSuffix = sanitizeFilename(receiptForm.nomePagadorRecebedor || "Pessoa");
       doc.save(
-        `Recibo_Aluguel_Editado_${suffix}_${codeSuffix}_${nameSuffix}.pdf`,
+        `Recibo_Aluguel_Personalizado_${suffix}_${codeSuffix}_${nameSuffix}.pdf`,
       );
     } catch (e) {
       console.error("Erro ao gerar recibo de pagamento editado:", e);
@@ -1592,6 +1631,341 @@ export default function AdminRents() {
       );
     }
   };
+
+  async function buildTenantReceiptData(locacao: any) {
+    console.log("Gerando recibo locatário para:", locacao.id);
+
+    // 1. Fetch leaseData from Firestore to get updated lease fields
+    let leaseData = { ...locacao };
+    try {
+      const leaseDoc = await getDoc(doc(db, "locacoes", locacao.id));
+      if (leaseDoc.exists()) {
+        leaseData = { id: leaseDoc.id, ...leaseDoc.data() };
+      }
+    } catch (err) {
+      console.warn("Não foi possível buscar os dados da locação de 'locacoes':", err);
+    }
+
+    // 2. Fetch propertyData
+    let propertyData: any = null;
+    const propertyId = leaseData.propertyId || leaseData.imovelId || "";
+    const propertyCode = leaseData.propertyCode || leaseData.codigoImovel || "";
+
+    if (propertyId) {
+      try {
+        const propDoc = await getDoc(doc(db, "imoveis", propertyId));
+        if (propDoc.exists()) {
+          propertyData = { id: propDoc.id, ...propDoc.data() };
+        }
+      } catch (err) {
+        console.warn("Erro ao buscar imóvel por ID:", err);
+      }
+    }
+
+    if (!propertyData && propertyCode) {
+      try {
+        const propQuery = query(collection(db, "imoveis"), where("code", "==", propertyCode));
+        const propSnap = await getDocs(propQuery);
+        if (!propSnap.empty) {
+          const doc0 = propSnap.docs[0];
+          propertyData = { id: doc0.id, ...doc0.data() };
+        } else {
+          const propQuery2 = query(collection(db, "imoveis"), where("codigo", "==", propertyCode));
+          const propSnap2 = await getDocs(propQuery2);
+          if (!propSnap2.empty) {
+            const doc0 = propSnap2.docs[0];
+            propertyData = { id: doc0.id, ...doc0.data() };
+          }
+        }
+      } catch (err) {
+        console.warn("Erro ao buscar imóvel por código:", err);
+      }
+    }
+
+    // Fallback to memory properties list if still not found
+    if (!propertyData && properties.length > 0) {
+      propertyData = properties.find(p => p.id === propertyId || p.code === propertyCode || (p as any).codigo === propertyCode);
+    }
+
+    // 3. Fetch tenantData from 'usuarios' collection
+    let tenantData: any = {
+      name: leaseData.tenantName || "Não informado",
+      phone: leaseData.tenantPhone || "Não informado",
+      cpf: leaseData.tenantCpf || "Não informado"
+    };
+
+    try {
+      if (leaseData.tenantCpf) {
+        const userQuery = query(collection(db, "usuarios"), where("cpf", "==", leaseData.tenantCpf));
+        const userSnap = await getDocs(userQuery);
+        if (!userSnap.empty) {
+          const uData = userSnap.docs[0].data();
+          tenantData.name = uData.name || uData.nome || tenantData.name;
+          tenantData.phone = uData.phone || uData.telefone || tenantData.phone;
+          tenantData.cpf = uData.cpf || uData.cpfCnpj || tenantData.cpf;
+        }
+      }
+    } catch (err) {
+      console.warn("Não foi possível buscar dados do locatário na coleção 'usuarios':", err);
+    }
+
+    // 4. Fetch ownerData
+    let ownerData: any = {
+      name: leaseData.ownerName || propertyData?.ownerName || "Não informado",
+      phone: leaseData.ownerPhone || propertyData?.ownerPhone || "Não informado",
+      cpf: leaseData.ownerCpf || propertyData?.ownerCpf || "Não informado"
+    };
+
+    if (propertyId) {
+      try {
+        const subOwnerDoc = await getDoc(doc(db, "imoveis", propertyId, "privado", "proprietario"));
+        if (subOwnerDoc.exists()) {
+          const sData = subOwnerDoc.data();
+          ownerData.name = sData.name || sData.nome || ownerData.name;
+          ownerData.phone = sData.phone || sData.telefone || ownerData.phone;
+          ownerData.cpf = sData.cpf || sData.cpfCnpj || ownerData.cpf;
+        }
+      } catch (err) {
+        console.warn("Erro ao buscar proprietário na subcoleção:", err);
+      }
+    }
+
+    try {
+      if (ownerData.cpf && ownerData.cpf !== "Não informado") {
+        const ownerQuery = query(collection(db, "proprietarios"), where("cpf", "==", ownerData.cpf));
+        const ownerSnap = await getDocs(ownerQuery);
+        if (!ownerSnap.empty) {
+          const pData = ownerSnap.docs[0].data();
+          ownerData.name = pData.name || pData.nome || ownerData.name;
+          ownerData.phone = pData.phone || pData.telefone || ownerData.phone;
+          ownerData.cpf = pData.cpf || pData.cpfCnpj || ownerData.cpf;
+        }
+      } else if (ownerData.name && ownerData.name !== "Não informado") {
+        const ownerQuery = query(collection(db, "proprietarios"), where("nome", "==", ownerData.name));
+        const ownerSnap = await getDocs(ownerQuery);
+        if (!ownerSnap.empty) {
+          const pData = ownerSnap.docs[0].data();
+          ownerData.name = pData.name || pData.nome || ownerData.name;
+          ownerData.phone = pData.phone || pData.telefone || ownerData.phone;
+          ownerData.cpf = pData.cpf || pData.cpfCnpj || ownerData.cpf;
+        }
+      }
+    } catch (err) {
+      console.warn("Não foi possível buscar dados do proprietário na coleção 'proprietarios':", err);
+    }
+
+    // 5. Fetch company settings
+    let companyData: any = { ...empresa };
+    try {
+      const companyDoc = await getDoc(doc(db, "siteSettings", "company"));
+      if (companyDoc.exists()) {
+        companyData = { ...companyData, ...companyDoc.data() };
+      }
+    } catch (err) {
+      console.warn("Não foi possível buscar dados da empresa de 'siteSettings/company':", err);
+    }
+
+    const safeNumber = (val: any) => {
+      const n = Number(val);
+      return Number.isFinite(n) ? n : 0;
+    };
+
+    const tipoText = [propertyData?.propertyType || propertyData?.tipoImovel, propertyData?.title || propertyData?.titulo || leaseData.propertyTitle].filter(Boolean).join(' - ');
+
+    const fullAddress = leaseData.propertyAddress || [
+      propertyData?.address || propertyData?.endereco || "",
+      propertyData?.number || propertyData?.numero ? `Nº ${propertyData?.number || propertyData?.numero}` : "",
+      propertyData?.complement || propertyData?.complemento ? `(${propertyData?.complement || propertyData?.complemento})` : ""
+    ].filter(Boolean).join(', ') || "Não informado";
+
+    const mappedData = {
+      imovelId: propertyId || "",
+      enderecoImovel: fullAddress,
+      codigoImovel: propertyCode || "Não informado",
+      nomePagadorRecebedor: tenantData.name || "Não informado",
+      cpfCnpj: tenantData.cpf || "Não informado",
+      telefoneLocatario: tenantData.phone || "Não informado",
+      tituloImovel: tipoText || "Não informado",
+      tipoImovel: propertyData?.propertyType || propertyData?.tipoImovel || "Não informado",
+      numeroImovel: propertyData?.number || propertyData?.numero || "Não informado",
+      complementoImovel: propertyData?.complement || propertyData?.complemento || "Não informado",
+      bairroImovel: leaseData.propertyNeighborhood || propertyData?.neighborhood || propertyData?.bairro || "Não informado",
+      cidadeEstadoImovel: propertyData ? `${propertyData.city || leaseData.propertyCity || "Não informado"}/${propertyData.state || "SC"}` : (leaseData.propertyCity || "Não informado"),
+      cepImovel: propertyData?.cep || "Não informado",
+      nomeLocador: ownerData.name || "Não informado",
+      nomeLocatario: tenantData.name || "Não informado",
+      mesReferencia: formatCompetencia(leaseData.lastPaymentMonth) || "Não informado",
+      dataVencimento: leaseData.dueDay ? calculateDueDate(leaseData.dueDay, leaseData.lastPaymentMonth) : "Não informado",
+      dataPagamento: new Date().toISOString().split("T")[0],
+
+      valorAluguel: safeNumber(leaseData.valorAluguel),
+      valorCondominio: safeNumber(leaseData.valorCondominio),
+      valorIptu: safeNumber(leaseData.valorIptu),
+      valorTaxaLixo: safeNumber(leaseData.valorTaxaLixo),
+      valorTaxaGas: safeNumber(leaseData.valorTaxaGas || leaseData.taxaGas),
+      valorTaxaAgua: safeNumber(leaseData.valorTaxaAgua || leaseData.taxaAgua),
+      valorTaxaLuz: safeNumber(leaseData.valorTaxaLuz || leaseData.taxaLuz),
+      valorSeguroIncendio: safeNumber(leaseData.valorSeguroIncendio || leaseData.seguroIncendio),
+      valorGarantiaCaucao: safeNumber(leaseData.valorGarantiaCaucao),
+      valorOutros: safeNumber(leaseData.valorOutros),
+      valorDesconto: safeNumber(leaseData.valorDesconto),
+      valorTotal: safeNumber(leaseData.valorTotalPagar),
+      formaPagamento: leaseData.formaPagamento || "Boleto/PIX",
+      observacoes: leaseData.observacoes || "",
+      textoExtra: "",
+      garantiaLocaticia: leaseData.garantiaLocaticia || "Não informado",
+      cidadeData: `${companyData.cidade || "Balneário Camboriú"}, ${companyData.estado || "SC"}`,
+      emitenteAssinatura: companyData.nome || "Menta Negócios Imobiliários",
+      company: companyData,
+      pixChave: "63.572.479/0001-50",
+    };
+
+    console.log("Dados do recibo:", mappedData);
+    return mappedData;
+  }
+
+  async function saveTenantReceiptRecord(receiptData: any) {
+    try {
+      await addDoc(collection(db, "recibos"), {
+        ...receiptData,
+        tipo: "locatario",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      console.log("Recibo salvo com sucesso.");
+    } catch (e) {
+      console.error("Erro ao salvar recibo:", e);
+      throw e;
+    }
+  }
+
+  async function handleGenerateTenantReceipt(locacao: any) {
+    try {
+      if (!locacao?.id) {
+        toast.error("Locação não encontrada.");
+        return;
+      }
+
+      setLoadingReceiptId(locacao.id);
+
+      const receiptData = await buildTenantReceiptData(locacao);
+
+      await generateTenantReceiptPDF(receiptData);
+
+      await saveTenantReceiptRecord(receiptData);
+
+      toast.success("Recibo do locatário gerado com sucesso.");
+    } catch (error) {
+      console.error("Erro ao gerar recibo do locatário:", error);
+      toast.error("Erro ao gerar recibo do locatário.");
+    } finally {
+      setLoadingReceiptId(null);
+    }
+  }
+
+  async function generateTenantReceiptPDF(receiptData: any) {
+    setActiveReceiptPdf({ data: receiptData, type: "locatario" });
+
+    // Wait for the A4PaginationContainer to be completely ready and rendered in DOM
+    let ready = false;
+    for (let i = 0; i < 30; i++) {
+      if (receiptPdfRef.current && receiptPdfRef.current.querySelector('.pdf-document-pages')) {
+        ready = true;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+
+    if (!ready || !receiptPdfRef.current) {
+      throw new Error("Elemento do PDF não renderizado ou demorou muito para responder.");
+    }
+
+    const canvas = await html2canvas(receiptPdfRef.current, {
+      scale: 3.5,
+      useCORS: true,
+      logging: false,
+      backgroundColor: '#ffffff',
+      allowTaint: true,
+      onclone: (clonedDoc) => {
+        const elements = clonedDoc.querySelectorAll("*");
+        elements.forEach((el) => {
+          const htmlEl = el as HTMLElement;
+          try {
+            const style = window.getComputedStyle(el);
+            const properties = [
+              'backgroundColor', 'color', 'borderColor', 
+              'borderTopColor', 'borderBottomColor', 
+              'borderLeftColor', 'borderRightColor', 
+              'outlineColor', 'fill', 'stroke'
+            ];
+            
+            properties.forEach(prop => {
+              try {
+                const value = (style as any)[prop];
+                if (value && (
+                  value.includes("oklab") || 
+                  value.includes("oklch") || 
+                  value.includes("color-mix") || 
+                  value.includes("lab(") || 
+                  value.includes("lch(")
+                )) {
+                  if (prop.toLowerCase().includes('background')) {
+                    htmlEl.style.setProperty(prop, "#ffffff", "important");
+                  } else if (prop.toLowerCase().includes('color')) {
+                    htmlEl.style.setProperty(prop, "#111827", "important");
+                  } else if (prop.toLowerCase().includes('border')) {
+                    htmlEl.style.setProperty(prop, "#e5e7eb", "important");
+                  } else {
+                    htmlEl.style.setProperty(prop, "transparent", "important");
+                  }
+                }
+              } catch (e) {
+                // Ignore
+              }
+            });
+          } catch (e) {
+            // Ignore
+          }
+        });
+
+        clonedDoc.querySelectorAll("style").forEach((styleEl) => {
+          try {
+            if (styleEl.textContent) {
+              styleEl.textContent = styleEl.textContent
+                .replace(/oklch\([^)]+\)/g, "#111827")
+                .replace(/oklab\([^)]+\)/g, "#111827")
+                .replace(/color-mix\([^)]+\)/g, "#e5e7eb");
+            }
+          } catch (e) {
+            console.error("Error sanitizing style element:", e);
+          }
+        });
+      }
+    });
+
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+
+    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+
+    const pdfBlob = pdf.output('blob');
+    const url = URL.createObjectURL(pdfBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    const sanitizeFilename = (str: string) => safeText(str).replace(/[^a-zA-Z0-9_\-]/g, "_").replace(/__+/g, "_");
+    const suffix = "Locatario";
+    const codeSuffix = receiptData.codigoImovel ? sanitizeFilename(receiptData.codigoImovel) : "LEASE";
+    const nameSuffix = sanitizeFilename(receiptData.nomeLocatario || "Inquilino");
+    link.download = `Recibo_Aluguel_${suffix}_${codeSuffix}_${nameSuffix}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    setActiveReceiptPdf(null);
+  }
 
   const generateReceipt = async (
     lease: Lease,
@@ -2131,13 +2505,18 @@ export default function AdminRents() {
                           <DollarSign size={18} />
                         </button>
                         <button
-                          onClick={() => generateReceipt(lease, "locatario")}
-                          className="p-2.5 bg-primary-black text-white hover:bg-gold hover:text-primary-black rounded-xl transition-all shadow-md flex items-center gap-1.5"
+                          onClick={() => handleGenerateTenantReceipt(lease)}
+                          disabled={loadingReceiptId === lease.id}
+                          className="p-2.5 bg-primary-black text-white hover:bg-gold hover:text-primary-black rounded-xl transition-all shadow-md flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                           title="Gerar Recibo do Locatário (Inquilino)"
                         >
-                          <Printer size={16} />
+                          {loadingReceiptId === lease.id ? (
+                            <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <Printer size={16} />
+                          )}
                           <span className="text-[9px] font-black uppercase tracking-wider">
-                            Recibo Locatário
+                            {loadingReceiptId === lease.id ? "Gerando..." : "Recibo Locatário"}
                           </span>
                         </button>
                         <button
@@ -3029,11 +3408,17 @@ export default function AdminRents() {
                     Editar Locação
                   </button>
                   <button
-                    onClick={() => generateReceipt(selectedLease, "locatario")}
-                    className="px-4 py-3 bg-primary-black text-white hover:bg-gold hover:text-primary-black rounded-2xl flex items-center gap-1.5 transition-all shadow-md text-[11px] font-bold"
+                    onClick={() => handleGenerateTenantReceipt(selectedLease)}
+                    disabled={loadingReceiptId === selectedLease.id}
+                    className="px-4 py-3 bg-primary-black text-white hover:bg-gold hover:text-primary-black rounded-2xl flex items-center gap-1.5 transition-all shadow-md text-[11px] font-bold disabled:opacity-50 disabled:cursor-not-allowed"
                     title="Recibo Locatário"
                   >
-                    <Printer size={15} /> Recibo Locatário
+                    {loadingReceiptId === selectedLease.id ? (
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Printer size={15} />
+                    )}
+                    {loadingReceiptId === selectedLease.id ? "Gerando..." : "Recibo Locatário"}
                   </button>
                   <button
                     onClick={() => generateReceipt(selectedLease, "locador")}
@@ -3748,6 +4133,24 @@ export default function AdminRents() {
           </div>
         </div>
       )}
+
+      <AnimatePresence>
+        {toastState && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            className="fixed top-24 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-3 px-6 py-4 rounded-2xl text-white backdrop-blur-md shadow-2xl border"
+            style={{
+              backgroundColor: toastState.type === 'success' ? '#14532d' : '#7f1d1d',
+              borderColor: toastState.type === 'success' ? '#16a34a' : '#b91c1c',
+            }}
+          >
+            {toastState.type === 'success' ? <CheckCircle size={20} className="text-emerald-300" /> : <X size={20} className="text-red-300" />}
+            <span className="font-bold text-sm tracking-wide">{toastState.message}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
