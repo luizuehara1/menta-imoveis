@@ -7,18 +7,20 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isEmailAdmin(email) {
+      return email == 'luiz.uehara1@gmail.com' ||
+             email == 'edson.menta@hotmail.com' ||
+             email == 'anamariamenta@hotmail.com' ||
+             (exists(/databases/$(database)/documents/administradores/$(email)) &&
+              get(/databases/$(database)/documents/administradores/$(email)).data.get('ativo', false) == true) ||
+             (exists(/databases/$(database)/documents/admins/$(email)) &&
+              get(/databases/$(database)/documents/admins/$(email)).data.get('ativo', false) == true);
+    }
+
     function isAdmin() {
       return isSignedIn() && 
              request.auth.token.email != null &&
-             (
-               request.auth.token.email.lower() == 'luiz.uehara1@gmail.com' ||
-               request.auth.token.email.lower() == 'edson.menta@hotmail.com' ||
-               request.auth.token.email.lower() == 'anamariamenta@hotmail.com' ||
-               (exists(/databases/$(database)/documents/administradores/$(request.auth.token.email.lower())) &&
-                get(/databases/$(database)/documents/administradores/$(request.auth.token.email.lower())).data.get('ativo', false) == true) ||
-               (exists(/databases/$(database)/documents/admins/$(request.auth.token.email.lower())) &&
-                get(/databases/$(database)/documents/admins/$(request.auth.token.email.lower())).data.get('ativo', false) == true)
-             );
+             isEmailAdmin(request.auth.token.email.lower());
     }
 
     // Public Collections - Anyone can read, only Admin can write
