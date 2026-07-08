@@ -189,214 +189,6 @@ function cleanFirestoreData(obj: any): any {
   return obj;
 }
 
-// -------------------------------------------------------------
-// USER REQUESTED INTENTIONAL HELPER FUNCTIONS
-// -------------------------------------------------------------
-
-function getDateFromTransaction(transaction: any): string {
-  if (!transaction) return '';
-  const dateVal = transaction.dataCompetencia || 
-                  transaction.dataPagamento || 
-                  transaction.dataVencimento || 
-                  transaction.createdAt || 
-                  transaction.data || 
-                  transaction.date;
-                  
-  if (!dateVal) return '';
-
-  if (typeof dateVal === 'object') {
-    if (typeof dateVal.toDate === 'function') {
-      try {
-        return dateVal.toDate().toISOString().split('T')[0];
-      } catch (e) {}
-    }
-    if (dateVal.seconds !== undefined) {
-      try {
-        return new Date(dateVal.seconds * 1000).toISOString().split('T')[0];
-      } catch (e) {}
-    }
-    if (dateVal instanceof Date) {
-      try {
-        return dateVal.toISOString().split('T')[0];
-      } catch (e) {}
-    }
-  }
-
-  if (typeof dateVal === 'string') {
-    return dateVal.split('T')[0];
-  }
-
-  return String(dateVal).split('T')[0];
-}
-
-function filterTransactionsByPeriod(transactions: any[], startDate: string, endDate: string): any[] {
-  return transactions.filter(t => {
-    const tDate = getDateFromTransaction(t);
-    if (!tDate) return false;
-    const matchesStart = !startDate || tDate >= startDate;
-    const matchesEnd = !endDate || tDate <= endDate;
-    return matchesStart && matchesEnd;
-  });
-}
-
-function calculateFinancialSummary(transactions: any[]) {
-  let gastosOperacionais = 0;
-  let receitasComissao = 0;
-  let entradasTotais = 0;
-  let saidasTotais = 0;
-
-  transactions.forEach(t => {
-    const val = Number(t.valor) || 0;
-    
-    // 1. Gastos Operacionais: tipo = "Saída" ou "Despesa" ou "Gasto" ou categoria seja gasto operacional
-    const tipo = String(t.tipo || '').toLowerCase();
-    const cat = String(t.categoria || '').toLowerCase();
-    
-    const isGasto = tipo === 'saida' || tipo === 'saída' || tipo === 'despesa' || tipo === 'gasto' ||
-                    cat === 'operacional' || cat.includes('gasto') || cat.includes('despesa') || cat.includes('operacional') ||
-                    EXPENSE_CATEGORIES.map(c => c.toLowerCase()).includes(cat);
-                    
-    if (isGasto) {
-      gastosOperacionais += val;
-      saidasTotais += val;
-    } else {
-      if (tipo === 'saida' || tipo === 'saída' || tipo === 'despesa' || tipo === 'gasto') {
-        saidasTotais += val;
-      }
-    }
-    
-    // 2. Receitas de Comissão: tipo = "Entrada" ou "Receita" ou "Comissão" e categoria contenha "Comissão"
-    const isComissao = (tipo === 'entrada' || tipo === 'receita' || tipo === 'comissão' || tipo === 'comissao') &&
-                       (cat.includes('comissão') || cat.includes('comissao'));
-                       
-    if (isComissao) {
-      receitasComissao += val;
-    }
-    
-    // 4. Saldo do mês (Entradas totais)
-    const isEntrada = tipo === 'entrada' || tipo === 'receita' || tipo === 'comissão' || tipo === 'comissao';
-    if (isEntrada) {
-      entradasTotais += val;
-    }
-  });
-
-  return {
-    gastosOperacionais,
-    receitasComissao,
-    lucroLiquido: receitasComissao - gastosOperacionais,
-    saldoMes: entradasTotais - saidasTotais,
-    entradasTotais,
-    saidasTotais
-  };
-}
-
-const PERIOD_OPTIONS = [
-  { value: 'este_mes', label: 'Este mês' },
-  { value: 'mes_anterior', label: 'Mês anterior' },
-  { value: 'proximo_mes', label: 'Próximo mês' },
-  { value: '01', label: 'Janeiro' },
-  { value: '02', label: 'Fevereiro' },
-  { value: '03', label: 'Março' },
-  { value: '04', label: 'Abril' },
-  { value: '05', label: 'Maio' },
-  { value: '06', label: 'Junho' },
-  { value: '07', label: 'Julho' },
-  { value: '08', label: 'Agosto' },
-  { value: '09', label: 'Setembro' },
-  { value: '10', label: 'Outubro' },
-  { value: '11', label: 'Novembro' },
-  { value: '12', label: 'Dezembro' },
-  { value: 'ano', label: 'Ano' },
-  { value: 'personalizado', label: 'Período personalizado' }
-];
-
-const getPeriodDates = (period: string, customStart: string, customEnd: string) => {
-  const today = new Date();
-  const year = today.getFullYear(); // 2026
-  const month = today.getMonth(); // 6 (July is index 6)
-
-  let start = '';
-  let end = '';
-  let prevStart = '';
-  let prevEnd = '';
-
-  const formatLocalDate = (d: Date) => {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  };
-
-  if (period === 'este_mes') {
-    const sDate = new Date(year, month, 1);
-    const eDate = new Date(year, month + 1, 0);
-    start = formatLocalDate(sDate);
-    end = formatLocalDate(eDate);
-
-    const psDate = new Date(year, month - 1, 1);
-    const peDate = new Date(year, month, 0);
-    prevStart = formatLocalDate(psDate);
-    prevEnd = formatLocalDate(peDate);
-  } else if (period === 'mes_anterior') {
-    const sDate = new Date(year, month - 1, 1);
-    const eDate = new Date(year, month, 0);
-    start = formatLocalDate(sDate);
-    end = formatLocalDate(eDate);
-
-    const psDate = new Date(year, month - 2, 1);
-    const peDate = new Date(year, month - 1, 0);
-    prevStart = formatLocalDate(psDate);
-    prevEnd = formatLocalDate(peDate);
-  } else if (period === 'proximo_mes') {
-    const sDate = new Date(year, month + 1, 1);
-    const eDate = new Date(year, month + 2, 0);
-    start = formatLocalDate(sDate);
-    end = formatLocalDate(eDate);
-
-    const psDate = new Date(year, month, 1);
-    const peDate = new Date(year, month + 1, 0);
-    prevStart = formatLocalDate(psDate);
-    prevEnd = formatLocalDate(peDate);
-  } else if (period === 'ano') {
-    start = `${year}-01-01`;
-    end = `${year}-12-31`;
-
-    prevStart = `${year - 1}-01-01`;
-    prevEnd = `${year - 1}-12-31`;
-  } else if (period === 'personalizado') {
-    start = customStart;
-    end = customEnd;
-    
-    if (customStart && customEnd) {
-      const s = new Date(customStart + 'T12:00:00');
-      const e = new Date(customEnd + 'T12:00:00');
-      const diffTime = Math.abs(e.getTime() - s.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-      
-      const ps = new Date(s);
-      ps.setDate(ps.getDate() - diffDays);
-      const pe = new Date(e);
-      pe.setDate(pe.getDate() - diffDays);
-      
-      prevStart = formatLocalDate(ps);
-      prevEnd = formatLocalDate(pe);
-    }
-  } else {
-    const mIdx = parseInt(period, 10) - 1;
-    const sDate = new Date(year, mIdx, 1);
-    const eDate = new Date(year, mIdx + 1, 0);
-    start = formatLocalDate(sDate);
-    end = formatLocalDate(eDate);
-
-    const psDate = new Date(year, mIdx - 1, 1);
-    const peDate = new Date(year, mIdx, 0);
-    prevStart = formatLocalDate(psDate);
-    prevEnd = formatLocalDate(peDate);
-  }
-
-  return { start, end, prevStart, prevEnd };
-};
-
 export default function AdminFinance() {
   const { user, isAdmin } = useAuth();
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -422,7 +214,7 @@ export default function AdminFinance() {
   const [filterCategory, setFilterCategory] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [referencePeriod, setReferencePeriod] = useState<string>('este_mes');
+  const [referenciaPeriodo, setReferenciaPeriodo] = useState<string>('este_mes');
 
   // Form State
   const [formData, setFormData] = useState<Partial<FinanceRecord>>({
@@ -443,122 +235,270 @@ export default function AdminFinance() {
     beneficiario: ''
   });
 
-  useEffect(() => {
-    // Set initial date range for 'este_mes' on mount
-    const dates = getPeriodDates('este_mes', '', '');
-    setStartDate(dates.start);
-    setEndDate(dates.end);
+  // Helper functions requested by user
+  const getDateFromTransaction = (transaction: any): string => {
+    const val = transaction.dataCompetencia || transaction.dataPagamento || transaction.dataVencimento || transaction.dataEfetiva || transaction.data || transaction.createdAt;
+    if (!val) return '';
+    if (typeof val === 'object' && val !== null && 'seconds' in val) {
+      return new Date(val.seconds * 1000).toISOString().split('T')[0];
+    }
+    if (val instanceof Date) {
+      return val.toISOString().split('T')[0];
+    }
+    if (typeof val === 'string') {
+      return val.split('T')[0];
+    }
+    return String(val);
+  };
 
-    setLoading(true);
-    let unsubFinanceiro = () => {};
-    let unsubGastos = () => {};
-    let unsubReceitas = () => {};
+  const filterTransactionsByPeriod = (transactions: any[], start: string, end: string) => {
+    return transactions.filter(t => {
+      const d = getDateFromTransaction(t);
+      if (!d) return false;
+      return d >= start && d <= end;
+    });
+  };
 
-    let rawFinanceiro: any[] = [];
-    let rawGastos: any[] = [];
-    let rawReceitas: any[] = [];
+  const calculateFinancialSummary = (transactions: any[]) => {
+    let totalOutflow = 0;
+    let totalReceitasComissao = 0;
+    let totalInflow = 0;
+    let totalSaida = 0;
 
-    const combineAndSetRecords = () => {
-      const allData = [...rawFinanceiro, ...rawGastos, ...rawReceitas].sort((a, b) => {
-        const dateA = getDateFromTransaction(a);
-        const dateB = getDateFromTransaction(b);
-        return dateB.localeCompare(dateA);
-      });
-      setRecords(allData);
+    transactions.forEach(t => {
+      const val = Number(t.valor || 0);
+      const tp = String(t.tipo || '').toLowerCase();
+      const cat = String(t.categoria || '').toLowerCase();
+
+      const isGasto = tp === 'saida' || tp === 'saída' || tp === 'despesa' || tp === 'gasto' || EXPENSE_CATEGORIES.map(c => c.toLowerCase()).includes(cat);
+      if (isGasto) {
+        totalOutflow += val;
+      }
+
+      const isRevComissao = (tp === 'entrada' || tp === 'receita' || tp === 'comissão' || tp === 'comissao') && (cat.includes('comissão') || cat.includes('comissao'));
+      if (isRevComissao) {
+        totalReceitasComissao += val;
+      }
+
+      const isEntrada = tp === 'entrada' || tp === 'receita' || tp === 'comissão' || tp === 'comissao' || REVENUE_CATEGORIES.map(c => c.toLowerCase()).includes(cat);
+      const isSaida = tp === 'saida' || tp === 'saída' || tp === 'despesa' || tp === 'gasto' || EXPENSE_CATEGORIES.map(c => c.toLowerCase()).includes(cat);
+
+      if (isEntrada) {
+        totalInflow += val;
+      }
+      if (isSaida) {
+        totalSaida += val;
+      }
+    });
+
+    return {
+      gastosOperacionais: totalOutflow,
+      receitasComissao: totalReceitasComissao,
+      lucroLiquido: totalReceitasComissao - totalOutflow,
+      saldoMes: totalInflow - totalSaida
     };
+  };
 
-    // 1. Listen to 'financeiro' in real-time
-    try {
-      unsubFinanceiro = onSnapshot(
-        query(collection(db, 'financeiro'), orderBy('data', 'desc')),
-        (snapshot) => {
-          rawFinanceiro = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            sourceCollection: 'financeiro'
-          }));
-          combineAndSetRecords();
-          setLoading(false);
-        },
-        (error) => {
-          console.error("Erro real-time no financeiro:", error);
-          setLoading(false);
-        }
-      );
-    } catch (err) {
-      console.error("Erro ao assinar financeiro:", err);
+  const getPeriodRanges = (option: string, customStart?: string, customEnd?: string) => {
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth();
+
+    let start = new Date();
+    let end = new Date();
+    let prevStart = new Date();
+    let prevEnd = new Date();
+
+    if (option === 'este_mes') {
+      start = new Date(currentYear, currentMonth, 1);
+      end = new Date(currentYear, currentMonth + 1, 0);
+      
+      prevStart = new Date(currentYear, currentMonth - 1, 1);
+      prevEnd = new Date(currentYear, currentMonth, 0);
+    } else if (option === 'mes_anterior') {
+      start = new Date(currentYear, currentMonth - 1, 1);
+      end = new Date(currentYear, currentMonth, 0);
+      
+      prevStart = new Date(currentYear, currentMonth - 2, 1);
+      prevEnd = new Date(currentYear, currentMonth - 1, 0);
+    } else if (option === 'proximo_mes') {
+      start = new Date(currentYear, currentMonth + 1, 1);
+      end = new Date(currentYear, currentMonth + 2, 0);
+      
+      prevStart = new Date(currentYear, currentMonth, 1);
+      prevEnd = new Date(currentYear, currentMonth + 1, 0);
+    } else if (option === 'ano') {
+      start = new Date(currentYear, 0, 1);
+      end = new Date(currentYear, 12, 0);
+      
+      prevStart = new Date(currentYear - 1, 0, 1);
+      prevEnd = new Date(currentYear - 1, 12, 0);
+    } else if (option === 'personalizado') {
+      if (customStart && customEnd) {
+        start = new Date(customStart + 'T00:00:00');
+        end = new Date(customEnd + 'T23:59:59');
+        
+        const diffTime = Math.abs(end.getTime() - start.getTime());
+        prevEnd = new Date(start.getTime() - 1000);
+        prevStart = new Date(prevEnd.getTime() - diffTime);
+      } else {
+        start = new Date(currentYear, currentMonth, 1);
+        end = new Date(currentYear, currentMonth + 1, 0);
+        prevStart = new Date(currentYear, currentMonth - 1, 1);
+        prevEnd = new Date(currentYear, currentMonth, 0);
+      }
+    } else {
+      const monthsMap: { [key: string]: number } = {
+        janeiro: 0, fevereiro: 1, marco: 2, abril: 3, maio: 4, junho: 5,
+        julho: 6, agosto: 7, setembro: 8, outubro: 9, novembro: 10, dezembro: 11
+      };
+      const mIndex = monthsMap[option] ?? currentMonth;
+      start = new Date(currentYear, mIndex, 1);
+      end = new Date(currentYear, mIndex + 1, 0);
+      
+      prevStart = new Date(currentYear, mIndex - 1, 1);
+      prevEnd = new Date(currentYear, mIndex, 0);
     }
 
-    // 2. Listen to 'gastos' (legacy) in real-time
-    try {
-      unsubGastos = onSnapshot(
-        query(collection(db, 'gastos'), orderBy('date', 'desc')),
-        (snapshot) => {
-          rawGastos = snapshot.docs.map(doc => {
-            const d = doc.data();
-            return {
-              id: doc.id,
-              tipo: 'saida',
-              data: d.date || '',
-              valor: d.value || 0,
-              descricao: d.description || '',
-              categoria: d.category || 'Outros',
-              responsavel: d.responsible || 'Admin',
-              formaPagamento: d.paymentMethod || 'Outro',
-              status: 'confirmado',
-              sourceCollection: 'gastos'
-            };
-          });
-          combineAndSetRecords();
-        },
-        (error) => {
-          console.error("Erro real-time legacy gastos:", error);
-        }
-      );
-    } catch (err) {
-      console.error("Erro ao assinar legacy gastos:", err);
-    }
+    return {
+      current: {
+        start: start.toISOString().split('T')[0],
+        end: end.toISOString().split('T')[0]
+      },
+      previous: {
+        start: prevStart.toISOString().split('T')[0],
+        end: prevEnd.toISOString().split('T')[0]
+      }
+    };
+  };
 
-    // 3. Listen to 'receitas' (legacy) in real-time
-    try {
-      unsubReceitas = onSnapshot(
-        query(collection(db, 'receitas'), orderBy('date', 'desc')),
-        (snapshot) => {
-          rawReceitas = snapshot.docs.map(doc => {
-            const d = doc.data();
-            return {
-              id: doc.id,
-              tipo: 'entrada',
-              data: d.date || '',
-              valor: d.value || 0,
-              descricao: d.description || '',
-              categoria: d.type || 'Outros',
-              status: 'confirmado',
-              responsavel: 'Admin',
-              sourceCollection: 'receitas'
-            };
-          });
-          combineAndSetRecords();
-        },
-        (error) => {
-          console.error("Erro real-time legacy receitas:", error);
-        }
-      );
-    } catch (err) {
-      console.error("Erro ao assinar legacy receitas:", err);
+  const getPercentageChange = (current: number, prev: number) => {
+    if (prev === 0) {
+      if (current === 0) return { percent: 0, text: '0%', type: 'neutral' };
+      return { percent: 100, text: '+100%', type: 'increase' };
     }
+    const diff = current - prev;
+    const pct = (diff / prev) * 100;
+    const sign = pct > 0 ? '+' : '';
+    return {
+      percent: pct,
+      text: `${sign}${pct.toFixed(0)}%`,
+      type: pct > 0 ? 'increase' : pct < 0 ? 'decrease' : 'neutral'
+    };
+  };
+
+  // Real-time collection synchronization
+  useEffect(() => {
+    setLoading(true);
+    
+    // 1. Live listener for financeiro collection
+    const qFinanceiro = query(collection(db, 'financeiro'), orderBy('data', 'desc'));
+    const unsubscribeFinanceiro = onSnapshot(qFinanceiro, (snapshot) => {
+      const financeiroData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        sourceCollection: 'financeiro'
+      } as FinanceRecord & { sourceCollection: string }));
+      
+      setRecords(prev => {
+        const others = prev.filter(r => r.sourceCollection !== 'financeiro');
+        const merged = [...financeiroData, ...others].sort((a, b) => b.data.localeCompare(a.data));
+        return merged;
+      });
+      setLoading(false);
+    }, (error) => {
+      console.error("Erro no onSnapshot 'financeiro':", error);
+      setLoading(false);
+    });
+
+    // 2. Live listener for legacy gastos collection
+    const qGastos = query(collection(db, 'gastos'), orderBy('date', 'desc'));
+    const unsubscribeGastos = onSnapshot(qGastos, (snapshot) => {
+      const legacyGastos = snapshot.docs.map(doc => {
+        const d = doc.data();
+        return {
+          id: doc.id,
+          tipo: 'saida',
+          data: d.date || '',
+          valor: d.value || 0,
+          descricao: d.description || '',
+          categoria: d.category || 'Outros',
+          responsavel: d.responsible || 'Admin',
+          formaPagamento: d.paymentMethod || 'Outro',
+          status: 'confirmado',
+          sourceCollection: 'gastos'
+        } as FinanceRecord & { sourceCollection: string };
+      });
+
+      setRecords(prev => {
+        const others = prev.filter(r => r.sourceCollection !== 'gastos');
+        const merged = [...legacyGastos, ...others].sort((a, b) => b.data.localeCompare(a.data));
+        return merged;
+      });
+    }, (error) => {
+      console.error("Erro no onSnapshot 'gastos':", error);
+    });
+
+    // 3. Live listener for legacy receitas collection
+    const qReceitas = query(collection(db, 'receitas'), orderBy('date', 'desc'));
+    const unsubscribeReceitas = onSnapshot(qReceitas, (snapshot) => {
+      const legacyReceitas = snapshot.docs.map(doc => {
+        const d = doc.data();
+        return {
+          id: doc.id,
+          tipo: 'entrada',
+          data: d.date || '',
+          valor: d.value || 0,
+          descricao: d.description || '',
+          categoria: d.type || 'Outros',
+          status: 'confirmado',
+          responsavel: 'Admin',
+          sourceCollection: 'receitas'
+        } as FinanceRecord & { sourceCollection: string };
+      });
+
+      setRecords(prev => {
+        const others = prev.filter(r => r.sourceCollection !== 'receitas');
+        const merged = [...legacyReceitas, ...others].sort((a, b) => b.data.localeCompare(a.data));
+        return merged;
+      });
+    }, (error) => {
+      console.error("Erro no onSnapshot 'receitas':", error);
+    });
 
     fetchIntegrations();
 
     return () => {
-      unsubFinanceiro();
-      unsubGastos();
-      unsubReceitas();
+      unsubscribeFinanceiro();
+      unsubscribeGastos();
+      unsubscribeReceitas();
     };
   }, []);
 
+  // Update date bounds automatically when referenciaPeriodo changes
+  useEffect(() => {
+    if (referenciaPeriodo !== 'personalizado') {
+      const ranges = getPeriodRanges(referenciaPeriodo);
+      setStartDate(ranges.current.start);
+      setEndDate(ranges.current.end);
+    }
+  }, [referenciaPeriodo]);
+
+  const toggleStatus = async (item: FinanceRecord & { sourceCollection?: string }) => {
+    try {
+      const coll = item.sourceCollection || 'financeiro';
+      const currentStatus = item.status || 'confirmado';
+      const newStatus = currentStatus === 'confirmado' ? 'pendente' : 'confirmado';
+      await updateDoc(doc(db, coll, item.id!), { status: newStatus });
+      triggerToast(`Status do lançamento atualizado para ${newStatus === 'confirmado' ? 'pago/recebido' : 'pendente'}.`, "success");
+    } catch (err: any) {
+      console.error("Erro ao atualizar status do lançamento:", err);
+      triggerToast("Erro ao atualizar status do lançamento.", "error");
+    }
+  };
+
   const fetchData = async () => {
-    // Kept as a no-op fallback for any legacy code calling it
+    // No-op placeholder since onSnapshot manages everything in real-time
   };
 
   const fetchIntegrations = async () => {
@@ -776,10 +716,6 @@ export default function AdminFinance() {
     }
   };
 
-  const periodDates = useMemo(() => {
-    return getPeriodDates(referencePeriod, startDate, endDate);
-  }, [referencePeriod, startDate, endDate]);
-
   const filteredRecords = useMemo(() => {
     return records.filter(record => {
       const matchesTab = activeTab === 'todos' || 
@@ -792,47 +728,54 @@ export default function AdminFinance() {
                            record.codigoImovel?.toLowerCase().includes(searchQuery.toLowerCase());
       
       const matchesCategory = !filterCategory || record.categoria === filterCategory;
-      
-      const rDate = getDateFromTransaction(record);
-      const matchesStartDate = !startDate || rDate >= startDate;
-      const matchesEndDate = !endDate || rDate <= endDate;
+      const matchesStartDate = !startDate || record.data >= startDate;
+      const matchesEndDate = !endDate || record.data <= endDate;
 
       return matchesTab && matchesSearch && matchesCategory && matchesStartDate && matchesEndDate;
     });
   }, [records, activeTab, searchQuery, filterCategory, startDate, endDate]);
 
   const stats = useMemo(() => {
-    const currentPeriodTransactions = filterTransactionsByPeriod(records, periodDates.start, periodDates.end);
-    const prevPeriodTransactions = filterTransactionsByPeriod(records, periodDates.prevStart, periodDates.prevEnd);
-
+    // 1. Current selected period transactions
+    const currentPeriodTransactions = filterTransactionsByPeriod(records, startDate, endDate);
     const currentSummary = calculateFinancialSummary(currentPeriodTransactions);
+
+    // 2. Previous period transactions for comparison
+    const ranges = getPeriodRanges(referenciaPeriodo, startDate, endDate);
+    const prevPeriodTransactions = filterTransactionsByPeriod(records, ranges.previous.start, ranges.previous.end);
     const prevSummary = calculateFinancialSummary(prevPeriodTransactions);
 
-    const calculatePercentageChange = (current: number, previous: number) => {
-      if (previous === 0) {
-        return current > 0 ? '+100%' : '0%';
-      }
-      const change = ((current - previous) / previous) * 100;
-      const sign = change >= 0 ? '+' : '';
-      return `${sign}${change.toFixed(0)}%`;
-    };
-
-    const compGastos = calculatePercentageChange(currentSummary.gastosOperacionais, prevSummary.gastosOperacionais);
-    const compReceitas = calculatePercentageChange(currentSummary.receitasComissao, prevSummary.receitasComissao);
-    const compLucro = calculatePercentageChange(currentSummary.lucroLiquido, prevSummary.lucroLiquido);
-    const compSaldo = calculatePercentageChange(currentSummary.saldoMes, prevSummary.saldoMes);
+    // Percentage Changes
+    const gastosChange = getPercentageChange(currentSummary.gastosOperacionais, prevSummary.gastosOperacionais);
+    const receitasChange = getPercentageChange(currentSummary.receitasComissao, prevSummary.receitasComissao);
+    const lucroChange = getPercentageChange(currentSummary.lucroLiquido, prevSummary.lucroLiquido);
+    const saldoChange = getPercentageChange(currentSummary.saldoMes, prevSummary.saldoMes);
 
     return {
-      current: currentSummary,
-      previous: prevSummary,
-      comparisons: {
-        gastos: compGastos,
-        receitas: compReceitas,
-        lucro: compLucro,
-        saldo: compSaldo
-      }
+      gastosOperacionais: currentSummary.gastosOperacionais,
+      receitasComissao: currentSummary.receitasComissao,
+      lucroLiquido: currentSummary.lucroLiquido,
+      saldoMes: currentSummary.saldoMes,
+      
+      prevGastosOperacionais: prevSummary.gastosOperacionais,
+      prevReceitasComissao: prevSummary.receitasComissao,
+      prevLucroLiquido: prevSummary.lucroLiquido,
+      prevSaldoMes: prevSummary.saldoMes,
+
+      gastosChange,
+      receitasChange,
+      lucroChange,
+      saldoChange,
+
+      // Keep properties for older references to avoid any crashes
+      totalInflow: currentSummary.receitasComissao,
+      totalOutflow: currentSummary.gastosOperacionais,
+      balance: currentSummary.lucroLiquido,
+      monthInflow: currentSummary.receitasComissao,
+      monthOutflow: currentSummary.gastosOperacionais,
+      monthBalance: currentSummary.saldoMes
     };
-  }, [records, periodDates]);
+  }, [records, startDate, endDate, referenciaPeriodo]);
 
   const exportPDF = async () => {
     try {
@@ -1001,52 +944,90 @@ export default function AdminFinance() {
           <h1 className="text-4xl font-display font-bold text-primary-black tracking-tight">Fluxo de Caixa</h1>
           <p className="text-gray-400 mt-2 text-lg font-light leading-relaxed">Controle completo de entradas e saídas da imobiliária.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-6">
-          {/* Mês de referência selector */}
+        <div className="flex items-center gap-4">
+          <motion.button 
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={exportPDF}
+            className="flex items-center gap-2 px-6 py-4 border border-gray-200 rounded-2xl text-gray-500 hover:text-primary-black hover:bg-gray-50 transition-all font-black text-[10px] uppercase tracking-widest"
+          >
+            <FileDown size={18} /> Exportar PDF
+          </motion.button>
+          <motion.button 
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setShowModal(true)}
+            className="btn-gold !bg-primary-black !text-white hover:!bg-gold hover:!text-primary-black !rounded-2xl !py-4 !px-8 shadow-xl shadow-primary-black/10 flex items-center gap-3"
+          >
+            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
+              <Plus size={20} className="text-gold" />
+            </div>
+            <span className="uppercase text-xs font-black tracking-widest leading-none">Novo Lançamento</span>
+          </motion.button>
+        </div>
+      </motion.div>
+
+      {/* Mês de Referência Selector */}
+      <motion.div 
+        variants={slideUp} 
+        className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4"
+      >
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Mês de referência</label>
+          <div className="flex items-center gap-2">
+            <Calendar size={18} className="text-gold" />
+            <span className="text-sm font-semibold text-primary-black">
+              Filtrando dados de: <span className="text-gold font-mono">{startDate || 'Início'}</span> até <span className="text-gold font-mono">{endDate || 'Hoje'}</span>
+            </span>
+          </div>
+        </div>
+        
+        <div className="flex flex-wrap items-center gap-4">
           <div className="flex flex-col gap-1.5 min-w-[200px]">
-            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
-              Mês de referência
-            </label>
             <select
-              value={referencePeriod}
-              onChange={(e) => {
-                const val = e.target.value;
-                setReferencePeriod(val);
-                const dates = getPeriodDates(val, startDate, endDate);
-                setStartDate(dates.start);
-                setEndDate(dates.end);
-              }}
-              className="bg-white border border-gray-200 rounded-2xl py-3 px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-gold/20 hover:border-gray-300 transition-all text-primary-black shadow-sm"
+              value={referenciaPeriodo}
+              onChange={(e) => setReferenciaPeriodo(e.target.value)}
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 px-4 text-sm font-bold text-primary-black outline-none focus:ring-2 focus:ring-gold/20 focus:bg-white transition-all cursor-pointer shadow-sm"
             >
-              {PERIOD_OPTIONS.map(opt => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
+              <option value="este_mes">Este mês</option>
+              <option value="mes_anterior">Mês anterior</option>
+              <option value="proximo_mes">Próximo mês</option>
+              <option value="ano">Ano</option>
+              <optgroup label="Janeiro a Dezembro">
+                <option value="janeiro">Janeiro</option>
+                <option value="fevereiro">Fevereiro</option>
+                <option value="marco">Março</option>
+                <option value="abril">Abril</option>
+                <option value="maio">Maio</option>
+                <option value="junho">Junho</option>
+                <option value="julho">Julho</option>
+                <option value="agosto">Agosto</option>
+                <option value="setembro">Setembro</option>
+                <option value="outubro">Outubro</option>
+                <option value="novembro">Novembro</option>
+                <option value="dezembro">Dezembro</option>
+              </optgroup>
+              <option value="personalizado">Período personalizado</option>
             </select>
           </div>
 
-          <div className="flex items-center gap-4 self-end">
-            <motion.button 
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={exportPDF}
-              className="flex items-center gap-2 px-6 py-4 border border-gray-200 rounded-2xl text-gray-500 hover:text-primary-black hover:bg-gray-50 transition-all font-black text-[10px] uppercase tracking-widest"
-            >
-              <FileDown size={18} /> Exportar PDF
-            </motion.button>
-            <motion.button 
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => setShowModal(true)}
-              className="btn-gold !bg-primary-black !text-white hover:!bg-gold hover:!text-primary-black !rounded-2xl !py-4 !px-8 shadow-xl shadow-primary-black/10 flex items-center gap-3"
-            >
-              <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
-                <Plus size={20} className="text-gold" />
-              </div>
-              <span className="uppercase text-xs font-black tracking-widest leading-none">Novo Lançamento</span>
-            </motion.button>
-          </div>
+          {referenciaPeriodo === 'personalizado' && (
+            <div className="flex items-center gap-2 animate-fadeIn">
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="bg-gray-50 border border-gray-200 rounded-xl py-2 px-3 text-sm font-bold outline-none focus:ring-2 focus:ring-gold/20 focus:bg-white transition-all"
+              />
+              <span className="text-xs font-bold text-gray-400">até</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="bg-gray-50 border border-gray-200 rounded-xl py-2 px-3 text-sm font-bold outline-none focus:ring-2 focus:ring-gold/20 focus:bg-white transition-all"
+              />
+            </div>
+          )}
         </div>
       </motion.div>
 
@@ -1063,13 +1044,11 @@ export default function AdminFinance() {
             <div className="flex items-center gap-3 text-red-500 mb-4 font-black uppercase text-[10px] tracking-[0.2em]">
                <div className="w-8 h-8 rounded-xl bg-red-50 flex items-center justify-center"><TrendingDown size={18} /></div> Gastos Operacionais
             </div>
-            <h3 className="text-3xl font-bold text-primary-black tracking-tighter">
-              {formatCurrency(stats.current.gastosOperacionais)}
-            </h3>
+            <h3 className="text-3xl font-bold text-primary-black tracking-tighter">{formatCurrency(stats.gastosOperacionais)}</h3>
             <div className="mt-4 flex items-center justify-between text-[10px]">
-               <span className="text-gray-400 font-medium uppercase tracking-widest">Comparativo:</span>
-               <span className="font-bold text-red-500">
-                 {stats.comparisons.gastos} vs período anterior
+               <span className="text-gray-400 font-medium uppercase tracking-widest">vs mês anterior:</span>
+               <span className={`font-bold ${stats.gastosChange.type === 'increase' ? 'text-red-500' : stats.gastosChange.type === 'decrease' ? 'text-emerald-500' : 'text-gray-400'}`}>
+                  {stats.gastosChange.text} ({formatCurrency(stats.prevGastosOperacionais)})
                </span>
             </div>
          </motion.div>
@@ -1082,13 +1061,11 @@ export default function AdminFinance() {
             <div className="flex items-center gap-3 text-emerald-500 mb-4 font-black uppercase text-[10px] tracking-[0.2em]">
                <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center"><TrendingUp size={18} /></div> Receitas de Comissão
             </div>
-            <h3 className="text-3xl font-bold text-primary-black tracking-tighter">
-              {formatCurrency(stats.current.receitasComissao)}
-            </h3>
+            <h3 className="text-3xl font-bold text-primary-black tracking-tighter">{formatCurrency(stats.receitasComissao)}</h3>
             <div className="mt-4 flex items-center justify-between text-[10px]">
-               <span className="text-gray-400 font-medium uppercase tracking-widest">Comparativo:</span>
-               <span className="font-bold text-emerald-500">
-                 {stats.comparisons.receitas} vs período anterior
+               <span className="text-gray-400 font-medium uppercase tracking-widest">vs mês anterior:</span>
+               <span className={`font-bold ${stats.receitasChange.type === 'increase' ? 'text-emerald-500' : stats.receitasChange.type === 'decrease' ? 'text-red-500' : 'text-gray-400'}`}>
+                  {stats.receitasChange.text} ({formatCurrency(stats.prevReceitasComissao)})
                </span>
             </div>
          </motion.div>
@@ -1096,19 +1073,15 @@ export default function AdminFinance() {
          <motion.div 
            variants={slideUp}
            whileHover={{ y: -5 }}
-           className={`${stats.current.lucroLiquido >= 0 ? 'bg-primary-black text-white' : 'bg-red-600 text-white'} p-8 rounded-[2rem] shadow-2xl relative overflow-hidden group`}
+           className={`${stats.lucroLiquido >= 0 ? 'bg-primary-black text-white' : 'bg-red-600 text-white'} p-8 rounded-[2rem] shadow-2xl relative overflow-hidden group`}
          >
             <div className="flex items-center gap-3 text-gold mb-4 font-black uppercase text-[10px] tracking-[0.2em]">
                <div className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center"><DollarSign size={18} /></div> Lucro Líquido
             </div>
-            <h3 className="text-3xl font-bold tracking-tighter">
-              {formatCurrency(stats.current.lucroLiquido)}
-            </h3>
+            <h3 className="text-3xl font-bold tracking-tighter">{formatCurrency(stats.lucroLiquido)}</h3>
             <div className="mt-4 flex items-center justify-between text-[10px]">
-               <span className="text-white/40 font-medium uppercase tracking-widest">Saldo do mês:</span>
-               <span className="font-bold text-gold">
-                 {formatCurrency(stats.current.saldoMes)} ({stats.comparisons.lucro} vs anterior)
-               </span>
+               <span className="text-white/40 font-medium uppercase tracking-widest font-semibold">Saldo do mês:</span>
+               <span className={`font-bold ${stats.saldoMes >= 0 ? 'text-emerald-400' : 'text-red-300'}`}>{formatCurrency(stats.saldoMes)}</span>
             </div>
          </motion.div>
       </motion.div>
@@ -1247,15 +1220,7 @@ export default function AdminFinance() {
                       <td className="p-8 pl-12 text-sm text-gray-500 font-bold whitespace-nowrap">
                         <div className="flex items-center gap-3">
                           <Calendar size={14} className="text-gray-300" />
-                          {(() => {
-                            const dateStr = getDateFromTransaction(item);
-                            if (!dateStr) return '---';
-                            const parts = dateStr.split('-');
-                            if (parts.length === 3) {
-                              return `${parts[2]}/${parts[1]}/${parts[0]}`;
-                            }
-                            return dateStr;
-                          })()}
+                          {new Date(item.data + 'T00:00:00').toLocaleDateString('pt-BR')}
                         </div>
                       </td>
                       <td className="p-8">

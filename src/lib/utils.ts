@@ -2400,9 +2400,13 @@ export function getDetalhesPagamento(dados: any = {}): string {
   return (
     dados.detalhesPagamento ||
     dados.detalhesPagamentoContraproposta ||
+    dados.observacoesPagamento ||
+    dados.formaPagamentoDetalhada ||
+    dados.pagamento?.detalhes ||
+    dados.pagamento?.detalhesPagamento ||
+    dados.termos?.detalhesPagamento ||
     dados.outrasCondicoes ||
     dados.condicoesPagamento ||
-    dados.observacoesPagamento ||
     dados.clausulaPagamento ||
     dados.termosCondicoes ||
     ""

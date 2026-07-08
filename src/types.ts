@@ -235,6 +235,12 @@ export interface Lease {
   statusLocacao: 'Ativa' | 'Encerrada' | 'Cancelada';
   lastPaymentDate?: string;
   lastPaymentMonth?: string; // YYYY-MM
+  ultimoPagamentoData?: string;
+  ultimoPagamentoMes?: string;
+  ultimoPagamentoCompetencia?: string;
+  proximaCompetencia?: string;
+  proximoVencimento?: string;
+  statusPagamentoAtual?: 'Pendente' | 'Pago' | 'Atrasado' | 'Cancelado';
   observacoes?: string;
   active: boolean;
   manterPublicado?: boolean;

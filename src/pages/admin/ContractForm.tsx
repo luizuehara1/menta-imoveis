@@ -2745,7 +2745,7 @@ export default function AdminContractForm() {
           }
           
           const canvas = await html2canvas(pageEl, {
-            scale: 4.0, // High-DPI rendering for razor-sharp, non-serrated corporate PDF outputs
+            scale: 2.2, // Slightly higher quality for crisp text
             useCORS: true,
             logging: false,
             backgroundColor: '#ffffff',
