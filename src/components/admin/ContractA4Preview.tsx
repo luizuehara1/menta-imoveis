@@ -30,6 +30,21 @@ export function textosIguaisPDF(a: any, b: any): boolean {
 
 const getCleanVal = (val: any): string => (typeof val === 'string' ? val.trim() : '');
 
+export const parseValorNum = (v: any): number => {
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string') {
+    // aceita "850.000,00", "850000.00", "R$ 850.000,00"
+    const cleaned = v.replace(/[^\d,.-]/g, '');
+    // pt-BR: ponto = milhar, vírgula = decimal
+    const normalized = cleaned.includes(',')
+      ? cleaned.replace(/\./g, '').replace(',', '.')
+      : cleaned;
+    const n = parseFloat(normalized);
+    return isNaN(n) ? 0 : n;
+  }
+  return 0;
+};
+
 const estimateHeight = (text: string, divisor: number = 56, mmPerLine: number = 5.0): number => {
   if (!text) return 0;
   const lines = text.split('\n');
@@ -1303,11 +1318,44 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
       );
 
       // 5. Pagamento Block
-      const totalValor = Number(dados.pagamento?.valorTotal || dados.termos?.valorTotal || contract.valorContrato || 0);
+      // Busca o valor total em todos os nomes de campo possíveis. O formulário
+      // grava "Valor Total Negociado" em chaves que variam (valorTotalNegociado,
+      // valorNegociado, valorTotal em dados/pagamento/termos, etc.), então
+      // percorremos todas as variantes conhecidas em vez de só 3 caminhos.
+      const totalValor =
+        parseValorNum(dados.pagamento?.valorTotal) ||
+        parseValorNum(dados.pagamento?.valorTotalNegociado) ||
+        parseValorNum(dados.termos?.valorTotal) ||
+        parseValorNum(dados.termos?.valorTotalNegociado) ||
+        parseValorNum(dados.valorTotalNegociado) ||
+        parseValorNum(dados.valorNegociado) ||
+        parseValorNum(dados.valorTotal) ||
+        parseValorNum(dados.valorProposta) ||
+        parseValorNum(dados.valor) ||
+        parseValorNum(contract.valorTotalNegociado) ||
+        parseValorNum(contract.valorContrato) ||
+        parseValorNum(contract.valor) ||
+        0;
       addBlock(
         <PdfPaymentBlock dados={dados} tipoContrato={tipoContrato} totalValor={totalValor} metodosDePagamento={metodosDePagamento} contract={contract} />,
         25 + (metodosDePagamento.length * 3.8) + (showDetalhes ? estimateHeight(rawDetalhes) + 8 : 0) + (showOutras ? estimateHeight(rawOutras) + 8 : 0)
       );
+
+      // Sinal do Negócio Clause
+      const vSinal = parseValorNum(dados.valorSinal || contract.valorSinal || dados.pagamento?.valorSinal || dados.termos?.valorSinal || dados.arras?.valorArras || 0);
+      if (vSinal > 0) {
+        const vSinalExtenso = valorMonetarioPorExtenso(vSinal).toLowerCase();
+        const formattedSinal = vSinal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const clauseText = `O(A) COMPRADOR(A) pagará à imobiliária intermediadora a quantia de R$ ${formattedSinal} (${vSinalExtenso}), a título de sinal de negócio, por meio da forma de pagamento convencionada pelas partes, servindo este valor como confirmação irrevogável do fechamento da transação imobiliária, sob pena de perda do sinal em caso de desistência imotivada do(a) COMPRADOR(A) ou devolução em dobro em caso de desistência imotivada do(a) VENDEDOR(A).`;
+        addBlock(
+          <PdfSection title="CLÁUSULA – SINAL DO NEGÓCIO">
+            <p className="text-justify text-[11.5px] text-gray-800 leading-relaxed bg-white p-2 border border-gray-150 rounded">
+              O(A) COMPRADOR(A) pagará à imobiliária intermediadora a quantia de <strong>R$ {formattedSinal} ({vSinalExtenso})</strong>, a título de <strong>sinal de negócio</strong>, por meio da forma de pagamento convencionada pelas partes, servindo este valor como confirmação irrevogável do fechamento da transação imobiliária, sob pena de perda do sinal em caso de desistência imotivada do(a) COMPRADOR(A) ou devolução em dobro em caso de desistência imotivada do(a) VENDEDOR(A).
+            </p>
+          </PdfSection>,
+          14 + estimateHeight(clauseText)
+        );
+      }
 
       // 6. Selected Clauses
       const listClauses = (dados.clausulasSelecionadas || []).filter(
@@ -1437,11 +1485,36 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
       );
 
       // 5. Arras e Condicoes
-      const valorTotal = Number(arr.valorTotalNegocio || contract.valorContrato || 0);
+      const valorTotal =
+        parseValorNum(arr.valorTotalNegocio) ||
+        parseValorNum(arr.valorTotalNegociado) ||
+        parseValorNum(arr.valorTotal) ||
+        parseValorNum(dados.valorTotalNegociado) ||
+        parseValorNum(dados.valorNegociado) ||
+        parseValorNum(dados.valorTotal) ||
+        parseValorNum(contract.valorTotalNegociado) ||
+        parseValorNum(contract.valorContrato) ||
+        0;
       addBlock(
         <PdfPaymentBlock dados={dados} tipoContrato={tipoContrato} totalValor={valorTotal} contract={contract} />,
         28 + (showDetalhes ? estimateHeight(rawDetalhes) + 8 : 0) + (showOutras ? estimateHeight(rawOutras) + 8 : 0)
       );
+
+      // Sinal do Negócio Clause
+      const vSinalArras = parseValorNum(dados.valorSinal || contract.valorSinal || dados.pagamento?.valorSinal || dados.termos?.valorSinal || dados.arras?.valorArras || 0);
+      if (vSinalArras > 0) {
+        const vSinalExtenso = valorMonetarioPorExtenso(vSinalArras).toLowerCase();
+        const formattedSinal = vSinalArras.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const clauseText = `O(A) COMPRADOR(A) pagará à imobiliária intermediadora a quantia de R$ ${formattedSinal} (${vSinalExtenso}), a título de sinal de negócio, por meio da forma de pagamento convencionada pelas partes, servindo este valor como confirmação irrevogável do fechamento da transação imobiliária, sob pena de perda do sinal em caso de desistência imotivada do(a) COMPRADOR(A) ou devolução em dobro em caso de desistência imotivada do(a) VENDEDOR(A).`;
+        addBlock(
+          <PdfSection title="CLÁUSULA – SINAL DO NEGÓCIO">
+            <p className="text-justify text-[11.5px] text-gray-800 leading-relaxed bg-white p-2 border border-gray-150 rounded">
+              O(A) COMPRADOR(A) pagará à imobiliária intermediadora a quantia de <strong>R$ {formattedSinal} ({vSinalExtenso})</strong>, a título de <strong>sinal de negócio</strong>, por meio da forma de pagamento convencionada pelas partes, servindo este valor como confirmação irrevogável do fechamento da transação imobiliária, sob pena de perda do sinal em caso de desistência imotivada do(a) COMPRADOR(A) ou devolução em dobro em caso de desistência imotivada do(a) VENDEDOR(A).
+            </p>
+          </PdfSection>,
+          14 + estimateHeight(clauseText)
+        );
+      }
 
       // 6. Selected Clauses (Individualized Blocks)
       const listClausesArras = (dados.clausulasSelecionadas || []).filter(
@@ -1793,6 +1866,22 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
         <PdfPaymentBlock dados={dados} tipoContrato={tipoContrato} totalValor={vAceite} formaPagamentoSimple={formaPag} contract={contract} />,
         24 + (showDetalhes ? estimateHeight(rawDetalhes) + 8 : 0) + (showOutras ? estimateHeight(rawOutras) + 8 : 0)
       );
+
+      // Sinal do Negócio Clause
+      const vSinalAceite = parseValorNum(dados.valorSinal || contract.valorSinal || dados.pagamento?.valorSinal || dados.termos?.valorSinal || dados.arras?.valorArras || 0);
+      if (vSinalAceite > 0) {
+        const vSinalExtenso = valorMonetarioPorExtenso(vSinalAceite).toLowerCase();
+        const formattedSinal = vSinalAceite.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const clauseText = `O(A) COMPRADOR(A) pagará à imobiliária intermediadora a quantia de R$ ${formattedSinal} (${vSinalExtenso}), a título de sinal de negócio, por meio da forma de pagamento convencionada pelas partes, servindo este valor como confirmação irrevogável do fechamento da transação imobiliária, sob pena de perda do sinal em caso de desistência imotivada do(a) COMPRADOR(A) ou devolução em dobro em caso de desistência imotivada do(a) VENDEDOR(A).`;
+        addBlock(
+          <PdfSection title="CLÁUSULA – SINAL DO NEGÓCIO">
+            <p className="text-justify text-[11.5px] text-gray-800 leading-relaxed bg-white p-2 border border-gray-150 rounded">
+              O(A) COMPRADOR(A) pagará à imobiliária intermediadora a quantia de <strong>R$ {formattedSinal} ({vSinalExtenso})</strong>, a título de <strong>sinal de negócio</strong>, por meio da forma de pagamento convencionada pelas partes, servindo este valor como confirmação irrevogável do fechamento da transação imobiliária, sob pena de perda do sinal em caso de desistência imotivada do(a) COMPRADOR(A) ou devolução em dobro em caso de desistência imotivada do(a) VENDEDOR(A).
+            </p>
+          </PdfSection>,
+          14 + estimateHeight(clauseText)
+        );
+      }
 
       // 4. database Clauses
       const listSelectionAceite = (dados.clausulasSelecionadas || []).filter(

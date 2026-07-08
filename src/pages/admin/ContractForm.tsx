@@ -1254,6 +1254,7 @@ export default function AdminContractForm() {
     return {
       ...docObj,
       ...flatData,
+      valorSinal: docObj.valorSinal || flatData.valorSinal || docObj.dados?.pagamento?.valorSinal || docObj.dados?.arras?.valorArras || 0,
       detalhesPagamento: detalhesFinal,
       detalhesPagamentoContraproposta: detalhesFinal,
       outrasCondicoes: detalhesFinal,
@@ -2299,6 +2300,7 @@ export default function AdminContractForm() {
         imovelMatricula: String((contract as any).imovelMatricula || contract.dados?.imovel?.matricula || '').trim(),
         imovelCri: String((contract as any).imovelCri || contract.dados?.imovel?.cri || '').trim(),
         valorTotalNegociado: Number(contract.valor || 0),
+        valorSinal: Number(contract.valorSinal || contract.dados?.pagamento?.valorSinal || contract.dados?.termos?.valorSinal || contract.dados?.arras?.valorArras || 0),
         valorPorExtenso: contract.dados?.[contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos']?.valorExtenso || valorMonetarioPorExtenso(Number(contract.valor || 0)),
         locadorNome: contract.dados?.locador?.nome || contract.nomeVendedor || '',
         locadorDocumento: contract.dados?.locador?.cpf || '',
@@ -4570,8 +4572,21 @@ export default function AdminContractForm() {
                           <input 
                             type="text" 
                             className="input-field" 
-                            value={maskCurrency(contract.dados?.arras?.valorArras ?? '')}
-                            onChange={e => updateDados('arras', 'valorArras', parseCurrencyToNumber(e.target.value))}
+                            value={maskCurrency(contract.dados?.arras?.valorArras ?? contract.valorSinal ?? '')}
+                            onChange={e => {
+                              const num = parseCurrencyToNumber(e.target.value);
+                              setContract(prev => ({
+                                ...prev,
+                                valorSinal: num,
+                                dados: {
+                                  ...prev.dados,
+                                  arras: {
+                                    ...prev.dados?.arras,
+                                    valorArras: num
+                                  }
+                                }
+                              }));
+                            }}
                           />
                         </div>
 
@@ -4687,6 +4702,36 @@ export default function AdminContractForm() {
                               className="w-full bg-gray-50 border border-transparent rounded-[1.5rem] py-5 px-7 text-2xl font-display font-bold text-primary-black focus:ring-4 focus:ring-gold/10 focus:border-gold/20 focus:bg-white outline-none transition-all"
                               value={maskCurrency(contract.valor || '')}
                               onChange={e => setContract({...contract, valor: parseCurrencyToNumber(e.target.value)})}
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1 text-gold">Sinal do Negócio (R$)</label>
+                            <input 
+                              type="text" 
+                              className="w-full bg-gray-50 border border-transparent rounded-[1.5rem] py-5 px-7 text-2xl font-display font-bold text-primary-black focus:ring-4 focus:ring-gold/10 focus:border-gold/20 focus:bg-white outline-none transition-all"
+                              value={maskCurrency(contract.valorSinal || '')}
+                              onChange={e => {
+                                const num = parseCurrencyToNumber(e.target.value);
+                                setContract(prev => ({
+                                  ...prev,
+                                  valorSinal: num,
+                                  dados: {
+                                    ...prev.dados,
+                                    pagamento: {
+                                      ...prev.dados?.pagamento,
+                                      valorSinal: num,
+                                      sinal: num
+                                    },
+                                    termos: {
+                                      ...prev.dados?.termos,
+                                      valorSinal: num,
+                                      sinal: num
+                                    }
+                                  }
+                                }));
+                              }}
+                              placeholder="R$ 0,00"
                             />
                           </div>
 

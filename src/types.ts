@@ -311,6 +311,7 @@ export interface Contract {
   imovelCri?: string;
   valorImovel?: number;
   valorArras?: number;
+  valorSinal?: number;
   formaPagamentoArras?: string;
   dataPagamentoArras?: string;
   prazoContratoDefinitivo?: string;

@@ -2211,18 +2211,23 @@ export default function AdminRents() {
                             {properties
                               .filter((p) => {
                                 const norm = normalizeTipoNegocio(p.businessType || (p as any).tipoNegocio || "");
-                                const matchesType = norm === "Locação" || norm === "Venda e Locação";
+                                // Pull all business types (Venda, Locação, Venda e Locação, and fallback)
+                                const matchesType = norm === "Locação" || norm === "Venda e Locação" || norm === "Venda" || norm === "";
                                 const isSelf = p.id === leaseForm.propertyId;
                                 
                                 if (!matchesType && !isSelf) return false;
                                 if (isEditing || isSelf) return true;
-                                return p.status === "Disponível";
+                                // Allow selecting already registered properties (Disponível, Alugado, Locado, etc.) except explicitly Inativo
+                                return p.status !== "Inativo";
                               })
-                              .map((p) => (
-                                <option key={p.id} value={p.id}>
-                                  {p.code} - {p.title} ({p.neighborhood})
-                                </option>
-                              ))}
+                              .map((p) => {
+                                const statusSuffix = p.status && p.status !== "Disponível" ? ` - [${p.status}]` : "";
+                                return (
+                                  <option key={p.id} value={p.id}>
+                                    {p.code} - {p.title} ({p.neighborhood}){statusSuffix}
+                                  </option>
+                                );
+                              })}
                           </select>
                         </div>
                       </div>

@@ -1814,6 +1814,14 @@ export function normalizarDadosDocumento(origem: any = {}): any {
       origem.valorArras ||
       "",
 
+    valorSinal:
+      origem.valorSinal ||
+      origem.sinal ||
+      parsedDados?.pagamento?.valorSinal ||
+      parsedDados?.pagamento?.sinal ||
+      origem.valorArras ||
+      0,
+
     fgts:
       origem.fgts ||
       origem.valorFgts ||

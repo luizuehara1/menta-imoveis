@@ -99,6 +99,8 @@ service cloud.firestore {
     }
     match /recibos/{document=**} { allow read, write: if isAdmin(); }
     match /recibosEditaveis/{document=**} { allow read, write: if isAdmin(); }
+    match /pagamentosLocacao/{document=**} { allow read, write: if isAdmin(); }
+    match /propostas/{document=**} { allow read, write: if isAdmin(); }
 
     match /administradores/{email} {
       allow read: if isSignedIn() && (request.auth.token.email.lower() == email.lower() || isAdmin());
