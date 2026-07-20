@@ -45,7 +45,7 @@ import { useSettings } from '../../hooks/useSettings';
 import { Contract, ContractType, ContractStatus, Property } from '../../types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { getProprietarioFromImovel, maskCurrency, parseCurrencyToNumber, formatCurrency, valorMonetarioPorExtenso, normalizarDadosImovel, normalizarPessoa, textoConjuge, normalizarDadosDocumento, formatarDataBR, getOutrasCondicoes, montarTextoConjuge, getNomeComprador, getNomeVendedor, getCpfVendedor, getRgVendedor, getProfissaoVendedor, getEstadoCivilVendedor, getTelefoneVendedor, getEmailVendedor, getEnderecoVendedor, valorOuNaoInformado, getNomeEdificio, getEnderecoImovel, getTermosCondicoes, getFormaPagamento, getDetalhesPagamento, getParteAceitante, normalizarFormasPagamento } from '../../lib/utils';
+import { getProprietarioFromImovel, maskCurrency, parseCurrencyToNumber, formatCurrency, valorMonetarioPorExtenso, normalizarDadosImovel, normalizarPessoa, textoConjuge, normalizarDadosDocumento, formatarDataBR, getOutrasCondicoes, montarTextoConjuge, getNomeComprador, getNomeVendedor, getCpfVendedor, getRgVendedor, getProfissaoVendedor, getEstadoCivilVendedor, getTelefoneVendedor, getEmailVendedor, getEnderecoVendedor, valorOuNaoInformado, getNomeEdificio, getEnderecoImovel, getTermosCondicoes, getFormaPagamento, getDetalhesPagamento, getParteAceitante, normalizarFormasPagamento, montarEnderecoCompletoImovel, limparTextoEndereco, limparEnderecoDuplicadoSalvo } from '../../lib/utils';
 import { staggerContainer, slideUp, fadeIn, scaleIn } from '../../constants/animations';
 import { ContractA4Preview } from '../../components/admin/ContractA4Preview';
 import jsPDF from 'jspdf';
@@ -1844,6 +1844,18 @@ export default function AdminContractForm() {
       
       const tituloFinal = getTituloImovel(property) || "Imóvel";
 
+      const pAny = property as any;
+      const logradouroPart = pAny.logradouro || pAny.rua || pAny.endereco || pAny.street || pAny.address || "";
+      const numeroPart = pAny.numero || pAny.number || "";
+      const complementoPart = pAny.complemento || pAny.complement || "";
+      const bairroPart = pAny.neighborhood || pAny.bairro || pAny.district || "";
+      const cidadePart = pAny.city || pAny.cidade || "";
+      const estadoPart = pAny.state || pAny.uf || pAny.estado || "";
+      const cepPart = pAny.cep || pAny.zipCode || "";
+      const enderecoCompletoPart = (pAny.enderecoCompleto || pAny.enderecoFormatado || pAny.localizacaoCompleta)
+        ? limparEnderecoDuplicadoSalvo(pAny.enderecoCompleto || pAny.enderecoFormatado || pAny.localizacaoCompleta)
+        : montarEnderecoCompletoImovel(property);
+
       const updatedDados = {
         ...prev.dados,
         imovel: {
@@ -1854,12 +1866,22 @@ export default function AdminContractForm() {
           descricao: property.shortDescription || property.title || getTituloImovel(property),
           codigo: getCodigoImovel(property),
           titulo: tituloFinal,
-          endereco: montarEnderecoImovel(property),
-          numero: property.numero || (property as any).numero || '',
-          complemento: property.complemento || (property as any).complemento || '',
-          bairro: property.neighborhood || (property as any).bairro || '',
-          cidade: property.city || (property as any).cidade || '',
-          estado: property.state || (property as any).uf || (property as any).estado || '',
+          endereco: logradouroPart,
+          numero: numeroPart,
+          complemento: complementoPart,
+          bairro: bairroPart,
+          cidade: cidadePart,
+          estado: estadoPart,
+          cep: cepPart,
+          imovelEndereco: logradouroPart,
+          imovelLogradouro: logradouroPart,
+          imovelNumero: numeroPart,
+          imovelComplemento: complementoPart,
+          imovelBairro: bairroPart,
+          imovelCidade: cidadePart,
+          imovelEstado: estadoPart,
+          imovelCep: cepPart,
+          imovelEnderecoCompleto: enderecoCompletoPart,
           valorVenda: getValorVendaImovel(property),
           valorCondominio: property.condoFee || (property as any).valorCondominio || (property as any).condominio || "",
           valorIptu: property.iptu || (property as any).valorIptu || (property as any).iptu || ""
@@ -1944,10 +1966,15 @@ export default function AdminContractForm() {
         imovelNomeEdificio: tituloFinal,
         imovelTipo: property.propertyType || (property as any).tipoImovel || "",
         imovelTipoNegocio: (property as any).tipoNegocio || property.businessType || "",
-        imovelEndereco: montarEnderecoImovel(property),
-        imovelBairro: property.neighborhood || (property as any).bairro || "",
-        imovelCidade: property.city || (property as any).cidade || "",
-        imovelEstado: property.state || (property as any).estado || "",
+        imovelEndereco: logradouroPart,
+        imovelLogradouro: logradouroPart,
+        imovelNumero: numeroPart,
+        imovelComplemento: complementoPart,
+        imovelBairro: bairroPart,
+        imovelCidade: cidadePart,
+        imovelEstado: estadoPart,
+        imovelCep: cepPart,
+        imovelEnderecoCompleto: enderecoCompletoPart,
         imovelMatricula: getMatriculaImovel(property),
         imovelCri: getCriImovel(property),
 
@@ -1959,7 +1986,7 @@ export default function AdminContractForm() {
         proprietario: propOwner.nome || "",
         corretorResponsavel: (property as any).corretorResponsavel || (property as any).brokerName || "",
 
-        enderecoImovel: montarEnderecoImovel(property),
+        enderecoImovel: logradouroPart,
         nomeVendedor: propOwner.nome || '',
         valor: defaultVal,
         dados: updatedDados

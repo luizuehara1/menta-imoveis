@@ -9,7 +9,22 @@ import {
   safeDate, 
   valorMonetarioPorExtenso, 
   getParteAceitante,
-  formatarDataBR
+  formatarDataBR,
+  getNomeCompletoPessoa,
+  getNomeComprador,
+  getNomeVendedor,
+  limparTextoEndereco,
+  montarEnderecoCompletoImovel,
+  montarEnderecoComprador,
+  montarEnderecoVendedor,
+  montarEnderecoImovel,
+  normalizarParteEndereco,
+  normalizarChaveEndereco,
+  removerPartesDuplicadas,
+  montarEnderecoImovelPDF,
+  montarEnderecoCompradorPDF,
+  montarEnderecoVendedorPDF,
+  limparEnderecoDuplicadoSalvo
 } from '../../lib/utils';
 import { useSettings } from '../../hooks/useSettings';
 
@@ -82,90 +97,59 @@ export function removerDuplicadosEndereco(partes: any[] = []): string[] {
     });
 }
 
-export function montarEnderecoImovelPDF(imovel: any = {}): string {
-  if (!imovel) return "";
-  if (typeof imovel === 'string') return limparParteEndereco(imovel);
+// montarEnderecoImovelPDF is imported from ../../lib/utils
 
-  const enderecoBase =
-    imovel.imovelEndereco ||
-    imovel.enderecoImovel ||
-    imovel.endereco ||
-    imovel.street ||
-    imovel.address ||
-    "";
+export function montarEnderecoIdentificacaoImovel(imovel: any = {}): string {
+  if (!imovel) return "Não informado";
 
-  const numero =
-    imovel.numero ||
-    imovel.numeroImovel ||
-    imovel.number ||
-    "";
+  if (typeof imovel === 'string') return limparTextoEndereco(imovel);
 
-  const complemento =
-    imovel.complemento ||
-    imovel.complementoImovel ||
-    imovel.complement ||
-    "";
+  const cep = limparTextoEndereco(imovel.imovelCep || imovel.cep || imovel.zipCode || "");
+  const cepStr = cep ? `CEP ${cep}` : "";
 
-  const bairro =
-    imovel.bairro ||
-    imovel.bairroImovel ||
-    imovel.district ||
-    imovel.neighborhood ||
-    "";
+  const logradouro = limparTextoEndereco(imovel.imovelLogradouro || imovel.logradouro || imovel.endereco || imovel.rua || imovel.street || imovel.address || "");
+  const numero = limparTextoEndereco(imovel.imovelNumero || imovel.numero || imovel.number || "");
+  const complemento = limparTextoEndereco(imovel.imovelComplemento || imovel.complemento || imovel.complement || "");
 
-  const cidade =
-    imovel.cidade ||
-    imovel.cidadeImovel ||
-    imovel.city ||
-    "";
+  const logradouroCompletado = [logradouro, numero, complemento]
+    .map(limparTextoEndereco)
+    .filter(Boolean)
+    .join(", ");
 
-  const estado =
-    imovel.estado ||
-    imovel.uf ||
-    imovel.estadoImovel ||
-    imovel.state ||
-    "";
+  const bairro = limparTextoEndereco(imovel.imovelBairro || imovel.bairro || imovel.neighborhood || imovel.district || "");
 
-  let enderecoLimpo = limparParteEndereco(enderecoBase);
-
-  // Evitar adicionar bairro/cidade/estado se já estiverem no endereço base
-  const enderecoLower = enderecoLimpo.toLowerCase();
-
-  const partes: string[] = [];
-
-  if (enderecoLimpo) partes.push(enderecoLimpo);
-
-  if (numero && !enderecoLower.includes(String(numero).toLowerCase())) {
-    partes.push(`nº ${numero}`);
-  }
-
-  if (complemento && !enderecoLower.includes(String(complemento).toLowerCase())) {
-    partes.push(complemento);
-  }
-
-  if (bairro && !enderecoLower.includes(String(bairro).toLowerCase())) {
-    partes.push(bairro);
-  }
-
+  const cidade = limparTextoEndereco(imovel.imovelCidade || imovel.cidade || imovel.city || "");
+  const estado = limparTextoEndereco(imovel.imovelEstado || imovel.estado || imovel.uf || imovel.state || "");
   let cidadeUf = "";
-
   if (cidade && estado) {
     if (cidade.toLowerCase() === estado.toLowerCase()) {
       cidadeUf = cidade;
     } else {
       cidadeUf = `${cidade}/${estado}`;
     }
-  } else if (cidade) {
-    cidadeUf = cidade;
-  } else if (estado) {
-    cidadeUf = estado;
+  } else {
+    cidadeUf = cidade || estado;
   }
 
-  if (cidadeUf && !enderecoLower.includes(cidade.toLowerCase())) {
-    partes.push(cidadeUf);
+  // Deduplicate parts
+  const partes = [logradouroCompletado, bairro, cidadeUf, cepStr].filter(Boolean);
+  const partesUnicas: string[] = [];
+  const normalizados = new Set<string>();
+
+  for (const parte of partes) {
+    const chave = parte
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^\w]/g, "");
+
+    if (chave && !normalizados.has(chave)) {
+      normalizados.add(chave);
+      partesUnicas.push(parte);
+    }
   }
 
-  return removerDuplicadosEndereco(partes).join(", ");
+  return partesUnicas.join(" — ");
 }
 
 export function getDadosImovelPDF(dados: any = {}): any {
@@ -580,22 +564,67 @@ export const PdfPropertyBlock: React.FC<PdfPropertyBlockProps> = ({
 
   const titulo = imovParsed.nomeEdificio || "Imóvel";
   const codigo = imovParsed.codigoImovel || "Não informado";
-  const address = imovParsed.endereco || "Não informado";
-  const bairro = imovParsed.bairro || "Não informado";
   
-  let cidadeUf = "Bali/SC"; // fallback
-  if (imovParsed.cidade && imovParsed.estado) {
-    if (imovParsed.cidade.toLowerCase() === imovParsed.estado.toLowerCase()) {
-      cidadeUf = imovParsed.cidade;
-    } else {
-      cidadeUf = `${imovParsed.cidade}/${imovParsed.estado}`;
+  const logradouro = combined.imovelLogradouro || combined.imovel?.imovelLogradouro || combined.logradouro || combined.imovel?.logradouro || combined.endereco || combined.imovel?.endereco || combined.rua || combined.imovel?.rua || combined.street || combined.imovel?.street || combined.address || combined.imovel?.address || "";
+  const numero = combined.imovelNumero || combined.imovel?.imovelNumero || combined.numero || combined.imovel?.numero || combined.number || combined.imovel?.number || "";
+  const complemento = combined.imovelComplemento || combined.imovel?.imovelComplemento || combined.complemento || combined.imovel?.complemento || combined.complement || combined.imovel?.complement || "";
+  const bairro = combined.imovelBairro || combined.imovel?.imovelBairro || combined.bairro || combined.imovel?.bairro || combined.district || combined.imovel?.district || combined.neighborhood || combined.imovel?.neighborhood || "";
+  const cidade = combined.imovelCidade || combined.imovel?.imovelCidade || combined.cidade || combined.imovel?.cidade || combined.city || combined.imovel?.city || "";
+  const estado = combined.imovelEstado || combined.imovel?.imovelEstado || combined.estado || combined.imovel?.estado || combined.uf || combined.imovel?.uf || combined.state || combined.imovel?.state || "";
+  const cep = combined.imovelCep || combined.imovel?.imovelCep || combined.cep || combined.imovel?.cep || combined.zipCode || combined.imovel?.zipCode || "";
+
+  // Helper to strip neighborhood, city, state, and cep from a given string to ensure the Address row only has street info
+  const obterApenasLogradouroNumeroComplemento = (textoOriginal: string): string => {
+    if (!textoOriginal) return "";
+    const partes = textoOriginal.split(",").map(p => p.trim()).filter(Boolean);
+    const ignorarChaves = new Set<string>();
+    if (bairro) ignorarChaves.add(normalizarChaveEndereco(bairro));
+    if (cidade) ignorarChaves.add(normalizarChaveEndereco(cidade));
+    if (estado) ignorarChaves.add(normalizarChaveEndereco(estado));
+    if (cep) {
+      ignorarChaves.add(normalizarChaveEndereco(cep));
+      ignorarChaves.add(normalizarChaveEndereco(cep.replace("-", "")));
     }
-  } else if (imovParsed.cidade) {
-    cidadeUf = imovParsed.cidade;
-  } else if (imovParsed.estado) {
-    cidadeUf = imovParsed.estado;
+
+    const limpas = partes.filter(parte => {
+      const chave = normalizarChaveEndereco(parte);
+      if (ignorarChaves.has(chave)) return false;
+      for (const k of ignorarChaves) {
+        if (k && k.length >= 3 && (chave === k || chave.includes(k) || k.includes(chave))) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    return removerPartesDuplicadas(limpas).join(", ");
+  };
+
+  // Build the Endereço row (logradouro, numero, complemento)
+  let streetPart = "";
+  if (logradouro) {
+    const partes = removerPartesDuplicadas([logradouro, numero, complemento]);
+    streetPart = obterApenasLogradouroNumeroComplemento(partes.join(", "));
   } else {
-    cidadeUf = "Balneário Camboriú/SC";
+    const full = combined.imovelEnderecoCompleto || combined.enderecoCompleto || combined.imovel?.imovelEnderecoCompleto || combined.imovel?.enderecoCompleto || "";
+    streetPart = obterApenasLogradouroNumeroComplemento(full);
+  }
+
+  if (!streetPart.trim()) {
+    streetPart = removerPartesDuplicadas([logradouro, numero, complemento]).join(", ");
+  }
+
+  streetPart = limparEnderecoDuplicadoSalvo(streetPart);
+
+  let cidadeUf = "";
+  if (cidade && estado) {
+    if (String(cidade).toLowerCase() === String(estado).toLowerCase()) {
+      cidadeUf = String(cidade);
+    } else {
+      cidadeUf = `${cidade}/${estado}`;
+    }
+  } else {
+    cidadeUf = String(cidade || estado || "Balneário Camboriú/SC");
   }
 
   const matricula = imovParsed.matricula || "Não informada";
@@ -612,9 +641,12 @@ export const PdfPropertyBlock: React.FC<PdfPropertyBlockProps> = ({
     <div className="bg-gray-50/55 border border-gray-150 rounded-xl p-2.5 grid grid-cols-2 gap-y-1 gap-x-6 text-[12px] leading-normal property-block avoid-break">
       <p><strong>Edifício / Imóvel:</strong> {safeText(titulo)}</p>
       <p><strong>Código do Imóvel:</strong> {safeText(codigo)}</p>
-      <p className="col-span-2"><strong>Endereço:</strong> {address}</p>
-      <p><strong>Bairro:</strong> {safeText(bairro)}</p>
+      
+      <p className="col-span-2"><strong>Endereço:</strong> {safeText(streetPart)}</p>
+      <p><strong>Bairro:</strong> {safeText(bairro || "Não informado")}</p>
       <p><strong>Cidade/UF:</strong> {safeText(cidadeUf)}</p>
+      {cep && <p className="col-span-2"><strong>CEP:</strong> {safeText(cep)}</p>}
+
       <p><strong>Matrícula:</strong> {safeText(matricula)}</p>
       <p><strong>CRI Registrário:</strong> {safeText(cri)}</p>
       
@@ -976,8 +1008,19 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
 
   const formatFullAddress = (obj: any): string => {
     if (!obj) return 'Não informado';
-    if (typeof obj === 'string') return obj;
-    const street = obj.endereco || obj.address || obj.street || (typeof obj.heading === 'string' ? obj.heading : '') || (typeof obj.headings === 'string' ? obj.headings : '');
+    if (typeof obj === 'string') return limparEnderecoDuplicadoSalvo(obj);
+    
+    const isBuyerObj = obj.compradorEnderecoCompleto || obj.compradorEndereco || obj.compradorLogradouro || obj.compradorBairro || obj.compradorCidade;
+    const isSellerObj = obj.vendedorEnderecoCompleto || obj.vendedorEndereco || obj.vendedorLogradouro || obj.vendedorBairro || obj.vendedorCidade;
+    
+    if (isBuyerObj) {
+      return limparEnderecoDuplicadoSalvo(montarEnderecoCompradorPDF(obj, dados));
+    }
+    if (isSellerObj) {
+      return limparEnderecoDuplicadoSalvo(montarEnderecoVendedorPDF(obj, dados));
+    }
+
+    const street = obj.endereco || obj.address || obj.street || '';
     const num = obj.numero || obj.number || '';
     const numStr = num ? `Nº ${num}` : '';
     const compl = obj.complemento || obj.complement || '';
@@ -997,15 +1040,17 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
 
     const cleanParts = parts.map(s => String(s || '').trim()).filter(Boolean);
     if (cleanParts.length === 0) {
-      if (typeof obj.enderecoImovel === 'string' && obj.enderecoImovel) return obj.enderecoImovel;
+      if (typeof obj.enderecoImovel === 'string' && obj.enderecoImovel) {
+        return limparEnderecoDuplicadoSalvo(obj.enderecoImovel);
+      }
       return 'Não informado';
     }
 
-    let result = cleanParts.join(', ');
+    let result = removerPartesDuplicadas(cleanParts).join(', ');
     if (cep) {
       result += ` - CEP: ${cep}`;
     }
-    return result;
+    return limparEnderecoDuplicadoSalvo(result);
   };
 
   // Global Watermark & Headers/Footers Renders (Top-level)

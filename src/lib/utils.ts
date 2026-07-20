@@ -2157,19 +2157,50 @@ export function normalizarDadosDocumento(origem: any = {}): any {
   };
 }
 
-export function getNomeComprador(dados: any = {}): string {
-  if (!dados) return "";
-  const proponenteRaw = dados.dados?.proponente || dados.dados?.comprador || dados.proponente || dados.comprador || {};
+export function getNomeCompletoPessoa(pessoa: any = {}): string {
+  if (!pessoa) return "";
   return (
-    dados.compradorNome ||
-    dados.proponenteNome ||
-    dados.nomeComprador ||
-    dados.nomeProponente ||
-    dados.nomeCompleto ||
-    dados.clienteNome ||
-    dados.nomeCliente ||
-    dados.nome ||
-    proponenteRaw.nome ||
+    pessoa.nomeCompleto ||
+    pessoa.nome ||
+    pessoa.fullName ||
+    pessoa.displayName ||
+    [
+      pessoa.primeiroNome,
+      pessoa.nomeMeio,
+      pessoa.sobrenome
+    ].filter(Boolean).join(" ") ||
+    ""
+  ).trim();
+}
+
+export function getNomeComprador(documento: any = {}): string {
+  if (!documento) return "";
+
+  const nomeDireto = (
+    documento.compradorNomeCompleto ||
+    documento.proponenteNomeCompleto ||
+    documento.clienteNomeCompleto ||
+    documento.compradorNome ||
+    documento.proponenteNome ||
+    documento.clienteNome
+  );
+  if (nomeDireto) {
+    return String(nomeDireto).trim();
+  }
+
+  // Nested paths
+  const compObj = documento.comprador || documento.proponente || documento.dados?.comprador || documento.dados?.proponente || documento.dadosComprador || {};
+  const nomeNested = getNomeCompletoPessoa(compObj);
+  if (nomeNested) {
+    return nomeNested;
+  }
+
+  // Extra check on other possible direct paths
+  return (
+    documento.dadosComprador?.nomeCompleto ||
+    documento.dadosComprador?.nome ||
+    documento.comprador?.nomeCompleto ||
+    documento.comprador?.nome ||
     ""
   ).trim();
 }
@@ -2177,17 +2208,344 @@ export function getNomeComprador(dados: any = {}): string {
 export function getNomeVendedor(dados: any = {}): string {
   if (!dados) return "";
   const vendedorRaw = dados.dados?.vendedor || dados.vendedor || dados.proprietarioDados || {};
-  return (
+
+  const nomeDireto = (
     dados.vendedorNome ||
     dados.proprietarioNome ||
     dados.nomeVendedor ||
     dados.nomeProprietario ||
-    dados.proprietario ||
-    vendedorRaw.nome ||
+    dados.proprietario
+  );
+  if (nomeDireto) {
+    return String(nomeDireto).trim();
+  }
+
+  const nomeNested = getNomeCompletoPessoa(vendedorRaw);
+  if (nomeNested) {
+    return nomeNested;
+  }
+
+  return (
     dados.vendedor?.nome ||
     dados.proprietarioDados?.nome ||
     ""
   ).trim();
+}
+
+export function limparTextoEndereco(valor: any): string {
+  return String(valor || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/\s*,\s*/g, ", ")
+    .replace(/(,\s*){2,}/g, ", ")
+    .replace(/,\s*$/g, "");
+}
+
+export function normalizarParteEndereco(valor: any): string {
+  return String(valor || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/\s*,\s*/g, ", ")
+    .replace(/(,\s*){2,}/g, ", ");
+}
+
+export function normalizarChaveEndereco(valor: any): string {
+  return normalizarParteEndereco(valor)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+export function removerPartesDuplicadas(partes: any[] = []): string[] {
+  const resultado: string[] = [];
+  const vistos = new Set<string>();
+
+  for (const parteOriginal of partes) {
+    const parte = normalizarParteEndereco(parteOriginal);
+    const chave = normalizarChaveEndereco(parte);
+
+    if (!parte || !chave || vistos.has(chave)) continue;
+
+    vistos.add(chave);
+    resultado.push(parte);
+  }
+
+  return resultado;
+}
+
+export function limparEnderecoDuplicadoSalvo(endereco: any = ""): string {
+  const partes = String(endereco || "")
+    .split(",")
+    .map(item => item.trim())
+    .filter(Boolean);
+
+  return removerPartesDuplicadas(partes).join(", ");
+}
+
+export function montarEnderecoCompletoImovel(imovel: any = {}): string {
+  if (!imovel) return "";
+  if (typeof imovel === "string") return limparTextoEndereco(imovel);
+
+  const enderecoCompletoPronto =
+    imovel.imovelEnderecoCompleto ||
+    imovel.enderecoCompleto ||
+    imovel.enderecoFormatado ||
+    imovel.localizacaoCompleta ||
+    "";
+
+  if (enderecoCompletoPronto) {
+    return limparTextoEndereco(enderecoCompletoPronto);
+  }
+
+  const partes = [
+    imovel.imovelLogradouro || imovel.logradouro || imovel.imovelEndereco || imovel.endereco || imovel.rua || imovel.street || imovel.address || "",
+    imovel.imovelNumero || imovel.numero || imovel.number || "",
+    imovel.imovelComplemento || imovel.complemento || imovel.complement || "",
+    imovel.imovelBairro || imovel.bairro || imovel.neighborhood || imovel.district || "",
+    imovel.imovelCidade || imovel.cidade || imovel.city || "",
+    imovel.imovelEstado || imovel.estado || imovel.uf || imovel.state || "",
+    imovel.imovelCep || imovel.cep || imovel.zipCode || ""
+  ]
+    .map(normalizarParteEndereco)
+    .filter(Boolean);
+
+  return removerPartesDuplicadas(partes).join(", ");
+}
+
+export function montarEnderecoComprador(dados: any = {}): string {
+  if (!dados) return "";
+
+  // Try to find the buyer/proponente sub-object first
+  const comp = dados.comprador || dados.proponente || dados.dados?.comprador || dados.dados?.proponente || dados;
+
+  if (typeof comp === "string") return limparTextoEndereco(comp);
+
+  const enderecoCompletoPronto =
+    comp.compradorEnderecoCompleto ||
+    comp.enderecoCompleto ||
+    comp.enderecoFormatado ||
+    "";
+
+  if (enderecoCompletoPronto) {
+    return limparTextoEndereco(enderecoCompletoPronto);
+  }
+
+  const partes = [
+    comp.compradorLogradouro || comp.compradorEndereco || comp.logradouro || comp.endereco || comp.rua || comp.street || comp.address || "",
+    comp.compradorNumero || comp.numero || comp.number || "",
+    comp.compradorComplemento || comp.complemento || comp.complement || "",
+    comp.compradorBairro || comp.bairro || comp.neighborhood || comp.district || "",
+    comp.compradorCidade || comp.cidade || comp.city || "",
+    comp.compradorEstado || comp.estado || comp.uf || comp.state || "",
+    comp.compradorCep || comp.cep || comp.zipCode || ""
+  ]
+    .map(normalizarParteEndereco)
+    .filter(Boolean);
+
+  return removerPartesDuplicadas(partes).join(", ");
+}
+
+export function montarEnderecoVendedor(dados: any = {}): string {
+  if (!dados) return "";
+
+  // Try to find the seller/vendedor/proprietario sub-object first
+  const vend = dados.vendedor || dados.proprietario || dados.dados?.vendedor || dados.dados?.proprietario || dados;
+
+  if (typeof vend === "string") return limparTextoEndereco(vend);
+
+  const enderecoCompletoPronto =
+    vend.vendedorEnderecoCompleto ||
+    vend.enderecoCompleto ||
+    vend.enderecoFormatado ||
+    "";
+
+  if (enderecoCompletoPronto) {
+    return limparTextoEndereco(enderecoCompletoPronto);
+  }
+
+  const partes = [
+    vend.vendedorLogradouro || vend.vendedorEndereco || vend.logradouro || vend.endereco || vend.rua || vend.street || vend.address || "",
+    vend.vendedorNumero || vend.numero || vend.number || "",
+    vend.vendedorComplemento || vend.complemento || vend.complement || "",
+    vend.vendedorBairro || vend.bairro || vend.neighborhood || vend.district || "",
+    vend.vendedorCidade || vend.cidade || vend.city || "",
+    vend.vendedorEstado || vend.estado || vend.uf || vend.state || "",
+    vend.vendedorCep || vend.cep || vend.zipCode || ""
+  ]
+    .map(normalizarParteEndereco)
+    .filter(Boolean);
+
+  return removerPartesDuplicadas(partes).join(", ");
+}
+
+export function montarEnderecoImovel(dados: any = {}): string {
+  return montarEnderecoCompletoImovel(dados);
+}
+
+export function montarEnderecoImovelPDF(imovel: any = {}, documento: any = {}): string {
+  const i = imovel?.imovel || imovel?.dados?.imovel || imovel || {};
+  const doc = documento?.imovel || documento?.dados?.imovel || documento || {};
+
+  const enderecoCompleto =
+    doc.imovelEnderecoCompleto ||
+    doc.enderecoCompleto ||
+    doc.enderecoFormatado ||
+    doc.localizacaoCompleta ||
+    i.imovelEnderecoCompleto ||
+    i.enderecoCompleto ||
+    i.enderecoFormatado ||
+    i.localizacaoCompleta ||
+    "";
+
+  if (String(enderecoCompleto).trim()) {
+    return normalizarParteEndereco(enderecoCompleto);
+  }
+
+  const logradouro =
+    doc.imovelLogradouro ||
+    doc.logradouro ||
+    doc.rua ||
+    doc.endereco ||
+    i.imovelLogradouro ||
+    i.logradouro ||
+    i.rua ||
+    i.endereco ||
+    "";
+
+  const numero =
+    doc.imovelNumero ||
+    doc.numero ||
+    i.imovelNumero ||
+    i.numero ||
+    "";
+
+  const complemento =
+    doc.imovelComplemento ||
+    doc.complemento ||
+    i.imovelComplemento ||
+    i.complemento ||
+    "";
+
+  const partesEndereco = removerPartesDuplicadas([
+    logradouro,
+    numero,
+    complemento
+  ]);
+
+  return partesEndereco.join(", ");
+}
+
+export function montarEnderecoCompradorPDF(comprador: any = {}, documento: any = {}): string {
+  const c = comprador?.comprador || comprador?.proponente || comprador?.locatario || comprador?.dados?.comprador || comprador?.dados?.proponente || comprador?.dados?.locatario || comprador || {};
+  const doc = documento?.comprador || documento?.proponente || documento?.locatario || documento?.dados?.comprador || documento?.dados?.proponente || documento?.dados?.locatario || documento || {};
+
+  const enderecoCompleto =
+    doc.compradorEnderecoCompleto ||
+    doc.compradorEndereco ||
+    doc.enderecoCompleto ||
+    doc.enderecoFormatado ||
+    c.compradorEnderecoCompleto ||
+    c.compradorEndereco ||
+    c.enderecoCompleto ||
+    c.enderecoFormatado ||
+    c.endereco ||
+    "";
+
+  if (String(enderecoCompleto).trim()) {
+    return normalizarParteEndereco(enderecoCompleto);
+  }
+
+  const logradouro =
+    doc.compradorLogradouro ||
+    doc.compradorEndereco ||
+    doc.logradouro ||
+    doc.endereco ||
+    doc.rua ||
+    c.compradorLogradouro ||
+    c.compradorEndereco ||
+    c.logradouro ||
+    c.endereco ||
+    c.rua ||
+    "";
+
+  const numero =
+    doc.compradorNumero ||
+    doc.numero ||
+    c.compradorNumero ||
+    c.numero ||
+    "";
+
+  const complemento =
+    doc.compradorComplemento ||
+    doc.complemento ||
+    c.compradorComplemento ||
+    c.complemento ||
+    "";
+
+  const partesEndereco = removerPartesDuplicadas([
+    logradouro,
+    numero,
+    complemento
+  ]);
+
+  return partesEndereco.join(", ");
+}
+
+export function montarEnderecoVendedorPDF(vendedor: any = {}, documento: any = {}): string {
+  const v = vendedor?.vendedor || vendedor?.proprietario || vendedor?.locador || vendedor?.dados?.vendedor || vendedor?.dados?.proprietario || vendedor?.dados?.locador || vendedor || {};
+  const doc = documento?.vendedor || documento?.proprietario || documento?.locador || documento?.dados?.vendedor || documento?.dados?.proprietario || documento?.dados?.locador || documento || {};
+
+  const enderecoCompleto =
+    doc.vendedorEnderecoCompleto ||
+    doc.vendedorEndereco ||
+    doc.enderecoCompleto ||
+    doc.enderecoFormatado ||
+    v.vendedorEnderecoCompleto ||
+    v.vendedorEndereco ||
+    v.enderecoCompleto ||
+    v.enderecoFormatado ||
+    v.endereco ||
+    "";
+
+  if (String(enderecoCompleto).trim()) {
+    return normalizarParteEndereco(enderecoCompleto);
+  }
+
+  const logradouro =
+    doc.vendedorLogradouro ||
+    doc.vendedorEndereco ||
+    doc.logradouro ||
+    doc.endereco ||
+    doc.rua ||
+    v.vendedorLogradouro ||
+    v.vendedorEndereco ||
+    v.logradouro ||
+    v.endereco ||
+    v.rua ||
+    "";
+
+  const numero =
+    doc.vendedorNumero ||
+    doc.numero ||
+    v.vendedorNumero ||
+    v.numero ||
+    "";
+
+  const complemento =
+    doc.vendedorComplemento ||
+    doc.complemento ||
+    v.vendedorComplemento ||
+    v.complemento ||
+    "";
+
+  const partesEndereco = removerPartesDuplicadas([
+    logradouro,
+    numero,
+    complemento
+  ]);
+
+  return partesEndereco.join(", ");
 }
 
 export function getCpfVendedor(dados: any = {}): string {

@@ -12,8 +12,10 @@ import {
   updateDoc,
   where,
   orderBy,
+  writeBatch,
 } from "firebase/firestore";
 import { db, auth } from "../../lib/firebase";
+import { useAuth } from "../../contexts/AuthContext";
 import { Lease, Property } from "../../types";
 import {
   Home,
@@ -40,6 +42,7 @@ import {
   MapPin,
   Eye,
   Edit,
+  RefreshCw,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -154,6 +157,109 @@ const toNumber = (value: any): number => {
   return Number.isFinite(number) ? number : 0;
 };
 
+function isLocacaoAtiva(locacao: any = {}) {
+  const status = String(
+    locacao.status ||
+    locacao.statusLocacao ||
+    ""
+  ).trim().toLowerCase();
+
+  return (
+    locacao.ativo === true ||
+    locacao.active === true ||
+    status === "ativa" ||
+    status === "ativo" ||
+    status === "alugada" ||
+    status === "alugado"
+  ) && locacao.cancelada !== true;
+}
+
+function normalizarCompetencia(val: any): string {
+  if (!val) return "";
+  const s = String(val).trim();
+  if (s.includes("/")) {
+    const parts = s.split("/");
+    if (parts.length === 2) {
+      const [m, y] = parts;
+      if (y.length === 4 && m.length <= 2) {
+        return `${y}-${m.padStart(2, "0")}`;
+      }
+    }
+  }
+  if (s.match(/^\d{4}-\d{2}$/)) {
+    return s;
+  }
+  return s;
+}
+
+function formatarCompetencia(data: any): string {
+  if (!data) return "";
+  let dateStr = "";
+  if (data && typeof data === "object" && "seconds" in data) {
+    const d = new Date(data.seconds * 1000);
+    dateStr = d.toISOString();
+  } else if (data instanceof Date) {
+    dateStr = data.toISOString();
+  } else {
+    dateStr = String(data);
+  }
+  const match = dateStr.match(/^(\d{4})-(\d{2})/);
+  if (match) {
+    return `${match[1]}-${match[2]}`;
+  }
+  return "";
+}
+
+function getCompetenciaPagamento(pagamento: any = {}) {
+  if (pagamento.competencia) return pagamento.competencia;
+
+  if (pagamento.mesReferencia) {
+    return normalizarCompetencia(pagamento.mesReferencia);
+  }
+
+  const data =
+    pagamento.dataCompetencia ||
+    pagamento.dataVencimento ||
+    pagamento.createdAt;
+
+  return data ? formatarCompetencia(data) : "";
+}
+
+function calcularVencimento(ano: number, mes: number, dia: number): string {
+  const safeDia = Math.min(Math.max(dia, 1), 31);
+  const date = new Date(ano, mes - 1, safeDia);
+  if (date.getMonth() !== mes - 1) {
+    const lastDay = new Date(ano, mes, 0).getDate();
+    return `${ano}-${String(mes).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+  }
+  return `${ano}-${String(mes).padStart(2, "0")}-${String(safeDia).padStart(2, "0")}`;
+}
+
+function criarPagamentoVirtualPendente(locacao: any, competencia: string) {
+  const [ano, mes] = competencia.split("-").map(Number);
+
+  return {
+    id: null,
+    locacaoId: locacao.id,
+    imovelId: locacao.propertyId || locacao.imovelId || "",
+    codigoImovel: locacao.propertyCode || locacao.codigoImovel || "",
+    locatarioNome: locacao.tenantName || locacao.locatarioNome || "",
+    proprietarioNome: locacao.ownerName || locacao.proprietarioNome || "",
+    competencia,
+    competenciaMes: String(mes).padStart(2, "0"),
+    competenciaAno: ano,
+    dataVencimento: calcularVencimento(
+      ano,
+      mes,
+      locacao.dueDay || locacao.diaVencimento || 10
+    ),
+    valorAluguel: Number(locacao.valorAluguel || locacao.valorAluguelMensal || 0),
+    valorTotal: Number(locacao.valorTotalPagar || locacao.valorTotalMensal || locacao.valorAluguelMensal || locacao.valorAluguel || 0),
+    statusPagamento: "Pendente",
+    virtual: true
+  };
+}
+
 export default function AdminRents() {
   const { settings } = useSettings();
   const empresa = (settings?.empresa || {}) as any;
@@ -165,6 +271,104 @@ export default function AdminRents() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedLease, setSelectedLease] = useState<Lease | null>(null);
+
+  // Deletion & permission states
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [selectedRental, setSelectedRental] = useState<Lease | null>(null);
+  const [permanentDelete, setPermanentDelete] = useState(false);
+
+  // Toast notifications
+  const [toastState, setToastState] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  
+  const triggerToast = (message: string, type: 'success' | 'error') => {
+    setToastState({ message, type });
+    setTimeout(() => setToastState(null), 4000);
+  };
+
+  const toastObj = {
+    success: (msg: string) => triggerToast(msg, 'success'),
+    error: (msg: string) => triggerToast(msg, 'error'),
+  };
+  const toast = toastObj;
+
+  // Retrieve current user data for permissions
+  const [currentUserData, setCurrentUserData] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (!auth.currentUser?.email) return;
+      try {
+        const email = auth.currentUser.email.toLowerCase().trim();
+        const [adminSnap, administradorSnap] = await Promise.all([
+          getDoc(doc(db, "admins", email)),
+          getDoc(doc(db, "administradores", email))
+        ]);
+        
+        if (adminSnap.exists()) {
+          setCurrentUserData(adminSnap.data());
+        } else if (administradorSnap.exists()) {
+          setCurrentUserData(administradorSnap.data());
+        }
+      } catch (err) {
+        console.error("Erro ao buscar dados do usuário para permissões:", err);
+      }
+    };
+    fetchUserData();
+  }, [auth.currentUser?.email]);
+
+  const hasPermission = (permission: string): boolean => {
+    if (!auth.currentUser?.email) return false;
+    const email = auth.currentUser.email.toLowerCase().trim();
+    
+    // Hardcoded Admins are Master/Administrador by default
+    const hardcodedAdmins = ['luiz.uehara1@gmail.com', 'edson.menta@hotmail.com', 'anamariamenta@hotmail.com'];
+    if (hardcodedAdmins.includes(email)) return true;
+
+    if (!currentUserData) {
+      // Allow general admins by default if no detailed document is loaded yet
+      const { isAdmin } = useAuth();
+      return isAdmin;
+    }
+
+    const cargo = (currentUserData.cargo || currentUserData.role || currentUserData.funcao || "").toLowerCase().trim();
+    
+    // - Administrador
+    // - Master
+    if (cargo === "administrador" || cargo === "master" || cargo === "admin" || currentUserData.isAdmin === true || currentUserData.isMaster === true) {
+      return true;
+    }
+
+    // - Líder, se tiver excluir_locacao
+    if (cargo === "lider" || cargo === "líder") {
+      const permissoes = currentUserData.permissoes || [];
+      if (currentUserData.excluir_locacao === true || currentUserData[permission] === true || (Array.isArray(permissoes) && permissoes.includes(permission))) {
+        return true;
+      }
+    }
+
+    // General checks inside document
+    if (currentUserData[permission] === true) return true;
+    if (Array.isArray(currentUserData.permissoes) && currentUserData.permissoes.includes(permission)) return true;
+
+    // Fallback using useAuth
+    const { isAdmin } = useAuth();
+    return isAdmin;
+  };
+
+  const isMasterOrAdmin = (): boolean => {
+    if (!auth.currentUser?.email) return false;
+    const email = auth.currentUser.email.toLowerCase().trim();
+    const hardcodedAdmins = ['luiz.uehara1@gmail.com', 'edson.menta@hotmail.com', 'anamariamenta@hotmail.com'];
+    if (hardcodedAdmins.includes(email)) return true;
+
+    if (!currentUserData) {
+      const { isAdmin } = useAuth();
+      return isAdmin;
+    }
+    const cargo = (currentUserData.cargo || currentUserData.role || currentUserData.funcao || "").toLowerCase().trim();
+    return cargo === "administrador" || cargo === "master" || cargo === "admin" || currentUserData.isAdmin === true || currentUserData.isMaster === true;
+  };
 
   // Form states
   const [leaseForm, setLeaseForm] = useState<Partial<Lease>>({
@@ -286,17 +490,66 @@ export default function AdminRents() {
     return getCompetenciaFromFilter(selectedFilter, customMonth);
   }, [selectedFilter, customMonth]);
 
+  const ensureMonthlyPaymentsForActiveRentals = async (competencia: string) => {
+    try {
+      const [yearStr, monthStr] = competencia.split("-");
+      const ano = parseInt(yearStr);
+      const mes = parseInt(monthStr);
+
+      const leaseSnap = await getDocs(collection(db, "locacoes"));
+      const allLeases = leaseSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      const activeLeases = allLeases.filter(isLocacaoAtiva);
+
+      const paymentsSnap = await getDocs(
+        query(
+          collection(db, "pagamentosLocacao"),
+          where("competencia", "==", competencia)
+        )
+      );
+      const existingPayments = paymentsSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      const existingLocacaoIds = new Set(existingPayments.map(p => p.locacaoId));
+
+      for (const lease of activeLeases) {
+        const lAny = lease as any;
+        if (!existingLocacaoIds.has(lAny.id)) {
+          const dueDayStr = String(lAny.dueDay || lAny.diaVencimento || 10).padStart(2, "0");
+          const dataVencimento = `${competencia}-${dueDayStr}`;
+          
+          const newPayment = {
+            locacaoId: lAny.id,
+            imovelId: lAny.propertyId || lAny.imovelId || "",
+            codigoImovel: lAny.propertyCode || lAny.codigoImovel || "",
+            locatarioNome: lAny.tenantName || lAny.locatarioNome || "",
+            proprietarioNome: lAny.ownerName || lAny.proprietarioNome || "",
+            competenciaMes: monthStr,
+            competenciaAno: ano,
+            competencia,
+            dataVencimento,
+            dataPagamento: null,
+            valorAluguel: Number(lAny.valorAluguel || lAny.valorAluguelMensal || 0),
+            valorTotal: Number(lAny.valorTotalPagar || lAny.valorTotalMensal || lAny.valorAluguelMensal || lAny.valorAluguel || 0),
+            statusPagamento: "Pendente",
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          };
+
+          const predId = `${lAny.id}_${competencia}`;
+          await setDoc(doc(db, "pagamentosLocacao", predId), newPayment, { merge: true });
+        }
+      }
+    } catch (e) {
+      console.error("Error in ensureMonthlyPaymentsForActiveRentals:", e);
+    }
+  };
+
   const ensureNextRentalPayment = async (locacao: Lease, currentPayment: any) => {
     const nextComp = getNextCompetencia(currentPayment.competencia);
     const [nextYear, nextMonth] = nextComp.split("-");
     
-    const q = query(
-      collection(db, "pagamentosLocacao"),
-      where("locacaoId", "==", locacao.id),
-      where("competencia", "==", nextComp)
-    );
-    const snap = await getDocs(q);
-    if (snap.empty) {
+    const predId = `${locacao.id}_${nextComp}`;
+    const paymentRef = doc(db, "pagamentosLocacao", predId);
+    const snap = await getDoc(paymentRef);
+    if (!snap.exists()) {
       const dueDayStr = String(locacao.dueDay || 10).padStart(2, "0");
       const dataVencimento = `${nextComp}-${dueDayStr}`;
       
@@ -317,25 +570,58 @@ export default function AdminRents() {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
-      await addDoc(collection(db, "pagamentosLocacao"), newPayment);
+      await setDoc(paymentRef, newPayment, { merge: true });
     }
   };
 
   const markRentalPaymentAsPaid = async (paymentId: string) => {
     const paymentRef = doc(db, "pagamentosLocacao", paymentId);
-    const paymentSnap = await getDoc(paymentRef);
-    if (!paymentSnap.exists()) return;
+    let paymentSnap = await getDoc(paymentRef);
     
-    const paymentData = paymentSnap.data();
+    let paymentData: any;
+    let locacaoId: string;
     const currentDateStr = new Date().toISOString().split("T")[0];
+
+    if (!paymentSnap.exists()) {
+      const [lId, comp] = paymentId.split("_");
+      locacaoId = lId;
+      const lease = leases.find(l => l.id === locacaoId) as any;
+      if (!lease) return;
+
+      const [y, m] = comp.split("-");
+      const dueDayStr = String(lease.dueDay || lease.diaVencimento || 10).padStart(2, "0");
+      const dataVencimento = `${comp}-${dueDayStr}`;
+
+      paymentData = {
+        locacaoId,
+        imovelId: lease.propertyId || lease.imovelId || "",
+        codigoImovel: lease.propertyCode || lease.codigoImovel || "",
+        locatarioNome: lease.tenantName || lease.locatarioNome || "",
+        proprietarioNome: lease.ownerName || lease.proprietarioNome || "",
+        competenciaMes: m,
+        competenciaAno: parseInt(y),
+        competencia: comp,
+        dataVencimento,
+        dataPagamento: currentDateStr,
+        valorAluguel: Number(lease.valorAluguel || lease.valorAluguelMensal || 0),
+        valorTotal: Number(lease.valorTotalPagar || lease.valorTotalMensal || lease.valorAluguelMensal || lease.valorAluguel || 0),
+        statusPagamento: "Pago",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+
+      await setDoc(paymentRef, paymentData);
+    } else {
+      paymentData = paymentSnap.data();
+      locacaoId = paymentData.locacaoId;
+      
+      await updateDoc(paymentRef, {
+        statusPagamento: "Pago",
+        dataPagamento: currentDateStr,
+        updatedAt: serverTimestamp(),
+      });
+    }
     
-    await updateDoc(paymentRef, {
-      statusPagamento: "Pago",
-      dataPagamento: currentDateStr,
-      updatedAt: serverTimestamp(),
-    });
-    
-    const locacaoId = paymentData.locacaoId;
     const locacaoRef = doc(db, "locacoes", locacaoId);
     const locacaoSnap = await getDoc(locacaoRef);
     if (locacaoSnap.exists()) {
@@ -361,45 +647,6 @@ export default function AdminRents() {
     }
   };
 
-  const ensureCurrentMonthPayments = async (activeLeases: Lease[]) => {
-    const currentComp = getCompetenciaFromFilter("current");
-    const [currentYear, currentMonth] = currentComp.split("-");
-    
-    for (const lease of activeLeases) {
-      if (lease.statusLocacao !== "Ativa") continue;
-      
-      const q = query(
-        collection(db, "pagamentosLocacao"),
-        where("locacaoId", "==", lease.id),
-        where("competencia", "==", currentComp)
-      );
-      const snap = await getDocs(q);
-      if (snap.empty) {
-        const dueDayStr = String(lease.dueDay || 10).padStart(2, "0");
-        const dataVencimento = `${currentComp}-${dueDayStr}`;
-        
-        const newPayment = {
-          locacaoId: lease.id,
-          imovelId: lease.propertyId || "",
-          codigoImovel: lease.propertyCode || "",
-          locatarioNome: lease.tenantName || "",
-          proprietarioNome: lease.ownerName || "",
-          competenciaMes: currentMonth,
-          competenciaAno: parseInt(currentYear),
-          competencia: currentComp,
-          dataVencimento,
-          dataPagamento: null,
-          valorAluguel: lease.valorAluguel || 0,
-          valorTotal: lease.valorTotalPagar || 0,
-          statusPagamento: "Pendente",
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        };
-        await addDoc(collection(db, "pagamentosLocacao"), newPayment);
-      }
-    }
-  };
-
   const fetchPayments = async () => {
     try {
       const q = query(
@@ -421,7 +668,11 @@ export default function AdminRents() {
   };
 
   useEffect(() => {
-    fetchPayments();
+    const syncAndFetch = async () => {
+      await ensureMonthlyPaymentsForActiveRentals(selectedCompetencia);
+      await fetchPayments();
+    };
+    syncAndFetch();
   }, [selectedCompetencia, leases]);
 
   useEffect(() => {
@@ -452,8 +703,7 @@ export default function AdminRents() {
         propSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Property),
       );
 
-      const activeLeases = leaseData.filter((l) => l.statusLocacao === "Ativa");
-      await ensureCurrentMonthPayments(activeLeases);
+      await ensureMonthlyPaymentsForActiveRentals(selectedCompetencia);
       await fetchPayments();
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -945,38 +1195,323 @@ export default function AdminRents() {
     }
   };
 
-  const handleDeleteLease = async (lease: Lease) => {
-    if (
-      confirm(
-        "Deseja realmente remover esta locação? Isto não excluirá o histórico de pagamentos.",
-      )
-    ) {
-      try {
-        await deleteDoc(doc(db, "locacoes", lease.id!));
+  const refreshRentals = async () => {
+    await fetchData();
+  };
 
-        const confirmarVal = confirm(
-          "Deseja também alterar o status do imóvel vinculado para 'Disponível' e torná-lo disponível para visitas?",
-        );
-        const updatePayload: any = {};
-        if (confirmarVal) {
-          updatePayload.status = "Disponível";
-          updatePayload.imovelAlugado = false;
-          updatePayload.disponivelParaVisita = true;
-          updatePayload.availableForVisit = "Sim";
-          updatePayload.rented = false;
-          updatePayload.locacaoAtivaId = null;
-          updatePayload.atualizadoEm = serverTimestamp();
-        } else {
-          updatePayload.locacaoAtivaId = null;
-          updatePayload.atualizadoEm = serverTimestamp();
-        }
-        await updateDoc(doc(db, "imoveis", lease.propertyId), updatePayload);
+  const refreshFinancialSummary = async () => {
+    await fetchData();
+  };
 
-        fetchData();
-      } catch (error) {
-        console.error("Error deleting lease:", error);
+  const refreshMonthlyPayments = async () => {
+    await fetchPayments();
+  };
+
+  const openDeleteRentalModal = (locacao: Lease) => {
+    if (!hasPermission("excluir_locacao")) {
+      toast.error("Você não possui permissão para excluir locações.");
+      return;
+    }
+    console.log("Abertura do modal de exclusão para locação:", locacao);
+    setSelectedRental(locacao);
+    setPermanentDelete(false);
+    setDeleteModalOpen(true);
+  };
+
+  const cancelFutureRentalPayments = async (rentalId: string) => {
+    const q = query(
+      collection(db, "pagamentosLocacao"),
+      where("locacaoId", "==", rentalId)
+    );
+    const snap = await getDocs(q);
+    const batch = writeBatch(db);
+    let batchCount = 0;
+
+    for (const paymentDoc of snap.docs) {
+      const payment = paymentDoc.data();
+      const status = (payment.statusPagamento || "").toLowerCase();
+      const canCancel = ["pendente", "atrasada", "atrasado", "agendada", "agendado"].includes(status);
+      
+      if (canCancel) {
+        batch.update(doc(db, "pagamentosLocacao", paymentDoc.id), {
+          statusPagamento: "Cancelado",
+          cancelado: true,
+          updatedAt: serverTimestamp()
+        });
+        batchCount++;
       }
     }
+
+    if (batchCount > 0) {
+      await batch.commit();
+      console.log("Parcelas de cobrança futuras/pendentes canceladas:", batchCount);
+    }
+  };
+
+  const updateLinkedPropertyAfterRentalCancellation = async (locacao: Lease) => {
+    const imovelId = locacao.propertyId || (locacao as any).imovelId;
+    const codigoImovel = locacao.propertyCode || (locacao as any).codigoImovel;
+
+    if (!imovelId && !codigoImovel) {
+      console.log("Nenhum ID ou código de imóvel disponível na locação.");
+      return;
+    }
+
+    let finalImovelId = imovelId;
+
+    if (!finalImovelId && codigoImovel) {
+      const qProps = query(collection(db, "imoveis"), where("codigo", "==", codigoImovel));
+      const propSnap = await getDocs(qProps);
+      if (!propSnap.empty) {
+        finalImovelId = propSnap.docs[0].id;
+      }
+    }
+
+    if (!finalImovelId) {
+      console.log("Imóvel correspondente não encontrado pelo código.");
+      return;
+    }
+
+    // Verificar se existe outra locação ativa no mesmo imóvel
+    const qLeases = query(
+      collection(db, "locacoes"),
+      where("propertyId", "==", finalImovelId)
+    );
+    const leasesSnap = await getDocs(qLeases);
+    const otherActiveLeaseExists = leasesSnap.docs.some(doc => {
+      if (doc.id === locacao.id) return false;
+      const leaseData = doc.data();
+      return isLocacaoAtiva({ id: doc.id, ...leaseData });
+    });
+
+    if (otherActiveLeaseExists) {
+      console.log("Outra locação ativa ainda existe para o mesmo imóvel. Status do imóvel não alterado.");
+      return;
+    }
+
+    // Buscar imóvel para saber a pretensão/tipo
+    const propRef = doc(db, "imoveis", finalImovelId);
+    const propDoc = await getDoc(propRef);
+    if (!propDoc.exists()) {
+      console.log("Imóvel não localizado para atualizar status.");
+      return;
+    }
+
+    const propData = propDoc.data();
+    const finalidade = String(propData.pretensao || propData.finalidade || propData.tipoNegocio || propData.negocio || "").toLowerCase();
+    const isOnlyRent = finalidade.includes("locaç") || finalidade.includes("alug") || finalidade === "aluguel";
+
+    const updatePayload: any = {
+      alugado: false,
+      imovelAlugado: false,
+      disponivelParaLocacao: true,
+      locacaoAtivaId: null,
+      updatedAt: serverTimestamp(),
+    };
+
+    if (isOnlyRent || finalidade === "") {
+      updatePayload.status = "Disponível";
+      updatePayload.statusImovel = "Disponível";
+      updatePayload.disponivelParaVisita = true;
+      updatePayload.availableForVisit = "Sim";
+      updatePayload.rented = false;
+    } else {
+      updatePayload.disponivelParaVisita = true;
+      updatePayload.availableForVisit = "Sim";
+      updatePayload.rented = false;
+    }
+
+    await updateDoc(propRef, updatePayload);
+    console.log("Status do imóvel atualizado após exclusão/cancelamento:", finalImovelId, updatePayload);
+  };
+
+  const cancelOrDeleteLinkedFinancialTransactions = async (rentalId: string, permanent: boolean) => {
+    const collectionsToCheck = ["financeiro", "transacoesFinanceiras", "financialTransactions"];
+    
+    for (const colName of collectionsToCheck) {
+      try {
+        const q = query(collection(db, colName), where("locacaoId", "==", rentalId));
+        const snap = await getDocs(q);
+        
+        if (snap.empty) continue;
+        
+        const batch = writeBatch(db);
+        let batchCount = 0;
+        
+        for (const tDoc of snap.docs) {
+          const trans = tDoc.data();
+          const status = String(trans.status || trans.statusLancamento || trans.statusPagamento || "").toLowerCase();
+          
+          const isPending = ["pendente", "agendado", "em aberto", "aberto", "scheduled", "pending"].includes(status);
+          const isPaid = ["pago", "recebido", "liquidado", "conciliado", "paid", "received"].includes(status);
+          const isEstornado = ["estornado", "refunded", "revertido"].includes(status);
+          
+          if (isPaid || isEstornado || trans.comissaoRecebida === true) {
+            continue;
+          }
+          
+          if (isPending) {
+            if (permanent) {
+              batch.delete(doc(db, colName, tDoc.id));
+            } else {
+              batch.update(doc(db, colName, tDoc.id), {
+                status: "Cancelado",
+                statusLancamento: "Cancelado",
+                statusPagamento: "Cancelado",
+                cancelado: true,
+                updatedAt: serverTimestamp()
+              });
+            }
+            batchCount++;
+          }
+        }
+        
+        if (batchCount > 0) {
+          await batch.commit();
+          console.log(`Lançamentos financeiros pendentes em ${colName} processados:`, batchCount);
+        }
+      } catch (err) {
+        console.error(`Erro ao processar financeiro na coleção ${colName}:`, err);
+      }
+    }
+  };
+
+  const deleteUnfinishedReceiptsLinkedToRental = async (rentalId: string) => {
+    try {
+      const q = query(
+        collection(db, "recibosEditaveis"),
+        where("locacaoId", "==", rentalId)
+      );
+      const snap = await getDocs(q);
+      if (snap.empty) return;
+
+      const batch = writeBatch(db);
+      let batchCount = 0;
+
+      for (const rDoc of snap.docs) {
+        const receipt = rDoc.data();
+        const finalized = receipt.finalizado === true || receipt.status === "Pago" || receipt.statusRecibo === "Emitido";
+        if (!finalized) {
+          batch.delete(doc(db, "recibosEditaveis", rDoc.id));
+          batchCount++;
+        }
+      }
+
+      if (batchCount > 0) {
+        await batch.commit();
+        console.log("Recibos editáveis não finalizados excluídos:", batchCount);
+      }
+    } catch (err) {
+      console.error("Erro ao excluir recibos editáveis:", err);
+    }
+  };
+
+  const cancelRental = async (locacao: Lease) => {
+    const rentalRef = doc(db, "locacoes", locacao.id!);
+
+    await updateDoc(rentalRef, {
+      status: "Cancelada",
+      statusLocacao: "Cancelada",
+      ativo: false,
+      active: false,
+      cancelada: true,
+      canceladaEm: serverTimestamp(),
+      canceladaPorUid: auth.currentUser?.uid || "",
+      canceladaPorEmail: auth.currentUser?.email || "",
+      updatedAt: serverTimestamp()
+    });
+
+    await cancelFutureRentalPayments(locacao.id!);
+    await cancelOrDeleteLinkedFinancialTransactions(locacao.id!, false);
+    await updateLinkedPropertyAfterRentalCancellation(locacao);
+  };
+
+  const permanentlyDeleteRental = async (locacao: Lease) => {
+    const rentalId = locacao.id!;
+    
+    // 1. Excluir locacao
+    const batch = writeBatch(db);
+    batch.delete(doc(db, "locacoes", rentalId));
+    await batch.commit();
+    
+    // 2. Excluir cobranças pendentes de pagamentosLocacao
+    const qPayments = query(
+      collection(db, "pagamentosLocacao"),
+      where("locacaoId", "==", rentalId)
+    );
+    const paymentsSnap = await getDocs(qPayments);
+    
+    const paymentBatch = writeBatch(db);
+    let pCount = 0;
+    for (const pDoc of paymentsSnap.docs) {
+      const payment = pDoc.data();
+      const status = (payment.statusPagamento || "").toLowerCase();
+      if (status !== "pago" && status !== "recebido") {
+        paymentBatch.delete(doc(db, "pagamentosLocacao", pDoc.id));
+        pCount++;
+      }
+    }
+    if (pCount > 0) {
+      await paymentBatch.commit();
+      console.log("Cobranças pendentes excluídas definitivamente:", pCount);
+    }
+    
+    // 3. Lançamentos financeiros pendentes
+    await cancelOrDeleteLinkedFinancialTransactions(rentalId, true);
+    
+    // 4. Recibos não finalizados
+    await deleteUnfinishedReceiptsLinkedToRental(rentalId);
+
+    // 5. Atualizar imóvel
+    await updateLinkedPropertyAfterRentalCancellation(locacao);
+  };
+
+  const handleDeleteRental = async (locacao: Lease, permanent = false) => {
+    if (!locacao?.id) {
+      toast.error("Locação inválida.");
+      return;
+    }
+
+    if (!hasPermission("excluir_locacao")) {
+      toast.error("Você não possui permissão para excluir locações.");
+      return;
+    }
+
+    console.log("Clique em excluir locação:", locacao);
+    console.log("ID da locação:", locacao?.id);
+    console.log("Usuário atual:", auth.currentUser?.email);
+    console.log("Modo de exclusão:", permanent ? "definitiva" : "cancelamento");
+
+    try {
+      setDeletingId(locacao.id);
+
+      if (permanent) {
+        await permanentlyDeleteRental(locacao);
+        toast.success("Locação excluída definitivamente.");
+      } else {
+        await cancelRental(locacao);
+        toast.success("Locação cancelada com sucesso.");
+      }
+
+      await refreshRentals();
+      await refreshFinancialSummary();
+      await refreshMonthlyPayments();
+    } catch (error: any) {
+      console.error("Erro ao excluir locação:", error);
+      console.error("Código de erro:", error?.code);
+      console.error("Mensagem de erro:", error?.message);
+      console.error("Locação ID:", locacao.id);
+      toast.error("Não foi possível excluir a locação.");
+    } finally {
+      setDeletingId(null);
+      setDeleteModalOpen(false);
+      setSelectedRental(null);
+      setPermanentDelete(false);
+    }
+  };
+
+  const handleDeleteLease = async (lease: Lease) => {
+    openDeleteRentalModal(lease);
   };
 
   const recalculateReceiptTotal = (form: any, type: "locatario" | "locador") => {
@@ -1767,22 +2302,147 @@ export default function AdminRents() {
     }
   };
 
+  const [syncing, setSyncing] = useState(false);
+
+  const handleSyncMonthlyPayments = async () => {
+    setSyncing(true);
+    try {
+      const currentComp = getCompetenciaFromFilter("current");
+      const [currentYear, currentMonth] = currentComp.split("-");
+      
+      const leaseSnap = await getDocs(collection(db, "locacoes"));
+      const allLeases = leaseSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      const activeLeases = allLeases.filter(isLocacaoAtiva);
+
+      const paymentsSnap = await getDocs(
+        query(
+          collection(db, "pagamentosLocacao"),
+          where("competencia", "==", currentComp)
+        )
+      );
+      const existingPayments = paymentsSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      const existingLocacaoIds = new Set(existingPayments.map(p => p.locacaoId));
+
+      let createdCount = 0;
+
+      for (const lease of activeLeases) {
+        const lAny = lease as any;
+        if (!existingLocacaoIds.has(lAny.id)) {
+          const dueDayStr = String(lAny.dueDay || lAny.diaVencimento || 10).padStart(2, "0");
+          const dataVencimento = `${currentComp}-${dueDayStr}`;
+          
+          const newPayment = {
+            locacaoId: lAny.id,
+            imovelId: lAny.propertyId || lAny.imovelId || "",
+            codigoImovel: lAny.propertyCode || lAny.codigoImovel || "",
+            locatarioNome: lAny.tenantName || lAny.locatarioNome || "",
+            proprietarioNome: lAny.ownerName || lAny.proprietarioNome || "",
+            competenciaMes: currentMonth,
+            competenciaAno: parseInt(currentYear),
+            competencia: currentComp,
+            dataVencimento,
+            dataPagamento: null,
+            valorAluguel: Number(lAny.valorAluguel || lAny.valorAluguelMensal || 0),
+            valorTotal: Number(lAny.valorTotalPagar || lAny.valorTotalMensal || lAny.valorAluguelMensal || lAny.valorAluguel || 0),
+            statusPagamento: "Pendente",
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          };
+
+          const predId = `${lAny.id}_${currentComp}`;
+          await setDoc(doc(db, "pagamentosLocacao", predId), newPayment, { merge: true });
+          createdCount++;
+        }
+      }
+
+      alert(`Sincronização concluída! Foram criadas ${createdCount} novas cobranças para o mês atual.`);
+      await fetchData();
+    } catch (e) {
+      console.error("Erro ao sincronizar cobranças:", e);
+      alert("Erro ao realizar a sincronização de cobranças mensais.");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const mergedRentals = useMemo(() => {
+    const activeLeases = leases.filter(isLocacaoAtiva);
+    
+    const rows = activeLeases.map((lease) => {
+      let payment = payments.find((p) => p.locacaoId === lease.id);
+      
+      if (!payment) {
+        payment = {
+          ...criarPagamentoVirtualPendente(lease, selectedCompetencia),
+          id: `${lease.id}_${selectedCompetencia}`
+        };
+      } else {
+        const comp = getCompetenciaPagamento(payment);
+        const [y, m] = comp.split("-");
+        payment = {
+          ...payment,
+          competencia: comp,
+          competenciaMes: m || payment.competenciaMes,
+          competenciaAno: parseInt(y) || payment.competenciaAno,
+        };
+      }
+      
+      return {
+        lease,
+        payment,
+      };
+    });
+
+    payments.forEach((payment) => {
+      const alreadyAdded = rows.some((r) => r.lease.id === payment.locacaoId);
+      if (!alreadyAdded) {
+        const lease = leases.find((l) => l.id === payment.locacaoId);
+        if (lease) {
+          const comp = getCompetenciaPagamento(payment);
+          const [y, m] = comp.split("-");
+          const normPayment = {
+            ...payment,
+            competencia: comp,
+            competenciaMes: m || payment.competenciaMes,
+            competenciaAno: parseInt(y) || payment.competenciaAno,
+          };
+          rows.push({
+            lease,
+            payment: normPayment,
+          });
+        }
+      }
+    });
+
+    return rows;
+  }, [leases, payments, selectedCompetencia]);
+
   const stats = useMemo(() => {
-    const active = leases.filter((l) => l.statusLocacao === "Ativa").length;
-    const paidThisMonth = payments.filter((p) => p.statusPagamento === "Pago").length;
+    const active = leases.filter(isLocacaoAtiva).length;
+    
+    let paidThisMonth = 0;
+    let pendingOrLate = 0;
+    let revenue = 0;
     
     const todayStr = new Date().toISOString().split("T")[0];
-    const pendingOrLate = payments.filter((p) => {
-      if (p.statusPagamento === "Pago") return false;
-      if (p.statusPagamento === "Cancelado") return false;
-      const computedStatus = p.dataVencimento < todayStr ? "Atrasado" : "Pendente";
-      return computedStatus === "Pendente" || computedStatus === "Atrasado";
-    }).length;
     
-    const revenue = payments.reduce((acc, p) => acc + (p.valorTotal || p.valorAluguel || 0), 0);
+    mergedRentals.forEach(({ lease, payment }) => {
+      const isPaid = payment.statusPagamento === "Pago";
+      const isLate = !payment.dataPagamento && payment.dataVencimento < todayStr;
+      
+      if (isPaid) {
+        paidThisMonth++;
+      } else if (payment.statusPagamento !== "Cancelado") {
+        pendingOrLate++;
+      }
+      
+      if (isLocacaoAtiva(lease)) {
+        revenue += Number(payment.valorTotal || payment.valorAluguel || 0);
+      }
+    });
 
     return { active, paidThisMonth, pendingOrLate, revenue };
-  }, [leases, payments]);
+  }, [leases, mergedRentals]);
 
   return (
     <motion.div
@@ -1810,7 +2470,20 @@ export default function AdminRents() {
             vigentes.
           </p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-4">
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            disabled={syncing}
+            onClick={handleSyncMonthlyPayments}
+            className="bg-primary-black border border-gray-800 text-white hover:bg-gold hover:text-primary-black !rounded-2xl !py-4 !px-6 shadow-xl flex items-center gap-2 transition-all disabled:opacity-50"
+          >
+            <RefreshCw size={16} className={syncing ? "animate-spin" : ""} />
+            <span className="uppercase text-xs font-black tracking-widest leading-none">
+              Sincronizar Cobranças
+            </span>
+          </motion.button>
+
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
@@ -1974,7 +2647,7 @@ export default function AdminRents() {
                     Carregando carteira de locação...
                   </td>
                 </tr>
-              ) : payments.length === 0 ? (
+              ) : mergedRentals.length === 0 ? (
                 <tr>
                   <td
                     colSpan={6}
@@ -1984,14 +2657,13 @@ export default function AdminRents() {
                   </td>
                 </tr>
               ) : (
-                payments.map((payment) => {
-                  const lease = leases.find((l) => l.id === payment.locacaoId);
+                mergedRentals.map(({ lease, payment }) => {
                   const isLate = !payment.dataPagamento && payment.dataVencimento < new Date().toISOString().split("T")[0];
                   const statusLabel = payment.statusPagamento === "Pago" ? "Pago" : (isLate ? "Atrasado" : "Pendente");
 
                   return (
                     <tr
-                      key={payment.id}
+                      key={payment.id || `${payment.locacaoId}_${payment.competencia}`}
                       className="hover:bg-gray-50/50 transition-colors group"
                     >
                       <td className="p-8 pl-10">
@@ -2134,15 +2806,25 @@ export default function AdminRents() {
                               Recibo Editável
                             </span>
                           </button>
-                          <button
-                            onClick={() => {
-                              if (lease) handleDeleteLease(lease);
-                            }}
-                            className="p-2.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
-                            title="Excluir Contrato"
-                          >
-                            <Trash2 size={18} />
-                          </button>
+                          {hasPermission("excluir_locacao") && (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                if (lease) {
+                                  openDeleteRentalModal(lease);
+                                }
+                              }}
+                              disabled={deletingId === lease?.id}
+                              className="p-2.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                              style={{ pointerEvents: "auto", zIndex: 10 }}
+                              title="Excluir Contrato"
+                              aria-label={lease ? `Excluir locação ${lease.propertyCode || lease.id}` : "Excluir locação"}
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -3616,6 +4298,199 @@ export default function AdminRents() {
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {deleteModalOpen && selectedRental && (
+          <div className="fixed inset-0 z-[250] flex items-center justify-center p-6 overflow-y-auto">
+            <motion.div
+              {...fadeIn}
+              className="fixed inset-0 bg-primary-black/60 backdrop-blur-md"
+              onClick={() => {
+                if (deletingId === null) {
+                  setDeleteModalOpen(false);
+                  setSelectedRental(null);
+                }
+              }}
+            />
+
+            <motion.div
+              {...scaleIn}
+              className="relative w-full max-w-2xl bg-white rounded-[2.5rem] shadow-2xl border border-gray-100 overflow-hidden flex flex-col my-8"
+            >
+              {/* Header */}
+              <div className="p-10 border-b border-gray-50 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-red-50 rounded-2xl flex items-center justify-center text-red-500">
+                    <Trash2 size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black text-primary-black uppercase tracking-tight">
+                      Excluir locação
+                    </h3>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">
+                      Confirmação de segurança
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={deletingId !== null}
+                  onClick={() => {
+                    setDeleteModalOpen(false);
+                    setSelectedRental(null);
+                  }}
+                  className="p-3 text-gray-400 hover:text-primary-black hover:bg-gray-100 rounded-2xl transition-all"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="p-10 space-y-8 overflow-y-auto max-h-[60vh] text-left">
+                <p className="text-sm font-bold text-gray-600 leading-relaxed">
+                  Tem certeza que deseja excluir a locação do imóvel{" "}
+                  <span className="text-gold font-black">[{selectedRental.propertyCode}]</span>{" "}
+                  vinculada ao locatário{" "}
+                  <span className="text-primary-black font-black">{selectedRental.tenantName}</span>?
+                </p>
+
+                {/* Info Grid */}
+                <div className="grid grid-cols-2 gap-6 bg-gray-50 p-6 rounded-3xl border border-gray-100">
+                  <div>
+                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">
+                      Imóvel
+                    </span>
+                    <span className="text-xs font-bold text-primary-black block truncate">
+                      {selectedRental.propertyTitle || "Não informado"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">
+                      Código
+                    </span>
+                    <span className="text-xs font-black text-gold uppercase tracking-widest block">
+                      {selectedRental.propertyCode || "Não informado"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">
+                      Locatário
+                    </span>
+                    <span className="text-xs font-bold text-primary-black block">
+                      {selectedRental.tenantName || "Não informado"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">
+                      Competência Atual
+                    </span>
+                    <span className="text-xs font-bold text-primary-black block">
+                      {selectedCompetencia.split("-").reverse().join("/")}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">
+                      Valor Mensal
+                    </span>
+                    <span className="text-xs font-extrabold text-primary-green block">
+                      {formatCurrency(selectedRental.valorTotalPagar || selectedRental.valorAluguel || 0)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">
+                      Status
+                    </span>
+                    <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-600 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border border-blue-100">
+                      {selectedRental.statusLocacao || "Ativa"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Permanent Delete Option (Admin/Master only) */}
+                {isMasterOrAdmin() ? (
+                  <div className="p-6 bg-red-50/50 border border-red-100 rounded-3xl space-y-4">
+                    <label className="flex items-start gap-3 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        className="mt-1 w-4.5 h-4.5 rounded border-red-300 text-red-600 focus:ring-red-500 bg-white"
+                        checked={permanentDelete}
+                        onChange={(e) => setPermanentDelete(e.target.checked)}
+                        disabled={deletingId !== null}
+                      />
+                      <div>
+                        <span className="text-xs font-black text-red-800 uppercase tracking-wider block">
+                          Excluir definitivamente do banco de dados
+                        </span>
+                        <span className="text-[11px] text-red-600 font-bold block mt-1 leading-normal">
+                          Esta opção apagará permanentemente o contrato, cobranças pendentes e lançamentos financeiros não liquidados. Pagamentos já consolidados e recibos pagos continuarão preservados.
+                        </span>
+                      </div>
+                    </label>
+                  </div>
+                ) : (
+                  <div className="p-6 bg-amber-50/50 border border-amber-100 rounded-3xl">
+                    <p className="text-[11px] text-amber-700 font-bold leading-normal">
+                      Aviso: Como medida de segurança, o sistema realizará o <strong>Cancelamento Lógico</strong> do contrato. O histórico de pagamentos passados e recibos pagos será preservado, mas nenhuma cobrança futura ou lançamento financeiro pendente será gerado para esta locação.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Actions Footer */}
+              <div className="p-10 bg-gray-50 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-6 flex-shrink-0">
+                <button
+                  type="button"
+                  disabled={deletingId !== null}
+                  onClick={() => {
+                    setDeleteModalOpen(false);
+                    setSelectedRental(null);
+                  }}
+                  className="text-xs font-bold uppercase text-gray-400 tracking-widest hover:text-gray-600 transition-all disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={deletingId !== null}
+                  onClick={() => handleDeleteRental(selectedRental, permanentDelete)}
+                  className={`w-full sm:w-auto px-8 py-4 ${
+                    permanentDelete ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-red-500 hover:bg-red-600 text-white'
+                  } font-black text-xs uppercase tracking-widest rounded-2xl shadow-xl shadow-red-500/10 transition-all flex items-center justify-center gap-2.5 disabled:opacity-50`}
+                >
+                  {deletingId !== null ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <Trash2 size={16} />
+                  )}
+                  <span>
+                    {permanentDelete ? "Excluir Definitivamente" : "Excluir locação"}
+                  </span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Toast Notification Container */}
+      <AnimatePresence>
+        {toastState && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            className="fixed top-24 left-1/2 -translate-x-1/2 z-[300] flex items-center gap-3 px-6 py-4 rounded-2xl text-white backdrop-blur-md shadow-2xl border"
+            style={{
+              backgroundColor: toastState.type === 'success' ? '#14532d' : '#7f1d1d',
+              borderColor: toastState.type === 'success' ? '#16a34a' : '#b91c1c',
+            }}
+          >
+            {toastState.type === 'success' ? <CheckCircle size={20} className="text-emerald-300" /> : <X size={20} className="text-red-300" />}
+            <span className="font-bold text-sm tracking-wide">{toastState.message}</span>
+          </motion.div>
         )}
       </AnimatePresence>
     </motion.div>

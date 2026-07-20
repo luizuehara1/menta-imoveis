@@ -7,11 +7,14 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isEmailAdmin(email) {
+    function isHardcodedAdmin(email) {
       return email == 'luiz.uehara1@gmail.com' ||
              email == 'edson.menta@hotmail.com' ||
-             email == 'anamariamenta@hotmail.com' ||
-             (exists(/databases/$(database)/documents/administradores/$(email)) &&
+             email == 'anamariamenta@hotmail.com';
+    }
+
+    function isDbAdmin(email) {
+      return (exists(/databases/$(database)/documents/administradores/$(email)) &&
               get(/databases/$(database)/documents/administradores/$(email)).data.get('ativo', false) == true) ||
              (exists(/databases/$(database)/documents/admins/$(email)) &&
               get(/databases/$(database)/documents/admins/$(email)).data.get('ativo', false) == true);
@@ -20,7 +23,10 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() && 
              request.auth.token.email != null &&
-             isEmailAdmin(request.auth.token.email.lower());
+             (
+               isHardcodedAdmin(request.auth.token.email) ||
+               isDbAdmin(request.auth.token.email)
+             );
     }
 
     // Public Collections - Anyone can read, only Admin can write
@@ -105,12 +111,12 @@ service cloud.firestore {
     match /propostas/{document=**} { allow read, write: if isAdmin(); }
 
     match /administradores/{email} {
-      allow read: if isSignedIn() && (request.auth.token.email.lower() == email.lower() || isAdmin());
+      allow read: if isSignedIn() && (request.auth.token.email == email || isAdmin());
       allow write: if isAdmin();
     }
 
     match /admins/{email} {
-      allow read: if isSignedIn() && (request.auth.token.email.lower() == email.lower() || isAdmin());
+      allow read: if isSignedIn() && (request.auth.token.email == email || isAdmin());
       allow write: if isAdmin();
     }
 
