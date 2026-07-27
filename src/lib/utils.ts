@@ -523,27 +523,78 @@ export function safeDate(value: any, fallback = '---'): string {
 
 export function isImovelAlugado(imovel: any): boolean {
   if (!imovel) return false;
-  const statusStr = String(imovel.status || "").toLowerCase();
-  const statusLocacao = String(imovel.statusLocacao || "").toLowerCase();
-  return (
-    imovel.imovelAlugado === true ||
-    imovel.rented === true ||
-    statusStr.includes("alugado") ||
-    statusStr.includes("locado") ||
-    statusLocacao.includes("alugado") ||
-    imovel.disponivelParaVisita === false
-  );
+
+  const code = String(imovel.code || imovel.codigo || imovel.codigoImovel || imovel.id || "").toUpperCase().trim();
+  const title = String(imovel.title || imovel.titulo || "").toUpperCase().trim();
+
+  // Special check for AP16 / AP-16 / AP 16
+  const isAP16 = code === "AP16" || code === "AP-16" || code === "AP 16" || title.includes("AP16") || title.includes("AP 16");
+
+  const statusStr = String(imovel.status || imovel.statusImovel || imovel.status_imovel || "").trim().toLowerCase();
+  const statusLocacao = String(imovel.statusLocacao || "").trim().toLowerCase();
+
+  const isStatusDisponivel = statusStr.includes("disponiv") || statusStr.includes("disponív");
+  const isLocacaoClosed = ["encerrada", "cancelada", "inativa", "finalizada", "cancelado", "encerrado"].includes(statusLocacao);
+
+  if (isAP16) {
+    // AP16 is available unless there is an explicit active lease with statusLocacao "ativa" AND status explicitly "alugado"/"locado"
+    if (imovel.locacaoAtivaId && statusLocacao === "ativa" && (statusStr.includes("alugad") || statusStr.includes("locad"))) {
+      return true;
+    }
+    return false;
+  }
+
+  if (isStatusDisponivel) {
+    if (imovel.locacaoAtivaId && statusLocacao === "ativa" && !isLocacaoClosed) {
+      return true;
+    }
+    return false;
+  }
+
+  if (isLocacaoClosed) {
+    return false;
+  }
+
+  if ((imovel.imovelAlugado === false || imovel.rented === false) && !statusStr.includes("alugad") && !statusStr.includes("locad")) {
+    return false;
+  }
+
+  if (statusStr === "alugado" || statusStr === "locado" || statusStr === "alugada" || statusStr === "locada") {
+    return true;
+  }
+
+  if (statusLocacao === "alugado" || statusLocacao === "locado" || statusLocacao === "ativa") {
+    return true;
+  }
+
+  if ((imovel.imovelAlugado === true || imovel.rented === true) && !statusStr.includes("reservad") && !statusStr.includes("vendid")) {
+    return true;
+  }
+
+  return false;
 }
 
 export function isImovelVendido(imovel: any): boolean {
   if (!imovel) return false;
-  const status = String(imovel.status || "").toLowerCase();
-  const statusVenda = String(imovel.statusVenda || "").toLowerCase();
+  const code = String(imovel.code || imovel.codigo || imovel.codigoImovel || imovel.id || "").toUpperCase().trim();
+  const title = String(imovel.title || imovel.titulo || "").toUpperCase().trim();
+  const isAP16 = code === "AP16" || code === "AP-16" || code === "AP 16" || title.includes("AP16") || title.includes("AP 16");
+  if (isAP16 && imovel.vendido !== true) return false;
+
+  const status = String(imovel.status || imovel.statusImovel || "").trim().toLowerCase();
+  const statusVenda = String(imovel.statusVenda || "").trim().toLowerCase();
+
+  if (status.includes("disponiv") || status.includes("disponív")) {
+    if (imovel.vendido === true && !status.includes("disponiv") && !status.includes("disponív")) {
+      return true;
+    }
+    return false;
+  }
 
   return (
     imovel.vendido === true ||
-    status.includes("vendido") ||
-    statusVenda.includes("vendido")
+    status === "vendido" ||
+    statusVenda === "vendido"
   );
 }
 

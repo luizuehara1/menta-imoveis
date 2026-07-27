@@ -709,12 +709,20 @@ export default function AdminPropertyForm() {
             }
             setValue('businessType', finalBType);
             
-            // Normalize "Alugado" status for backwards compatibility
-            const statusStr = String(data.status || "").toLowerCase();
-            const alugado = data.imovelAlugado === true || statusStr.includes("alugado") || statusStr.includes("locado") || data.rented === true;
-            setValue('rented', alugado);
-            if (alugado) {
-              setValue('status', 'Alugado');
+            // Normalize status correctly
+            const statusStr = String(data.status || "").toLowerCase().trim();
+            const isDisponivel = statusStr === "disponível" || statusStr === "disponivel";
+            if (isDisponivel) {
+              setValue('status', 'Disponível');
+              setValue('rented', false);
+            } else {
+              const alugado = data.imovelAlugado === true || statusStr.includes("alugado") || statusStr.includes("locado") || data.rented === true;
+              setValue('rented', alugado);
+              if (alugado) {
+                setValue('status', 'Alugado');
+              } else if (data.status) {
+                setValue('status', data.status);
+              }
             }
 
             // Set garbage and gas taxes with fallback for old properties
@@ -1281,30 +1289,34 @@ export default function AdminPropertyForm() {
         propertyData.publicadoNoSite = true;
       } else {
         propertyData.vendido = false;
-        if (statusValue.toLowerCase() === "disponível" || statusValue.toLowerCase() === "disponivel") {
+        const isDisponivel = statusValue.toLowerCase() === "disponível" || statusValue.toLowerCase() === "disponivel";
+        if (isDisponivel) {
           propertyData.status = "Disponível";
           propertyData.statusVenda = "Disponível";
-          propertyData.disponivelParaVisita = true;
-          propertyData.availableForVisit = "Sim";
+          propertyData.disponivelParaVisita = data.availableForVisit !== "Não";
+          propertyData.availableForVisit = data.availableForVisit !== "Não" ? "Sim" : "Não";
           propertyData.disponivelParaProposta = true;
+          propertyData.imovelAlugado = false;
+          propertyData.rented = false;
+          propertyData.statusLocacao = null;
         } else {
           propertyData.disponivelParaProposta = data.disponivelParaProposta !== false;
-        }
+          const checkboxRented = data.rented === true;
+          const isAlugado = checkboxRented || statusValue.toLowerCase().includes("alugado") || statusValue.toLowerCase().includes("locado");
 
-        const checkboxRented = data.rented === true;
-        const isAlugado = checkboxRented || statusValue.toLowerCase().includes("alugado") || statusValue.toLowerCase().includes("locado");
-
-        propertyData.imovelAlugado = isAlugado;
-        propertyData.rented = isAlugado;
-        if (isAlugado) {
-          propertyData.status = "Alugado";
-          propertyData.disponivelParaVisita = false;
-          propertyData.availableForVisit = "Não";
-        } else {
-          if (propertyData.status === "Alugado" || propertyData.status === "Locado") {
-            propertyData.status = "Disponível";
+          propertyData.imovelAlugado = isAlugado;
+          propertyData.rented = isAlugado;
+          if (isAlugado) {
+            propertyData.status = "Alugado";
+            propertyData.statusLocacao = "Alugado";
+            propertyData.disponivelParaVisita = false;
+            propertyData.availableForVisit = "Não";
+          } else {
+            if (propertyData.status === "Alugado" || propertyData.status === "Locado") {
+              propertyData.status = "Disponível";
+            }
+            propertyData.disponivelParaVisita = data.availableForVisit !== "Não";
           }
-          propertyData.disponivelParaVisita = data.availableForVisit !== "Não";
         }
       }
 
