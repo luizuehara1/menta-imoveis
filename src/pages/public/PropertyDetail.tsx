@@ -33,6 +33,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import PageWrapper from '../../components/PageWrapper';
 import { SafeImage } from '../../components/ui/SafeImage';
+import { getOptimizedCloudinaryUrl } from '../../utils/image';
 import { 
   formatCurrency, 
   isValidPublicProperty, 
@@ -368,6 +369,20 @@ export default function PropertyDetail() {
     return galleryImagesWithMeta.map(item => item.url);
   }, [galleryImagesWithMeta]);
 
+  // Preload gallery images in background for instant carousel transitions
+  useEffect(() => {
+    if (galleryImages && galleryImages.length > 0) {
+      galleryImages.forEach((imgUrl) => {
+        if (imgUrl) {
+          const safe = getSafeImageUrl(imgUrl);
+          const opt = getOptimizedCloudinaryUrl(safe, 1200);
+          const img = new Image();
+          img.src = opt;
+        }
+      });
+    }
+  }, [galleryImages]);
+
   // Infinite automated carousel: transitions automatically every 3 seconds unless paused on mouse hover
   useEffect(() => {
     if (galleryImages.length <= 1 || isPaused) return;
@@ -603,18 +618,11 @@ export default function PropertyDetail() {
                         alt={`${property.title} - Imagem ${activeImage + 1}`}
                         className="w-full h-full object-cover"
                         widthSize={1200}
+                        priority={true}
+                        aplicarMarcaDagua={galleryImagesWithMeta[activeImage]?.aplicarMarcaDagua !== false}
+                        watermarkUrl={settings?.empresa?.marcaDaguaUrl || settings?.empresa?.logoCabecalhoUrl || settings?.aparencia?.logoUrl || '/watermark.png'}
+                        watermarkClassName="w-[45%] max-w-[320px] opacity-[0.08]"
                       />
-                      {/* Interactive watermark overlay for public page */}
-                      {galleryImagesWithMeta[activeImage]?.aplicarMarcaDagua && (
-                        <div className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden z-20 select-none">
-                           <img 
-                             src={settings?.empresa?.marcaDaguaUrl || settings?.empresa?.logoCabecalhoUrl || settings?.aparencia?.logoUrl || '/watermark.png'} 
-                             alt="Watermark" 
-                             className="w-[45%] max-w-[320px] opacity-[0.08] object-contain select-none pointer-events-none"
-                             onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                           />
-                        </div>
-                      )}
                     </motion.div>
                   </AnimatePresence>
                   
@@ -649,7 +657,7 @@ export default function PropertyDetail() {
                         onClick={() => setActiveImage(idx)}
                         className={`property-thumbnail ${activeImage === idx ? 'active' : 'opacity-60 hover:opacity-100'}`}
                       >
-                        <SafeImage src={img} className="w-full h-full object-cover animate-fadeIn" widthSize={400} />
+                        <SafeImage src={img} className="w-full h-full object-cover animate-fadeIn" widthSize={300} priority={idx < 6} />
                       </button>
                     ))}
                   </div>

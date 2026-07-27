@@ -166,18 +166,12 @@ const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
           src={getSafeImageUrl(getFotoPrincipal(property))}
           alt={displayTitle}
           className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"
+          widthSize={600}
+          priority={index < 6}
+          aplicarMarcaDagua={mainImageUnwrapped.aplicarMarcaDagua !== false}
+          watermarkUrl={settings?.empresa?.marcaDaguaUrl || settings?.empresa?.logoCabecalhoUrl || settings?.aparencia?.logoUrl || '/watermark.png'}
+          watermarkClassName="w-[45%] max-w-[120px] opacity-[0.09]"
         />
-        
-        {mainImageUnwrapped.aplicarMarcaDagua && (
-          <div className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden z-10 select-none">
-            <img 
-              src={settings?.empresa?.marcaDaguaUrl || settings?.empresa?.logoCabecalhoUrl || settings?.aparencia?.logoUrl || '/watermark.png'} 
-              alt="Watermark" 
-              className="w-[45%] max-w-[120px] opacity-[0.09] object-contain select-none pointer-events-none"
-              onError={(e) => { e.currentTarget.style.display = 'none'; }}
-            />
-          </div>
-        )}
         
         {/* Badges */}
         <div className="absolute top-4 left-4 flex flex-col gap-2 z-10">

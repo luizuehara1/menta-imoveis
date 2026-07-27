@@ -8,6 +8,9 @@ interface SafeImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   className?: string;
   priority?: boolean;
   widthSize?: number;
+  watermarkUrl?: string;
+  aplicarMarcaDagua?: boolean;
+  watermarkClassName?: string;
 }
 
 export const SafeImage: React.FC<SafeImageProps> = ({ 
@@ -17,6 +20,11 @@ export const SafeImage: React.FC<SafeImageProps> = ({
   priority = false,
   fallbackSrc,
   widthSize = 800,
+  watermarkUrl,
+  aplicarMarcaDagua = false,
+  watermarkClassName,
+  onLoad,
+  onError,
   ...props 
 }) => {
   const [error, setError] = useState(false);
@@ -28,7 +36,10 @@ export const SafeImage: React.FC<SafeImageProps> = ({
 
   useEffect(() => {
     setError(false);
-  }, [src]);
+    if (!priority) {
+      setLoading(true);
+    }
+  }, [src, priority]);
 
   const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
     console.warn("[SafeImage] Load failed:", src);
@@ -40,6 +51,16 @@ export const SafeImage: React.FC<SafeImageProps> = ({
       e.currentTarget.src = fallbackSrc;
     } else {
       e.currentTarget.src = "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&q=80&w=1200";
+    }
+    if (onError) {
+      onError(e);
+    }
+  };
+
+  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+    setLoading(false);
+    if (onLoad) {
+      onLoad(e);
     }
   };
 
@@ -68,11 +89,23 @@ export const SafeImage: React.FC<SafeImageProps> = ({
         referrerPolicy="no-referrer"
         crossOrigin="anonymous"
         onError={handleImageError}
-        onLoad={() => setLoading(false)}
+        onLoad={handleImageLoad}
         loading={priority ? "eager" : props.loading || "lazy"}
         decoding={priority ? "sync" : "async"}
+        fetchPriority={priority ? "high" : (props as any).fetchPriority || "auto"}
         {...props}
       />
+      {/* Watermark overlay: ONLY rendered when main image is loaded (loading is false) and not in error state */}
+      {aplicarMarcaDagua && watermarkUrl && !loading && !error && (
+        <div className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden z-20 select-none animate-fadeIn">
+          <img 
+            src={watermarkUrl} 
+            alt="Watermark" 
+            className={cn("w-[45%] max-w-[320px] opacity-[0.08] object-contain select-none pointer-events-none transition-opacity duration-300", watermarkClassName)}
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+          />
+        </div>
+      )}
     </div>
   );
 };

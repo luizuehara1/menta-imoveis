@@ -16,6 +16,19 @@ export function getOptimizedCloudinaryUrl(url: string | null | undefined, width 
     return trimmed;
   }
 
+  // Unsplash optimization
+  if (trimmed.includes('images.unsplash.com')) {
+    try {
+      const parsed = new URL(trimmed);
+      parsed.searchParams.set('w', width.toString());
+      parsed.searchParams.set('q', '80');
+      parsed.searchParams.set('auto', 'format');
+      return parsed.toString();
+    } catch {
+      return trimmed;
+    }
+  }
+
   // Cloudinary optimization
   if (trimmed.includes('cloudinary.com')) {
     if (trimmed.includes('/upload/')) {

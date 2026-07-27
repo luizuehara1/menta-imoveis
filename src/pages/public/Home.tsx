@@ -432,30 +432,23 @@ export default function Home() {
                   className="group bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-[0_40px_80px_-15px_rgba(0,0,0,0.1)] transition-all duration-500"
                 >
                   <Link to={`/imovel/${encodeURIComponent(getCodigoPublicoImovel(property))}`} className="block relative h-64 overflow-hidden">
-                    <SafeImage
-                      src={getFotoPrincipal(property)}
-                      alt={property.title}
-                      className="w-full h-full transition-transform duration-1000 group-hover:scale-110"
-                    />
                     {(() => {
                       const imgs = property.images || property.imagens || [];
                       const mainUrl = getFotoPrincipal(property);
-                      if (!mainUrl) return null;
-                      const match = imgs.find((img: any) => (typeof img === 'string' ? img : img.url) === mainUrl);
+                      const match = mainUrl ? imgs.find((img: any) => (typeof img === 'string' ? img : img.url) === mainUrl) : null;
                       const unwrapped = match ? (typeof match === 'string' ? { url: match, aplicarMarcaDagua: true } : match) : { url: mainUrl, aplicarMarcaDagua: true };
-                      if (unwrapped.aplicarMarcaDagua !== false) {
-                        return (
-                          <div className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden z-10 select-none">
-                            <img 
-                              src={homeSettings?.empresa?.marcaDaguaUrl || homeSettings?.empresa?.logoCabecalhoUrl || homeSettings?.aparencia?.logoUrl || '/watermark.png'} 
-                              alt="Watermark" 
-                              className="w-[45%] max-w-[120px] opacity-[0.09] object-contain select-none pointer-events-none"
-                              onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                            />
-                          </div>
-                        );
-                      }
-                      return null;
+                      return (
+                        <SafeImage
+                          src={getFotoPrincipal(property)}
+                          alt={property.title}
+                          className="w-full h-full transition-transform duration-1000 group-hover:scale-110"
+                          widthSize={600}
+                          priority={idx < 6}
+                          aplicarMarcaDagua={unwrapped.aplicarMarcaDagua !== false}
+                          watermarkUrl={homeSettings?.empresa?.marcaDaguaUrl || homeSettings?.empresa?.logoCabecalhoUrl || homeSettings?.aparencia?.logoUrl || '/watermark.png'}
+                          watermarkClassName="w-[45%] max-w-[120px] opacity-[0.09]"
+                        />
+                      );
                     })()}
 
                     <div className="absolute top-4 left-4 flex flex-col gap-2 z-10">
