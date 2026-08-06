@@ -28,6 +28,7 @@ import {
   where 
 } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+import { useAuth } from '../../contexts/AuthContext';
 import { Contract, ContractType, ContractStatus } from '../../types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -35,6 +36,7 @@ import { formatCurrency } from '../../lib/utils';
 import { staggerContainer, slideUp, fadeIn, scaleIn } from '../../constants/animations';
 
 export default function AdminContracts() {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,6 +45,11 @@ export default function AdminContracts() {
   const [filterStatus, setFilterStatus] = useState<string>('all');
 
   useEffect(() => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
     const q = query(collection(db, 'contratos'), orderBy('criadoEm', 'desc'));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -52,10 +59,17 @@ export default function AdminContracts() {
       })) as Contract[];
       setContracts(docs);
       setLoading(false);
+    }, (error: any) => {
+      if (error?.code === 'permission-denied' || error?.message?.includes('permissions')) {
+        console.warn("Aguardando permissões em 'contratos':", error?.message);
+      } else {
+        console.error("Erro no onSnapshot 'contratos':", error);
+      }
+      setLoading(false);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [user]);
 
   const handleDelete = async (id: string) => {
     if (window.confirm('Tem certeza que deseja excluir este contrato?')) {

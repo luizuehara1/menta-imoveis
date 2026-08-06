@@ -253,7 +253,7 @@ export interface Lease {
 
 export interface FinanceRecord {
   id?: string;
-  tipo: 'entrada' | 'saida';
+  tipo: 'entrada' | 'saida' | 'Transferência';
   data: string;
   valor: number;
   descricao: string;
@@ -272,6 +272,66 @@ export interface FinanceRecord {
   origem?: string;
   criadoEm?: any;
   atualizadoEm?: any;
+}
+
+export type FinancialAccountType = 'caixa' | 'banco' | 'carteira' | 'digital' | 'investimento' | 'outros';
+
+export interface FinancialAccount {
+  id?: string;
+  nome: string;
+  tipo: FinancialAccountType | string;
+  banco?: string;
+  agencia?: string;
+  conta?: string;
+  saldoAtual: number;
+  saldoInicial: number;
+  ativo: boolean;
+  ordem?: number;
+  permiteSaldoNegativo?: boolean;
+  descricao?: string;
+  cor?: string;
+  createdAt?: any;
+  updatedAt?: any;
+}
+
+export type TransferStatus = 'Pendente' | 'Concluída' | 'Cancelada' | 'Estornada';
+
+export interface FinancialTransfer {
+  id?: string;
+  transferenciaId?: string;
+  tipo: 'Transferência';
+  origem: 'transferencia';
+  contaOrigemId: string;
+  contaOrigemNome: string;
+  contaDestinoId: string;
+  contaDestinoNome: string;
+  valor: number;
+  valorFormatado?: string;
+  dataTransferencia: string; // YYYY-MM-DD
+  descricao: string;
+  formaTransferencia: string;
+  status: TransferStatus;
+  observacoes?: string;
+  numeroComprovante?: string;
+  comprovanteUrl?: string;
+  imovelId?: string;
+  codigoImovel?: string;
+  locacaoId?: string;
+  corretorId?: string;
+  corretorNome?: string;
+  categoriaInterna?: string;
+  centroCustoId?: string;
+  tags?: string[];
+  createdAt?: any;
+  updatedAt?: any;
+  criadoPorUid?: string;
+  criadoPorEmail?: string;
+  estornada?: boolean;
+  estornadaEm?: any;
+  estornadaPorUid?: string;
+  estornadaPorEmail?: string;
+  motivoEstorno?: string;
+  transferenciaEstornoId?: string;
 }
 
 export interface Admin {

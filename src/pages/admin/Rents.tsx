@@ -261,6 +261,7 @@ function criarPagamentoVirtualPendente(locacao: any, competencia: string) {
 }
 
 export default function AdminRents() {
+  const { user, isAdmin: isAuthAdmin } = useAuth();
   const { settings } = useSettings();
   const empresa = (settings?.empresa || {}) as any;
   const [leases, setLeases] = useState<Lease[]>([]);
@@ -297,9 +298,9 @@ export default function AdminRents() {
 
   useEffect(() => {
     const fetchUserData = async () => {
-      if (!auth.currentUser?.email) return;
+      if (!user?.email) return;
       try {
-        const email = auth.currentUser.email.toLowerCase().trim();
+        const email = user.email.toLowerCase().trim();
         const [adminSnap, administradorSnap] = await Promise.all([
           getDoc(doc(db, "admins", email)),
           getDoc(doc(db, "administradores", email))
@@ -315,11 +316,11 @@ export default function AdminRents() {
       }
     };
     fetchUserData();
-  }, [auth.currentUser?.email]);
+  }, [user?.email]);
 
   const hasPermission = (permission: string): boolean => {
-    if (!auth.currentUser?.email) return false;
-    const email = auth.currentUser.email.toLowerCase().trim();
+    if (!user?.email) return false;
+    const email = user.email.toLowerCase().trim();
     
     // Hardcoded Admins are Master/Administrador by default
     const hardcodedAdmins = ['luiz.uehara1@gmail.com', 'edson.menta@hotmail.com', 'anamariamenta@hotmail.com'];
@@ -327,8 +328,7 @@ export default function AdminRents() {
 
     if (!currentUserData) {
       // Allow general admins by default if no detailed document is loaded yet
-      const { isAdmin } = useAuth();
-      return isAdmin;
+      return isAuthAdmin;
     }
 
     const cargo = (currentUserData.cargo || currentUserData.role || currentUserData.funcao || "").toLowerCase().trim();
@@ -351,20 +351,18 @@ export default function AdminRents() {
     if (currentUserData[permission] === true) return true;
     if (Array.isArray(currentUserData.permissoes) && currentUserData.permissoes.includes(permission)) return true;
 
-    // Fallback using useAuth
-    const { isAdmin } = useAuth();
-    return isAdmin;
+    // Fallback using useAuth state
+    return isAuthAdmin;
   };
 
   const isMasterOrAdmin = (): boolean => {
-    if (!auth.currentUser?.email) return false;
-    const email = auth.currentUser.email.toLowerCase().trim();
+    if (!user?.email) return false;
+    const email = user.email.toLowerCase().trim();
     const hardcodedAdmins = ['luiz.uehara1@gmail.com', 'edson.menta@hotmail.com', 'anamariamenta@hotmail.com'];
     if (hardcodedAdmins.includes(email)) return true;
 
     if (!currentUserData) {
-      const { isAdmin } = useAuth();
-      return isAdmin;
+      return isAuthAdmin;
     }
     const cargo = (currentUserData.cargo || currentUserData.role || currentUserData.funcao || "").toLowerCase().trim();
     return cargo === "administrador" || cargo === "master" || cargo === "admin" || currentUserData.isAdmin === true || currentUserData.isMaster === true;
@@ -491,6 +489,7 @@ export default function AdminRents() {
   }, [selectedFilter, customMonth]);
 
   const ensureMonthlyPaymentsForActiveRentals = async (competencia: string) => {
+    if (!user) return;
     try {
       const [yearStr, monthStr] = competencia.split("-");
       const ano = parseInt(yearStr);
@@ -537,8 +536,12 @@ export default function AdminRents() {
           await setDoc(doc(db, "pagamentosLocacao", predId), newPayment, { merge: true });
         }
       }
-    } catch (e) {
-      console.error("Error in ensureMonthlyPaymentsForActiveRentals:", e);
+    } catch (e: any) {
+      if (e?.code === 'permission-denied' || e?.message?.includes('permissions')) {
+        console.warn("Permissões de pagamentos pendentes ou aguardando autenticação:", e?.message);
+      } else {
+        console.error("Error in ensureMonthlyPaymentsForActiveRentals:", e);
+      }
     }
   };
 
@@ -648,6 +651,7 @@ export default function AdminRents() {
   };
 
   const fetchPayments = async () => {
+    if (!user) return;
     try {
       const q = query(
         collection(db, "pagamentosLocacao"),
@@ -662,24 +666,34 @@ export default function AdminRents() {
         };
       });
       setPayments(paymentList);
-    } catch (e) {
-      console.error("Error fetching payments:", e);
+    } catch (e: any) {
+      if (e?.code === 'permission-denied' || e?.message?.includes('permissions')) {
+        console.warn("Permissões de pagamentos pendentes ou aguardando autenticação:", e?.message);
+      } else {
+        console.error("Error fetching payments:", e);
+      }
     }
   };
 
   useEffect(() => {
+    if (!user) return;
+    fetchData();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
     const syncAndFetch = async () => {
       await ensureMonthlyPaymentsForActiveRentals(selectedCompetencia);
       await fetchPayments();
     };
     syncAndFetch();
-  }, [selectedCompetencia, leases]);
-
-  useEffect(() => {
-    fetchData();
-  }, []);
+  }, [user, selectedCompetencia, leases]);
 
   const fetchData = async () => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const leaseSnap = await getDocs(

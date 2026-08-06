@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { collection, query, getDocs, where, limit, orderBy, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+import { useAuth } from '../../contexts/AuthContext';
 import { 
   Home, 
   DollarSign, 
@@ -29,10 +30,12 @@ import {
 } from 'recharts';
 import { Link } from 'react-router-dom';
 import { staggerContainer, slideUp, fadeIn, scaleIn } from '../../constants/animations';
+import { isTransferencia } from '../../lib/financeUtils';
 
 const COLORS = ['#003030', '#E5BC53', '#2B2B2B', '#9ca3af', '#f87171'];
 
 export default function AdminDashboard() {
+  const { user } = useAuth();
   const [stats, setStats] = useState({
     totalImoveis: 0,
     aVenda: 0,
@@ -74,6 +77,11 @@ export default function AdminDashboard() {
   };
 
   useEffect(() => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
     const fetchStats = async () => {
       try {
         const safeGetDocs = async (collPath: string, q?: any) => {
@@ -98,6 +106,7 @@ export default function AdminDashboard() {
         
         financeiroSnap.docs.forEach((doc: any) => {
           const d = doc.data();
+          if (isTransferencia(d)) return;
           allFinance.push({
             tipo: d.tipo,
             valor: d.valor || 0,
@@ -108,6 +117,7 @@ export default function AdminDashboard() {
 
         legacyGastosSnap.docs.forEach((doc: any) => {
           const d = doc.data();
+          if (isTransferencia(d)) return;
           allFinance.push({
             tipo: 'saida',
             valor: d.value || 0,
@@ -118,6 +128,7 @@ export default function AdminDashboard() {
 
         legacyReceitasSnap.docs.forEach((doc: any) => {
           const d = doc.data();
+          if (isTransferencia(d)) return;
           allFinance.push({
             tipo: 'entrada',
             valor: d.value || 0,
@@ -182,7 +193,7 @@ export default function AdminDashboard() {
     };
 
     fetchStats();
-  }, []);
+  }, [user]);
 
   const StatCard = ({ title, value, icon: Icon, color, trend, trendLabel }: any) => (
     <motion.div 

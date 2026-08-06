@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { collection, query, getDocs, updateDoc, doc, addDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+import { useAuth } from '../../contexts/AuthContext';
 import { 
   Calendar, 
   Clock, 
@@ -55,6 +56,7 @@ const SkeletonRow = () => (
 );
 
 export default function AdminVisits() {
+  const { user } = useAuth();
   const [visits, setVisits] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedVisit, setSelectedVisit] = useState<any>(null);
@@ -75,10 +77,18 @@ export default function AdminVisits() {
   });
 
   useEffect(() => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     fetchVisits();
-  }, []);
+  }, [user]);
 
   const fetchVisits = async () => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const snap = await getDocs(collection(db, 'visitas'));

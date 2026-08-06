@@ -25,7 +25,11 @@ import {
   PlusCircle,
   MinusCircle,
   FileDown,
-  CheckCircle
+  CheckCircle,
+  ArrowRightLeft,
+  Wallet,
+  ShieldCheck,
+  History
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -43,7 +47,13 @@ import {
   safeDate
 } from '../../lib/utils';
 import { useSettings } from '../../hooks/useSettings';
-import { FinanceRecord, Property, Lease } from '../../types';
+import { FinanceRecord, Property, Lease, FinancialAccount, FinancialTransfer } from '../../types';
+import { isTransferencia } from '../../lib/financeUtils';
+import { seedDefaultAccountsIfEmpty } from '../../services/financialTransferService';
+import { TransferModal } from '../../components/admin/finance/TransferModal';
+import { AccountsManager } from '../../components/admin/finance/AccountsManager';
+import { TransferHistoryTable } from '../../components/admin/finance/TransferHistoryTable';
+import { AccountFormModal } from '../../components/admin/finance/AccountFormModal';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -199,10 +209,17 @@ export default function AdminFinance() {
   };
   const { settings } = useSettings();
   const empresa = (settings?.empresa || {}) as any;
-  const [activeTab, setActiveTab] = useState<'todos' | 'entradas' | 'saidas'>('todos');
+  const [activeTab, setActiveTab] = useState<'todos' | 'entradas' | 'saidas' | 'transferencias' | 'contas'>('todos');
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState<(FinanceRecord & { sourceCollection?: string })[]>([]);
   const [showModal, setShowModal] = useState(false);
+
+  // Transfers & Accounts State
+  const [accounts, setAccounts] = useState<FinancialAccount[]>([]);
+  const [transfers, setTransfers] = useState<FinancialTransfer[]>([]);
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [showAccountModal, setShowAccountModal] = useState(false);
+  const [preselectedOriginId, setPreselectedOriginId] = useState<string | undefined>(undefined);
   
   // Data for integration
   const [properties, setProperties] = useState<Property[]>([]);
@@ -266,6 +283,9 @@ export default function AdminFinance() {
     let totalSaida = 0;
 
     transactions.forEach(t => {
+      // IMPORTANT: Internal transfers NEVER affect operational expenses, revenues, or profit
+      if (isTransferencia(t)) return;
+
       const val = Number(t.valor || 0);
       const tp = String(t.tipo || '').toLowerCase();
       const cat = String(t.categoria || '').toLowerCase();
@@ -389,6 +409,11 @@ export default function AdminFinance() {
 
   // Real-time collection synchronization
   useEffect(() => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     
     // 1. Live listener for financeiro collection
@@ -406,8 +431,12 @@ export default function AdminFinance() {
         return merged;
       });
       setLoading(false);
-    }, (error) => {
-      console.error("Erro no onSnapshot 'financeiro':", error);
+    }, (error: any) => {
+      if (error?.code === 'permission-denied' || error?.message?.includes('permissions')) {
+        console.warn("Aguardando permissões em 'financeiro':", error?.message);
+      } else {
+        console.error("Erro no onSnapshot 'financeiro':", error);
+      }
       setLoading(false);
     });
 
@@ -435,8 +464,12 @@ export default function AdminFinance() {
         const merged = [...legacyGastos, ...others].sort((a, b) => b.data.localeCompare(a.data));
         return merged;
       });
-    }, (error) => {
-      console.error("Erro no onSnapshot 'gastos':", error);
+    }, (error: any) => {
+      if (error?.code === 'permission-denied' || error?.message?.includes('permissions')) {
+        console.warn("Aguardando permissões em 'gastos':", error?.message);
+      } else {
+        console.error("Erro no onSnapshot 'gastos':", error);
+      }
     });
 
     // 3. Live listener for legacy receitas collection
@@ -462,18 +495,59 @@ export default function AdminFinance() {
         const merged = [...legacyReceitas, ...others].sort((a, b) => b.data.localeCompare(a.data));
         return merged;
       });
-    }, (error) => {
-      console.error("Erro no onSnapshot 'receitas':", error);
+    }, (error: any) => {
+      if (error?.code === 'permission-denied' || error?.message?.includes('permissions')) {
+        console.warn("Aguardando permissões em 'receitas':", error?.message);
+      } else {
+        console.error("Erro no onSnapshot 'receitas':", error);
+      }
     });
 
     fetchIntegrations();
+
+    // 4. Live listener for contasFinanceiras
+    const qContas = query(collection(db, 'contasFinanceiras'));
+    const unsubscribeContas = onSnapshot(qContas, (snapshot) => {
+      const contasData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as FinancialAccount));
+      setAccounts(contasData.sort((a, b) => (a.ordem ?? 99) - (b.ordem ?? 99) || a.nome.localeCompare(b.nome)));
+    }, (error: any) => {
+      if (error?.code === 'permission-denied' || error?.message?.includes('permissions')) {
+        console.warn("Aguardando permissões em 'contasFinanceiras':", error?.message);
+      } else {
+        console.error("Erro no onSnapshot 'contasFinanceiras':", error);
+      }
+    });
+
+    // 5. Live listener for transferenciasFinanceiras
+    const qTransferencias = query(collection(db, 'transferenciasFinanceiras'), orderBy('dataTransferencia', 'desc'));
+    const unsubscribeTransferencias = onSnapshot(qTransferencias, (snapshot) => {
+      const transData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as FinancialTransfer));
+      setTransfers(transData);
+    }, (error: any) => {
+      if (error?.code === 'permission-denied' || error?.message?.includes('permissions')) {
+        console.warn("Aguardando permissões em 'transferenciasFinanceiras':", error?.message);
+      } else {
+        console.error("Erro no onSnapshot 'transferenciasFinanceiras':", error);
+      }
+    });
+
+    // Check and seed default accounts if empty
+    seedDefaultAccountsIfEmpty(db);
 
     return () => {
       unsubscribeFinanceiro();
       unsubscribeGastos();
       unsubscribeReceitas();
+      unsubscribeContas();
+      unsubscribeTransferencias();
     };
-  }, []);
+  }, [user]);
 
   // Update date bounds automatically when referenciaPeriodo changes
   useEffect(() => {
@@ -718,6 +792,9 @@ export default function AdminFinance() {
 
   const filteredRecords = useMemo(() => {
     return records.filter(record => {
+      // Internal transfers are managed in the dedicated Transferências tab
+      if (isTransferencia(record)) return false;
+
       const matchesTab = activeTab === 'todos' || 
                         (activeTab === 'entradas' && record.tipo === 'entrada') || 
                         (activeTab === 'saidas' && record.tipo === 'saida');
@@ -944,23 +1021,49 @@ export default function AdminFinance() {
           <h1 className="text-4xl font-display font-bold text-primary-black tracking-tight">Fluxo de Caixa</h1>
           <p className="text-gray-400 mt-2 text-lg font-light leading-relaxed">Controle completo de entradas e saídas da imobiliária.</p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-3">
           <motion.button 
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={exportPDF}
-            className="flex items-center gap-2 px-6 py-4 border border-gray-200 rounded-2xl text-gray-500 hover:text-primary-black hover:bg-gray-50 transition-all font-black text-[10px] uppercase tracking-widest"
+            className="flex items-center gap-2 px-5 py-3.5 border border-gray-200 rounded-2xl text-gray-600 hover:text-primary-black hover:bg-gray-50 transition-all font-black text-[10px] uppercase tracking-widest bg-white shadow-sm"
           >
-            <FileDown size={18} /> Exportar PDF
+            <FileDown size={16} /> Exportar PDF
           </motion.button>
+
+          <motion.button 
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setShowAccountModal(true)}
+            className="flex items-center gap-2 px-5 py-3.5 border border-amber-200/80 bg-amber-50/60 text-amber-900 hover:bg-amber-100/80 rounded-2xl transition-all font-black text-[10px] uppercase tracking-widest shadow-sm"
+          >
+            <Wallet size={16} className="text-amber-700" />
+            <span>Cadastrar Conta</span>
+          </motion.button>
+
+          <motion.button 
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => {
+              setPreselectedOriginId(undefined);
+              setShowTransferModal(true);
+            }}
+            className="flex items-center gap-2.5 px-6 py-3.5 bg-emerald-50 text-emerald-800 border border-emerald-200/80 hover:bg-emerald-600 hover:text-white rounded-2xl transition-all font-black text-[10px] uppercase tracking-widest shadow-sm group"
+          >
+            <div className="w-6 h-6 rounded-lg bg-emerald-500/10 group-hover:bg-white/20 flex items-center justify-center transition-colors">
+              <ArrowRightLeft size={14} className="text-emerald-600 group-hover:text-white" />
+            </div>
+            <span>Nova Transferência</span>
+          </motion.button>
+
           <motion.button 
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => setShowModal(true)}
-            className="btn-gold !bg-primary-black !text-white hover:!bg-gold hover:!text-primary-black !rounded-2xl !py-4 !px-8 shadow-xl shadow-primary-black/10 flex items-center gap-3"
+            className="btn-gold !bg-primary-black !text-white hover:!bg-gold hover:!text-primary-black !rounded-2xl !py-3.5 !px-7 shadow-xl shadow-primary-black/10 flex items-center gap-3"
           >
-            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
-              <Plus size={20} className="text-gold" />
+            <div className="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center">
+              <Plus size={16} className="text-gold" />
             </div>
             <span className="uppercase text-xs font-black tracking-widest leading-none">Novo Lançamento</span>
           </motion.button>
@@ -1086,192 +1189,261 @@ export default function AdminFinance() {
          </motion.div>
       </motion.div>
 
-      {/* Filters Area */}
-      <motion.div variants={slideUp} className="bg-white p-8 rounded-[2rem] border border-gray-100 shadow-sm space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-6">
-          <div className="md:col-span-2 space-y-2">
-            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Busca Rápida</label>
-            <div className="relative">
-              <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" />
-              <input 
-                type="text" 
-                placeholder="Descrição, Cliente, Código..." 
-                className="w-full bg-gray-50 border border-transparent rounded-xl py-3 pl-12 pr-4 text-sm font-medium outline-none focus:ring-2 focus:ring-gold/20 focus:bg-white transition-all"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-              />
+      {/* Module Navigation Tabs */}
+      <motion.div variants={slideUp} className="bg-white p-2.5 rounded-[2rem] border border-gray-100 shadow-sm flex flex-wrap items-center gap-2">
+        <button 
+          onClick={() => setActiveTab('todos')}
+          className={`px-6 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-[0.25em] transition-all flex items-center gap-2.5 ${activeTab === 'todos' ? 'bg-primary-black text-white shadow-lg shadow-black/10' : 'text-gray-500 hover:text-primary-black hover:bg-gray-50'}`}
+        >
+          <span>Todos</span>
+          <span className={`px-2 py-0.5 rounded-lg text-[9px] font-bold ${activeTab === 'todos' ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'}`}>
+            {records.filter(r => !isTransferencia(r)).length}
+          </span>
+        </button>
+
+        <button 
+          onClick={() => setActiveTab('entradas')}
+          className={`px-6 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-[0.25em] transition-all flex items-center gap-2.5 ${activeTab === 'entradas' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20' : 'text-gray-500 hover:text-emerald-600 hover:bg-emerald-50/50'}`}
+        >
+          <PlusCircle size={14} />
+          <span>Entradas</span>
+          <span className={`px-2 py-0.5 rounded-lg text-[9px] font-bold ${activeTab === 'entradas' ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'}`}>
+            {records.filter(r => !isTransferencia(r) && r.tipo === 'entrada').length}
+          </span>
+        </button>
+
+        <button 
+          onClick={() => setActiveTab('saidas')}
+          className={`px-6 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-[0.25em] transition-all flex items-center gap-2.5 ${activeTab === 'saidas' ? 'bg-red-600 text-white shadow-lg shadow-red-600/20' : 'text-gray-500 hover:text-red-600 hover:bg-red-50/50'}`}
+        >
+          <MinusCircle size={14} />
+          <span>Saídas</span>
+          <span className={`px-2 py-0.5 rounded-lg text-[9px] font-bold ${activeTab === 'saidas' ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'}`}>
+            {records.filter(r => !isTransferencia(r) && r.tipo === 'saida').length}
+          </span>
+        </button>
+
+        <div className="h-6 w-[1px] bg-gray-200 mx-2 hidden sm:block" />
+
+        <button 
+          onClick={() => setActiveTab('transferencias')}
+          className={`px-6 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-[0.25em] transition-all flex items-center gap-2.5 ${activeTab === 'transferencias' ? 'bg-emerald-800 text-white shadow-lg shadow-emerald-900/20' : 'text-gray-600 hover:text-emerald-700 hover:bg-emerald-50/50'}`}
+        >
+          <ArrowRightLeft size={14} />
+          <span>Transferências</span>
+          <span className={`px-2 py-0.5 rounded-lg text-[9px] font-bold ${activeTab === 'transferencias' ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'}`}>
+            {transfers.length}
+          </span>
+        </button>
+
+        <button 
+          onClick={() => setActiveTab('contas')}
+          className={`px-6 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-[0.25em] transition-all flex items-center gap-2.5 ${activeTab === 'contas' ? 'bg-primary-black text-white shadow-lg shadow-black/10' : 'text-gray-600 hover:text-primary-black hover:bg-gray-50'}`}
+        >
+          <Wallet size={14} />
+          <span>Contas & Caixas</span>
+          <span className={`px-2 py-0.5 rounded-lg text-[9px] font-bold ${activeTab === 'contas' ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'}`}>
+            {accounts.filter(a => a.ativo !== false).length}
+          </span>
+        </button>
+      </motion.div>
+
+      {/* Tab Content: Contas & Caixas */}
+      {activeTab === 'contas' && (
+        <AccountsManager 
+          db={db}
+          accounts={accounts}
+          transfers={transfers}
+          onOpenTransferModal={(accId) => {
+            setPreselectedOriginId(accId);
+            setShowTransferModal(true);
+          }}
+          onToast={triggerToast}
+        />
+      )}
+
+      {/* Tab Content: Transferências */}
+      {activeTab === 'transferencias' && (
+        <TransferHistoryTable 
+          db={db}
+          transfers={transfers}
+          accounts={accounts}
+          properties={properties}
+          currentUser={user}
+          onOpenTransferModal={() => {
+            setPreselectedOriginId(undefined);
+            setShowTransferModal(true);
+          }}
+          onToast={triggerToast}
+        />
+      )}
+
+      {/* Tab Content: Lançamentos Operacionais (Todos, Entradas, Saídas) */}
+      {(activeTab === 'todos' || activeTab === 'entradas' || activeTab === 'saidas') && (
+        <>
+          {/* Filters Area */}
+          <motion.div variants={slideUp} className="bg-white p-8 rounded-[2rem] border border-gray-100 shadow-sm space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-6">
+              <div className="md:col-span-2 space-y-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Busca Rápida</label>
+                <div className="relative">
+                  <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" />
+                  <input 
+                    type="text" 
+                    placeholder="Descrição, Cliente, Código..." 
+                    className="w-full bg-gray-50 border border-transparent rounded-xl py-3 pl-12 pr-4 text-sm font-medium outline-none focus:ring-2 focus:ring-gold/20 focus:bg-white transition-all"
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Categoria</label>
+                <select 
+                  className="w-full bg-gray-50 border border-transparent rounded-xl py-3 px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-gold/20 focus:bg-white transition-all"
+                  value={filterCategory}
+                  onChange={e => setFilterCategory(e.target.value)}
+                >
+                  <option value="">Todas</option>
+                  {activeTab === 'saidas' && EXPENSE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  {activeTab === 'entradas' && REVENUE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  {activeTab === 'todos' && Array.from(new Set([...EXPENSE_CATEGORIES, ...REVENUE_CATEGORIES])).sort().map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">De</label>
+                <input 
+                  type="date" 
+                  className="w-full bg-gray-50 border border-transparent rounded-xl py-3 px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-gold/20 focus:bg-white transition-all"
+                  value={startDate}
+                  onChange={e => setStartDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Até</label>
+                <input 
+                  type="date" 
+                  className="w-full bg-gray-50 border border-transparent rounded-xl py-3 px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-gold/20 focus:bg-white transition-all"
+                  value={endDate}
+                  onChange={e => setEndDate(e.target.value)}
+                />
+              </div>
+              <div className="flex items-end">
+                <button 
+                  onClick={() => {
+                    setSearchQuery('');
+                    setFilterCategory('');
+                    setStartDate('');
+                    setEndDate('');
+                  }}
+                  className="w-full py-3 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-red-500 transition-colors"
+                >
+                  Limpar Filtros
+                </button>
+              </div>
             </div>
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Categoria</label>
-            <select 
-              className="w-full bg-gray-50 border border-transparent rounded-xl py-3 px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-gold/20 focus:bg-white transition-all"
-              value={filterCategory}
-              onChange={e => setFilterCategory(e.target.value)}
-            >
-              <option value="">Todas</option>
-              {activeTab === 'saidas' && EXPENSE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-              {activeTab === 'entradas' && REVENUE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-              {activeTab === 'todos' && Array.from(new Set([...EXPENSE_CATEGORIES, ...REVENUE_CATEGORIES])).sort().map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">De</label>
-            <input 
-              type="date" 
-              className="w-full bg-gray-50 border border-transparent rounded-xl py-3 px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-gold/20 focus:bg-white transition-all"
-              value={startDate}
-              onChange={e => setStartDate(e.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Até</label>
-            <input 
-              type="date" 
-              className="w-full bg-gray-50 border border-transparent rounded-xl py-3 px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-gold/20 focus:bg-white transition-all"
-              value={endDate}
-              onChange={e => setEndDate(e.target.value)}
-            />
-          </div>
-          <div className="flex items-end">
-            <button 
-              onClick={() => {
-                setSearchQuery('');
-                setFilterCategory('');
-                setStartDate('');
-                setEndDate('');
-              }}
-              className="w-full py-3 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-red-500 transition-colors"
-            >
-              Limpar Filtros
-            </button>
-          </div>
-        </div>
-      </motion.div>
+          </motion.div>
 
-      <motion.div 
-        variants={slideUp}
-        className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden"
-      >
-        {/* Tabs */}
-        <div className="flex items-center border-b border-gray-50 bg-gray-50/20">
-          <button 
-            onClick={() => setActiveTab('todos')}
-            className={`flex-1 py-6 font-black text-[10px] uppercase tracking-[0.3em] transition-all relative ${activeTab === 'todos' ? 'text-primary-black' : 'text-gray-400 hover:text-primary-black'}`}
+          <motion.div 
+            variants={slideUp}
+            className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden"
           >
-            Todos
-            {activeTab === 'todos' && <motion.div layoutId="tab-underline" className="absolute bottom-0 left-0 right-0 h-1 bg-gold" />}
-          </button>
-          <button 
-            onClick={() => setActiveTab('entradas')}
-            className={`flex-1 py-6 font-black text-[10px] uppercase tracking-[0.3em] transition-all relative ${activeTab === 'entradas' ? 'text-emerald-600' : 'text-gray-400 hover:text-primary-black'}`}
-          >
-            Entradas
-            {activeTab === 'entradas' && <motion.div layoutId="tab-underline" className="absolute bottom-0 left-0 right-0 h-1 bg-gold" />}
-          </button>
-          <button 
-            onClick={() => setActiveTab('saidas')}
-            className={`flex-1 py-6 font-black text-[10px] uppercase tracking-[0.3em] transition-all relative ${activeTab === 'saidas' ? 'text-red-500' : 'text-gray-400 hover:text-primary-black'}`}
-          >
-            Saídas
-            {activeTab === 'saidas' && <motion.div layoutId="tab-underline" className="absolute bottom-0 left-0 right-0 h-1 bg-gold" />}
-          </button>
-        </div>
-
-        {/* List */}
-        <div className="overflow-x-auto">
-          <AnimatePresence mode="wait">
-            <motion.table 
-              key={activeTab}
-              variants={staggerContainer}
-              initial="initial"
-              animate="animate"
-              exit={{ opacity: 0, x: -20 }}
-              className="w-full"
-            >
-              <thead>
-                <tr className="text-left bg-gray-50/50 border-b border-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">
-                  <th className="p-8 pl-12 font-black">Data</th>
-                  <th className="p-8 font-black">Tipo</th>
-                  <th className="p-8 font-black">Descrição</th>
-                  <th className="p-8 font-black">Categoria</th>
-                  <th className="p-8 font-black">Identificação</th>
-                  <th className="p-8 font-black">Valor</th>
-                  <th className="p-8 text-right pr-12 font-black">Ação</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {filteredRecords.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="p-20 text-center">
-                      <div className="flex flex-col items-center gap-4 text-gray-300">
-                        <Filter size={48} className="opacity-20" />
-                        <p className="text-sm font-medium">Nenhum lançamento encontrado para os filtros selecionados.</p>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  filteredRecords.map(item => (
-                    <motion.tr 
-                      key={item.id} 
-                      variants={slideUp}
-                      className="hover:bg-gray-50/40 transition-all group"
-                    >
-                      <td className="p-8 pl-12 text-sm text-gray-500 font-bold whitespace-nowrap">
-                        <div className="flex items-center gap-3">
-                          <Calendar size={14} className="text-gray-300" />
-                          {new Date(item.data + 'T00:00:00').toLocaleDateString('pt-BR')}
-                        </div>
-                      </td>
-                      <td className="p-8">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${item.tipo === 'entrada' ? 'bg-emerald-50 text-emerald-500' : 'bg-red-50 text-red-500'}`}>
-                          {item.tipo === 'entrada' ? <PlusCircle size={14} /> : <MinusCircle size={14} />}
-                        </div>
-                      </td>
-                      <td className="p-8">
-                        <span className="font-bold text-gray-900 tracking-tight leading-none block mb-1">{item.descricao}</span>
-                        {item.observacoes && <span className="text-[10px] text-gray-400 italic line-clamp-1">{item.observacoes}</span>}
-                      </td>
-                      <td className="p-8">
-                        <span className="inline-flex items-center px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest bg-gray-100 text-gray-500">
-                          {item.categoria}
-                        </span>
-                      </td>
-                      <td className="p-8">
-                        <div className="flex flex-col gap-1">
-                          {item.clienteOrigem && (
-                            <span className="text-xs font-bold text-primary-black">{item.clienteOrigem}</span>
-                          )}
-                          {item.codigoImovel && (
-                            <span className="text-[10px] font-black text-gold uppercase tracking-widest">{item.codigoImovel}</span>
-                          )}
-                          {!item.clienteOrigem && !item.codigoImovel && (
-                            <span className="text-xs text-gray-300 italic">---</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="p-8">
-                        <span className={`text-lg font-display font-bold tracking-tight whitespace-nowrap ${item.tipo === 'entrada' ? 'text-emerald-600' : 'text-red-500'}`}>
-                          {item.tipo === 'entrada' ? '+' : '-'} {formatCurrency(item.valor)}
-                        </span>
-                      </td>
-                      <td className="p-8 pr-12 text-right">
-                        <motion.button 
-                          whileHover={{ scale: 1.1, color: '#ef4444' }}
-                          onClick={() => handleDelete(item)}
-                          className="p-4 text-gray-300 hover:bg-white hover:shadow-xl hover:shadow-black/5 rounded-2xl transition-all border border-transparent hover:border-gray-100"
+            {/* List */}
+            <div className="overflow-x-auto">
+              <AnimatePresence mode="wait">
+                <motion.table 
+                  key={activeTab}
+                  variants={staggerContainer}
+                  initial="initial"
+                  animate="animate"
+                  exit={{ opacity: 0, x: -20 }}
+                  className="w-full"
+                >
+                  <thead>
+                    <tr className="text-left bg-gray-50/50 border-b border-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">
+                      <th className="p-8 pl-12 font-black">Data</th>
+                      <th className="p-8 font-black">Tipo</th>
+                      <th className="p-8 font-black">Descrição</th>
+                      <th className="p-8 font-black">Categoria</th>
+                      <th className="p-8 font-black">Identificação</th>
+                      <th className="p-8 font-black">Valor</th>
+                      <th className="p-8 text-right pr-12 font-black">Ação</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {filteredRecords.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="p-20 text-center">
+                          <div className="flex flex-col items-center gap-4 text-gray-300">
+                            <Filter size={48} className="opacity-20" />
+                            <p className="text-sm font-medium">Nenhum lançamento encontrado para os filtros selecionados.</p>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredRecords.map(item => (
+                        <motion.tr 
+                          key={item.id} 
+                          variants={slideUp}
+                          className="hover:bg-gray-50/40 transition-all group"
                         >
-                          <Trash2 size={20} />
-                        </motion.button>
-                      </td>
-                    </motion.tr>
-                  ))
-                )}
-              </tbody>
-            </motion.table>
-          </AnimatePresence>
-        </div>
-      </motion.div>
+                          <td className="p-8 pl-12 text-sm text-gray-500 font-bold whitespace-nowrap">
+                            <div className="flex items-center gap-3">
+                              <Calendar size={14} className="text-gray-300" />
+                              {new Date(item.data + 'T00:00:00').toLocaleDateString('pt-BR')}
+                            </div>
+                          </td>
+                          <td className="p-8">
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${item.tipo === 'entrada' ? 'bg-emerald-50 text-emerald-500' : 'bg-red-50 text-red-500'}`}>
+                              {item.tipo === 'entrada' ? <PlusCircle size={14} /> : <MinusCircle size={14} />}
+                            </div>
+                          </td>
+                          <td className="p-8">
+                            <span className="font-bold text-gray-900 tracking-tight leading-none block mb-1">{item.descricao}</span>
+                            {item.observacoes && <span className="text-[10px] text-gray-400 italic line-clamp-1">{item.observacoes}</span>}
+                          </td>
+                          <td className="p-8">
+                            <span className="inline-flex items-center px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest bg-gray-100 text-gray-500">
+                              {item.categoria}
+                            </span>
+                          </td>
+                          <td className="p-8">
+                            <div className="flex flex-col gap-1">
+                              {item.clienteOrigem && (
+                                <span className="text-xs font-bold text-primary-black">{item.clienteOrigem}</span>
+                              )}
+                              {item.codigoImovel && (
+                                <span className="text-[10px] font-black text-gold uppercase tracking-widest">{item.codigoImovel}</span>
+                              )}
+                              {!item.clienteOrigem && !item.codigoImovel && (
+                                <span className="text-xs text-gray-300 italic">---</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="p-8">
+                            <span className={`text-lg font-display font-bold tracking-tight whitespace-nowrap ${item.tipo === 'entrada' ? 'text-emerald-600' : 'text-red-500'}`}>
+                              {item.tipo === 'entrada' ? '+' : '-'} {formatCurrency(item.valor)}
+                            </span>
+                          </td>
+                          <td className="p-8 pr-12 text-right">
+                            <motion.button 
+                              whileHover={{ scale: 1.1, color: '#ef4444' }}
+                              onClick={() => handleDelete(item)}
+                              className="p-4 text-gray-300 hover:bg-white hover:shadow-xl hover:shadow-black/5 rounded-2xl transition-all border border-transparent hover:border-gray-100"
+                            >
+                              <Trash2 size={20} />
+                            </motion.button>
+                          </td>
+                        </motion.tr>
+                      ))
+                    )}
+                  </tbody>
+                </motion.table>
+              </AnimatePresence>
+            </div>
+          </motion.div>
+        </>
+      )}
 
       {/* Modal Lançamento */}
       <AnimatePresence>
@@ -1471,6 +1643,36 @@ export default function AdminFinance() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Modal Transferência Interna */}
+      <TransferModal 
+        isOpen={showTransferModal}
+        onClose={() => {
+          setShowTransferModal(false);
+          setPreselectedOriginId(undefined);
+        }}
+        db={db}
+        accounts={accounts}
+        properties={properties}
+        leases={leases}
+        currentUser={user}
+        preselectedOriginId={preselectedOriginId}
+        onTransferSuccess={(msg) => {
+          triggerToast(msg || "Transferência interna realizada com sucesso!", "success");
+        }}
+      />
+
+      {/* Modal Cadastrar Conta Financeira */}
+      {showAccountModal && (
+        <AccountFormModal
+          isOpen={showAccountModal}
+          onClose={() => setShowAccountModal(false)}
+          db={db}
+          onSuccess={(msg) => {
+            triggerToast(msg || "Conta financeira salva com sucesso!", "success");
+          }}
+        />
+      )}
 
       <AnimatePresence>
         {toast && (

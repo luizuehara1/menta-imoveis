@@ -393,9 +393,62 @@
         "locatarioNome": { "type": "string" },
         "locadorNome": { "type": "string" }
       }
+    },
+    "FinancialAccount": {
+      "title": "Financial Account",
+      "description": "Internal financial accounts, banks, cash registers, or digital wallets",
+      "type": "object",
+      "properties": {
+        "nome": { "type": "string" },
+        "tipo": { "type": "string" },
+        "banco": { "type": "string" },
+        "agencia": { "type": "string" },
+        "conta": { "type": "string" },
+        "saldoAtual": { "type": "number" },
+        "saldoInicial": { "type": "number" },
+        "ativo": { "type": "boolean" },
+        "ordem": { "type": "number" },
+        "permiteSaldoNegativo": { "type": "boolean" }
+      },
+      "required": ["nome", "tipo", "saldoAtual", "ativo"]
+    },
+    "FinancialTransfer": {
+      "title": "Financial Transfer",
+      "description": "Internal money transfers between company accounts",
+      "type": "object",
+      "properties": {
+        "tipo": { "type": "string", "enum": ["Transferência"] },
+        "origem": { "type": "string", "enum": ["transferencia"] },
+        "contaOrigemId": { "type": "string" },
+        "contaOrigemNome": { "type": "string" },
+        "contaDestinoId": { "type": "string" },
+        "contaDestinoNome": { "type": "string" },
+        "valor": { "type": "number" },
+        "dataTransferencia": { "type": "string" },
+        "descricao": { "type": "string" },
+        "formaTransferencia": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pendente", "Concluída", "Cancelada", "Estornada"] },
+        "observacoes": { "type": "string" },
+        "numeroComprovante": { "type": "string" },
+        "comprovanteUrl": { "type": "string" },
+        "imovelId": { "type": "string" },
+        "codigoImovel": { "type": "string" },
+        "locacaoId": { "type": "string" },
+        "corretorId": { "type": "string" },
+        "centroCustoId": { "type": "string" }
+      },
+      "required": ["tipo", "origem", "contaOrigemId", "contaDestinoId", "valor", "dataTransferencia", "descricao", "status"]
     }
   },
   "firestore": {
+    "contasFinanceiras": {
+      "schema": "FinancialAccount",
+      "description": "Internal company financial accounts and cash registers"
+    },
+    "transferenciasFinanceiras": {
+      "schema": "FinancialTransfer",
+      "description": "Internal company financial transfers between accounts"
+    },
     "siteSettings": {
       "schema": "SiteConfig",
       "description": "Public site content and design settings"

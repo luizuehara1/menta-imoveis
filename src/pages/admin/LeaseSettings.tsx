@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+import { useAuth } from '../../contexts/AuthContext';
 import { Plus, Trash2, Check, X, RefreshCcw, Settings, Shield, Activity, Clock, FileText, Sparkles, CheckCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { staggerContainer, slideUp, fadeIn, scaleIn } from '../../constants/animations';
@@ -30,6 +31,7 @@ function normalizeText(value: string | undefined): string {
 }
 
 export default function LeaseSettings() {
+  const { user } = useAuth();
   const [activeCategory, setActiveCategory] = useState(CONFIG_CATEGORIES[0].id);
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,18 +41,18 @@ export default function LeaseSettings() {
 
   useEffect(() => {
     fetchItems(true);
-  }, [activeCategory]);
+  }, [activeCategory, user]);
 
   const fetchItems = async (checkAutoLoad = false) => {
     setLoading(true);
     try {
       const snap = await getDocs(collection(db, activeCategory));
-      const fetchedItems = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a: any, b: any) => a.nome.localeCompare(b.nome));
+      const fetchedItems = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || ''));
       
       setItems(fetchedItems);
 
-      // Task 6: Load automatically if empty
-      if (checkAutoLoad && fetchedItems.length === 0) {
+      // Task 6: Load automatically if empty and user is logged in
+      if (checkAutoLoad && fetchedItems.length === 0 && user) {
         await loadDefaults(activeCategory);
       }
     } catch (error) {
@@ -61,6 +63,7 @@ export default function LeaseSettings() {
   };
 
   const loadDefaults = async (categoryId: string) => {
+    if (!user) return;
     const defaults = DEFAULT_OPTIONS[categoryId];
     if (!defaults) return;
 
