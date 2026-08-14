@@ -200,7 +200,7 @@ function cleanFirestoreData(obj: any): any {
 }
 
 export default function AdminFinance() {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, loading: authLoading } = useAuth();
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   const triggerToast = (message: string, type: 'success' | 'error' = 'success') => {
@@ -409,6 +409,7 @@ export default function AdminFinance() {
 
   // Real-time collection synchronization
   useEffect(() => {
+    if (authLoading) return;
     if (!user) {
       setLoading(false);
       return;
@@ -547,7 +548,7 @@ export default function AdminFinance() {
       unsubscribeContas();
       unsubscribeTransferencias();
     };
-  }, [user]);
+  }, [authLoading, user]);
 
   // Update date bounds automatically when referenciaPeriodo changes
   useEffect(() => {

@@ -39,6 +39,40 @@ interface AuthContextType {
   isAdmin: boolean;
   login: () => Promise<void>;
   logout: () => Promise<void>;
+  checkAdminAccess: (user: User | null) => Promise<boolean>;
+}
+
+export async function checkAdminAccess(currentUser: User | null): Promise<boolean> {
+  if (!currentUser || !currentUser.email) return false;
+  const email = currentUser.email.toLowerCase().trim();
+  const allowedEmails = ['luiz.uehara1@gmail.com', 'edson.menta@hotmail.com', 'anamariamenta@hotmail.com'];
+  if (allowedEmails.includes(email)) return true;
+
+  const cachedAdmin = sessionStorage.getItem("adminVerified");
+  const cachedEmail = sessionStorage.getItem("adminEmail");
+  if (cachedAdmin === "true" && cachedEmail === email) {
+    return true;
+  }
+
+  try {
+    const [adminSnap, administradorSnap] = await Promise.all([
+      getDoc(doc(db, "admins", email)),
+      getDoc(doc(db, "administradores", email))
+    ]);
+
+    const adminValido = 
+      (adminSnap.data()?.ativo === true) || 
+      (administradorSnap.data()?.ativo === true);
+
+    if (adminValido) {
+      sessionStorage.setItem("adminVerified", "true");
+      sessionStorage.setItem("adminEmail", email);
+    }
+    return adminValido;
+  } catch (error) {
+    console.error("[Auth] Erro em checkAdminAccess:", error);
+    return allowedEmails.includes(email);
+  }
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -214,7 +248,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, isAdmin, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, isAdmin, login, logout, checkAdminAccess }}>
       {children}
     </AuthContext.Provider>
   );

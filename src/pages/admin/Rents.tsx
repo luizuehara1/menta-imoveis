@@ -124,6 +124,43 @@ const getWatermarkData = (
   });
 };
 
+function cleanFirestoreData(obj: any): any {
+  if (Array.isArray(obj)) {
+    return obj
+      .map(cleanFirestoreData)
+      .filter(item => item !== undefined);
+  }
+
+  if (obj && typeof obj === "object") {
+    const proto = Object.getPrototypeOf(obj);
+    if (proto !== null && proto !== Object.prototype) {
+      return obj;
+    }
+
+    const cleaned: any = {};
+
+    Object.entries(obj).forEach(([key, value]) => {
+      if (value === undefined) return;
+
+      if (typeof value === "number" && !Number.isFinite(value)) {
+        cleaned[key] = 0;
+        return;
+      }
+
+      if (value && typeof value === "object") {
+        cleaned[key] = cleanFirestoreData(value);
+        return;
+      }
+
+      cleaned[key] = value;
+    });
+
+    return cleaned;
+  }
+
+  return obj;
+}
+
 function normalizeTipoNegocio(tipo: any): string {
   const value = String(tipo || "").toLowerCase();
 
@@ -261,7 +298,7 @@ function criarPagamentoVirtualPendente(locacao: any, competencia: string) {
 }
 
 export default function AdminRents() {
-  const { user, isAdmin: isAuthAdmin } = useAuth();
+  const { user, isAdmin: isAuthAdmin, loading: authLoading, checkAdminAccess } = useAuth();
   const { settings } = useSettings();
   const empresa = (settings?.empresa || {}) as any;
   const [leases, setLeases] = useState<Lease[]>([]);
@@ -410,6 +447,7 @@ export default function AdminRents() {
     date: new Date().toISOString().split("T")[0],
     value: 0,
     month: new Date().toISOString().slice(0, 7), // YYYY-MM
+    formaPagamento: "PIX",
   });
 
   // Editable Receipt states
@@ -489,7 +527,7 @@ export default function AdminRents() {
   }, [selectedFilter, customMonth]);
 
   const ensureMonthlyPaymentsForActiveRentals = async (competencia: string) => {
-    if (!user) return;
+    if (authLoading || !user) return;
     try {
       const [yearStr, monthStr] = competencia.split("-");
       const ano = parseInt(yearStr);
@@ -514,7 +552,7 @@ export default function AdminRents() {
           const dueDayStr = String(lAny.dueDay || lAny.diaVencimento || 10).padStart(2, "0");
           const dataVencimento = `${competencia}-${dueDayStr}`;
           
-          const newPayment = {
+          const newPayment = cleanFirestoreData({
             locacaoId: lAny.id,
             imovelId: lAny.propertyId || lAny.imovelId || "",
             codigoImovel: lAny.propertyCode || lAny.codigoImovel || "",
@@ -525,12 +563,14 @@ export default function AdminRents() {
             competencia,
             dataVencimento,
             dataPagamento: null,
+            formaPagamento: "",
             valorAluguel: Number(lAny.valorAluguel || lAny.valorAluguelMensal || 0),
             valorTotal: Number(lAny.valorTotalPagar || lAny.valorTotalMensal || lAny.valorAluguelMensal || lAny.valorAluguel || 0),
+            valorPago: 0,
             statusPagamento: "Pendente",
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
-          };
+          });
 
           const predId = `${lAny.id}_${competencia}`;
           await setDoc(doc(db, "pagamentosLocacao", predId), newPayment, { merge: true });
@@ -546,8 +586,11 @@ export default function AdminRents() {
   };
 
   const ensureNextRentalPayment = async (locacao: Lease, currentPayment: any) => {
-    const nextComp = getNextCompetencia(currentPayment.competencia);
-    const [nextYear, nextMonth] = nextComp.split("-");
+    if (authLoading || !user || !locacao || !locacao.id) return;
+    const currentComp = currentPayment?.competencia || getCompetenciaPagamento(currentPayment) || selectedCompetencia;
+    const nextComp = getNextCompetencia(currentComp);
+    const [nextYear, nextMonth] = (nextComp || "").split("-");
+    if (!nextComp || !nextYear || !nextMonth) return;
     
     const predId = `${locacao.id}_${nextComp}`;
     const paymentRef = doc(db, "pagamentosLocacao", predId);
@@ -556,28 +599,31 @@ export default function AdminRents() {
       const dueDayStr = String(locacao.dueDay || 10).padStart(2, "0");
       const dataVencimento = `${nextComp}-${dueDayStr}`;
       
-      const newPayment = {
+      const newPayment = cleanFirestoreData({
         locacaoId: locacao.id,
         imovelId: locacao.propertyId || "",
         codigoImovel: locacao.propertyCode || "",
         locatarioNome: locacao.tenantName || "",
         proprietarioNome: locacao.ownerName || "",
         competenciaMes: nextMonth,
-        competenciaAno: parseInt(nextYear),
+        competenciaAno: parseInt(nextYear) || new Date().getFullYear(),
         competencia: nextComp,
         dataVencimento,
         dataPagamento: null,
-        valorAluguel: locacao.valorAluguel || 0,
-        valorTotal: locacao.valorTotalPagar || 0,
+        formaPagamento: "",
+        valorAluguel: Number(locacao.valorAluguel || 0),
+        valorTotal: Number(locacao.valorTotalPagar || locacao.valorAluguel || 0),
+        valorPago: 0,
         statusPagamento: "Pendente",
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      };
+      });
       await setDoc(paymentRef, newPayment, { merge: true });
     }
   };
 
   const markRentalPaymentAsPaid = async (paymentId: string) => {
+    if (!paymentId) return;
     const paymentRef = doc(db, "pagamentosLocacao", paymentId);
     let paymentSnap = await getDoc(paymentRef);
     
@@ -591,67 +637,89 @@ export default function AdminRents() {
       const lease = leases.find(l => l.id === locacaoId) as any;
       if (!lease) return;
 
-      const [y, m] = comp.split("-");
+      const safeComp = comp || selectedCompetencia || formatarCompetencia(new Date());
+      const parts = safeComp.split("-");
+      const y = parts[0] || String(new Date().getFullYear());
+      const m = parts[1] || String(new Date().getMonth() + 1).padStart(2, "0");
       const dueDayStr = String(lease.dueDay || lease.diaVencimento || 10).padStart(2, "0");
-      const dataVencimento = `${comp}-${dueDayStr}`;
+      const dataVencimento = `${safeComp}-${dueDayStr}`;
 
-      paymentData = {
+      paymentData = cleanFirestoreData({
         locacaoId,
         imovelId: lease.propertyId || lease.imovelId || "",
         codigoImovel: lease.propertyCode || lease.codigoImovel || "",
         locatarioNome: lease.tenantName || lease.locatarioNome || "",
         proprietarioNome: lease.ownerName || lease.proprietarioNome || "",
         competenciaMes: m,
-        competenciaAno: parseInt(y),
-        competencia: comp,
+        competenciaAno: parseInt(y) || new Date().getFullYear(),
+        competencia: safeComp,
         dataVencimento,
         dataPagamento: currentDateStr,
+        formaPagamento: paymentForm.formaPagamento || "PIX",
         valorAluguel: Number(lease.valorAluguel || lease.valorAluguelMensal || 0),
         valorTotal: Number(lease.valorTotalPagar || lease.valorTotalMensal || lease.valorAluguelMensal || lease.valorAluguel || 0),
+        valorPago: Number(lease.valorTotalPagar || lease.valorTotalMensal || lease.valorAluguelMensal || lease.valorAluguel || 0),
         statusPagamento: "Pago",
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      };
+      });
 
       await setDoc(paymentRef, paymentData);
     } else {
-      paymentData = paymentSnap.data();
-      locacaoId = paymentData.locacaoId;
+      paymentData = paymentSnap.data() || {};
+      locacaoId = paymentData.locacaoId || paymentId.split("_")[0];
       
-      await updateDoc(paymentRef, {
+      const comp = paymentData.competencia || paymentId.split("_")[1] || selectedCompetencia;
+      const parts = (comp || "").split("-");
+      const m = paymentData.competenciaMes || parts[1] || String(new Date().getMonth() + 1).padStart(2, "0");
+      const y = paymentData.competenciaAno || parseInt(parts[0]) || new Date().getFullYear();
+
+      paymentData = {
+        ...paymentData,
+        competencia: comp,
+        competenciaMes: m,
+        competenciaAno: y,
+      };
+
+      await updateDoc(paymentRef, cleanFirestoreData({
         statusPagamento: "Pago",
         dataPagamento: currentDateStr,
+        formaPagamento: paymentForm.formaPagamento || "PIX",
         updatedAt: serverTimestamp(),
-      });
+      }));
     }
     
-    const locacaoRef = doc(db, "locacoes", locacaoId);
-    const locacaoSnap = await getDoc(locacaoRef);
-    if (locacaoSnap.exists()) {
-      const locacaoData = { id: locacaoSnap.id, ...locacaoSnap.data() } as Lease;
-      const nextComp = getNextCompetencia(paymentData.competencia);
-      const dueDayStr = String(locacaoData.dueDay || 10).padStart(2, "0");
-      const proximoVencimento = `${nextComp}-${dueDayStr}`;
-      
-      await updateDoc(locacaoRef, {
-        ultimoPagamentoData: currentDateStr,
-        ultimoPagamentoMes: paymentData.competenciaMes,
-        ultimoPagamentoCompetencia: paymentData.competencia,
-        proximaCompetencia: nextComp,
-        proximoVencimento,
-        statusPagamentoAtual: "Pendente",
-        lastPaymentDate: currentDateStr,
-        lastPaymentMonth: paymentData.competencia,
-        statusPagamento: "Pago",
-        updatedAt: serverTimestamp(),
-      });
-      
-      await ensureNextRentalPayment(locacaoData, { ...paymentData, id: paymentId });
+    if (locacaoId) {
+      const locacaoRef = doc(db, "locacoes", locacaoId);
+      const locacaoSnap = await getDoc(locacaoRef);
+      if (locacaoSnap.exists()) {
+        const locacaoData = { id: locacaoSnap.id, ...locacaoSnap.data() } as Lease;
+        const comp = paymentData.competencia || selectedCompetencia;
+        const nextComp = getNextCompetencia(comp);
+        const dueDayStr = String(locacaoData.dueDay || 10).padStart(2, "0");
+        const proximoVencimento = `${nextComp}-${dueDayStr}`;
+        const m = paymentData.competenciaMes || (comp ? comp.split("-")[1] : "01");
+        
+        await updateDoc(locacaoRef, cleanFirestoreData({
+          ultimoPagamentoData: currentDateStr,
+          ultimoPagamentoMes: m,
+          ultimoPagamentoCompetencia: comp,
+          proximaCompetencia: nextComp,
+          proximoVencimento,
+          statusPagamentoAtual: "Pendente",
+          lastPaymentDate: currentDateStr,
+          lastPaymentMonth: comp,
+          statusPagamento: "Pago",
+          updatedAt: serverTimestamp(),
+        }));
+        
+        await ensureNextRentalPayment(locacaoData, { ...paymentData, id: paymentId });
+      }
     }
   };
 
   const fetchPayments = async () => {
-    if (!user) return;
+    if (authLoading || !user) return;
     try {
       const q = query(
         collection(db, "pagamentosLocacao"),
@@ -676,20 +744,21 @@ export default function AdminRents() {
   };
 
   useEffect(() => {
-    if (!user) return;
+    if (authLoading || !user) return;
     fetchData();
-  }, [user]);
+  }, [authLoading, user]);
 
   useEffect(() => {
-    if (!user) return;
+    if (authLoading || !user) return;
     const syncAndFetch = async () => {
       await ensureMonthlyPaymentsForActiveRentals(selectedCompetencia);
       await fetchPayments();
     };
     syncAndFetch();
-  }, [user, selectedCompetencia, leases]);
+  }, [authLoading, user, selectedCompetencia, leases]);
 
   const fetchData = async () => {
+    if (authLoading) return;
     if (!user) {
       setLoading(false);
       return;
@@ -1187,32 +1256,173 @@ export default function AdminRents() {
 
   const handleRegisterPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedPayment) return;
+    if (!selectedPayment && !selectedLease) return;
+
+    if (!auth.currentUser) {
+      toast.error("Aguarde a autenticação ser concluída.");
+      return;
+    }
+
+    const currentAuthUser = auth.currentUser;
+    let adminAccess = isAuthAdmin;
+    if (!adminAccess && checkAdminAccess) {
+      adminAccess = await checkAdminAccess(currentAuthUser);
+    }
+
+    if (!adminAccess) {
+      toast.error("Usuário sem permissão administrativa.");
+      throw new Error("Usuário sem permissão administrativa.");
+    }
+
+    const matchedLease = (selectedLease || leases.find((l) => l.id === (selectedPayment?.locacaoId || ""))) as any;
+    const locacaoId = selectedPayment?.locacaoId || matchedLease?.id || "";
+    const comp = paymentForm.month || selectedCompetencia;
+    const [compYear, compMonth] = (comp || "").split("-");
+    const paymentDocId = selectedPayment?.id || `${locacaoId}_${comp}`;
+    const collectionName = "pagamentosLocacao";
+
+    const paymentData = cleanFirestoreData({
+      locacaoId,
+      imovelId: selectedPayment?.imovelId || matchedLease?.propertyId || matchedLease?.imovelId || "",
+      codigoImovel: selectedPayment?.codigoImovel || matchedLease?.propertyCode || matchedLease?.codigoImovel || "",
+      proprietarioId: matchedLease?.ownerId || matchedLease?.proprietarioId || "",
+      proprietarioEmail: matchedLease?.ownerEmail || matchedLease?.proprietarioEmail || "",
+      locatarioId: matchedLease?.tenantId || matchedLease?.locatarioId || "",
+      locatarioNome: selectedPayment?.locatarioNome || matchedLease?.tenantName || matchedLease?.locatarioNome || "",
+      proprietarioNome: selectedPayment?.proprietarioNome || matchedLease?.ownerName || matchedLease?.proprietarioNome || "",
+
+      competencia: comp,
+      competenciaMes: compMonth || String(new Date().getMonth() + 1).padStart(2, "0"),
+      competenciaAno: parseInt(compYear) || new Date().getFullYear(),
+
+      valorAluguel: Number(selectedPayment?.valorAluguel || matchedLease?.valorAluguel || matchedLease?.valorAluguelMensal || 0),
+      valorTotal: Number(paymentForm.value || selectedPayment?.valorTotal || matchedLease?.valorTotalPagar || matchedLease?.valorAluguel || 0),
+      valorPago: Number(paymentForm.value) || 0,
+
+      dataVencimento: selectedPayment?.dataVencimento || `${comp}-${String(matchedLease?.dueDay || matchedLease?.diaVencimento || 10).padStart(2, "0")}`,
+      dataPagamento: paymentForm.date,
+
+      formaPagamento: paymentForm.formaPagamento || "PIX",
+
+      statusPagamento: "Pago",
+
+      createdAt: selectedPayment?.createdAt || serverTimestamp(),
+      updatedAt: serverTimestamp(),
+
+      registradoPorUid: currentAuthUser.uid,
+      registradoPorEmail: currentAuthUser.email || "",
+    });
+
+    console.log("Registrando pagamento em:", collectionName);
+    console.log("Pagamento:", paymentData);
+    console.log("Usuário:", currentAuthUser.uid, currentAuthUser.email);
 
     try {
-      // 1. Create finance entry
-      await addDoc(collection(db, "financeiro"), {
+      setLoading(true);
+
+      const batch = writeBatch(db);
+
+      // 1. Atualizar / Criar documento de pagamento em pagamentosLocacao
+      const paymentRef = doc(db, "pagamentosLocacao", paymentDocId);
+      batch.set(paymentRef, paymentData, { merge: true });
+
+      // 2. Criar lançamento em financeiro (origem: "locacao", tipo: "entrada", categoria: "Aluguel recebido")
+      const financeRef = doc(collection(db, "financeiro"));
+      const financeData = cleanFirestoreData({
         tipo: "entrada",
+        tipoTransacao: "Receita",
+        origem: "locacao",
         data: paymentForm.date,
-        descricao: `Aluguel - ${selectedPayment.codigoImovel} - ${selectedPayment.locatarioNome} (${paymentForm.month})`,
+        descricao: `Aluguel - ${paymentData.codigoImovel || ""} - ${paymentData.locatarioNome || ""} (${comp})`,
         categoria: "Aluguel recebido",
-        valor: paymentForm.value,
-        imovelId: selectedPayment.imovelId,
-        codigoImovel: selectedPayment.codigoImovel,
-        locacaoId: selectedPayment.locacaoId,
+        valor: Number(paymentForm.value) || 0,
+        imovelId: paymentData.imovelId || "",
+        codigoImovel: paymentData.codigoImovel || "",
+        locacaoId: paymentData.locacaoId || "",
+        formaPagamento: paymentForm.formaPagamento || "PIX",
         status: "confirmado",
+        registradoPorUid: currentAuthUser.uid,
+        registradoPorEmail: currentAuthUser.email || "",
         criadoEm: serverTimestamp(),
         atualizadoEm: serverTimestamp(),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       });
+      batch.set(financeRef, financeData);
 
-      // 2. Update payment status using the advance logic
-      await markRentalPaymentAsPaid(selectedPayment.id);
+      // 3. Atualizar locações e preparar próxima competência
+      if (locacaoId) {
+        const locacaoRef = doc(db, "locacoes", locacaoId);
+        const nextComp = getNextCompetencia(comp);
+        const dueDayStr = String(matchedLease?.dueDay || matchedLease?.diaVencimento || 10).padStart(2, "0");
+        const proximoVencimento = `${nextComp}-${dueDayStr}`;
+        const [nextY, nextM] = (nextComp || "").split("-");
+
+        batch.update(locacaoRef, cleanFirestoreData({
+          ultimoPagamentoData: paymentForm.date,
+          ultimoPagamentoMes: compMonth || "01",
+          ultimoPagamentoCompetencia: comp,
+          proximaCompetencia: nextComp,
+          proximoVencimento,
+          statusPagamentoAtual: "Pendente",
+          lastPaymentDate: paymentForm.date,
+          lastPaymentMonth: comp,
+          statusPagamento: "Pago",
+          updatedAt: serverTimestamp(),
+        }));
+
+        // 4. Criar próxima competência
+        if (nextComp && nextY && nextM) {
+          const nextPaymentId = `${locacaoId}_${nextComp}`;
+          const nextPaymentRef = doc(db, "pagamentosLocacao", nextPaymentId);
+          const nextPaymentData = cleanFirestoreData({
+            locacaoId: locacaoId,
+            imovelId: matchedLease?.propertyId || matchedLease?.imovelId || "",
+            codigoImovel: matchedLease?.propertyCode || matchedLease?.codigoImovel || "",
+            proprietarioId: matchedLease?.ownerId || matchedLease?.proprietarioId || "",
+            proprietarioEmail: matchedLease?.ownerEmail || matchedLease?.proprietarioEmail || "",
+            locatarioId: matchedLease?.tenantId || matchedLease?.locatarioId || "",
+            locatarioNome: matchedLease?.tenantName || matchedLease?.locatarioNome || "",
+            proprietarioNome: matchedLease?.ownerName || matchedLease?.proprietarioNome || "",
+            competencia: nextComp,
+            competenciaMes: nextM,
+            competenciaAno: parseInt(nextY) || new Date().getFullYear(),
+            valorAluguel: Number(matchedLease?.valorAluguel || 0),
+            valorTotal: Number(matchedLease?.valorTotalPagar || matchedLease?.valorAluguel || 0),
+            valorPago: 0,
+            dataVencimento: proximoVencimento,
+            dataPagamento: null,
+            formaPagamento: "",
+            statusPagamento: "Pendente",
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+          batch.set(nextPaymentRef, nextPaymentData, { merge: true });
+        }
+      }
+
+      await batch.commit();
 
       setShowPaymentModal(false);
       setSelectedPayment(null);
-      fetchData();
-    } catch (error) {
-      console.error("Error registering payment:", error);
+      setSelectedLease(null);
+      await fetchPayments();
+      await fetchData();
+      toast.success("Pagamento confirmado com sucesso!");
+    } catch (error: any) {
+      console.error("Erro ao registrar pagamento:", {
+        isAdminAtivo: adminAccess,
+        uid: auth.currentUser?.uid,
+        email: auth.currentUser?.email,
+        operacao: "writeBatch (pagamentosLocacao, financeiro, locacoes)",
+        pathCompleto: `${collectionName}/${paymentDocId}`,
+        projectIdAtivo: db.app.options.projectId,
+        code: error?.code,
+        message: error?.message,
+      });
+      toast.error(error?.message || "Erro ao confirmar pagamento.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -2840,16 +3050,20 @@ export default function AdminRents() {
                             <button
                               onClick={() => {
                                 setSelectedPayment(payment);
+                                const matchedLease = lease || leases.find((l) => l.id === payment.locacaoId);
+                                if (matchedLease) {
+                                  setSelectedLease(matchedLease);
+                                }
                                 setPaymentForm({
-                                  ...paymentForm,
-                                  value: payment.valorTotal || payment.valorAluguel,
+                                  value: Number(payment.valorTotal || payment.valorAluguel || 0),
                                   date: new Date().toISOString().split("T")[0],
-                                  month: payment.competencia,
+                                  month: payment.competencia || selectedCompetencia,
+                                  formaPagamento: payment.formaPagamento || "PIX",
                                 });
                                 setShowPaymentModal(true);
                               }}
                               className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-500 hover:text-white transition-all shadow-sm"
-                              title="Lançar Pagamento"
+                              title="Lançar / Confirmar Pagamento"
                             >
                               <DollarSign size={18} />
                             </button>
@@ -3785,6 +3999,24 @@ export default function AdminRents() {
                     <Printer size={15} /> Recibo Locador
                   </button>
                   <button
+                    onClick={() => {
+                      const matchedPayment = payments.find(p => p.locacaoId === selectedLease.id && p.competencia === selectedCompetencia);
+                      setSelectedPayment(matchedPayment || null);
+                      setPaymentForm({
+                        month: matchedPayment?.competencia || selectedCompetencia,
+                        date: new Date().toISOString().split("T")[0],
+                        value: Number(matchedPayment?.valorTotal || matchedPayment?.valorAluguel || selectedLease.valorTotalPagar || selectedLease.valorAluguel || 0),
+                        formaPagamento: matchedPayment?.formaPagamento || "PIX",
+                      });
+                      setShowViewModal(false);
+                      setShowPaymentModal(true);
+                    }}
+                    className="px-4 py-3 bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white rounded-2xl flex items-center gap-1.5 transition-all shadow-sm text-[11px] font-bold"
+                    title="Lançar / Confirmar Pagamento"
+                  >
+                    <DollarSign size={15} /> Lançar Pagamento
+                  </button>
+                  <button
                     onClick={() => handleOpenEditableReceipt(selectedLease)}
                     className="px-4 py-3 bg-blue-50 text-blue-600 rounded-2xl hover:bg-blue-600 hover:text-white flex items-center gap-1.5 transition-all shadow-sm text-[11px] font-bold"
                     title="Editar recibo antes de gerar"
@@ -3800,31 +4032,41 @@ export default function AdminRents() {
 
       {/* Payment Confirmation Modal */}
       <AnimatePresence>
-        {showPaymentModal && selectedLease && (
+        {showPaymentModal && (selectedPayment || selectedLease) && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
             <motion.div
               {...fadeIn}
               className="fixed inset-0 bg-primary-black/60 backdrop-blur-md"
-              onClick={() => setShowPaymentModal(false)}
+              onClick={() => {
+                if (!loading) setShowPaymentModal(false);
+              }}
             />
             <motion.div
               {...scaleIn}
               className="bg-white max-w-xl w-full rounded-[3rem] shadow-2xl relative z-10 overflow-hidden"
             >
-              <div className="p-10 bg-emerald-600 text-white">
-                <span className="text-[10px] font-black uppercase tracking-[0.3em] opacity-60">
-                  Recebimento de Aluguel
+              <div className="p-8 bg-emerald-600 text-white">
+                <span className="text-[10px] font-black uppercase tracking-[0.3em] opacity-80">
+                  Recebimento de Locação
                 </span>
-                <h3 className="text-3xl font-display font-bold mt-2">
+                <h3 className="text-2xl font-display font-bold mt-1">
                   Lançar Pagamento
                 </h3>
+                <div className="mt-3 flex items-center justify-between text-xs font-bold text-emerald-900 bg-emerald-100/90 px-4 py-2.5 rounded-2xl">
+                  <span>
+                    Imóvel: {selectedPayment?.codigoImovel || selectedLease?.propertyCode || "---"}
+                  </span>
+                  <span className="truncate max-w-[200px]">
+                    {selectedPayment?.locatarioNome || selectedLease?.tenantName || "Locatário"}
+                  </span>
+                </div>
               </div>
 
-              <form onSubmit={handleRegisterPayment} className="p-10 space-y-8">
-                <div className="space-y-6">
-                  <div className="space-y-2">
+              <form onSubmit={handleRegisterPayment} className="p-8 space-y-6">
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
-                      Mês de Referência
+                      Mês de Referência (Competência)
                     </label>
                     <input
                       required
@@ -3839,7 +4081,7 @@ export default function AdminRents() {
                       }
                     />
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
                       Data do Pagamento
                     </label>
@@ -3853,7 +4095,7 @@ export default function AdminRents() {
                       }
                     />
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
                       Valor Recebido (R$)
                     </label>
@@ -3870,21 +4112,54 @@ export default function AdminRents() {
                       }
                     />
                   </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                      Forma de Pagamento
+                    </label>
+                    <select
+                      className="input-field"
+                      value={paymentForm.formaPagamento || "PIX"}
+                      onChange={(e) =>
+                        setPaymentForm({
+                          ...paymentForm,
+                          formaPagamento: e.target.value,
+                        })
+                      }
+                    >
+                      <option value="PIX">PIX</option>
+                      <option value="Transferência Bancária">Transferência Bancária</option>
+                      <option value="Boleto">Boleto</option>
+                      <option value="Dinheiro">Dinheiro</option>
+                      <option value="Cartão de Crédito">Cartão de Crédito</option>
+                      <option value="Cartão de Débito">Cartão de Débito</option>
+                      <option value="Cheque">Cheque</option>
+                      <option value="Outro">Outro</option>
+                    </select>
+                  </div>
                 </div>
 
-                <div className="flex items-center justify-end gap-6 pt-6">
+                <div className="flex items-center justify-end gap-4 pt-4 border-t border-gray-100">
                   <button
                     type="button"
+                    disabled={loading}
                     onClick={() => setShowPaymentModal(false)}
-                    className="text-xs font-bold uppercase text-gray-400 tracking-widest"
+                    className="px-5 py-3 text-xs font-bold uppercase text-gray-400 tracking-widest hover:text-gray-700 transition-colors"
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
-                    className="btn-gold !bg-emerald-600 !text-white hover:!bg-emerald-700"
+                    disabled={loading}
+                    className="btn-gold !bg-emerald-600 !text-white hover:!bg-emerald-700 disabled:opacity-50 flex items-center gap-2"
                   >
-                    Confirmar Pagamento
+                    {loading ? (
+                      <span>Processando...</span>
+                    ) : (
+                      <>
+                        <CheckCircle size={16} />
+                        <span>Confirmar Pagamento</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </form>

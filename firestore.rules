@@ -1,9 +1,132 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Permit read and write on all collections for full functionality
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isMasterAdmin() {
+      return isSignedIn() && (
+        request.auth.uid == 'T6XcUvoTBDh353qYJJEGTmghSsF3' ||
+        (request.auth.token.email != null && (
+          request.auth.token.email == 'luiz.uehara1@gmail.com' ||
+          request.auth.token.email == 'edson.menta@hotmail.com' ||
+          request.auth.token.email == 'anamariamenta@hotmail.com' ||
+          request.auth.token.email == 'LUIZ.UEHARA1@GMAIL.COM' ||
+          request.auth.token.email == 'EDSON.MENTA@HOTMAIL.COM' ||
+          request.auth.token.email == 'ANAMARIAMENTA@HOTMAIL.COM'
+        ))
+      );
+    }
+
+    function isAdmin() {
+      return isMasterAdmin() || (
+        isSignedIn() && request.auth.token.email != null && (
+          exists(/databases/$(database)/documents/admins/$(request.auth.token.email)) ||
+          exists(/databases/$(database)/documents/administradores/$(request.auth.token.email))
+        )
+      );
+    }
+
+    function isAdminAtivo() {
+      return isMasterAdmin() || (
+        isSignedIn() && request.auth.token.email != null && (
+          (exists(/databases/$(database)/documents/admins/$(request.auth.token.email)) &&
+           get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.ativo == true) ||
+          (exists(/databases/$(database)/documents/administradores/$(request.auth.token.email)) &&
+           get(/databases/$(database)/documents/administradores/$(request.auth.token.email)).data.ativo == true)
+        )
+      );
+    }
+
+    // 1. Pagamentos e Cobranças
+    match /pagamentosLocacao/{docId} {
+      allow read, create, update, delete: if isAdminAtivo();
+    }
+
+    match /pagamentos/{docId} {
+      allow read, create, update, delete: if isAdminAtivo();
+    }
+
+    match /pagamentosPendentes/{docId} {
+      allow read, create, update, delete: if isAdminAtivo();
+    }
+
+    match /recebimentos/{docId} {
+      allow read, create, update, delete: if isAdminAtivo();
+    }
+
+    // 2. Financeiro e Transações
+    match /financeiro/{docId} {
+      allow read, create, update, delete: if isAdminAtivo();
+    }
+
+    match /transacoesFinanceiras/{docId} {
+      allow read, create, update, delete: if isAdminAtivo();
+    }
+
+    match /financialTransactions/{docId} {
+      allow read, create, update, delete: if isAdminAtivo();
+    }
+
+    match /contasFinanceiras/{docId} {
+      allow read, create, update, delete: if isAdminAtivo();
+    }
+
+    match /transferenciasFinanceiras/{docId} {
+      allow read, create, update, delete: if isAdminAtivo();
+    }
+
+    // 3. Locações e Contratos
+    match /locacoes/{docId} {
+      allow read, create, update, delete: if isAdminAtivo();
+    }
+
+    match /contratos/{docId} {
+      allow read, create, update, delete: if isAdminAtivo();
+    }
+
+    match /templatesContrato/{docId} {
+      allow read, create, update, delete: if isAdminAtivo();
+    }
+
+    // 4. Imóveis
+    match /imoveis/{docId} {
+      allow read: if true;
+      allow create, update, delete: if isAdminAtivo();
+    }
+
+    // 5. Configurações e Logs
+    match /admins/{email} {
+      allow read: if isSignedIn();
+      allow write: if isAdminAtivo();
+    }
+
+    match /administradores/{email} {
+      allow read: if isSignedIn();
+      allow write: if isAdminAtivo();
+    }
+
+    match /site_settings/{docId} {
+      allow read: if true;
+      allow write: if isAdminAtivo();
+    }
+
+    match /configuracoes/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdminAtivo();
+    }
+
+    match /visitas/{docId} {
+      allow read: if isSignedIn();
+      allow create: if true;
+      allow update, delete: if isAdminAtivo();
+    }
+
+    // Fallback permissivo para qualquer outra coleção
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if isAdminAtivo();
     }
   }
 }
