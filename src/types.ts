@@ -209,6 +209,9 @@ export interface Lease {
   propertyAddress?: string;
   propertyNeighborhood?: string;
   propertyCity?: string;
+  nomeEdificio?: string;
+  buildingName?: string;
+  propertyBuildingName?: string;
   tenantName: string;
   tenantPhone: string;
   tenantCpf?: string;
