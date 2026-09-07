@@ -474,6 +474,7 @@ export default function AdminRents() {
     valorTotal: 0,
     valorComissaoImobiliaria: 0,
     valorRepassadoProprietario: 0,
+    valorEstornoTaxas: 0,
     valorGarantiaCaucao: 0,
     incluirCaucaoNoPrimeiroPagamento: false,
     garantiaLocaticia: "",
@@ -864,7 +865,10 @@ export default function AdminRents() {
                 setSelectedLeaseForReceipt(associatedLease);
                 setReceiptType(savedReceiptData.tipoRecibo || "locatario");
                 setReceiptDatabaseId(docSnap.id);
-                setReceiptForm(savedReceiptData.dadosRecibo);
+                setReceiptForm({
+                  ...savedReceiptData.dadosRecibo,
+                  valorEstornoTaxas: Number(savedReceiptData.dadosRecibo?.valorEstornoTaxas) || 0,
+                });
                 setShowEditableReceiptModal(true);
               }
             }
@@ -1802,7 +1806,7 @@ export default function AdminRents() {
     openDeleteRentalModal(lease);
   };
 
-  const recalculateReceiptTotal = (form: any, type: "locatario" | "locador") => {
+  const recalculateReceiptTotal = (form: any, type: "locatario" | "locador", changedField?: string) => {
     let totalPagoPeloLocatario = 
       (Number(form.valorAluguel) || 0) +
       (Number(form.valorCondominio) || 0) +
@@ -1826,11 +1830,21 @@ export default function AdminRents() {
       };
     } else {
       const comissao = Number(form.valorComissaoImobiliaria) || 0;
-      const repasse = totalPagoPeloLocatario - comissao;
+      const estorno = Number(form.valorEstornoTaxas) || 0;
+
+      let repasse = Number(form.valorRepassadoProprietario) || 0;
+      // Se não for edição direta de repasse ou estorno, atualiza o repasse base (total - comissão)
+      if (changedField !== "valorRepassadoProprietario" && changedField !== "valorEstornoTaxas") {
+        repasse = totalPagoPeloLocatario - comissao;
+      }
+
+      // Regra de cálculo: TOTAL REPASSADO AO LOCADOR = valor atual do repasse + estorno de taxas pagas
+      const totalRepassadoLocador = repasse + estorno;
+
       return {
         ...form,
-        valorTotal: repasse,
-        valorRepassadoProprietario: repasse
+        valorRepassadoProprietario: repasse,
+        valorTotal: totalRepassadoLocador
       };
     }
   };
@@ -1851,9 +1865,11 @@ export default function AdminRents() {
         field === "valorDesconto" ||
         field === "valorComissaoImobiliaria" ||
         field === "valorGarantiaCaucao" ||
-        field === "incluirCaucaoNoPrimeiroPagamento"
+        field === "incluirCaucaoNoPrimeiroPagamento" ||
+        field === "valorRepassadoProprietario" ||
+        field === "valorEstornoTaxas"
       ) {
-        updated = recalculateReceiptTotal(updated, receiptType || "locatario");
+        updated = recalculateReceiptTotal(updated, receiptType || "locatario", field);
       }
       return updated;
     });
@@ -1897,6 +1913,7 @@ export default function AdminRents() {
         valorTotal: Number(savedDoc.dadosRecibo.valorTotal) || 0,
         valorComissaoImobiliaria: Number(savedDoc.dadosRecibo.valorComissaoImobiliaria) || 0,
         valorRepassadoProprietario: Number(savedDoc.dadosRecibo.valorRepassadoProprietario) || 0,
+        valorEstornoTaxas: Number(savedDoc.dadosRecibo.valorEstornoTaxas) || 0,
         valorGarantiaCaucao: Number(savedDoc.dadosRecibo.valorGarantiaCaucao) || 0,
         incluirCaucaoNoPrimeiroPagamento: !!savedDoc.dadosRecibo.incluirCaucaoNoPrimeiroPagamento,
         garantiaLocaticia: savedDoc.dadosRecibo.garantiaLocaticia || "",
@@ -1954,6 +1971,7 @@ export default function AdminRents() {
         valorTotal: lease.valorTotalPagar || 0,
         valorComissaoImobiliaria: lease.valorComissaoImobiliaria || 0,
         valorRepassadoProprietario: lease.valorRepassadoProprietario || 0,
+        valorEstornoTaxas: 0,
         valorGarantiaCaucao: Number(lease.valorGarantiaCaucao) || 0,
         incluirCaucaoNoPrimeiroPagamento: !!lease.incluirCaucaoNoPrimeiroPagamento,
         garantiaLocaticia: lease.garantiaLocaticia || "",
@@ -2224,6 +2242,9 @@ export default function AdminRents() {
         tableBody.push(["Comissão da Imobiliária", `-${safeMoney(receiptForm.valorComissaoImobiliaria)}`]);
         tableBody.push(["Desconto Concedido", `- ${safeMoney(receiptForm.valorDesconto)}`]);
         tableBody.push(["Valor Líquido Repassado ao Proprietário", safeMoney(receiptForm.valorRepassadoProprietario)]);
+        if (Number(receiptForm.valorEstornoTaxas) > 0) {
+          tableBody.push(["Estorno de Taxas Pagas", `+ ${safeMoney(receiptForm.valorEstornoTaxas)}`]);
+        }
         tableBody.push(["TOTAL REPASSADO AO LOCADOR", safeMoney(receiptForm.valorTotal)]);
       }
 
@@ -4506,6 +4527,17 @@ export default function AdminRents() {
                             className="input-field text-emerald-600 font-bold"
                             value={maskCurrency(receiptForm.valorRepassadoProprietario)}
                             onChange={(e) => handleReceiptFieldChange("valorRepassadoProprietario", parseCurrencyToNumber(e.target.value))}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                            Estorno de Taxas Pagas (R$)
+                          </label>
+                          <input
+                            type="text"
+                            className="input-field"
+                            value={maskCurrency(receiptForm.valorEstornoTaxas)}
+                            onChange={(e) => handleReceiptFieldChange("valorEstornoTaxas", parseCurrencyToNumber(e.target.value))}
                           />
                         </div>
                       </>
