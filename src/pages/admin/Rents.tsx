@@ -1806,47 +1806,90 @@ export default function AdminRents() {
     openDeleteRentalModal(lease);
   };
 
+  const calculateReceiptTotal = (
+    form: any,
+    type: "locatario" | "locador" = "locatario",
+    changedField?: string
+  ) => {
+    const valorBase = Number(form.valorAluguel || form.valorAluguelMensal || 0);
+    const condominio = Number(form.valorCondominio || 0);
+    const iptu = Number(form.valorIptu || 0);
+    const taxaLixo = Number(form.valorTaxaLixo || 0);
+    const taxaGas = Number(form.valorTaxaGas || 0);
+    const taxaAgua = Number(form.valorTaxaAgua || 0);
+    const taxaLuz = Number(form.valorTaxaLuz || 0);
+    const seguroIncendio = Number(form.valorSeguroIncendio || form.fireInsurance || form.seguroIncendio || 0);
+    const taxaLimpeza = Number(form.valorLimpeza || form.taxaLimpeza || form.limpeza || 0);
+    const outrosValores = Number(form.valorOutros || 0) + taxaLimpeza;
+
+    // Garantia caução / caução adicional (apenas se marcada a inclusão no recibo)
+    const incluirCaucao = Boolean(form.incluirCaucaoNoPrimeiroPagamento);
+    const valorCaucaoRaw = Number(form.valorGarantiaCaucao || form.valorCaucao || form.caucao || 0);
+    const garantiaCaucao = incluirCaucao ? valorCaucaoRaw : 0;
+
+    // Soma de todos os valores / encargos positivos (subtotal)
+    const subtotal =
+      valorBase +
+      condominio +
+      iptu +
+      taxaLixo +
+      taxaGas +
+      taxaAgua +
+      taxaLuz +
+      seguroIncendio +
+      outrosValores +
+      garantiaCaucao;
+
+    // REGRA OBRIGATÓRIA: O desconto SEMPRE deve diminuir o total. NUNCA somar o desconto positivamente.
+    // Evita erro de dupla inversão de sinal tanto se for número positivo quanto negativo.
+    const rawDesconto = Number(form.valorDesconto) || 0;
+    const desconto = Math.abs(rawDesconto);
+
+    // Total pago pelo locatário = subtotal - desconto
+    const totalPagoLocatario = Math.max(0, subtotal - desconto);
+    const totalAntesEstorno = totalPagoLocatario;
+
+    // Comissão imobiliária
+    const comissaoImobiliaria = Number(form.valorComissaoImobiliaria) || 0;
+
+    // Estorno de taxas pagas (acréscimo a ser devolvido/repassado ao locador)
+    const rawEstorno = Number(form.valorEstornoTaxas) || 0;
+    const estornoTaxas = Math.abs(rawEstorno);
+
+    // Repasse ao proprietário
+    let repasseProprietario = Number(form.valorRepassadoProprietario) || 0;
+    if (changedField !== "valorRepassadoProprietario" && changedField !== "valorEstornoTaxas") {
+      repasseProprietario = Math.max(0, totalPagoLocatario - comissaoImobiliaria);
+    }
+
+    // TOTAL REPASSADO AO LOCADOR = repasse ao proprietário + estorno de taxas pagas
+    const totalRepassadoLocador = repasseProprietario + estornoTaxas;
+
+    // Total final conforme o tipo de recibo
+    const totalFinal = type === "locatario" ? totalPagoLocatario : totalRepassadoLocador;
+
+    return {
+      subtotal,
+      desconto,
+      totalAntesEstorno,
+      totalPagoLocatario,
+      comissaoImobiliaria,
+      repasseProprietario,
+      estornoTaxas,
+      totalRepassadoLocador,
+      totalFinal,
+    };
+  };
+
   const recalculateReceiptTotal = (form: any, type: "locatario" | "locador", changedField?: string) => {
-    let totalPagoPeloLocatario = 
-      (Number(form.valorAluguel) || 0) +
-      (Number(form.valorCondominio) || 0) +
-      (Number(form.valorIptu) || 0) +
-      (Number(form.valorTaxaLixo) || 0) +
-      (Number(form.valorTaxaGas) || 0) +
-      (Number(form.valorTaxaAgua) || 0) +
-      (Number(form.valorTaxaLuz) || 0) +
-      (Number(form.valorSeguroIncendio) || 0) +
-      (Number(form.valorOutros) || 0) -
-      (Number(form.valorDesconto) || 0);
-
-    if (form.incluirCaucaoNoPrimeiroPagamento && Number(form.valorGarantiaCaucao) > 0) {
-      totalPagoPeloLocatario += Number(form.valorGarantiaCaucao);
-    }
-
-    if (type === "locatario") {
-      return {
-        ...form,
-        valorTotal: totalPagoPeloLocatario
-      };
-    } else {
-      const comissao = Number(form.valorComissaoImobiliaria) || 0;
-      const estorno = Number(form.valorEstornoTaxas) || 0;
-
-      let repasse = Number(form.valorRepassadoProprietario) || 0;
-      // Se não for edição direta de repasse ou estorno, atualiza o repasse base (total - comissão)
-      if (changedField !== "valorRepassadoProprietario" && changedField !== "valorEstornoTaxas") {
-        repasse = totalPagoPeloLocatario - comissao;
-      }
-
-      // Regra de cálculo: TOTAL REPASSADO AO LOCADOR = valor atual do repasse + estorno de taxas pagas
-      const totalRepassadoLocador = repasse + estorno;
-
-      return {
-        ...form,
-        valorRepassadoProprietario: repasse,
-        valorTotal: totalRepassadoLocador
-      };
-    }
+    const calc = calculateReceiptTotal(form, type, changedField);
+    return {
+      ...form,
+      valorDesconto: calc.desconto,
+      valorTotal: calc.totalFinal,
+      valorRepassadoProprietario: calc.repasseProprietario,
+      valorEstornoTaxas: calc.estornoTaxas,
+    };
   };
 
   const handleReceiptFieldChange = (field: string, value: any) => {
@@ -1895,7 +1938,7 @@ export default function AdminRents() {
 
     if (savedDoc && savedDoc.dadosRecibo) {
       setReceiptDatabaseId(savedDoc.id);
-      setReceiptForm({
+      const rawSavedForm = {
         nomePagadorRecebedor: savedDoc.dadosRecibo.nomePagadorRecebedor || "",
         cpfCnpj: savedDoc.dadosRecibo.cpfCnpj || "",
         enderecoImovel: savedDoc.dadosRecibo.enderecoImovel || "",
@@ -1923,7 +1966,9 @@ export default function AdminRents() {
         textoExtra: savedDoc.dadosRecibo.textoExtra || "",
         cidadeData: savedDoc.dadosRecibo.cidadeData || `${lease.propertyCity || empresa.cidade || "Balneário Camboriú"}, SC`,
         emitenteAssinatura: savedDoc.dadosRecibo.emitenteAssinatura || empresa.nome || "Menta Negócios Imobiliários"
-      });
+      };
+      const recalculated = recalculateReceiptTotal(rawSavedForm, type);
+      setReceiptForm(recalculated);
     } else {
       setReceiptDatabaseId(null);
       const prop = properties.find(p => p.id === lease.propertyId);
@@ -2002,11 +2047,21 @@ export default function AdminRents() {
       const prop = properties.find(p => p.id === selectedLeaseForReceipt.propertyId);
       const ownerName = selectedLeaseForReceipt.ownerName || prop?.ownerName || "";
       
+      const calc = calculateReceiptTotal(receiptForm, receiptType);
+      const finalizedForm = {
+        ...receiptForm,
+        valorDesconto: calc.desconto,
+        valorTotal: calc.totalFinal,
+        valorRepassadoProprietario: calc.repasseProprietario,
+        valorEstornoTaxas: calc.estornoTaxas,
+      };
+      setReceiptForm(finalizedForm);
+
       const payload = {
         locacaoId: selectedLeaseForReceipt.id || "",
         tipoRecibo: receiptType,
-        dadosRecibo: receiptForm,
-        valorTotal: Number(receiptForm.valorTotal) || 0,
+        dadosRecibo: finalizedForm,
+        valorTotal: calc.totalFinal,
         status: "salvo",
         atualizadoEm: serverTimestamp(),
         atualizadoPor: auth.currentUser?.email || "",
@@ -2162,13 +2217,14 @@ export default function AdminRents() {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(10);
       doc.setTextColor(60, 60, 60);
+      const calc = calculateReceiptTotal(receiptForm, type);
       const labelImportancia = type === "locatario" ? "A importância líquida de:" : "A importância repassada de:";
       doc.text(labelImportancia, 20, 57);
 
       doc.setFont("helvetica", "bold");
       doc.setFontSize(15);
       doc.setTextColor(30, 80, 50);
-      doc.text(safeMoney(receiptForm.valorTotal), 20, 64);
+      doc.text(safeMoney(calc.totalFinal), 20, 64);
 
       doc.setFont("helvetica", "normal");
       doc.setFontSize(10);
@@ -2202,29 +2258,13 @@ export default function AdminRents() {
         tableBody.push(["Condomínio", safeMoney(receiptForm.valorCondominio)]);
         tableBody.push(["Seguro Incêndio", safeMoney(receiptForm.valorSeguroIncendio)]);
         tableBody.push(["Outras Taxas / Serviços", safeMoney(receiptForm.valorOutros)]);
-        tableBody.push(["Desconto Concedido", `- ${safeMoney(receiptForm.valorDesconto)}`]);
+        tableBody.push(["Desconto Concedido", `- ${safeMoney(calc.desconto)}`]);
         if (hasCaucao && receiptForm.incluirCaucaoNoPrimeiroPagamento) {
           tableBody.push(["Valor da Garantia Caução", safeMoney(receiptForm.valorGarantiaCaucao)]);
         }
-        tableBody.push(["TOTAL PAGO PELO LOCATÁRIO", safeMoney(receiptForm.valorTotal)]);
+        tableBody.push(["TOTAL PAGO PELO LOCATÁRIO", safeMoney(calc.totalPagoLocatario)]);
       } else {
-        let totalRecebidoLocatario = 
-          (Number(receiptForm.valorAluguel) || 0) +
-          (Number(receiptForm.valorCondominio) || 0) +
-          (Number(receiptForm.valorIptu) || 0) +
-          (Number(receiptForm.valorTaxaLixo) || 0) +
-          (Number(receiptForm.valorTaxaGas) || 0) +
-          (Number(receiptForm.valorTaxaAgua) || 0) +
-          (Number(receiptForm.valorTaxaLuz) || 0) +
-          (Number(receiptForm.valorSeguroIncendio) || 0) +
-          (Number(receiptForm.valorOutros) || 0) -
-          (Number(receiptForm.valorDesconto) || 0);
-
-        if (hasCaucao && receiptForm.incluirCaucaoNoPrimeiroPagamento) {
-          totalRecebidoLocatario += Number(receiptForm.valorGarantiaCaucao);
-        }
-
-        tableBody.push(["Valor Recebido do Locatário", safeMoney(totalRecebidoLocatario)]);
+        tableBody.push(["Valor Recebido do Locatário", safeMoney(calc.totalPagoLocatario)]);
         tableBody.push(["Aluguel Mensal Base", safeMoney(receiptForm.valorAluguel)]);
         tableBody.push(["IPTU Mensal", safeMoney(receiptForm.valorIptu)]);
         tableBody.push(["Condomínio", safeMoney(receiptForm.valorCondominio)]);
@@ -2240,12 +2280,12 @@ export default function AdminRents() {
           tableBody.push(["Garantia Caução Recebida", safeMoney(receiptForm.valorGarantiaCaucao)]);
         }
         tableBody.push(["Comissão da Imobiliária", `-${safeMoney(receiptForm.valorComissaoImobiliaria)}`]);
-        tableBody.push(["Desconto Concedido", `- ${safeMoney(receiptForm.valorDesconto)}`]);
-        tableBody.push(["Valor Líquido Repassado ao Proprietário", safeMoney(receiptForm.valorRepassadoProprietario)]);
-        if (Number(receiptForm.valorEstornoTaxas) > 0) {
-          tableBody.push(["Estorno de Taxas Pagas", `+ ${safeMoney(receiptForm.valorEstornoTaxas)}`]);
+        tableBody.push(["Desconto Concedido", `- ${safeMoney(calc.desconto)}`]);
+        tableBody.push(["Valor Líquido Repassado ao Proprietário", safeMoney(calc.repasseProprietario)]);
+        if (calc.estornoTaxas > 0) {
+          tableBody.push(["Estorno de Taxas Pagas", `+ ${safeMoney(calc.estornoTaxas)}`]);
         }
-        tableBody.push(["TOTAL REPASSADO AO LOCADOR", safeMoney(receiptForm.valorTotal)]);
+        tableBody.push(["TOTAL REPASSADO AO LOCADOR", safeMoney(calc.totalRepassadoLocador)]);
       }
 
       autoTable(doc, {
@@ -2453,12 +2493,14 @@ export default function AdminRents() {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(10);
       doc.setTextColor(60, 60, 60);
-      doc.text(`A importância líquida de:`, 20, 57);
+      const calc = calculateReceiptTotal(lease, type);
+      const labelImportancia = type === "locatario" ? "A importância líquida de:" : "A importância repassada de:";
+      doc.text(labelImportancia, 20, 57);
 
       doc.setFont("helvetica", "bold");
       doc.setFontSize(15);
       doc.setTextColor(30, 80, 50); // Emerald
-      doc.text(safeMoney(lease.valorTotalPagar), 20, 64);
+      doc.text(safeMoney(calc.totalFinal), 20, 64);
 
       doc.setFont("helvetica", "normal");
       doc.setFontSize(10);
@@ -2518,8 +2560,8 @@ export default function AdminRents() {
                 ? [["Taxa de Limpeza", safeMoney(cleaningVal)]]
                 : []),
               ...(depositVal > 0 ? [["Caução", safeMoney(depositVal)]] : []),
-              ["Desconto Concedido", `- ${safeMoney(lease.valorDesconto)}`],
-              ["TOTAL PAGO PELO LOCATÁRIO", safeMoney(lease.valorTotalPagar)],
+              ["Desconto Concedido", `- ${safeMoney(calc.desconto)}`],
+              ["TOTAL PAGO PELO LOCATÁRIO", safeMoney(calc.totalPagoLocatario)],
             ]
           : [
               ["Aluguel Mensal Base", safeMoney(lease.valorAluguel)],
@@ -2537,16 +2579,20 @@ export default function AdminRents() {
                 ? [["Taxa de Limpeza", safeMoney(cleaningVal)]]
                 : []),
               ...(depositVal > 0 ? [["Caução", safeMoney(depositVal)]] : []),
-              ["Desconto Concedido", `- ${safeMoney(lease.valorDesconto)}`],
-              ["TOTAL PAGO PELO LOCATÁRIO", safeMoney(lease.valorTotalPagar)],
+              ["Desconto Concedido", `- ${safeMoney(calc.desconto)}`],
+              ["TOTAL PAGO PELO LOCATÁRIO", safeMoney(calc.totalPagoLocatario)],
               [
                 "Comissão da Imobiliária",
-                safeMoney(lease.valorComissaoImobiliaria),
+                `-${safeMoney(calc.comissaoImobiliaria)}`,
               ],
               [
                 "Valor Repassado ao Proprietário",
-                safeMoney(lease.valorRepassadoProprietario),
+                safeMoney(calc.repasseProprietario),
               ],
+              ...(calc.estornoTaxas > 0
+                ? [["Estorno de Taxas Pagas", `+ ${safeMoney(calc.estornoTaxas)}`]]
+                : []),
+              ["TOTAL REPASSADO AO LOCADOR", safeMoney(calc.totalRepassadoLocador)],
             ];
 
       autoTable(doc, {
@@ -3619,19 +3665,11 @@ export default function AdminRents() {
                         <button
                           type="button"
                           onClick={() => {
-                            const total =
-                              (leaseForm.valorAluguel || 0) +
-                              (leaseForm.valorIptu || 0) +
-                              (leaseForm.valorTaxaLixo || 0) +
-                              (leaseForm.valorTaxaGas || 0) +
-                              (leaseForm.valorTaxaAgua || 0) +
-                              (leaseForm.valorTaxaLuz || 0) +
-                              (leaseForm.valorCondominio || 0) +
-                              (leaseForm.valorOutros || 0) -
-                              (leaseForm.valorDesconto || 0);
+                            const calc = calculateReceiptTotal(leaseForm, "locatario");
                             setLeaseForm((prev) => ({
                               ...prev,
-                              valorTotalPagar: total,
+                              valorDesconto: calc.desconto,
+                              valorTotalPagar: calc.totalPagoLocatario,
                             }));
                           }}
                           className="flex items-center gap-2 text-[10px] font-black text-gold uppercase tracking-[0.2em] hover:text-gold/80 transition-all bg-gold/5 px-4 py-2 rounded-xl"
