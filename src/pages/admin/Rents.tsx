@@ -49,6 +49,7 @@ import {
   maskCurrency,
   parseCurrencyToNumber,
   formatCurrency,
+  calculateTotalRepassedToOwner,
   safeText,
   safeMoney,
   safeDate,
@@ -872,10 +873,19 @@ export default function AdminRents() {
                   const p = properties.find(prop => prop.id === associatedLease.propertyId);
                   edificio = (associatedLease as any).nomeEdificio || (associatedLease as any).buildingName || p?.buildingName || (p as any)?.nomeEdificio || "";
                 }
+                const repasse = Number(savedDados.valorRepassadoProprietario ?? savedReceiptData.valorRepassadoProprietario ?? 0) || 0;
+                const estorno = Number(savedDados.valorEstornoTaxas ?? savedReceiptData.valorEstornoTaxas ?? 0) || 0;
+                const rType = (savedReceiptData.tipoRecibo || "locatario") as "locatario" | "locador";
+                const totalCalculado = rType === "locador"
+                  ? calculateTotalRepassedToOwner(repasse, estorno)
+                  : (Number(savedDados.valorTotal) || 0);
+
                 setReceiptForm({
                   ...savedDados,
                   nomeEdificio: edificio,
-                  valorEstornoTaxas: Number(savedDados.valorEstornoTaxas) || 0,
+                  valorRepassadoProprietario: repasse,
+                  valorEstornoTaxas: estorno,
+                  valorTotal: totalCalculado,
                 });
                 setShowEditableReceiptModal(true);
               }
@@ -1875,17 +1885,23 @@ export default function AdminRents() {
     const comissaoImobiliaria = Number(form.valorComissaoImobiliaria) || 0;
 
     // Estorno de taxas pagas (acréscimo a ser devolvido/repassado ao locador)
-    const rawEstorno = Number(form.valorEstornoTaxas) || 0;
-    const estornoTaxas = Math.abs(rawEstorno);
+    const rawEstorno = form.valorEstornoTaxas !== undefined && form.valorEstornoTaxas !== null && form.valorEstornoTaxas !== ""
+      ? Number(form.valorEstornoTaxas)
+      : 0;
+    const estornoTaxas = Math.abs(isNaN(rawEstorno) ? 0 : rawEstorno);
 
-    // Repasse ao proprietário
+    // Repasse ao proprietário:
+    // Mantém o valor informado/editado no formulário ou salvo no banco.
     let repasseProprietario = Number(form.valorRepassadoProprietario) || 0;
-    if (changedField !== "valorRepassadoProprietario" && changedField !== "valorEstornoTaxas") {
+    if (changedField === "valorComissaoImobiliaria") {
+      repasseProprietario = Math.max(0, totalPagoLocatario - comissaoImobiliaria);
+    } else if (changedField === "valorAluguel" && (!form.valorRepassadoProprietario || form.valorRepassadoProprietario === 0)) {
       repasseProprietario = Math.max(0, totalPagoLocatario - comissaoImobiliaria);
     }
 
-    // TOTAL REPASSADO AO LOCADOR = repasse ao proprietário + estorno de taxas pagas
-    const totalRepassadoLocador = repasseProprietario + estornoTaxas;
+    // REGRA FUNDAMENTAL DO ESTORNO (Fonte única da verdade):
+    // totalRepassadoAoLocador = repasseProprietario + estornoTaxasPagas
+    const totalRepassadoLocador = calculateTotalRepassedToOwner(repasseProprietario, estornoTaxas);
 
     // Total final conforme o tipo de recibo
     const totalFinal = type === "locatario" ? totalPagoLocatario : totalRepassadoLocador;
@@ -1959,18 +1975,22 @@ export default function AdminRents() {
     setSavingReceipt(false);
 
     // Identificar o imóvel correspondente diretamente da mesma fonte/relação de dados
-    let prop = properties.find(p => p.id === lease.propertyId);
-    if (!prop && lease.propertyCode) {
-      const targetCode = String(lease.propertyCode).toUpperCase().trim();
-      prop = properties.find(p =>
-        (p.code && p.code.toUpperCase().trim() === targetCode) ||
-        ((p as any).codigo && String((p as any).codigo).toUpperCase().trim() === targetCode) ||
-        ((p as any).codigoImovel && String((p as any).codigoImovel).toUpperCase().trim() === targetCode)
-      );
-    }
-    if (!prop && lease.propertyId) {
+    const lAny = lease as any;
+    const targetCode = String(lease.propertyCode || lAny.codigoImovel || lAny.codigo || lAny.code || "").toUpperCase().trim();
+    const targetId = lease.propertyId || lAny.imovelId || lAny.property_id || "";
+
+    let prop = properties.find((p: any) => 
+      (targetId && p.id === targetId) ||
+      (targetCode && (
+        String(p.code || "").toUpperCase().trim() === targetCode ||
+        String(p.codigo || "").toUpperCase().trim() === targetCode ||
+        String(p.codigoImovel || "").toUpperCase().trim() === targetCode
+      ))
+    );
+
+    if (!prop && targetId) {
       try {
-        const pSnap = await getDoc(doc(db, "imoveis", lease.propertyId));
+        const pSnap = await getDoc(doc(db, "imoveis", targetId));
         if (pSnap.exists()) {
           prop = { id: pSnap.id, ...pSnap.data() } as any;
         }
@@ -1979,19 +1999,55 @@ export default function AdminRents() {
       }
     }
 
+    if (!prop && targetCode) {
+      try {
+        const queries = [
+          query(collection(db, "imoveis"), where("codigo", "==", targetCode)),
+          query(collection(db, "imoveis"), where("code", "==", targetCode)),
+          query(collection(db, "imoveis"), where("codigoImovel", "==", targetCode)),
+        ];
+        for (const q of queries) {
+          const snap = await getDocs(q);
+          if (!snap.empty) {
+            prop = { id: snap.docs[0].id, ...snap.docs[0].data() } as any;
+            break;
+          }
+        }
+      } catch (err) {
+        console.warn("Não foi possível buscar imóvel por código:", err);
+      }
+    }
+
+    const pAny = prop as any;
     const edificioCadastrado =
-      (lease as any).nomeEdificio ||
-      (lease as any).buildingName ||
-      (lease as any).propertyBuildingName ||
-      (lease as any).edificio ||
-      prop?.buildingName ||
-      (prop as any)?.nomeEdificio ||
-      (prop as any)?.edificio ||
-      (prop as any)?.condoName ||
-      (prop as any)?.nomeCondominio ||
-      (prop as any)?.condominioNome ||
-      (prop as any)?.nomeEmpreendimento ||
-      (prop as any)?.empreendimento ||
+      (lAny.nomeEdificio && String(lAny.nomeEdificio).trim()) ||
+      (lAny.buildingName && String(lAny.buildingName).trim()) ||
+      (lAny.propertyBuildingName && String(lAny.propertyBuildingName).trim()) ||
+      (lAny.edificio && String(lAny.edificio).trim()) ||
+      (lAny.condominio && String(lAny.condominio).trim()) ||
+      (lAny.nomeCondominio && String(lAny.nomeCondominio).trim()) ||
+      (pAny?.buildingName && String(pAny.buildingName).trim()) ||
+      (pAny?.nomeEdificio && String(pAny.nomeEdificio).trim()) ||
+      (pAny?.edificio && String(pAny.edificio).trim()) ||
+      (pAny?.condoName && String(pAny.condoName).trim()) ||
+      (pAny?.nomeCondominio && String(pAny.nomeCondominio).trim()) ||
+      (pAny?.condominioNome && String(pAny.condominioNome).trim()) ||
+      (pAny?.nomeEmpreendimento && String(pAny.nomeEmpreendimento).trim()) ||
+      (pAny?.empreendimento && String(pAny.empreendimento).trim()) ||
+      "";
+
+    const enderecoCadastrado =
+      lease.propertyAddress ||
+      (prop
+        ? `${pAny?.address || pAny?.endereco || ""}${pAny?.number || pAny?.numero ? `, ${pAny.number || pAny.numero}` : ""}${pAny?.complement || pAny?.complemento ? ` - ${pAny.complement || pAny.complemento}` : ""}`
+        : "") ||
+      "";
+
+    const codigoCadastrado =
+      lease.propertyCode ||
+      pAny?.code ||
+      pAny?.codigo ||
+      pAny?.codigoImovel ||
       "";
 
     if (savedDoc && savedDoc.dadosRecibo) {
@@ -1999,11 +2055,13 @@ export default function AdminRents() {
       const rawSavedForm = {
         nomePagadorRecebedor: savedDoc.dadosRecibo.nomePagadorRecebedor || "",
         cpfCnpj: savedDoc.dadosRecibo.cpfCnpj || "",
-        nomeEdificio: savedDoc.dadosRecibo.nomeEdificio !== undefined && savedDoc.dadosRecibo.nomeEdificio !== ""
-          ? savedDoc.dadosRecibo.nomeEdificio
-          : (savedDoc.dadosRecibo.buildingName || edificioCadastrado || ""),
-        enderecoImovel: savedDoc.dadosRecibo.enderecoImovel || "",
-        codigoImovel: savedDoc.dadosRecibo.codigoImovel || "",
+        nomeEdificio:
+          (savedDoc.dadosRecibo.nomeEdificio && String(savedDoc.dadosRecibo.nomeEdificio).trim()) ||
+          (savedDoc.dadosRecibo.buildingName && String(savedDoc.dadosRecibo.buildingName).trim()) ||
+          edificioCadastrado ||
+          "",
+        enderecoImovel: savedDoc.dadosRecibo.enderecoImovel || enderecoCadastrado,
+        codigoImovel: savedDoc.dadosRecibo.codigoImovel || codigoCadastrado,
         valorAluguel: Number(savedDoc.dadosRecibo.valorAluguel) || 0,
         valorCondominio: Number(savedDoc.dadosRecibo.valorCondominio) || 0,
         valorIptu: Number(savedDoc.dadosRecibo.valorIptu) || 0,
@@ -2062,8 +2120,8 @@ export default function AdminRents() {
         nomePagadorRecebedor: payeeName,
         cpfCnpj: payeeCpf,
         nomeEdificio: edificioCadastrado || "",
-        enderecoImovel: lease.propertyAddress || prop?.address || "",
-        codigoImovel: lease.propertyCode || prop?.code || "",
+        enderecoImovel: enderecoCadastrado || lease.propertyAddress || prop?.address || "",
+        codigoImovel: codigoCadastrado || lease.propertyCode || prop?.code || "",
         valorAluguel: lease.valorAluguel || 0,
         valorCondominio: lease.valorCondominio || 0,
         valorIptu: lease.valorIptu || 0,
@@ -2109,6 +2167,7 @@ export default function AdminRents() {
       const ownerName = selectedLeaseForReceipt.ownerName || prop?.ownerName || "";
       
       const calc = calculateReceiptTotal(receiptForm, receiptType);
+      const totalRepassado = calculateTotalRepassedToOwner(calc.repasseProprietario, calc.estornoTaxas);
       const finalizedForm = {
         ...receiptForm,
         valorDesconto: calc.desconto,
@@ -2124,6 +2183,9 @@ export default function AdminRents() {
         dadosRecibo: finalizedForm,
         nomeEdificio: finalizedForm.nomeEdificio || "",
         valorTotal: calc.totalFinal,
+        valorRepassadoProprietario: calc.repasseProprietario,
+        valorEstornoTaxas: calc.estornoTaxas,
+        totalRepassadoAoLocador: totalRepassado,
         status: "salvo",
         atualizadoEm: serverTimestamp(),
         atualizadoPor: auth.currentUser?.email || "",
@@ -2356,7 +2418,7 @@ export default function AdminRents() {
         }
         tableBody.push(["Comissão da Imobiliária", `-${safeMoney(receiptForm.valorComissaoImobiliaria)}`]);
         tableBody.push(["Desconto Concedido", `- ${safeMoney(calc.desconto)}`]);
-        tableBody.push(["Valor Líquido Repassado ao Proprietário", safeMoney(calc.repasseProprietario)]);
+        tableBody.push(["Repasse Proprietário", safeMoney(calc.repasseProprietario)]);
         if (calc.estornoTaxas > 0) {
           tableBody.push(["Estorno de Taxas Pagas", `+ ${safeMoney(calc.estornoTaxas)}`]);
         }
@@ -2697,7 +2759,7 @@ export default function AdminRents() {
                 `-${safeMoney(calc.comissaoImobiliaria)}`,
               ],
               [
-                "Valor Repassado ao Proprietário",
+                "Repasse Proprietário",
                 safeMoney(calc.repasseProprietario),
               ],
               ...(calc.estornoTaxas > 0
@@ -4741,6 +4803,23 @@ export default function AdminRents() {
                         value={maskCurrency(receiptForm.valorEstornoTaxas)}
                         onChange={(e) => handleReceiptFieldChange("valorEstornoTaxas", parseCurrencyToNumber(e.target.value))}
                       />
+                    </div>
+
+                    {/* Resumo Dinâmico do Repasse ao Locador */}
+                    <div className="col-span-1 md:col-span-3 bg-blue-50/70 border border-blue-100 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-black text-blue-950 uppercase tracking-wider">
+                          Total Repassado ao Locador:
+                        </span>
+                        <span className="text-sm font-black text-emerald-700">
+                          R$ {maskCurrency(calculateTotalRepassedToOwner(receiptForm.valorRepassadoProprietario, receiptForm.valorEstornoTaxas))}
+                        </span>
+                      </div>
+                      <div className="text-[11px] font-bold text-blue-800 flex items-center gap-1.5">
+                        <span>Repasse: R$ {maskCurrency(receiptForm.valorRepassadoProprietario || 0)}</span>
+                        <span>+</span>
+                        <span>Estorno: R$ {maskCurrency(receiptForm.valorEstornoTaxas || 0)}</span>
+                      </div>
                     </div>
 
                     {/* Total overlay section */}

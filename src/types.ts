@@ -234,6 +234,7 @@ export interface Lease {
   percentualComissaoImobiliaria?: number;
   valorComissaoImobiliaria?: number;
   valorRepassadoProprietario?: number;
+  valorEstornoTaxas?: number;
   statusPagamento: 'Pendente' | 'Pago' | 'Atrasado' | 'Cancelado';
   statusLocacao: 'Ativa' | 'Encerrada' | 'Cancelada';
   lastPaymentDate?: string;

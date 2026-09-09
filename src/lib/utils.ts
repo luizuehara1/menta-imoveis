@@ -39,12 +39,30 @@ export function maskCurrency(value: string | number | undefined | null) {
 
 export function parseCurrencyToNumber(value: string | number | undefined | null): number {
   if (value === undefined || value === null || value === '') return 0;
-  if (typeof value === 'number') return value;
+  if (typeof value === 'number') return isNaN(value) ? 0 : value;
   
   const digits = value.replace(/\D/g, "");
   if (!digits) return 0;
   
   return parseInt(digits, 10) / 100;
+}
+
+/**
+ * Fonte única da verdade para o cálculo do Total Repassado ao Locador:
+ * totalRepassadoAoLocador = repasseProprietario + estornoTaxasPagas
+ */
+export function calculateTotalRepassedToOwner(
+  repasseProprietario: number | string | undefined | null,
+  estornoTaxasPagas: number | string | undefined | null
+): number {
+  const repasse = typeof repasseProprietario === 'number'
+    ? (isNaN(repasseProprietario) ? 0 : repasseProprietario)
+    : parseCurrencyToNumber(repasseProprietario);
+  const rawEstorno = typeof estornoTaxasPagas === 'number'
+    ? (isNaN(estornoTaxasPagas) ? 0 : estornoTaxasPagas)
+    : parseCurrencyToNumber(estornoTaxasPagas);
+  const estorno = Math.abs(rawEstorno);
+  return Number((repasse + estorno).toFixed(2));
 }
 
 export function isValidImageUrl(url: any): boolean {
