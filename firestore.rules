@@ -83,6 +83,38 @@ service cloud.firestore {
       allow read, create, update, delete: if isAdminAtivo();
     }
 
+    // Locação Temporária
+    match /reservasTemporada/{docId} {
+      allow read, create, update, delete: if isAdminAtivo();
+    }
+
+    match /bloqueiosTemporada/{docId} {
+      allow read: if true;
+      allow create, update, delete: if isAdminAtivo();
+    }
+
+    match /ocupacaoTemporada/{docId} {
+      allow read: if true;
+      allow create, update, delete: if isAdminAtivo();
+    }
+
+    match /solicitacoesReservaTemporada/{docId} {
+      allow create: if true;
+      allow read, update, delete: if isAdminAtivo();
+    }
+
+    match /hospedesTemporada/{docId} {
+      allow read, create, update, delete: if isAdminAtivo();
+    }
+
+    match /pagamentosTemporada/{docId} {
+      allow read, create, update, delete: if isAdminAtivo();
+    }
+
+    match /recibosTemporada/{docId} {
+      allow read, create, update, delete: if isAdminAtivo();
+    }
+
     match /contratos/{docId} {
       allow read, create, update, delete: if isAdminAtivo();
     }

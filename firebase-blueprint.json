@@ -524,6 +524,26 @@
     "recibosEditaveis": {
       "schema": "EditableReceipt",
       "description": "Editable and saved rental receipts"
+    },
+    "reservasTemporada": {
+      "schema": "TemporaryReservation",
+      "description": "Bookings and reservations for temporary/vacation rentals"
+    },
+    "bloqueiosTemporada": {
+      "schema": "TemporaryBlock",
+      "description": "Manual and maintenance date blocks on property calendar"
+    },
+    "hospedesTemporada": {
+      "schema": "TemporaryGuest",
+      "description": "Guests directory for temporary rentals"
+    },
+    "pagamentosTemporada": {
+      "schema": "TemporaryPayment",
+      "description": "Payments received for temporary rental bookings"
+    },
+    "recibosTemporada": {
+      "schema": "TemporaryReceipt",
+      "description": "Customer payment receipts for temporary rentals"
     }
   }
 }

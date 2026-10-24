@@ -47,7 +47,10 @@ import {
   Eye,
   ExternalLink,
   MessageSquare,
-  FileText
+  FileText,
+  Calendar,
+  CalendarDays,
+  AlertTriangle
 } from 'lucide-react';
 import { useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -68,6 +71,8 @@ import {
 import { useOptions } from '../../hooks/useSettings';
 import { Property, Owner, Broker } from '../../types';
 import { useSettings } from '../../hooks/useSettings';
+import { checkFutureActiveReservations } from '../../services/temporaryRentalService';
+import { clearPublicImoveisCache } from '../../lib/propertyService';
 
 const TABS = [
   { id: 'bash', label: 'Dados Básicos', icon: Info },
@@ -212,6 +217,11 @@ export default function AdminPropertyForm() {
   const [showCodeChangeModal, setShowCodeChangeModal] = useState(false);
   const [manualCode, setManualCode] = useState(false);
   const [pendingType, setPendingType] = useState('');
+  const [originalBusinessType, setOriginalBusinessType] = useState<string>('');
+  const [showModalityWarningModal, setShowModalityWarningModal] = useState(false);
+  const [futureReservationsCount, setFutureReservationsCount] = useState(0);
+  const [pendingSubmitData, setPendingSubmitData] = useState<any>(null);
+  const [savedTemporariaModal, setSavedTemporariaModal] = useState<{ id: string; code: string; title: string; isPublic: boolean } | null>(null);
   const [imageUrl, setImageUrl] = useState('');
   const [images, setImages] = useState<any[]>([]);
   const [uploadingFiles, setUploadingFiles] = useState<{ id: string; name: string; previewUrl: string; statusText?: string; error?: string }[]>([]);
@@ -698,16 +708,21 @@ export default function AdminPropertyForm() {
             setValue('vagas', data.vagas ?? data.garageSpaces ?? stats.vagas ?? 0);
 
             // Normalize "Comprar" to "Venda" or variations
-            const loadedBType = String(data.businessType || 'Venda').toLowerCase();
+            const loadedBType = String(data.businessType || data.tipoNegocio || 'Venda').toLowerCase();
             let finalBType = 'Venda';
-            if (loadedBType.includes('loca') && (loadedBType.includes('compr') || loadedBType.includes('vend'))) {
+            if (loadedBType.includes('tempor')) {
+              finalBType = 'Locação Temporária';
+            } else if (loadedBType.includes('loca') && (loadedBType.includes('compr') || loadedBType.includes('vend'))) {
               finalBType = 'Venda e Locação';
+            } else if (loadedBType.includes('tradicional')) {
+              finalBType = 'Locação tradicional';
             } else if (loadedBType.includes('loca')) {
               finalBType = 'Locação';
             } else {
               finalBType = 'Venda';
             }
             setValue('businessType', finalBType);
+            setOriginalBusinessType(finalBType);
             
             // Normalize status correctly
             const statusStr = String(data.status || "").toLowerCase().trim();
@@ -1009,11 +1024,42 @@ export default function AdminPropertyForm() {
     }
   }, [formValues, images, videos, mainImage, id, isDirty]);
 
-  const onSubmit = async (data: any) => {
+  const onSubmit = async (data: any, bypassModalityCheck = false) => {
     if (!isAdmin) {
       triggerToast("Usuário sem permissão administrativa.", "error");
       return;
     }
+
+    const rawSaveBTypeCheck = String(data.businessType || 'Venda').toLowerCase();
+    let normalizedCheck = 'Venda';
+    if (rawSaveBTypeCheck.includes('tempor')) {
+      normalizedCheck = 'Locação Temporária';
+    } else if (rawSaveBTypeCheck.includes('loca') && (rawSaveBTypeCheck.includes('compr') || rawSaveBTypeCheck.includes('vend'))) {
+      normalizedCheck = 'Venda e Locação';
+    } else if (rawSaveBTypeCheck.includes('tradicional')) {
+      normalizedCheck = 'Locação tradicional';
+    } else if (rawSaveBTypeCheck.includes('loca')) {
+      normalizedCheck = 'Locação';
+    } else {
+      normalizedCheck = 'Venda';
+    }
+
+    // Check if changing away from Locação Temporária with active future reservations
+    if (!bypassModalityCheck && id && originalBusinessType === 'Locação Temporária' && normalizedCheck !== 'Locação Temporária') {
+      try {
+        const futureRes = await checkFutureActiveReservations(id);
+        if (futureRes && futureRes.length > 0) {
+          setFutureReservationsCount(futureRes.length);
+          setPendingSubmitData(data);
+          setShowModalityWarningModal(true);
+          setShowConfirmModal(false);
+          return;
+        }
+      } catch (err) {
+        console.error("Erro ao verificar reservas futuras:", err);
+      }
+    }
+
     setLoading(true);
     try {
       console.log("Cloudinary cloud:", import.meta.env.VITE_CLOUDINARY_CLOUD_NAME);
@@ -1086,8 +1132,12 @@ export default function AdminPropertyForm() {
 
       const rawSaveBType = String(data.businessType || 'Venda').toLowerCase();
       let normalizedSaveBType = 'Venda';
-      if (rawSaveBType.includes('loca') && (rawSaveBType.includes('compr') || rawSaveBType.includes('vend'))) {
+      if (rawSaveBType.includes('tempor')) {
+        normalizedSaveBType = 'Locação Temporária';
+      } else if (rawSaveBType.includes('loca') && (rawSaveBType.includes('compr') || rawSaveBType.includes('vend'))) {
         normalizedSaveBType = 'Venda e Locação';
+      } else if (rawSaveBType.includes('tradicional')) {
+        normalizedSaveBType = 'Locação tradicional';
       } else if (rawSaveBType.includes('loca')) {
         normalizedSaveBType = 'Locação';
       } else {
@@ -1101,6 +1151,10 @@ export default function AdminPropertyForm() {
         nomeEdificio: data.nomeEdificio || data.buildingName || "",
         buildingName: data.buildingName || data.nomeEdificio || "",
         businessType: normalizedSaveBType,
+        valorDiaria: toNumber(data.valorDiaria || data.priceDiaria || 0),
+        priceDiaria: toNumber(data.valorDiaria || data.priceDiaria || 0),
+        maxHospedes: Number(data.maxHospedes || 2),
+        taxaLimpeza: toNumber(data.taxaLimpeza || 0),
         valorTaxaLixo: valLixo,
         taxaLixoAnual: valLixo,
         taxaLixoMensal: valLixoMensal,
@@ -1517,10 +1571,27 @@ export default function AdminPropertyForm() {
         console.warn("Erro ao limpar rascunho de rascunhos:", draftError);
       }
 
-      // Redirect user after showing the gorgeous toast shortly
-      setTimeout(() => {
-        navigate('/admin/imoveis');
-      }, 1500);
+      // Invalidate public properties cache so changes are immediately live
+      try {
+        clearPublicImoveisCache();
+      } catch (cacheErr) {
+        console.warn("Erro ao limpar cache de imóveis públicos:", cacheErr);
+      }
+
+      // If temporary rental, show confirmation modal with direct links to calendar and reservations
+      if (normalizedSaveBType === 'Locação Temporária') {
+        setSavedTemporariaModal({
+          id: propertyId as string,
+          code: finalCode,
+          title: data.title || data.titulo || 'Imóvel de Temporada',
+          isPublic: Boolean(isPublicado)
+        });
+      } else {
+        // Redirect user after showing the gorgeous toast shortly
+        setTimeout(() => {
+          navigate('/admin/imoveis');
+        }, 1500);
+      }
 
     } catch (error: any) {
       console.error("Erro real ao salvar imóvel:", error);
@@ -1981,17 +2052,11 @@ export default function AdminPropertyForm() {
             <div className="space-y-2">
               <label className="text-sm font-bold text-gray-700">Tipo de Negócio</label>
               <select {...register('businessType')} className="input-field">
-                {(() => {
-                  const items = (options.tiposNegocio || []).filter(o => o.ativo).map(o => {
-                    const normName = o.nome === 'Comprar' ? 'Venda' : o.nome;
-                    return { id: o.id, nome: normName };
-                  });
-                  const uniqueMap = new Map();
-                  items.forEach(item => uniqueMap.set(item.nome, item));
-                  return Array.from(uniqueMap.values()).map(o => (
-                    <option key={o.id} value={o.nome}>{o.nome}</option>
-                  ));
-                })()}
+                <option value="Venda">Venda</option>
+                <option value="Locação tradicional">Locação tradicional</option>
+                <option value="Locação Temporária">Locação temporária</option>
+                <option value="Locação">Locação (Geral)</option>
+                <option value="Venda e Locação">Venda e Locação</option>
               </select>
             </div>
             <div className="space-y-2">
@@ -2035,8 +2100,10 @@ export default function AdminPropertyForm() {
 
             {(() => {
               const businessType = watch('businessType');
-              const isTypeLocacao = businessType === 'Locação' || businessType === 'Venda e Locação';
-              const isTypeVenda = businessType === 'Venda' || businessType === 'Venda e Locação';
+              const bTypeLower = String(businessType || '').toLowerCase();
+              const isTypeTemporaria = bTypeLower.includes('tempor');
+              const isTypeLocacao = (bTypeLower.includes('loca') && !isTypeTemporaria) || bTypeLower.includes('tradicional');
+              const isTypeVenda = bTypeLower.includes('vend') || bTypeLower === 'venda e locação';
 
               return (
                 <>
@@ -2061,7 +2128,7 @@ export default function AdminPropertyForm() {
 
                   {isTypeLocacao && (
                     <div className="space-y-2">
-                      <label className="text-sm font-bold text-gray-700">Valor do Aluguel (R$)</label>
+                      <label className="text-sm font-bold text-gray-700">Valor do Aluguel Mensal (R$)</label>
                       <Controller
                         name="priceLocacao"
                         control={control}
@@ -2076,6 +2143,60 @@ export default function AdminPropertyForm() {
                         )}
                       />
                     </div>
+                  )}
+
+                  {isTypeTemporaria && (
+                    <>
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-gold uppercase tracking-wider">Valor da Diária Padrão (R$)</label>
+                        <Controller
+                          name="valorDiaria"
+                          control={control}
+                          render={({ field }) => (
+                            <input
+                              type="text"
+                              className="input-field border-gold/40 focus:border-gold"
+                              value={maskCurrency(field.value ?? watch('priceDiaria') ?? '')}
+                              onChange={(e) => {
+                                const val = parseCurrencyToNumber(e.target.value);
+                                field.onChange(val);
+                                setValue('priceDiaria', val);
+                              }}
+                              placeholder="0,00"
+                            />
+                          )}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-gray-700">Capacidade Máxima (Hóspedes)</label>
+                        <input
+                          {...register('maxHospedes')}
+                          type="number"
+                          min="1"
+                          max="50"
+                          className="input-field"
+                          placeholder="Ex: 4"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-gray-700">Taxa de Limpeza (R$)</label>
+                        <Controller
+                          name="taxaLimpeza"
+                          control={control}
+                          render={({ field }) => (
+                            <input
+                              type="text"
+                              className="input-field"
+                              value={maskCurrency(field.value ?? '')}
+                              onChange={(e) => field.onChange(parseCurrencyToNumber(e.target.value))}
+                              placeholder="0,00"
+                            />
+                          )}
+                        />
+                      </div>
+                    </>
                   )}
 
                   <div className="space-y-2">
@@ -3563,7 +3684,7 @@ export default function AdminPropertyForm() {
         variants={staggerContainer}
         initial="initial"
         animate="animate"
-        onSubmit={handleSubmit(onSubmit, (formErrors) => {
+        onSubmit={handleSubmit((formData) => onSubmit(formData, false), (formErrors) => {
           console.warn("Erros de validação do formulário:", formErrors);
           triggerToast("Verifique os campos obrigatórios em vermelho antes de salvar.", "error");
           setShowConfirmModal(false);
@@ -3861,6 +3982,158 @@ export default function AdminPropertyForm() {
                     Cancelar
                   </button>
                </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modality Change Warning Modal */}
+      <AnimatePresence>
+        {showModalityWarningModal && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-6 text-left">
+            <motion.div 
+              {...fadeIn}
+              className="absolute inset-0 bg-primary-black/70 backdrop-blur-md"
+              onClick={() => setShowModalityWarningModal(false)}
+            />
+            <motion.div 
+              {...scaleIn}
+              className="bg-white max-w-lg w-full rounded-[2.5rem] shadow-2xl p-8 sm:p-10 relative z-10 border border-amber-200"
+            >
+              <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-600 mb-6 border border-amber-200">
+                <AlertTriangle size={32} />
+              </div>
+              <h3 className="text-2xl font-display font-bold text-primary-black mb-3">
+                Atenção: Reservas Futuras Ativas
+              </h3>
+              <p className="text-gray-600 text-sm mb-4 leading-relaxed">
+                Este imóvel possui <strong className="text-amber-700">{futureReservationsCount} reserva(s) futura(s) ativas</strong> no módulo de Locação Temporária.
+              </p>
+              <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-200 text-xs text-amber-900 mb-8 space-y-2">
+                <p className="font-bold flex items-center gap-1.5">
+                  <Check size={16} className="text-emerald-600 shrink-0" />
+                  Preservação integral dos dados:
+                </p>
+                <p>Nenhuma reserva, hóspede, pagamento ou recibo será excluído. O histórico financeiro e de ocupação continuará 100% preservado no sistema.</p>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setShowModalityWarningModal(false);
+                    if (pendingSubmitData) {
+                      onSubmit(pendingSubmitData, true);
+                    }
+                  }}
+                  className="w-full bg-primary-black text-white hover:bg-gold hover:text-primary-black font-black text-[10px] uppercase tracking-[0.2em] py-4 rounded-xl transition-all shadow-xl"
+                >
+                  Confirmar Alteração de Modalidade
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setShowModalityWarningModal(false);
+                    setPendingSubmitData(null);
+                  }}
+                  className="w-full border border-gray-200 text-gray-600 hover:bg-gray-50 font-black text-[10px] uppercase tracking-[0.2em] py-4 rounded-xl transition-all"
+                >
+                  Cancelar e Manter Locação Temporária
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Temporary Rental Saved Success Modal */}
+      <AnimatePresence>
+        {savedTemporariaModal && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-6 text-left">
+            <motion.div 
+              {...fadeIn}
+              className="absolute inset-0 bg-primary-black/75 backdrop-blur-md"
+            />
+            <motion.div 
+              {...scaleIn}
+              className="bg-white max-w-xl w-full rounded-[2.5rem] shadow-2xl p-8 sm:p-10 relative z-10 border border-gold/30"
+            >
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-16 h-16 bg-gold/15 rounded-2xl flex items-center justify-center text-gold border border-gold/30">
+                  <CalendarDays size={32} />
+                </div>
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-[0.3em] text-gold block">Menta Short-Term Rentals</span>
+                  <h3 className="text-2xl font-display font-bold text-primary-black">
+                    Locação Temporária Ativada!
+                  </h3>
+                </div>
+              </div>
+
+              <p className="text-gray-600 text-sm mb-4 leading-relaxed">
+                O imóvel <strong>{savedTemporariaModal.title}</strong> (Código: <span className="font-mono font-bold text-primary-black">{savedTemporariaModal.code}</span>) foi salvo no cadastro oficial e vinculado automaticamente ao módulo de <strong>Locação Temporária</strong> com o ID real:
+              </p>
+
+              <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 text-xs font-mono text-gray-700 mb-6 flex items-center justify-between">
+                <span>ID Firestore: <strong className="text-primary-black">{savedTemporariaModal.id}</strong></span>
+                <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase font-sans ${
+                  savedTemporariaModal.isPublic ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-600'
+                }`}>
+                  {savedTemporariaModal.isPublic ? 'Publicado no Site' : 'Rascunho / Privado'}
+                </span>
+              </div>
+
+              <p className="text-xs text-gray-500 mb-8 leading-relaxed">
+                {savedTemporariaModal.isPublic 
+                  ? 'Como o imóvel está publicado, ele já aparece na busca pública sob o filtro "LOCAÇÃO TEMPORÁRIA". Seu calendário e gerenciador de reservas estão prontos para uso.' 
+                  : 'O imóvel está salvo no sistema e pronto para receber reservas no painel administrativo. Ele só aparecerá na busca pública quando você marcar "Publicar no Site".'}
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                <button 
+                  type="button"
+                  onClick={() => {
+                    navigate(`/admin/locacao-temporaria?imovelId=${savedTemporariaModal.id}&tab=calendario`);
+                  }}
+                  className="w-full bg-primary-black text-gold hover:bg-black font-black text-[10px] uppercase tracking-[0.2em] py-4 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2"
+                >
+                  <Calendar size={16} />
+                  <span>Gerenciar Reservas</span>
+                </button>
+
+                <button 
+                  type="button"
+                  onClick={() => {
+                    navigate(`/admin/locacao-temporaria?imovelId=${savedTemporariaModal.id}&tab=calendario&action=nova-reserva`);
+                  }}
+                  className="w-full btn-gold !py-4 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg flex items-center justify-center gap-2"
+                >
+                  <Plus size={16} />
+                  <span>Nova Reserva</span>
+                </button>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center gap-3">
+                {savedTemporariaModal.isPublic && (
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      window.open(`/imovel/${encodeURIComponent(savedTemporariaModal.code || savedTemporariaModal.id)}`, '_blank');
+                    }}
+                    className="w-full sm:flex-1 border border-gray-200 hover:border-gold hover:text-gold text-gray-700 font-bold text-xs py-3.5 rounded-xl transition-colors flex items-center justify-center gap-2"
+                  >
+                    <ExternalLink size={14} />
+                    <span>Ver Imóvel no Site</span>
+                  </button>
+                )}
+                <button 
+                  type="button"
+                  onClick={() => navigate('/admin/imoveis')}
+                  className="w-full sm:flex-1 text-center text-xs font-bold text-gray-500 hover:text-black py-3.5"
+                >
+                  Voltar para Lista de Imóveis
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

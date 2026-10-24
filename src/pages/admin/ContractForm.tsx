@@ -48,6 +48,8 @@ import { ptBR } from 'date-fns/locale';
 import { getProprietarioFromImovel, maskCurrency, parseCurrencyToNumber, formatCurrency, valorMonetarioPorExtenso, normalizarDadosImovel, normalizarPessoa, textoConjuge, normalizarDadosDocumento, formatarDataBR, getOutrasCondicoes, montarTextoConjuge, getNomeComprador, getNomeVendedor, getCpfVendedor, getRgVendedor, getProfissaoVendedor, getEstadoCivilVendedor, getTelefoneVendedor, getEmailVendedor, getEnderecoVendedor, valorOuNaoInformado, getNomeEdificio, getEnderecoImovel, getTermosCondicoes, getFormaPagamento, getDetalhesPagamento, getParteAceitante, normalizarFormasPagamento, montarEnderecoCompletoImovel, limparTextoEndereco, limparEnderecoDuplicadoSalvo } from '../../lib/utils';
 import { staggerContainer, slideUp, fadeIn, scaleIn } from '../../constants/animations';
 import { ContractA4Preview } from '../../components/admin/ContractA4Preview';
+import { obterDadosAutomaticosDoContrato } from '../../services/contractAutoFill';
+import { CLAUSULAS_PADRAO_ADMINISTRACAO_TEMPORARIA } from './ContractClauses';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -763,6 +765,11 @@ export default function AdminContractForm() {
   const [temConjugeVendedor, setTemConjugeVendedor] = useState(false);
   const [temConjugeLocador, setTemConjugeLocador] = useState(false);
   const [temConjugeLocatario, setTemConjugeLocatario] = useState(false);
+  const [autoFilledBadges, setAutoFilledBadges] = useState<{
+    imovel?: boolean;
+    proprietario?: boolean;
+    locatario?: boolean;
+  }>({});
 
   const [contract, setContract] = useState<Partial<Contract>>({
     tipoContrato: 'proposta',
@@ -774,11 +781,13 @@ export default function AdminContractForm() {
     local: 'Balneário Camboriú - SC',
     data: format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }),
     dados: {
-      proponente: { estadoCivil: 'Solteiro(a)' },
-      vendedor: { estadoCivil: 'Solteiro(a)' },
-      aceitante: { estadoCivil: 'Solteiro(a)' },
-      locador: { estadoCivil: 'Solteiro(a)' },
-      locatario: { estadoCivil: 'Solteiro(a)' },
+      proponente: { estadoCivil: 'Solteiro(a)', nacionalidade: 'Brasileiro(a)' },
+      vendedor: { estadoCivil: 'Solteiro(a)', nacionalidade: 'Brasileiro(a)' },
+      aceitante: { estadoCivil: 'Solteiro(a)', nacionalidade: 'Brasileiro(a)' },
+      locador: { estadoCivil: 'Solteiro(a)', nacionalidade: 'Brasileiro(a)' },
+      locatario: { estadoCivil: 'Solteiro(a)', nacionalidade: 'Brasileiro(a)' },
+      proprietario: { estadoCivil: 'Solteiro(a)', nacionalidade: 'Brasileiro(a)' },
+      administracao: { taxaAdministracaoPercentual: 20, prazoRepasseDias: 5, vigenciaMeses: 12, prestacaoContasPeriodo: 'Mensal, até o 10º dia do mês subsequente ao término de cada locação' },
       prazo: { finalidade: 'Temporada' },
       valores: { valorDiario: 0, taxaLimpeza: 0, taxaCaucao: 0, taxasAdicionais: 0, desconto: 0 },
       regras: {},
@@ -927,7 +936,13 @@ export default function AdminContractForm() {
         texto: "Fica eleito o foro da comarca competente para dirimir eventuais dúvidas ou controvérsias decorrentes deste instrumento.",
         ordem: 12
       }
-    ]
+    ],
+    administracao_temporaria: CLAUSULAS_PADRAO_ADMINISTRACAO_TEMPORARIA.map((c, i) => ({
+      id: `fallback-admin-${i + 1}`,
+      titulo: c.titulo,
+      texto: c.texto,
+      ordem: c.ordem
+    }))
   };
 
   const [allSysClauses, setAllSysClauses] = useState<any[]>([]);
@@ -1834,10 +1849,40 @@ export default function AdminContractForm() {
     }
   }, [contract.tipoContrato, contract.usarVendedorComoAceitante]);
 
-  const applyPropertySelection = (property: Property, overwriteSeller: boolean) => {
+  const applyPropertySelection = async (property: Property, overwriteSeller: boolean) => {
     setSelectedProperty(property);
+
+    let autoData: any = null;
+    try {
+      autoData = await obterDadosAutomaticosDoContrato(property, contract.tipoContrato || 'proposta', settings?.empresa);
+    } catch (err) {
+      console.warn("Erro ao obter dados automáticos do contrato:", err);
+    }
+
+    const propOwner = autoData?.proprietario || getProprietarioFromImovel(property);
+    const linkedTenant = autoData?.locatario;
+    const hasTenant = autoData?.temLocatarioVinculado || false;
+
+    if (contract.tipoContrato === 'locacao_temporaria') {
+      if (hasTenant && linkedTenant) {
+        showToast(`Locatário "${linkedTenant.nome}" vinculado automaticamente com sucesso!`, 'success');
+      } else {
+        showToast("Nenhum locatário com contrato ativo vinculado a este imóvel. Os dados podem ser preenchidos manualmente.", 'success');
+      }
+    } else if (contract.tipoContrato === 'administracao_temporaria') {
+      showToast("Dados do proprietário e imóvel vinculados automaticamente ao contrato de administração.", 'success');
+    }
+
+    setAutoFilledBadges({
+      imovel: true,
+      proprietario: true,
+      locatario: hasTenant
+    });
+
     setContract(prev => {
       const isArras = prev.tipoContrato === 'arras_confirmatorios';
+      const isAdmin = prev.tipoContrato === 'administracao_temporaria';
+      const isLocacao = prev.tipoContrato === 'locacao_temporaria';
       const defaultVal = isArras 
         ? (getValorVendaImovel(property) || 0) 
         : (prev.tipoContrato === 'proposta' ? (getValorVendaImovel(property) || 0) : prev.valor);
@@ -1850,7 +1895,7 @@ export default function AdminContractForm() {
       const complementoPart = pAny.complemento || pAny.complement || "";
       const bairroPart = pAny.neighborhood || pAny.bairro || pAny.district || "";
       const cidadePart = pAny.city || pAny.cidade || "";
-      const estadoPart = pAny.state || pAny.uf || pAny.estado || "";
+      const estadoPart = pAny.state || pAny.uf || pAny.estado || "SC";
       const cepPart = pAny.cep || pAny.zipCode || "";
       const enderecoCompletoPart = (pAny.enderecoCompleto || pAny.enderecoFormatado || pAny.localizacaoCompleta)
         ? limparEnderecoDuplicadoSalvo(pAny.enderecoCompleto || pAny.enderecoFormatado || pAny.localizacaoCompleta)
@@ -1862,7 +1907,7 @@ export default function AdminContractForm() {
           ...prev.dados?.imovel,
           matricula: getMatriculaImovel(property),
           cri: getCriImovel(property),
-          tipo: property.propertyType || (property as any).tipoImovel || '',
+          tipo: property.propertyType || (property as any).tipoImovel || 'Apartamento',
           descricao: property.shortDescription || property.title || getTituloImovel(property),
           codigo: getCodigoImovel(property),
           titulo: tituloFinal,
@@ -1883,12 +1928,13 @@ export default function AdminContractForm() {
           imovelCep: cepPart,
           imovelEnderecoCompleto: enderecoCompletoPart,
           valorVenda: getValorVendaImovel(property),
+          valorLocacao: Number(property.priceLocacao || pAny.valorLocacao || 0),
           valorCondominio: property.condoFee || (property as any).valorCondominio || (property as any).condominio || "",
-          valorIptu: property.iptu || (property as any).valorIptu || (property as any).iptu || ""
+          valorIptu: property.iptu || (property as any).valorIptu || (property as any).iptu || "",
+          caracteristicas: property.features?.join(', ') || (property as any).caracteristicas || '',
+          mobiliado: property.furnished ? "Sim" : ((property as any).furnishingStatus || "Sim")
         }
       };
-
-      const propOwner = getProprietarioFromImovel(property);
 
       if (overwriteSeller) {
         if (!updatedDados.vendedor) updatedDados.vendedor = {};
@@ -1896,12 +1942,13 @@ export default function AdminContractForm() {
         updatedDados.vendedor = {
           ...updatedDados.vendedor,
           nome: propOwner.nome || '',
-          cpf: propOwner.cpf || '',
+          cpf: propOwner.cpf || propOwner.cpfCnpj || '',
           rg: propOwner.rg || '',
+          nacionalidade: propOwner.nacionalidade || 'Brasileiro(a)',
           estadoCivil: propOwner.estadoCivil || "Solteiro(a)",
           profissao: propOwner.profissao || '',
           telefone: propOwner.telefone || '',
-          whatsapp: propOwner.whatsapp || '',
+          whatsapp: propOwner.whatsapp || propOwner.telefone || '',
           email: propOwner.email || '',
           endereco: propOwner.endereco || '',
           numero: propOwner.numero || '',
@@ -1915,6 +1962,7 @@ export default function AdminContractForm() {
           conjugeNome: propOwner.conjuge?.nome || '',
           conjugeCpf: propOwner.conjuge?.cpf || '',
           conjugeRg: propOwner.conjuge?.rg || '',
+          conjugeNacionalidade: propOwner.conjuge?.nacionalidade || 'Brasileiro(a)',
           conjugeEstadoCivil: propOwner.conjuge?.estadoCivil || "Casado(a)",
           conjugeProfissao: propOwner.conjuge?.profissao || '',
           conjugeTelefone: propOwner.conjuge?.telefone || '',
@@ -1923,7 +1971,6 @@ export default function AdminContractForm() {
           conjugeNumero: propOwner.conjuge?.numero || '',
           conjugeComplemento: propOwner.conjuge?.complemento || '',
 
-          // Backup duplicate spouse keys
           vendedorConjugeNome: propOwner.conjuge?.nome || '',
           vendedorConjugeCpf: propOwner.conjuge?.cpf || '',
           vendedorConjugeRg: propOwner.conjuge?.rg || '',
@@ -1936,8 +1983,115 @@ export default function AdminContractForm() {
           vendedorConjugeComplemento: propOwner.conjuge?.complemento || '',
         };
 
-        // Sync local conjunct toggle hook state too
         setTemConjugeVendedor(propOwner.possuiConjuge || false);
+      }
+
+      // If Locação Temporária, auto-fill Locador (from Owner) and Locatário (if found linked to property)
+      if (isLocacao) {
+        if (!updatedDados.locador) updatedDados.locador = {};
+        updatedDados.locador = {
+          ...updatedDados.locador,
+          nome: propOwner.nome || '',
+          cpfCnpj: propOwner.cpf || propOwner.cpfCnpj || '',
+          rgIe: propOwner.rg || '',
+          nacionalidade: propOwner.nacionalidade || 'Brasileiro(a)',
+          estadoCivil: propOwner.estadoCivil || "Solteiro(a)",
+          profissao: propOwner.profissao || '',
+          telefone: propOwner.telefone || '',
+          whatsapp: propOwner.whatsapp || propOwner.telefone || '',
+          email: propOwner.email || '',
+          endereco: propOwner.endereco || '',
+          numero: propOwner.numero || '',
+          complemento: propOwner.complemento || '',
+          cep: propOwner.cep || '',
+          cidade: propOwner.cidade || '',
+          estado: propOwner.estado || '',
+          possuiConjuge: propOwner.possuiConjuge || false,
+          locadorConjugeNome: propOwner.conjuge?.nome || '',
+          locadorConjugeCpf: propOwner.conjuge?.cpf || '',
+          locadorConjugeRg: propOwner.conjuge?.rg || '',
+          locadorConjugeEstadoCivil: propOwner.conjuge?.estadoCivil || "Casado(a)",
+          locadorConjugeProfissao: propOwner.conjuge?.profissao || '',
+          locadorConjugeTelefone: propOwner.conjuge?.telefone || '',
+          locadorConjugeEmail: propOwner.conjuge?.email || '',
+          locadorConjugeEndereco: propOwner.conjuge?.endereco || '',
+          conjugeNome: propOwner.conjuge?.nome || '',
+          conjugeCpf: propOwner.conjuge?.cpf || '',
+        };
+        setTemConjugeLocador(propOwner.possuiConjuge || false);
+
+        if (hasTenant && linkedTenant) {
+          if (!updatedDados.locatario) updatedDados.locatario = {};
+          updatedDados.locatario = {
+            ...updatedDados.locatario,
+            nome: linkedTenant.nome || '',
+            cpf: linkedTenant.cpf || linkedTenant.documento || '',
+            rg: linkedTenant.rg || '',
+            nacionalidade: linkedTenant.nacionalidade || 'Brasileiro(a)',
+            estadoCivil: linkedTenant.estadoCivil || 'Solteiro(a)',
+            profissao: linkedTenant.profissao || '',
+            dataNascimento: linkedTenant.dataNascimento || '',
+            telefone: linkedTenant.telefone || '',
+            whatsapp: linkedTenant.whatsapp || linkedTenant.telefone || '',
+            email: linkedTenant.email || '',
+            endereco: linkedTenant.endereco || '',
+            numero: linkedTenant.numero || '',
+            complemento: linkedTenant.complemento || '',
+            cep: linkedTenant.cep || '',
+            cidade: linkedTenant.cidade || '',
+            estado: linkedTenant.estado || '',
+            possuiConjuge: linkedTenant.possuiConjuge || false,
+            locatarioConjugeNome: linkedTenant.conjuge?.nome || '',
+            locatarioConjugeCpf: linkedTenant.conjuge?.cpf || '',
+            locatarioConjugeRg: linkedTenant.conjuge?.rg || '',
+            locatarioConjugeEstadoCivil: linkedTenant.conjuge?.estadoCivil || 'Casado(a)',
+            locatarioConjugeProfissao: linkedTenant.conjuge?.profissao || '',
+            locatarioConjugeTelefone: linkedTenant.conjuge?.telefone || '',
+            locatarioConjugeEmail: linkedTenant.conjuge?.email || '',
+            locatarioConjugeEndereco: linkedTenant.conjuge?.endereco || '',
+            conjugeNome: linkedTenant.conjuge?.nome || '',
+            conjugeCpf: linkedTenant.conjuge?.cpf || '',
+          };
+          setTemConjugeLocatario(linkedTenant.possuiConjuge || false);
+        }
+      }
+
+      // If Administração Temporária, configure Owner as Contratante and Agency as Contratada
+      if (isAdmin) {
+        if (!updatedDados.proprietario) updatedDados.proprietario = {};
+        updatedDados.proprietario = {
+          ...updatedDados.vendedor,
+          nome: propOwner.nome || '',
+          cpf: propOwner.cpf || '',
+          rg: propOwner.rg || '',
+          nacionalidade: propOwner.nacionalidade || 'Brasileiro(a)',
+          estadoCivil: propOwner.estadoCivil || "Solteiro(a)",
+          profissao: propOwner.profissao || '',
+          telefone: propOwner.telefone || '',
+          whatsapp: propOwner.whatsapp || propOwner.telefone || '',
+          email: propOwner.email || '',
+          endereco: propOwner.endereco || '',
+          numero: propOwner.numero || '',
+          complemento: propOwner.complemento || '',
+          cep: propOwner.cep || '',
+          cidade: propOwner.cidade || '',
+          estado: propOwner.estado || '',
+          possuiConjuge: propOwner.possuiConjuge || false,
+          conjugeNome: propOwner.conjuge?.nome || '',
+          conjugeCpf: propOwner.conjuge?.cpf || '',
+        };
+
+        if (!updatedDados.administracao) updatedDados.administracao = {};
+        updatedDados.administracao = {
+          ...updatedDados.administracao,
+          taxaAdministracaoPercentual: updatedDados.administracao.taxaAdministracaoPercentual ?? 20,
+          prazoRepasseDias: updatedDados.administracao.prazoRepasseDias ?? 5,
+          vigenciaMeses: updatedDados.administracao.vigenciaMeses ?? 12,
+          prestacaoContasPeriodo: updatedDados.administracao.prestacaoContasPeriodo || 'Mensal, até o 10º dia do mês subsequente ao término de cada locação'
+        };
+
+        if (!updatedDados.imobiliaria) updatedDados.imobiliaria = {};
+        updatedDados.imobiliaria = autoData?.imobiliaria || updatedDados.imobiliaria;
       }
 
       if (isArras) {
@@ -1957,9 +2111,12 @@ export default function AdminContractForm() {
         };
       }
 
+      const clientName = isLocacao && hasTenant && linkedTenant?.nome
+        ? linkedTenant.nome
+        : prev.nomeCliente;
+
       return {
         ...prev,
-        // Root attributes as requested
         imovelId: property.id,
         imovelCodigo: getCodigoImovel(property),
         imovelTitulo: tituloFinal,
@@ -1988,6 +2145,7 @@ export default function AdminContractForm() {
 
         enderecoImovel: logradouroPart,
         nomeVendedor: propOwner.nome || '',
+        nomeCliente: clientName,
         valor: defaultVal,
         dados: updatedDados
       };
@@ -2471,6 +2629,27 @@ export default function AdminContractForm() {
         dadosContrato.dataPagamentoArras = a.dataPagamentoArras || "";
         dadosContrato.prazoContratoDefinitivo = a.prazoContratoDefinitivo || "";
         dadosContrato.prazoEscritura = a.prazoEscritura || "";
+      }
+
+      if (contract.tipoContrato === 'administracao_temporaria') {
+        const adm = (contract as any).dados?.administracao || {};
+        dadosContrato.tipoContratoLabel = "Contrato de Administração Temporária";
+        dadosContrato.taxaAdministracaoPercentual = Number((contract as any).taxaAdministracaoPercentual ?? adm.taxaAdministracaoPercentual ?? 20);
+        dadosContrato.taxaAdministracaoValor = Number((contract as any).taxaAdministracaoValor ?? adm.taxaAdministracaoValor ?? 0);
+        dadosContrato.prazoRepasseDias = Number((contract as any).prazoRepasseDias ?? adm.prazoRepasseDias ?? 5);
+        dadosContrato.prestacaoContasPeriodo = (contract as any).prestacaoContasPeriodo || adm.prestacaoContasPeriodo || "Mensal até o 5º dia útil do mês subsequente";
+        dadosContrato.vigenciaMeses = Number((contract as any).vigenciaMeses ?? adm.vigenciaMeses ?? 12);
+        dadosContrato.chavePixRepasse = (contract as any).chavePixRepasse || adm.chavePixRepasse || "";
+        dadosContrato.dadosBancariosRepasse = (contract as any).dadosBancariosRepasse || adm.dadosBancariosRepasse || "";
+        dadosContrato.proprietarioNome = contract.nomeVendedor || contract.dados?.locador?.nome || "";
+        dadosContrato.proprietarioCpf = contract.dados?.vendedor?.cpf || contract.dados?.locador?.cpf || "";
+        dadosContrato.administradoraNome = contract.dados?.administradora?.razaoSocial || "MENTA IMÓVEIS LTDA";
+        dadosContrato.administradoraCnpj = contract.dados?.administradora?.cnpj || "00.000.000/0001-00";
+        dadosContrato.administradoraCreci = contract.dados?.administradora?.creci || "";
+      }
+
+      if (contract.tipoContrato === 'locacao_temporaria') {
+        dadosContrato.tipoContratoLabel = "Locação por Temporada";
       }
 
       if (finalizar) {
@@ -3211,7 +3390,7 @@ export default function AdminContractForm() {
                 { id: 'contraproposta', title: 'Contraproposta', icon: AlertCircle, desc: 'Resposta do vendedor com novos termos.' },
                 { id: 'aceite', title: 'Aceite de Termos', icon: Check, desc: 'Formalização final do acordo entre as partes.' },
                 { id: 'locacao_temporaria', title: 'Locação Temporária', icon: Calendar, desc: 'Contrato para aluguéis de temporada e curtos períodos.' },
-                { id: 'arras_confirmatorios', title: 'Arras Confirmatórios', icon: CreditCard, desc: 'Instrumento para formalizar sinal de pagamento e compromisso entre comprador e vendedor.' }
+                { id: 'administracao_temporaria', title: 'Contrato de Administração Temporária', icon: Building2, desc: 'Gestão e administração de locação temporária entre Proprietário e Imobiliária.' }
               ].map((t) => (
                 <button
                   key={t.id}
@@ -3249,8 +3428,15 @@ export default function AdminContractForm() {
                       <div className="w-12 h-12 bg-primary-black text-gold rounded-2xl flex items-center justify-center shadow-lg">
                         <Building2 size={24} />
                       </div>
-                      <div>
-                        <h3 className="text-xl font-display font-bold text-primary-black">1. Objeto e Imóvel</h3>
+                      <div className="flex-grow">
+                        <div className="flex items-center gap-3">
+                          <h3 className="text-xl font-display font-bold text-primary-black">1. Objeto e Imóvel</h3>
+                          {autoFilledBadges.imovel && (
+                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              ✓ Preenchido automaticamente pelo cadastro
+                            </span>
+                          )}
+                        </div>
                         <p className="text-sm text-gray-400">Escolha o imóvel para locação.</p>
                       </div>
                     </div>
@@ -3308,7 +3494,14 @@ export default function AdminContractForm() {
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
                       <div className="space-y-6">
-                        <h4 className="text-xs font-black text-gold uppercase tracking-widest border-b border-gray-100 pb-2">Locador (Proprietário)</h4>
+                        <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                          <h4 className="text-xs font-black text-gold uppercase tracking-widest">Locador (Proprietário)</h4>
+                          {autoFilledBadges.proprietario && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              ✓ Preenchido pelo imóvel
+                            </span>
+                          )}
+                        </div>
                         <div className="space-y-4">
                           <input type="text" className="input-field" placeholder="Nome Completo / Razão Social" value={contract.dados.locador?.nome || ''} onChange={e => {
                             updateDados('locador', 'nome', e.target.value);
@@ -3472,7 +3665,18 @@ export default function AdminContractForm() {
                       </div>
 
                       <div className="space-y-6">
-                        <h4 className="text-xs font-black text-gold uppercase tracking-widest border-b border-gray-100 pb-2">Locatário (Hóspede)</h4>
+                        <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                          <h4 className="text-xs font-black text-gold uppercase tracking-widest">Locatário (Hóspede)</h4>
+                          {autoFilledBadges.locatario ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              ✓ Vinculado automaticamente
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                              Preenchimento manual
+                            </span>
+                          )}
+                        </div>
                         <div className="space-y-4">
                           <input type="text" className="input-field" placeholder="Nome Completo" value={contract.dados.locatario?.nome || ''} onChange={e => {
                             updateDados('locatario', 'nome', e.target.value);
@@ -3481,6 +3685,13 @@ export default function AdminContractForm() {
                           <div className="grid grid-cols-2 gap-4">
                             <input type="text" className="input-field" placeholder="CPF" value={contract.dados.locatario?.cpf || ''} onChange={e => updateDados('locatario', 'cpf', e.target.value)} />
                             <input type="text" className="input-field" placeholder="RG" value={contract.dados.locatario?.rg || ''} onChange={e => updateDados('locatario', 'rg', e.target.value)} />
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <input type="text" className="input-field" placeholder="Nacionalidade" value={contract.dados.locatario?.nacionalidade || 'Brasileiro(a)'} onChange={e => updateDados('locatario', 'nacionalidade', e.target.value)} />
+                            <div className="space-y-1">
+                              <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest pl-1">Data de Nascimento</span>
+                              <input type="date" className="input-field !py-2" value={contract.dados.locatario?.dataNascimento || ''} onChange={e => updateDados('locatario', 'dataNascimento', e.target.value)} />
+                            </div>
                           </div>
                           <div className="grid grid-cols-2 gap-4">
                             <select className="input-field" value={contract.dados.locatario?.estadoCivil || 'Solteiro(a)'} onChange={e => updateDados('locatario', 'estadoCivil', e.target.value)}>
@@ -3711,6 +3922,609 @@ export default function AdminContractForm() {
                     </div>
                     <div className="mt-8 p-6 bg-gold/5 rounded-2xl border border-gold/10">
                        <p className="text-lg font-display font-bold text-primary-black">Duração: <span className="text-gold">{contract.dados.prazo?.quantidadeDias || 0} dias</span></p>
+                    </div>
+                  </div>
+                </>
+              ) : contract.tipoContrato === 'administracao_temporaria' ? (
+                <>
+                  {/* Administração Temporária - Objeto e Imóvel */}
+                  <div className="bg-white p-10 rounded-[2.5rem] shadow-xl border border-gray-100">
+                    <div className="flex items-center justify-between gap-4 mb-8">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-primary-black text-gold rounded-2xl flex items-center justify-center shadow-lg">
+                          <Building2 size={24} />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-3">
+                            <h3 className="text-xl font-display font-bold text-primary-black">1. Objeto e Imóvel Administrado</h3>
+                            {autoFilledBadges.imovel && (
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                ✓ Preenchido automaticamente pelo cadastro
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-400">Identificação detalhada do imóvel a ser administrado para locação temporária.</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                      <div className="space-y-2 md:col-span-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Selecionar Imóvel Cadastrado</label>
+                        <select 
+                          className="input-field"
+                          onChange={(e) => {
+                            const p = properties.find(prop => prop.id === e.target.value);
+                            if (p) handlePropertySelect(p);
+                          }}
+                          value={contract.imovelId || ''}
+                        >
+                          <option value="">-- Selecione um imóvel do cadastro geral --</option>
+                          {properties.map(p => (
+                            <option key={p.id} value={p.id}>{p.code} - {p.title}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Código do Imóvel</label>
+                        <input 
+                          type="text" 
+                          className="input-field" 
+                          value={contract.imovelCodigo || contract.dados.imovel?.codigo || ''} 
+                          onChange={e => {
+                            setContract(prev => ({ ...prev, imovelCodigo: e.target.value }));
+                            updateDados('imovel', 'codigo', e.target.value);
+                          }} 
+                        />
+                      </div>
+
+                      <div className="space-y-2 md:col-span-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Nome do Edifício / Empreendimento</label>
+                        <input 
+                          type="text" 
+                          className="input-field" 
+                          value={contract.imovelTitulo || contract.imovelNomeEdificio || contract.dados.imovel?.titulo || ''} 
+                          onChange={e => {
+                            setContract(prev => ({ ...prev, imovelTitulo: e.target.value, imovelNomeEdificio: e.target.value }));
+                            updateDados('imovel', 'titulo', e.target.value);
+                          }} 
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Tipo do Imóvel</label>
+                        <input 
+                          type="text" 
+                          className="input-field" 
+                          placeholder="Ex: Apartamento, Cobertura, Casa"
+                          value={contract.dados.imovel?.tipo || contract.imovelTipo || 'Apartamento'} 
+                          onChange={e => {
+                            updateDados('imovel', 'tipo', e.target.value);
+                            setContract(prev => ({ ...prev, imovelTipo: e.target.value }));
+                          }} 
+                        />
+                      </div>
+
+                      <div className="space-y-2 md:col-span-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Endereço Completo (Rua / Logradouro)</label>
+                        <input 
+                          type="text" 
+                          className="input-field" 
+                          value={contract.enderecoImovel || contract.dados.imovel?.endereco || ''} 
+                          onChange={e => {
+                            setContract(prev => ({ ...prev, enderecoImovel: e.target.value }));
+                            updateDados('imovel', 'endereco', e.target.value);
+                          }} 
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Número</label>
+                          <input 
+                            type="text" 
+                            className="input-field" 
+                            value={contract.dados.imovel?.numero || ''} 
+                            onChange={e => updateDados('imovel', 'numero', e.target.value)} 
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Complemento / Apto</label>
+                          <input 
+                            type="text" 
+                            className="input-field" 
+                            value={contract.dados.imovel?.complemento || ''} 
+                            onChange={e => updateDados('imovel', 'complemento', e.target.value)} 
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Bairro</label>
+                        <input 
+                          type="text" 
+                          className="input-field" 
+                          value={contract.dados.imovel?.bairro || contract.imovelBairro || ''} 
+                          onChange={e => {
+                            updateDados('imovel', 'bairro', e.target.value);
+                            setContract(prev => ({ ...prev, imovelBairro: e.target.value }));
+                          }} 
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Cidade</label>
+                        <input 
+                          type="text" 
+                          className="input-field" 
+                          value={contract.dados.imovel?.cidade || contract.imovelCidade || 'Balneário Camboriú'} 
+                          onChange={e => {
+                            updateDados('imovel', 'cidade', e.target.value);
+                            setContract(prev => ({ ...prev, imovelCidade: e.target.value }));
+                          }} 
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Estado (UF)</label>
+                          <input 
+                            type="text" 
+                            className="input-field" 
+                            value={contract.dados.imovel?.estado || contract.imovelEstado || 'SC'} 
+                            onChange={e => {
+                              updateDados('imovel', 'estado', e.target.value);
+                              setContract(prev => ({ ...prev, imovelEstado: e.target.value }));
+                            }} 
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">CEP</label>
+                          <input 
+                            type="text" 
+                            className="input-field" 
+                            value={contract.dados.imovel?.cep || contract.imovelCep || ''} 
+                            onChange={e => {
+                              updateDados('imovel', 'cep', e.target.value);
+                              setContract(prev => ({ ...prev, imovelCep: e.target.value }));
+                            }} 
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Matrícula do Imóvel</label>
+                        <input 
+                          type="text" 
+                          className="input-field" 
+                          placeholder="Nº da Matrícula"
+                          value={contract.dados.imovel?.matricula || (contract as any).imovelMatricula || ''} 
+                          onChange={e => {
+                            updateDados('imovel', 'matricula', e.target.value);
+                            setContract(prev => ({ ...prev, imovelMatricula: e.target.value }));
+                          }} 
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Cartório de Registro (CRI)</label>
+                        <input 
+                          type="text" 
+                          className="input-field" 
+                          placeholder="Ex: 1º Ofício de Registro de Imóveis"
+                          value={contract.dados.imovel?.cri || (contract as any).imovelCri || ''} 
+                          onChange={e => {
+                            updateDados('imovel', 'cri', e.target.value);
+                            setContract(prev => ({ ...prev, imovelCri: e.target.value }));
+                          }} 
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Status de Mobília</label>
+                        <select 
+                          className="input-field" 
+                          value={contract.dados.imovel?.mobiliado || 'Sim'} 
+                          onChange={e => updateDados('imovel', 'mobiliado', e.target.value)}
+                        >
+                          <option value="Sim">Mobiliado e Equipado</option>
+                          <option value="Parcialmente">Semimobiliado</option>
+                          <option value="Não">Sem mobília</option>
+                        </select>
+                      </div>
+
+                      <div className="space-y-2 md:col-span-3">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Características Relevantes / Observações do Imóvel</label>
+                        <textarea 
+                          rows={2}
+                          className="input-field py-3 min-h-[60px]" 
+                          placeholder="Vagas de garagem, itens de lazer, aparelhos de ar-condicionado, utensílios..."
+                          value={contract.dados.imovel?.caracteristicas || ''} 
+                          onChange={e => updateDados('imovel', 'caracteristicas', e.target.value)} 
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Administração Temporária - Partes (Proprietário e Imobiliária) */}
+                  <div className="bg-white p-10 rounded-[2.5rem] shadow-xl border border-gray-100">
+                    <div className="flex items-center gap-4 mb-8">
+                      <div className="w-12 h-12 bg-primary-black text-gold rounded-2xl flex items-center justify-center shadow-lg">
+                        <User size={24} />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-display font-bold text-primary-black">2. Qualificação das Partes Contratantes</h3>
+                        <p className="text-sm text-gray-400">O Proprietário (Contratante) e a Imobiliária (Administradora Contratada).</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                      {/* Contratante - Proprietário */}
+                      <div className="space-y-6">
+                        <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                          <h4 className="text-xs font-black text-gold uppercase tracking-widest">Contratante (Proprietário)</h4>
+                          {autoFilledBadges.proprietario && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              ✓ Puxado do cadastro
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="space-y-4">
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest pl-1">Nome Completo do Proprietário</label>
+                            <input 
+                              type="text" 
+                              className="input-field" 
+                              placeholder="Nome Completo" 
+                              value={contract.nomeVendedor || contract.dados.vendedor?.nome || ''} 
+                              onChange={e => {
+                                updateDados('vendedor', 'nome', e.target.value);
+                                updateDados('proprietario', 'nome', e.target.value);
+                                setContract(prev => ({ ...prev, nomeVendedor: e.target.value, proprietario: e.target.value }));
+                              }} 
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest pl-1">CPF / CNPJ</label>
+                              <input 
+                                type="text" 
+                                className="input-field" 
+                                placeholder="CPF ou CNPJ" 
+                                value={contract.dados.vendedor?.cpf || contract.dados.vendedor?.cpfCnpj || ''} 
+                                onChange={e => {
+                                  updateDados('vendedor', 'cpf', e.target.value);
+                                  updateDados('vendedor', 'cpfCnpj', e.target.value);
+                                  updateDados('proprietario', 'cpf', e.target.value);
+                                }} 
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest pl-1">RG / Órgão Emissor</label>
+                              <input 
+                                type="text" 
+                                className="input-field" 
+                                placeholder="RG" 
+                                value={contract.dados.vendedor?.rg || contract.dados.vendedor?.rgIe || ''} 
+                                onChange={e => {
+                                  updateDados('vendedor', 'rg', e.target.value);
+                                  updateDados('proprietario', 'rg', e.target.value);
+                                }} 
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest pl-1">Nacionalidade</label>
+                              <input 
+                                type="text" 
+                                className="input-field" 
+                                placeholder="Nacionalidade" 
+                                value={contract.dados.vendedor?.nacionalidade || 'Brasileiro(a)'} 
+                                onChange={e => {
+                                  updateDados('vendedor', 'nacionalidade', e.target.value);
+                                  updateDados('proprietario', 'nacionalidade', e.target.value);
+                                }} 
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest pl-1">Estado Civil</label>
+                              <select 
+                                className="input-field" 
+                                value={contract.dados.vendedor?.estadoCivil || 'Solteiro(a)'} 
+                                onChange={e => {
+                                  updateDados('vendedor', 'estadoCivil', e.target.value);
+                                  updateDados('proprietario', 'estadoCivil', e.target.value);
+                                }}
+                              >
+                                <option value="Solteiro(a)">Solteiro(a)</option>
+                                <option value="Casado(a)">Casado(a)</option>
+                                <option value="União Estável">União Estável</option>
+                                <option value="Divorciado(a)">Divorciado(a)</option>
+                                <option value="Viúvo(a)">Viúvo(a)</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest pl-1">Profissão</label>
+                              <input 
+                                type="text" 
+                                className="input-field" 
+                                placeholder="Profissão" 
+                                value={contract.dados.vendedor?.profissao || ''} 
+                                onChange={e => {
+                                  updateDados('vendedor', 'profissao', e.target.value);
+                                  updateDados('proprietario', 'profissao', e.target.value);
+                                }} 
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest pl-1">Telefone / WhatsApp</label>
+                              <input 
+                                type="text" 
+                                className="input-field" 
+                                placeholder="(XX) XXXXX-XXXX" 
+                                value={contract.dados.vendedor?.whatsapp || contract.dados.vendedor?.telefone || ''} 
+                                onChange={e => {
+                                  updateDados('vendedor', 'telefone', e.target.value);
+                                  updateDados('vendedor', 'whatsapp', e.target.value);
+                                  updateDados('proprietario', 'telefone', e.target.value);
+                                }} 
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest pl-1">E-mail</label>
+                            <input 
+                              type="email" 
+                              className="input-field" 
+                              placeholder="E-mail do Proprietário" 
+                              value={contract.dados.vendedor?.email || ''} 
+                              onChange={e => {
+                                updateDados('vendedor', 'email', e.target.value);
+                                updateDados('proprietario', 'email', e.target.value);
+                              }} 
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div className="sm:col-span-2 space-y-1">
+                              <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest pl-1">Endereço Residencial</label>
+                              <input 
+                                type="text" 
+                                className="input-field" 
+                                placeholder="Rua / Logradouro" 
+                                value={contract.dados.vendedor?.endereco || ''} 
+                                onChange={e => {
+                                  updateDados('vendedor', 'endereco', e.target.value);
+                                  updateDados('proprietario', 'endereco', e.target.value);
+                                }} 
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest pl-1">Número</label>
+                              <input 
+                                type="text" 
+                                className="input-field" 
+                                placeholder="Nº" 
+                                value={contract.dados.vendedor?.numero || ''} 
+                                onChange={e => {
+                                  updateDados('vendedor', 'numero', e.target.value);
+                                  updateDados('proprietario', 'numero', e.target.value);
+                                }} 
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-4">
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest pl-1">CEP</label>
+                              <input 
+                                type="text" 
+                                className="input-field" 
+                                placeholder="CEP" 
+                                value={contract.dados.vendedor?.cep || ''} 
+                                onChange={e => {
+                                  updateDados('vendedor', 'cep', e.target.value);
+                                  updateDados('proprietario', 'cep', e.target.value);
+                                }} 
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest pl-1">Cidade</label>
+                              <input 
+                                type="text" 
+                                className="input-field" 
+                                placeholder="Cidade" 
+                                value={contract.dados.vendedor?.cidade || ''} 
+                                onChange={e => {
+                                  updateDados('vendedor', 'cidade', e.target.value);
+                                  updateDados('proprietario', 'cidade', e.target.value);
+                                }} 
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest pl-1">Estado</label>
+                              <input 
+                                type="text" 
+                                className="input-field" 
+                                placeholder="UF" 
+                                value={contract.dados.vendedor?.estado || 'SC'} 
+                                onChange={e => {
+                                  updateDados('vendedor', 'estado', e.target.value);
+                                  updateDados('proprietario', 'estado', e.target.value);
+                                }} 
+                              />
+                            </div>
+                          </div>
+
+                          {/* Cônjuge do Proprietário */}
+                          <div className="flex items-center gap-2 mt-4 pt-2 border-t border-gray-100">
+                            <input
+                              type="checkbox"
+                              id="possuiConjugeAdminProp"
+                              className="rounded border-gray-300 text-gold focus:ring-gold"
+                              checked={temConjugeVendedor}
+                              onChange={e => setTemConjugeVendedor(e.target.checked)}
+                            />
+                            <label htmlFor="possuiConjugeAdminProp" className="text-xs text-gray-600 font-medium cursor-pointer">
+                              Proprietário possui cônjuge / companheiro(a)
+                            </label>
+                          </div>
+
+                          {temConjugeVendedor && (
+                            <div className="space-y-4 border-l-2 border-gold/30 pl-4 mt-2">
+                              <h5 className="text-[10px] font-black text-gold uppercase tracking-widest">Qualificação do Cônjuge</h5>
+                              <input
+                                type="text"
+                                className="input-field"
+                                placeholder="Nome Completo do Cônjuge"
+                                value={contract.dados.vendedor?.vendedorConjugeNome || contract.dados.vendedor?.conjugeNome || ''}
+                                onChange={e => {
+                                  updateDados('vendedor', 'vendedorConjugeNome', e.target.value);
+                                  updateDados('vendedor', 'conjugeNome', e.target.value);
+                                }}
+                              />
+                              <div className="grid grid-cols-2 gap-4">
+                                <input
+                                  type="text"
+                                  className="input-field"
+                                  placeholder="CPF do Cônjuge"
+                                  value={contract.dados.vendedor?.vendedorConjugeCpf || contract.dados.vendedor?.conjugeCpf || ''}
+                                  onChange={e => {
+                                    updateDados('vendedor', 'vendedorConjugeCpf', e.target.value);
+                                    updateDados('vendedor', 'conjugeCpf', e.target.value);
+                                  }}
+                                />
+                                <input
+                                  type="text"
+                                  className="input-field"
+                                  placeholder="RG do Cônjuge"
+                                  value={contract.dados.vendedor?.vendedorConjugeRg || contract.dados.vendedor?.conjugeRg || ''}
+                                  onChange={e => {
+                                    updateDados('vendedor', 'vendedorConjugeRg', e.target.value);
+                                    updateDados('vendedor', 'conjugeRg', e.target.value);
+                                  }}
+                                />
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                <input
+                                  type="text"
+                                  className="input-field"
+                                  placeholder="Profissão do Cônjuge"
+                                  value={contract.dados.vendedor?.vendedorConjugeProfissao || contract.dados.vendedor?.conjugeProfissao || ''}
+                                  onChange={e => {
+                                    updateDados('vendedor', 'vendedorConjugeProfissao', e.target.value);
+                                    updateDados('vendedor', 'conjugeProfissao', e.target.value);
+                                  }}
+                                />
+                                <input
+                                  type="text"
+                                  className="input-field"
+                                  placeholder="Telefone do Cônjuge"
+                                  value={contract.dados.vendedor?.vendedorConjugeTelefone || contract.dados.vendedor?.conjugeTelefone || ''}
+                                  onChange={e => {
+                                    updateDados('vendedor', 'vendedorConjugeTelefone', e.target.value);
+                                    updateDados('vendedor', 'conjugeTelefone', e.target.value);
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Contratada - Imobiliária Administradora */}
+                      <div className="space-y-6">
+                        <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                          <h4 className="text-xs font-black text-primary-black uppercase tracking-widest">Contratada (Imobiliária)</h4>
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-700">
+                            Dados da Empresa
+                          </span>
+                        </div>
+
+                        <div className="space-y-4">
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest pl-1">Razão Social / Nome da Imobiliária</label>
+                            <input 
+                              type="text" 
+                              className="input-field bg-gray-50" 
+                              value={settings.empresa?.razaoSocial || settings.empresa?.nome || "MENTA NEGÓCIOS IMOBILIÁRIOS"} 
+                              readOnly 
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest pl-1">CNPJ</label>
+                              <input 
+                                type="text" 
+                                className="input-field bg-gray-50" 
+                                value={settings.empresa?.cnpj || "Não informado"} 
+                                readOnly 
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest pl-1">CRECI PJ</label>
+                              <input 
+                                type="text" 
+                                className="input-field bg-gray-50" 
+                                value={settings.empresa?.creciPj || "Não informado"} 
+                                readOnly 
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest pl-1">Telefone da Imobiliária</label>
+                              <input 
+                                type="text" 
+                                className="input-field bg-gray-50" 
+                                value={settings.empresa?.telefone || "Não informado"} 
+                                readOnly 
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest pl-1">E-mail de Contato</label>
+                              <input 
+                                type="text" 
+                                className="input-field bg-gray-50" 
+                                value={settings.empresa?.email || "Não informado"} 
+                                readOnly 
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest pl-1">Endereço da Sede</label>
+                            <input 
+                              type="text" 
+                              className="input-field bg-gray-50" 
+                              value={settings.empresa?.endereco || "Não informado"} 
+                              readOnly 
+                            />
+                          </div>
+
+                          <div className="space-y-1 pt-2">
+                            <label className="text-[9px] font-bold text-gold uppercase tracking-widest pl-1">Corretor / Gestor Responsável</label>
+                            <input 
+                              type="text" 
+                              className="input-field" 
+                              placeholder="Nome do corretor ou gestor que assinará pela imobiliária"
+                              value={contract.corretorResponsavel || ''} 
+                              onChange={e => setContract(prev => ({ ...prev, corretorResponsavel: e.target.value }))} 
+                            />
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </>
@@ -4567,7 +5381,263 @@ export default function AdminContractForm() {
                 </>
               ) : (
                 <>
-                  {contract.tipoContrato === 'arras_confirmatorios' ? (
+                  {contract.tipoContrato === 'administracao_temporaria' ? (
+                    <div className="bg-white p-10 rounded-[2.5rem] shadow-xl border border-gray-100 space-y-8">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-primary-black text-gold rounded-2xl flex items-center justify-center shadow-lg">
+                          <CreditCard size={24} />
+                        </div>
+                        <div>
+                          <h3 className="text-xl font-display font-bold text-primary-black">Condições Comerciais e Remuneração da Administração</h3>
+                          <p className="text-sm text-gray-400">Defina a taxa de administração, prazos de repasse, vigência e dados para recebimento do proprietário.</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gold uppercase tracking-widest pl-1">Taxa de Administração (%)</label>
+                          <input 
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.5"
+                            className="input-field" 
+                            placeholder="Ex: 20"
+                            value={(contract as any).taxaAdministracaoPercentual ?? contract.dados?.administracao?.taxaAdministracaoPercentual ?? 20}
+                            onChange={e => {
+                              const val = parseFloat(e.target.value) || 0;
+                              setContract(prev => ({
+                                ...prev,
+                                taxaAdministracaoPercentual: val,
+                                dados: {
+                                  ...prev.dados,
+                                  administracao: {
+                                    ...prev.dados?.administracao,
+                                    taxaAdministracaoPercentual: val
+                                  }
+                                }
+                              }));
+                            }}
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Taxa Mínima por Locação (R$)</label>
+                          <input 
+                            type="text" 
+                            className="input-field" 
+                            value={maskCurrency((contract as any).taxaAdministracaoValor ?? contract.dados?.administracao?.taxaAdministracaoValor ?? 0)}
+                            onChange={e => {
+                              const num = parseCurrencyToNumber(e.target.value);
+                              setContract(prev => ({
+                                ...prev,
+                                taxaAdministracaoValor: num,
+                                dados: {
+                                  ...prev.dados,
+                                  administracao: {
+                                    ...prev.dados?.administracao,
+                                    taxaAdministracaoValor: num
+                                  }
+                                }
+                              }));
+                            }}
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Prazo de Repasse (Dias Úteis)</label>
+                          <input 
+                            type="number" 
+                            min="1"
+                            max="60"
+                            className="input-field" 
+                            placeholder="Ex: 5"
+                            value={(contract as any).prazoRepasseDias ?? contract.dados?.administracao?.prazoRepasseDias ?? 5}
+                            onChange={e => {
+                              const dias = parseInt(e.target.value, 10) || 5;
+                              setContract(prev => ({
+                                ...prev,
+                                prazoRepasseDias: dias,
+                                dados: {
+                                  ...prev.dados,
+                                  administracao: {
+                                    ...prev.dados?.administracao,
+                                    prazoRepasseDias: dias
+                                  }
+                                }
+                              }));
+                            }}
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Vigência Inicial (Meses)</label>
+                          <input 
+                            type="number" 
+                            min="1"
+                            max="60"
+                            className="input-field" 
+                            placeholder="Ex: 12"
+                            value={(contract as any).vigenciaMeses ?? contract.dados?.administracao?.vigenciaMeses ?? 12}
+                            onChange={e => {
+                              const meses = parseInt(e.target.value, 10) || 12;
+                              setContract(prev => ({
+                                ...prev,
+                                vigenciaMeses: meses,
+                                dados: {
+                                  ...prev.dados,
+                                  administracao: {
+                                    ...prev.dados?.administracao,
+                                    vigenciaMeses: meses
+                                  }
+                                }
+                              }));
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Periodicidade de Prestação de Contas</label>
+                          <input 
+                            type="text" 
+                            className="input-field" 
+                            placeholder="Ex: Mensal até o 5º dia útil do mês subsequente"
+                            value={(contract as any).prestacaoContasPeriodo || contract.dados?.administracao?.prestacaoContasPeriodo || 'Mensal até o 5º dia útil do mês subsequente'}
+                            onChange={e => {
+                              const txt = e.target.value;
+                              setContract(prev => ({
+                                ...prev,
+                                prestacaoContasPeriodo: txt,
+                                dados: {
+                                  ...prev.dados,
+                                  administracao: {
+                                    ...prev.dados?.administracao,
+                                    prestacaoContasPeriodo: txt
+                                  }
+                                }
+                              }));
+                            }}
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Canais / Plataformas Autorizadas</label>
+                          <input 
+                            type="text" 
+                            className="input-field" 
+                            placeholder="Ex: Airbnb, Booking.com, site oficial e reservas diretas"
+                            value={contract.dados?.administracao?.plataformasAutorizadas || 'Airbnb, Booking.com, site institucional e reservas diretas'}
+                            onChange={e => updateDados('administracao', 'plataformasAutorizadas', e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Repasse ao Proprietário */}
+                      <div className="p-6 rounded-2xl bg-gold/5 border border-gold/20 space-y-4">
+                        <h4 className="text-xs font-black text-gold uppercase tracking-widest">Dados Bancários / PIX do Proprietário para Repasses</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest pl-1">Chave PIX do Proprietário</label>
+                            <input 
+                              type="text" 
+                              className="input-field bg-white" 
+                              placeholder="CPF, CNPJ, E-mail, Celular ou Chave Aleatória"
+                              value={(contract as any).chavePixRepasse || contract.dados?.administracao?.chavePixRepasse || ''}
+                              onChange={e => {
+                                const val = e.target.value;
+                                setContract(prev => ({
+                                  ...prev,
+                                  chavePixRepasse: val,
+                                  dados: {
+                                    ...prev.dados,
+                                    administracao: {
+                                      ...prev.dados?.administracao,
+                                      chavePixRepasse: val
+                                    }
+                                  }
+                                }));
+                              }}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest pl-1">Conta Bancária (Banco, Agência, Conta, Titular)</label>
+                            <input 
+                              type="text" 
+                              className="input-field bg-white" 
+                              placeholder="Ex: Banco do Brasil - Ag: 1234 - CC: 56789-0"
+                              value={(contract as any).dadosBancariosRepasse || contract.dados?.administracao?.dadosBancariosRepasse || ''}
+                              onChange={e => {
+                                const val = e.target.value;
+                                setContract(prev => ({
+                                  ...prev,
+                                  dadosBancariosRepasse: val,
+                                  dados: {
+                                    ...prev.dados,
+                                    administracao: {
+                                      ...prev.dados?.administracao,
+                                      dadosBancariosRepasse: val
+                                    }
+                                  }
+                                }));
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Testemunhas */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-100">
+                        <div className="space-y-4">
+                          <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Testemunha 1</h5>
+                          <input 
+                            type="text" 
+                            className="input-field" 
+                            placeholder="Nome Completo"
+                            value={contract.dados?.assinaturas?.testemunha1 || ''}
+                            onChange={e => updateDados('assinaturas', 'testemunha1', e.target.value)}
+                          />
+                          <input 
+                            type="text" 
+                            className="input-field" 
+                            placeholder="CPF da Testemunha 1"
+                            value={contract.dados?.assinaturas?.cpfTestemunha1 || ''}
+                            onChange={e => updateDados('assinaturas', 'cpfTestemunha1', e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-4">
+                          <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Testemunha 2</h5>
+                          <input 
+                            type="text" 
+                            className="input-field" 
+                            placeholder="Nome Completo"
+                            value={contract.dados?.assinaturas?.testemunha2 || ''}
+                            onChange={e => updateDados('assinaturas', 'testemunha2', e.target.value)}
+                          />
+                          <input 
+                            type="text" 
+                            className="input-field" 
+                            placeholder="CPF da Testemunha 2"
+                            value={contract.dados?.assinaturas?.cpfTestemunha2 || ''}
+                            onChange={e => updateDados('assinaturas', 'cpfTestemunha2', e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Cláusulas Adicionais */}
+                      <div className="space-y-2 pt-4 border-t border-gray-100">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Cláusulas / Observações Adicionais de Administração</label>
+                        <textarea 
+                          rows={3}
+                          className="input-field py-4 min-h-[90px]" 
+                          placeholder="Condições especiais acordadas com o proprietário..."
+                          value={contract.observacoes || (contract as any).observacoesAdministracao || ''}
+                          onChange={e => setContract(prev => ({ ...prev, observacoes: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+                  ) : contract.tipoContrato === 'arras_confirmatorios' ? (
                     <div className="bg-white p-10 rounded-[2.5rem] shadow-xl border border-gray-100">
                       <div className="flex items-center gap-4 mb-8">
                         <div className="w-12 h-12 bg-primary-black text-gold rounded-2xl flex items-center justify-center shadow-lg">

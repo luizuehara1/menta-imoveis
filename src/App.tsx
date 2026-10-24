@@ -23,6 +23,7 @@ const AdminVisits = React.lazy(() => import('./pages/admin/Visits'));
 const AdminBrokers = React.lazy(() => import('./pages/admin/Brokers'));
 const AdminFinance = React.lazy(() => import('./pages/admin/Finance'));
 const AdminRents = React.lazy(() => import('./pages/admin/Rents'));
+const AdminTemporaryRentals = React.lazy(() => import('./pages/admin/TemporaryRentals'));
 const AdminContracts = React.lazy(() => import('./pages/admin/Contracts'));
 const AdminContractForm = React.lazy(() => import('./pages/admin/ContractForm'));
 const AdminSiteSettings = React.lazy(() => import('./pages/admin/SiteSettings'));
@@ -124,6 +125,7 @@ function AppRoutes() {
             <Route path="visitas" element={<AdminVisits />} />
             <Route path="corretores" element={<AdminBrokers />} />
             <Route path="locacoes" element={<AdminRents />} />
+            <Route path="locacao-temporaria" element={<AdminTemporaryRentals />} />
             <Route path="financeiro" element={<AdminFinance />} />
             <Route path="contratos" element={<AdminContracts />} />
             <Route path="contratos/novo" element={<AdminContractForm />} />

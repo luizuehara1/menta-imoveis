@@ -220,6 +220,20 @@ export function getProprietarioFromImovel(imovel: any = {}): any {
       imovel.proprietario?.estado ||
       "",
 
+    nacionalidade:
+      imovel.proprietarioNacionalidade ||
+      imovel.nacionalidadeProprietario ||
+      imovel.vendedorNacionalidade ||
+      imovel.proprietario?.nacionalidade ||
+      "Brasileiro(a)",
+
+    dataNascimento:
+      imovel.proprietarioDataNascimento ||
+      imovel.dataNascimentoProprietario ||
+      imovel.vendedorDataNascimento ||
+      imovel.proprietario?.dataNascimento ||
+      "",
+
     possuiConjuge:
       imovel.possuiConjugeProprietario ||
       imovel.proprietario?.possuiConjuge ||
@@ -242,6 +256,18 @@ export function getProprietarioFromImovel(imovel: any = {}): any {
         imovel.proprietarioConjugeRg ||
         imovel.conjugeProprietarioRg ||
         imovel.proprietario?.conjuge?.rg ||
+        "",
+
+      nacionalidade:
+        imovel.proprietarioConjugeNacionalidade ||
+        imovel.conjugeProprietarioNacionalidade ||
+        imovel.proprietario?.conjuge?.nacionalidade ||
+        "Brasileiro(a)",
+
+      dataNascimento:
+        imovel.proprietarioConjugeDataNascimento ||
+        imovel.conjugeProprietarioDataNascimento ||
+        imovel.proprietario?.conjuge?.dataNascimento ||
         "",
 
       profissao:
@@ -302,6 +328,190 @@ export function getProprietarioFromImovel(imovel: any = {}): any {
         imovel.proprietarioConjugeEstado ||
         imovel.proprietario?.conjuge?.estado ||
         ""
+    }
+  };
+}
+
+export function getLocatarioFromImovelOrLease(source: any = {}): any {
+  if (!source) return null;
+  const lRaw = source.locatario || source.tenant || {};
+  const cRaw = lRaw.conjuge || source.locatarioConjuge || source.tenantSpouse || {};
+
+  const nome = (
+    source.locatarioNome ||
+    source.tenantName ||
+    source.nomeLocatario ||
+    source.nomeInquilino ||
+    lRaw.nome ||
+    lRaw.name ||
+    ""
+  ).trim();
+
+  const cpf = (
+    source.locatarioCpf ||
+    source.tenantCpf ||
+    source.cpfLocatario ||
+    source.cpfInquilino ||
+    lRaw.cpf ||
+    lRaw.cpfCnpj ||
+    lRaw.documento ||
+    ""
+  ).trim();
+
+  // If both nome and cpf are completely empty, no tenant is registered
+  if (!nome && !cpf && !source.tenantPhone && !source.locatarioTelefone) {
+    return null;
+  }
+
+  const rg = (
+    source.locatarioRg ||
+    source.tenantRg ||
+    source.rgLocatario ||
+    lRaw.rg ||
+    ""
+  ).trim();
+
+  const nacionalidade = (
+    source.locatarioNacionalidade ||
+    source.tenantNationality ||
+    lRaw.nacionalidade ||
+    "Brasileiro(a)"
+  ).trim();
+
+  const estadoCivil = (
+    source.locatarioEstadoCivil ||
+    source.tenantCivilStatus ||
+    source.tenantEstadoCivil ||
+    lRaw.estadoCivil ||
+    "Solteiro(a)"
+  ).trim();
+
+  const profissao = (
+    source.locatarioProfissao ||
+    source.tenantProfession ||
+    lRaw.profissao ||
+    ""
+  ).trim();
+
+  const dataNascimento = (
+    source.locatarioDataNascimento ||
+    source.tenantBirthDate ||
+    source.dataNascimentoLocatario ||
+    lRaw.dataNascimento ||
+    ""
+  ).trim();
+
+  const telefone = (
+    source.locatarioTelefone ||
+    source.tenantPhone ||
+    source.telefoneLocatario ||
+    lRaw.telefone ||
+    lRaw.phone ||
+    ""
+  ).trim();
+
+  const whatsapp = (
+    source.locatarioWhatsapp ||
+    source.tenantWhatsapp ||
+    source.whatsappLocatario ||
+    lRaw.whatsapp ||
+    telefone
+  ).trim();
+
+  const email = (
+    source.locatarioEmail ||
+    source.tenantEmail ||
+    source.emailLocatario ||
+    lRaw.email ||
+    ""
+  ).trim();
+
+  const endereco = (
+    source.locatarioEndereco ||
+    source.tenantAddress ||
+    source.enderecoLocatario ||
+    lRaw.endereco ||
+    ""
+  ).trim();
+
+  const numero = (
+    source.locatarioNumero ||
+    source.tenantNumber ||
+    lRaw.numero ||
+    ""
+  ).trim();
+
+  const complemento = (
+    source.locatarioComplemento ||
+    source.tenantComplement ||
+    lRaw.complemento ||
+    ""
+  ).trim();
+
+  const cep = (
+    source.locatarioCep ||
+    source.tenantCep ||
+    lRaw.cep ||
+    ""
+  ).trim();
+
+  const cidade = (
+    source.locatarioCidade ||
+    source.tenantCity ||
+    lRaw.cidade ||
+    ""
+  ).trim();
+
+  const estado = (
+    source.locatarioEstado ||
+    source.tenantState ||
+    lRaw.estado ||
+    ""
+  ).trim();
+
+  const conjugeNome = (
+    source.locatarioConjugeNome ||
+    source.tenantSpouseName ||
+    cRaw.nome ||
+    ""
+  ).trim();
+
+  const possuiConjuge = !!conjugeNome || source.locatarioPossuiConjuge === true || lRaw.possuiConjuge === true;
+
+  return {
+    nome,
+    cpf,
+    rg,
+    nacionalidade,
+    estadoCivil,
+    profissao,
+    dataNascimento,
+    telefone,
+    whatsapp,
+    email,
+    endereco,
+    numero,
+    complemento,
+    cep,
+    cidade,
+    estado,
+    possuiConjuge,
+    conjuge: {
+      nome: conjugeNome,
+      cpf: (source.locatarioConjugeCpf || source.tenantSpouseCpf || cRaw.cpf || "").trim(),
+      rg: (source.locatarioConjugeRg || source.tenantSpouseRg || cRaw.rg || "").trim(),
+      nacionalidade: (source.locatarioConjugeNacionalidade || cRaw.nacionalidade || "Brasileiro(a)").trim(),
+      profissao: (source.locatarioConjugeProfissao || cRaw.profissao || "").trim(),
+      estadoCivil: (source.locatarioConjugeEstadoCivil || cRaw.estadoCivil || "Casado(a)").trim(),
+      telefone: (source.locatarioConjugeTelefone || cRaw.telefone || "").trim(),
+      whatsapp: (source.locatarioConjugeWhatsapp || cRaw.whatsapp || "").trim(),
+      email: (source.locatarioConjugeEmail || cRaw.email || "").trim(),
+      endereco: (source.locatarioConjugeEndereco || cRaw.endereco || "").trim(),
+      numero: (source.locatarioConjugeNumero || cRaw.numero || "").trim(),
+      complemento: (source.locatarioConjugeComplemento || cRaw.complemento || "").trim(),
+      cep: (source.locatarioConjugeCep || cRaw.cep || "").trim(),
+      cidade: (source.locatarioConjugeCidade || cRaw.cidade || "").trim(),
+      estado: (source.locatarioConjugeEstado || cRaw.estado || "").trim(),
     }
   };
 }
@@ -635,9 +845,14 @@ export function podeFazerProposta(imovel: any): boolean {
 export function normalizeTipoNegocio(tipo: any): string {
   const value = String(tipo || "").toLowerCase();
 
+  if (value.includes("tempor")) {
+    return "Locação Temporária";
+  }
+
   if (
     (value.includes("venda") && value.includes("loca")) ||
-    value.includes("ambos")
+    value.includes("ambos") ||
+    value.includes("venda_locacao")
   ) {
     return "Venda e Locação";
   }
@@ -1086,11 +1301,17 @@ O imóvel está alugado atualmente, mas vi que está disponível para venda.`;
     .filter(Boolean)
     .join(", ");
 
+  const isTemporaria = String(tipo).toLowerCase().includes("tempor") || String(imovel.businessType || "").toLowerCase().includes("tempor") || String(imovel.tipoNegocio || "").toLowerCase().includes("tempor");
   const isVenda = String(tipo).toLowerCase().includes("venda") || String(imovel.businessType || "").toLowerCase().includes("venda") || String(imovel.tipoNegocio || "").toLowerCase().includes("venda");
-  const isLocacao = String(tipo).toLowerCase().includes("locação") || String(tipo).toLowerCase().includes("locacao") || String(imovel.businessType || "").toLowerCase().includes("locacao") || String(imovel.tipoNegocio || "").toLowerCase().includes("locacao") || String(imovel.businessType || "").toLowerCase().includes("aluguel") || String(imovel.tipoNegocio || "").toLowerCase().includes("aluguel");
+  const isLocacao = !isTemporaria && (String(tipo).toLowerCase().includes("locação") || String(tipo).toLowerCase().includes("locacao") || String(imovel.businessType || "").toLowerCase().includes("locacao") || String(imovel.tipoNegocio || "").toLowerCase().includes("locacao") || String(imovel.businessType || "").toLowerCase().includes("aluguel") || String(imovel.tipoNegocio || "").toLowerCase().includes("aluguel"));
 
   let valorTexto = "Sob consulta";
-  if (isVenda && isLocacao) {
+  if (isTemporaria) {
+    const vDiaria = imovel.valorDiaria || imovel.priceDiaria || imovel.precoDiaria || imovel.diaria || 0;
+    const txtDiaria = vDiaria ? Number(vDiaria).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) + "/diária" : "Sob consulta";
+    const hospedes = imovel.capacidadeHospedes || imovel.maxGuests ? ` | Até ${imovel.capacidadeHospedes || imovel.maxGuests} hóspedes` : "";
+    valorTexto = `${txtDiaria}${hospedes}`;
+  } else if (isVenda && isLocacao) {
     const vVenda = imovel.priceVenda || imovel.valorVenda || 0;
     const vLoc = getValorTotalMensal(imovel) || imovel.priceLocacao || imovel.valorAluguel || 0;
     const txtVenda = vVenda ? Number(vVenda).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "";
@@ -2128,12 +2349,33 @@ export function normalizarDadosDocumento(origem: any = {}): any {
       vendedorRaw.endereco ||
       "",
 
+    locadorNacionalidade:
+      origem.locadorNacionalidade ||
+      locadorRaw.nacionalidade ||
+      origem.vendedorNacionalidade ||
+      vendedorRaw.nacionalidade ||
+      "Brasileiro(a)",
+    locadorDataNascimento:
+      origem.locadorDataNascimento ||
+      locadorRaw.dataNascimento ||
+      origem.vendedorDataNascimento ||
+      vendedorRaw.dataNascimento ||
+      "",
+    locadorWhatsapp:
+      origem.locadorWhatsapp ||
+      locadorRaw.whatsapp ||
+      origem.vendedorWhatsapp ||
+      vendedorRaw.whatsapp ||
+      "",
+
     locadorConjugeNome: origem.locadorConjugeNome || locadorConjugeRaw.nome || origem.vendedorConjugeNome || vendedorConjugeRaw.nome || "",
     locadorConjugeCpf: origem.locadorConjugeCpf || locadorConjugeRaw.cpf || origem.vendedorConjugeCpf || vendedorConjugeRaw.cpf || "",
     locadorConjugeRg: origem.locadorConjugeRg || locadorConjugeRaw.rg || origem.vendedorConjugeRg || vendedorConjugeRaw.rg || "",
+    locadorConjugeNacionalidade: origem.locadorConjugeNacionalidade || locadorConjugeRaw.nacionalidade || origem.vendedorConjugeNacionalidade || vendedorConjugeRaw.nacionalidade || "Brasileiro(a)",
     locadorConjugeProfissao: origem.locadorConjugeProfissao || locadorConjugeRaw.profissao || origem.vendedorConjugeProfissao || vendedorConjugeRaw.profissao || "",
     locadorConjugeEstadoCivil: origem.locadorConjugeEstadoCivil || locadorConjugeRaw.estadoCivil || origem.vendedorConjugeEstadoCivil || vendedorConjugeRaw.estadoCivil || "",
     locadorConjugeTelefone: origem.locadorConjugeTelefone || locadorConjugeRaw.telefone || origem.vendedorConjugeTelefone || vendedorConjugeRaw.telefone || "",
+    locadorConjugeWhatsapp: origem.locadorConjugeWhatsapp || locadorConjugeRaw.whatsapp || origem.vendedorConjugeWhatsapp || vendedorConjugeRaw.whatsapp || "",
     locadorConjugeEmail: origem.locadorConjugeEmail || locadorConjugeRaw.email || origem.vendedorConjugeEmail || vendedorConjugeRaw.email || "",
     locadorConjugeEndereco: origem.locadorConjugeEndereco || locadorConjugeRaw.endereco || origem.vendedorConjugeEndereco || vendedorConjugeRaw.endereco || "",
 
@@ -2147,65 +2389,102 @@ export function normalizarDadosDocumento(origem: any = {}): any {
       vendedorRaw.possuiConjuge ||
       false,
 
-    // Locatário definitions with standard fallbacks
+    // Locatário definitions (Strictly isolated from Comprador / Proprietário)
     locatarioNome:
       origem.locatarioNome ||
       locatarioRaw.nome ||
-      origem.compradorNome ||
-      compradorRaw.nome ||
+      origem.tenantName ||
       "",
     locatarioCpf:
       origem.locatarioCpf ||
       locatarioRaw.cpf ||
       locatarioRaw.cpfCnpj ||
-      origem.compradorCpf ||
-      compradorRaw.cpf ||
+      origem.tenantCpf ||
       "",
     locatarioRg:
       origem.locatarioRg ||
       locatarioRaw.rg ||
-      origem.compradorRg ||
-      compradorRaw.rg ||
+      origem.tenantRg ||
       "",
+    locatarioNacionalidade:
+      origem.locatarioNacionalidade ||
+      locatarioRaw.nacionalidade ||
+      origem.tenantNationality ||
+      "Brasileiro(a)",
     locatarioProfissao:
       origem.locatarioProfissao ||
       locatarioRaw.profissao ||
-      origem.compradorProfissao ||
-      compradorRaw.profissao ||
+      origem.tenantProfession ||
       "",
     locatarioEstadoCivil:
       origem.locatarioEstadoCivil ||
       locatarioRaw.estadoCivil ||
-      origem.compradorEstadoCivil ||
-      compradorRaw.estadoCivil ||
+      origem.tenantCivilStatus ||
+      origem.tenantEstadoCivil ||
+      "Solteiro(a)",
+    locatarioDataNascimento:
+      origem.locatarioDataNascimento ||
+      locatarioRaw.dataNascimento ||
+      origem.tenantBirthDate ||
       "",
     locatarioTelefone:
       origem.locatarioTelefone ||
       locatarioRaw.telefone ||
-      origem.compradorTelefone ||
-      compradorRaw.telefone ||
+      origem.tenantPhone ||
+      "",
+    locatarioWhatsapp:
+      origem.locatarioWhatsapp ||
+      locatarioRaw.whatsapp ||
+      origem.tenantWhatsapp ||
+      origem.locatarioTelefone ||
+      locatarioRaw.telefone ||
       "",
     locatarioEmail:
       origem.locatarioEmail ||
       locatarioRaw.email ||
-      origem.compradorEmail ||
-      compradorRaw.email ||
+      origem.tenantEmail ||
       "",
     locatarioEndereco:
       origem.locatarioEndereco ||
       locatarioRaw.endereco ||
-      origem.compradorEndereco ||
-      compradorRaw.endereco ||
+      origem.tenantAddress ||
+      "",
+    locatarioNumero:
+      origem.locatarioNumero ||
+      locatarioRaw.numero ||
+      origem.tenantNumber ||
+      "",
+    locatarioComplemento:
+      origem.locatarioComplemento ||
+      locatarioRaw.complemento ||
+      origem.tenantComplement ||
+      "",
+    locatarioCep:
+      origem.locatarioCep ||
+      locatarioRaw.cep ||
+      origem.tenantCep ||
+      "",
+    locatarioCidade:
+      origem.locatarioCidade ||
+      locatarioRaw.cidade ||
+      origem.tenantCity ||
+      "",
+    locatarioEstado:
+      origem.locatarioEstado ||
+      locatarioRaw.estado ||
+      origem.tenantState ||
       "",
 
-    locatarioConjugeNome: origem.locatarioConjugeNome || locatarioConjugeRaw.nome || origem.compradorConjugeNome || compradorConjugeRaw.nome || "",
-    locatarioConjugeCpf: origem.locatarioConjugeCpf || locatarioConjugeRaw.cpf || origem.compradorConjugeCpf || compradorConjugeRaw.cpf || "",
-    locatarioConjugeRg: origem.locatarioConjugeRg || locatarioConjugeRaw.rg || origem.compradorConjugeRg || compradorConjugeRaw.rg || "",
-    locatarioConjugeProfissao: origem.locatarioConjugeProfissao || locatarioConjugeRaw.profissao || origem.compradorConjugeProfissao || compradorConjugeRaw.profissao || "",
-    locatarioConjugeEstadoCivil: origem.locatarioConjugeEstadoCivil || locatarioConjugeRaw.estadoCivil || origem.compradorConjugeEstadoCivil || compradorConjugeRaw.estadoCivil || "",
-    locatarioConjugeTelefone: origem.locatarioConjugeTelefone || locatarioConjugeRaw.telefone || origem.compradorConjugeTelefone || compradorConjugeRaw.telefone || "",
-    locatarioConjugeEmail: origem.locatarioConjugeEmail || locatarioConjugeRaw.email || origem.compradorConjugeEmail || compradorConjugeRaw.email || "",
-    locatarioConjugeEndereco: origem.locatarioConjugeEndereco || locatarioConjugeRaw.endereco || origem.compradorConjugeEndereco || compradorConjugeRaw.endereco || "",
+    locatarioConjugeNome: origem.locatarioConjugeNome || locatarioConjugeRaw.nome || locatarioRaw.conjugeNome || locatarioRaw.conjuge?.nome || "",
+    locatarioConjugeCpf: origem.locatarioConjugeCpf || locatarioConjugeRaw.cpf || locatarioRaw.conjugeCpf || locatarioRaw.conjuge?.cpf || "",
+    locatarioConjugeRg: origem.locatarioConjugeRg || locatarioConjugeRaw.rg || locatarioRaw.conjugeRg || locatarioRaw.conjuge?.rg || "",
+    locatarioConjugeNacionalidade: origem.locatarioConjugeNacionalidade || locatarioConjugeRaw.nacionalidade || locatarioRaw.conjugeNacionalidade || "Brasileiro(a)",
+    locatarioConjugeProfissao: origem.locatarioConjugeProfissao || locatarioConjugeRaw.profissao || locatarioRaw.conjugeProfissao || "",
+    locatarioConjugeEstadoCivil: origem.locatarioConjugeEstadoCivil || locatarioConjugeRaw.estadoCivil || locatarioRaw.conjugeEstadoCivil || "Casado(a)",
+    locatarioConjugeTelefone: origem.locatarioConjugeTelefone || locatarioConjugeRaw.telefone || locatarioRaw.conjugeTelefone || "",
+    locatarioConjugeWhatsapp: origem.locatarioConjugeWhatsapp || locatarioConjugeRaw.whatsapp || locatarioRaw.conjugeWhatsapp || "",
+    locatarioConjugeEmail: origem.locatarioConjugeEmail || locatarioConjugeRaw.email || locatarioRaw.conjugeEmail || "",
+    locatarioConjugeEndereco: origem.locatarioConjugeEndereco || locatarioConjugeRaw.endereco || locatarioRaw.conjugeEndereco || "",
 
     locatarioPossuiConjuge:
       origem.locatarioPossuiConjuge ||
@@ -2213,9 +2492,20 @@ export function normalizarDadosDocumento(origem: any = {}): any {
       locatarioRaw.locatarioPossuiConjuge ||
       locatarioConjugeRaw.possuiConjuge ||
       parsedDados?.locatarioPossuiConjuge ||
-      origem.compradorPossuiConjuge ||
-      compradorRaw.possuiConjuge ||
       false,
+
+    // Administração Temporária
+    taxaAdministracaoPercentual: origem.taxaAdministracaoPercentual ?? parsedDados?.administracao?.taxaAdministracaoPercentual ?? 20,
+    taxaAdministracaoValor: origem.taxaAdministracaoValor ?? parsedDados?.administracao?.taxaAdministracaoValor ?? 0,
+    prazoRepasseDias: origem.prazoRepasseDias ?? parsedDados?.administracao?.prazoRepasseDias ?? 5,
+    prestacaoContasPeriodo: origem.prestacaoContasPeriodo || parsedDados?.administracao?.prestacaoContasPeriodo || "Mensal até o 5º dia útil",
+    vigenciaMeses: origem.vigenciaMeses ?? parsedDados?.administracao?.vigenciaMeses ?? 12,
+    chavePixRepasse: origem.chavePixRepasse || parsedDados?.administracao?.chavePixRepasse || "",
+    dadosBancariosRepasse: origem.dadosBancariosRepasse || parsedDados?.administracao?.dadosBancariosRepasse || "",
+    proprietarioNome: origem.proprietarioNome || origem.vendedorNome || parsedDados?.locador?.nome || parsedDados?.vendedor?.nome || "",
+    proprietarioCpf: origem.proprietarioCpf || origem.vendedorCpf || parsedDados?.locador?.cpf || parsedDados?.vendedor?.cpf || "",
+    administradoraNome: origem.administradoraNome || parsedDados?.administradora?.razaoSocial || "MENTA IMÓVEIS LTDA",
+    administradoraCnpj: origem.administradoraCnpj || parsedDados?.administradora?.cnpj || "00.000.000/0001-00",
 
     observacoes:
       origem.observacoes ||

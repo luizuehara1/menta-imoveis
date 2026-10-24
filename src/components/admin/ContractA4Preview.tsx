@@ -401,6 +401,10 @@ export function estimateSignatureHeight(dados: any, tipoContrato: string, contra
     const locatarioSpouse = getSpouseDataPDF(dados.locatario, 'locatario', dados);
     if (locatarioSpouse.nome) count++;
     if (dados.fiador && dados.fiador.nome) count++;
+  } else if (tipoContrato === 'administracao_temporaria') {
+    const propSpouse = getSpouseDataPDF(dados.proprietario || dados.vendedor, 'vendedor', dados);
+    if (propSpouse.nome) count++;
+    count += 2; // Testemunhas
   } else {
     const compSpouse = getSpouseDataPDF(dados.proponente || dados.comprador, 'comprador', dados);
     if (compSpouse.nome) count++;
@@ -914,6 +918,47 @@ export const PdfSignatures: React.FC<PdfSignaturesProps> = ({
             {safeText(empresa.nome)}
           </div>
           <div className="pdf-signature-role">INTERMEDIADORA</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (tipoContrato === 'administracao_temporaria') {
+    const nomeProprietario = dados.proprietario?.nome || dados.vendedor?.nome || contract.nomeVendedor || 'PROPRIETÁRIO CONTRATANTE';
+    const proprietarioSpouse = getSpouseDataPDF(dados.proprietario || dados.vendedor, 'vendedor', dados);
+    return (
+      <div className="pdf-signatures mt-4 pb-2 avoid-break signature-block text-[11.5px]">
+        <div className="flex flex-col justify-end pt-12">
+          <div className="pdf-signature-line text-black font-bold max-w-full truncate">
+            {safeText(nomeProprietario)}
+          </div>
+          <div className="pdf-signature-role">CONTRATANTE (Proprietário)</div>
+        </div>
+        {proprietarioSpouse.nome && (
+          <div className="flex flex-col justify-end pt-12">
+            <div className="pdf-signature-line text-black font-bold max-w-full truncate">
+              {safeText(proprietarioSpouse.nome)}
+            </div>
+            <div className="pdf-signature-role">CÔNJUGE DO CONTRATANTE</div>
+          </div>
+        )}
+        <div className="flex flex-col justify-end pt-12">
+          <div className="pdf-signature-line text-black font-bold max-w-full truncate">
+            {safeText(empresa.razaoSocial || empresa.nome || 'MENTA NEGÓCIOS IMOBILIÁRIOS')}
+          </div>
+          <div className="pdf-signature-role">CONTRATADA (Administradora)</div>
+        </div>
+        <div className="flex flex-col justify-end pt-12">
+          <div className="pdf-signature-line text-gray-700 font-bold max-w-full truncate">
+            {safeText(dados.assinaturas?.testemunha1 || 'TESTEMUNHA 1')}
+          </div>
+          <div className="pdf-signature-role">Testemunha 1 {dados.assinaturas?.cpfTestemunha1 ? `(CPF: ${dados.assinaturas.cpfTestemunha1})` : ''}</div>
+        </div>
+        <div className="flex flex-col justify-end pt-12">
+          <div className="pdf-signature-line text-gray-700 font-bold max-w-full truncate">
+            {safeText(dados.assinaturas?.testemunha2 || 'TESTEMUNHA 2')}
+          </div>
+          <div className="pdf-signature-role">Testemunha 2 {dados.assinaturas?.cpfTestemunha2 ? `(CPF: ${dados.assinaturas.cpfTestemunha2})` : ''}</div>
         </div>
       </div>
     );
@@ -1444,6 +1489,146 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
         true
       );
 
+    } else if (tipoContrato === 'administracao_temporaria') {
+      const p = dados.proprietario || dados.vendedor || (contract as any).vendedor || {};
+      const imov = dados.imovel || {};
+      const adminTerms = dados.administracao || {};
+      const proprietarioSpouse = getSpouseDataPDF(p, 'vendedor', dados);
+
+      // 1. Title Block
+      addBlock(
+        <div className="pdf-document-title font-display font-black text-black text-center">
+          CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE ADMINISTRAÇÃO TEMPORÁRIA DE IMÓVEL
+        </div>,
+        12
+      );
+
+      // 2. Intro Text
+      addBlock(
+        <p className="text-justify indent-6 text-[10.5px] text-gray-800 mt-2 leading-relaxed">
+          Pelo presente instrumento particular, de um lado o <strong>CONTRATANTE</strong> (Proprietário do Imóvel), qualificado no item I, e de outro lado a <strong>CONTRATADA</strong> (Imobiliária Administradora), qualificada no item II, têm entre si justo e acordado o presente Contrato de Prestação de Serviços de Administração Temporária, regendo-se pelas cláusulas e condições a seguir estipuladas.
+        </p>,
+        12
+      );
+
+      // 3. Contratante (Proprietário + Cônjuge)
+      addBlock(
+        <PdfSection title="I - Contratante (Proprietário do Imóvel)">
+          <PdfFieldGrid>
+            <p className="col-span-2"><strong>Nome Completo:</strong> {safeText(contract.nomeVendedor || p.nome)}</p>
+            <p><strong>CPF/CNPJ:</strong> {safeText(p.cpf || p.cpfCnpj || p.documento || "---")}</p>
+            <p><strong>RG:</strong> {safeText(p.rg || p.rgIe || "---")}</p>
+            <p><strong>Nacionalidade:</strong> {safeText(p.nacionalidade || "Brasileiro(a)")}</p>
+            <p><strong>Estado Civil:</strong> {safeText(p.estadoCivil || "Solteiro(a)")}</p>
+            <p><strong>Profissão:</strong> {safeText(p.profissao || "Não informada")}</p>
+            <p><strong>Telefone/WhatsApp:</strong> {safeText(p.whatsapp || p.telefone || p.celular || "---")}</p>
+            <p className="col-span-2"><strong>E-mail:</strong> {safeText(p.email || "---")}</p>
+            <p className="col-span-2"><strong>Endereço Completo:</strong> {formatFullAddress(p)}</p>
+            
+            {proprietarioSpouse.nome && (
+              <>
+                <p className="col-span-2 border-t border-gray-150 pt-1 font-bold text-gray-700">Dados do Cônjuge:</p>
+                <p><strong>Nome Cônjuge:</strong> {proprietarioSpouse.nome}</p>
+                <p><strong>CPF Cônjuge:</strong> {proprietarioSpouse.cpf || "Não informado"}</p>
+                {proprietarioSpouse.rg && <p><strong>RG Cônjuge:</strong> {proprietarioSpouse.rg}</p>}
+                {proprietarioSpouse.profissao && <p><strong>Profissão Cônjuge:</strong> {proprietarioSpouse.profissao}</p>}
+                {proprietarioSpouse.telefone && <p><strong>Telefone Cônjuge:</strong> {proprietarioSpouse.telefone}</p>}
+                {proprietarioSpouse.email && <p><strong>E-mail Cônjuge:</strong> {proprietarioSpouse.email}</p>}
+                {proprietarioSpouse.estadoCivil && <p><strong>Estado Civil Cônjuge:</strong> {proprietarioSpouse.estadoCivil}</p>}
+                {proprietarioSpouse.endereco && <p className="col-span-2"><strong>Endereço Cônjuge:</strong> {proprietarioSpouse.endereco}</p>}
+              </>
+            )}
+          </PdfFieldGrid>
+        </PdfSection>,
+        proprietarioSpouse.nome ? 44 : 26
+      );
+
+      // 4. Contratada (Imobiliária)
+      addBlock(
+        <PdfSection title="II - Contratada (Imobiliária Administradora)">
+          <PdfFieldGrid>
+            <p className="col-span-2"><strong>Razão Social / Nome:</strong> {safeText(empresa.razaoSocial || empresa.nome || "MENTA NEGÓCIOS IMOBILIÁRIOS")}</p>
+            <p><strong>CNPJ:</strong> {safeText(empresa.cnpj || "Não informado")}</p>
+            <p><strong>CRECI PJ:</strong> {safeText(empresa.creciPj || "Não informado")}</p>
+            <p><strong>Telefone:</strong> {safeText(empresa.telefone || "Não informado")}</p>
+            <p><strong>E-mail:</strong> {safeText(empresa.email || "Não informado")}</p>
+            <p className="col-span-2"><strong>Endereço:</strong> {safeText(empresa.endereco || "Não informado")}</p>
+            {contract.corretorResponsavel && (
+              <p className="col-span-2"><strong>Corretor / Gestor Responsável:</strong> {safeText(contract.corretorResponsavel)}</p>
+            )}
+          </PdfFieldGrid>
+        </PdfSection>,
+        22
+      );
+
+      // 5. Imóvel
+      addBlock(
+        <PdfSection title="III - Identificação e Descrição do Imóvel">
+          <PdfPropertyBlock imovel={imov} tipoContrato={tipoContrato} contract={contract} />
+        </PdfSection>,
+        28
+      );
+
+      // 6. Condições Comerciais e Remuneração
+      const taxaPercentual = adminTerms.taxaAdministracaoPercentual ?? dados.taxaAdministracaoPercentual ?? 20;
+      const taxaValor = adminTerms.taxaAdministracaoValor ?? dados.taxaAdministracaoValor ?? 0;
+      const prazoRepasse = adminTerms.prazoRepasseDias ?? dados.prazoRepasseDias ?? 5;
+      const prestacaoContas = adminTerms.prestacaoContasPeriodo || dados.prestacaoContasPeriodo || "Mensal, até o 10º dia do mês subsequente ao término de cada locação";
+      const vigenciaMeses = adminTerms.vigenciaMeses || dados.vigenciaMeses || 12;
+      const dadosBancarios = adminTerms.dadosBancariosRepasse || dados.dadosBancariosRepasse || p.dadosBancarios || "Não informado";
+      const chavePix = adminTerms.chavePixRepasse || dados.chavePixRepasse || p.chavePix || "";
+
+      addBlock(
+        <PdfSection title="IV - Condições Comerciais e Remuneração da Administração">
+          <PdfFieldGrid>
+            <p><strong>Taxa de Administração:</strong> {taxaPercentual}% sobre o valor bruto das locações{taxaValor > 0 ? ` (Mínimo: ${safeMoney(taxaValor)})` : ''}</p>
+            <p><strong>Prazo para Repasse:</strong> Até {prazoRepasse} dia(s) útil(eis) após recebimento</p>
+            <p className="col-span-2"><strong>Prestação de Contas:</strong> {safeText(prestacaoContas)}</p>
+            <p><strong>Vigência do Contrato:</strong> {vigenciaMeses} meses (renovável automaticamente)</p>
+            <p><strong>Chave PIX para Repasse:</strong> {safeText(chavePix || "Não informada")}</p>
+            <p className="col-span-2"><strong>Dados Bancários para Depósito:</strong> {safeText(dadosBancarios)}</p>
+          </PdfFieldGrid>
+        </PdfSection>,
+        24
+      );
+
+      // 7. Cláusulas Contratuais Selecionadas
+      const listClausesAdmin = (dados.clausulasSelecionadas || []).filter(
+        (c: any) => c && c.texto && c.texto.trim() !== ""
+      );
+      if (listClausesAdmin.length > 0) {
+        listClausesAdmin.forEach((c: any, idx: number) => {
+          addBlock(
+            <PdfClausesBlock clausulas={[c]} sectionTitle={idx === 0 ? "V - Cláusulas e Condições da Administração" : ""} startIndex={idx + 1} />,
+            estimateHeight(c.texto || '') + 8
+          );
+        });
+      }
+
+      // 8. Cláusulas Adicionais / Personalizadas
+      const customClausulasTextAdmin = getCleanVal(dados.clausulas || dados.clausulasPersonalizadas || '');
+      if (customClausulasTextAdmin) {
+        addBlock(
+          <PdfSection title="Cláusulas Adicionais">
+            <p className="text-justify text-[11.5px] text-gray-800 whitespace-pre-wrap leading-relaxed">{customClausulasTextAdmin}</p>
+          </PdfSection>,
+          14 + estimateHeight(customClausulasTextAdmin)
+        );
+      }
+
+      // 9. Signatures Block
+      const sigHeight = estimateSignatureHeight(dados, tipoContrato, contract, empresa);
+      addBlock(
+        <div className="pdf-date-signatures mt-4 avoid-break signature-block text-[11.5px]">
+          <div className="text-right font-bold text-[12.5px] text-black pt-1 mb-3">
+            {safeText(dados.local || 'Balneário Camboriú/SC')}, {safeText(dados.data || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }))}
+          </div>
+          <PdfSignatures dados={dados} tipoContrato={tipoContrato} contract={contract} empresa={empresa} />
+        </div>,
+        sigHeight,
+        true
+      );
+
     } else if (tipoContrato === 'arras_confirmatorios') {
       const comp = dados.proponente || {};
       const vend = dados.vendedor || (contract as any).vendedor || {};
@@ -1642,8 +1827,6 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
             <p><strong>E-mail:</strong> {safeText(l.email)}</p>
             <p className="col-span-2"><strong>Endereço:</strong> {formatFullAddress(l)}</p>
             <p className="col-span-2"><strong>Dados Bancários:</strong> {safeText(l.dadosBancarios || l.banco || 'Não informado')}</p>
-            <p><strong>Comissão Imobiliária:</strong> {percComissao}% ({safeMoney(valorComissao)})</p>
-            <p><strong>Líquido de Repasse:</strong> {safeMoney(valorRepasse)}</p>
             
             {locadorSpouse.nome && (
               <>
@@ -1659,7 +1842,7 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
             )}
           </PdfFieldGrid>
         </PdfSection>,
-        locadorSpouse.nome ? 36 : 24
+        locadorSpouse.nome ? 34 : 20
       );
 
       // 4. Locatario Block
@@ -1670,8 +1853,12 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
             <p className="col-span-2"><strong>Nome Completo:</strong> {safeText(t.nome)}</p>
             <p><strong>CPF:</strong> {safeText(t.cpf || t.documento)}</p>
             <p><strong>RG:</strong> {safeText(t.rg)}</p>
-            <p><strong>Telefone:</strong> {safeText(t.telefone || t.celular || t.phone)}</p>
-            <p><strong>E-mail:</strong> {safeText(t.email)}</p>
+            <p><strong>Nacionalidade:</strong> {safeText(t.nacionalidade || 'Brasileiro(a)')}</p>
+            <p><strong>Estado Civil:</strong> {safeText(t.estadoCivil || 'Não informado')}</p>
+            <p><strong>Profissão:</strong> {safeText(t.profissao || 'Não informado')}</p>
+            {t.dataNascimento && <p><strong>Data de Nascimento:</strong> {safeDate(t.dataNascimento)}</p>}
+            <p><strong>Telefone/WhatsApp:</strong> {safeText(t.whatsapp || t.telefone || t.celular || t.phone)}</p>
+            <p className="col-span-2"><strong>E-mail:</strong> {safeText(t.email)}</p>
             <p className="col-span-2"><strong>Endereço Residencial:</strong> {formatFullAddress(t)}</p>
             
             {locatarioSpouse.nome && (
@@ -1688,7 +1875,7 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
             )}
           </PdfFieldGrid>
         </PdfSection>,
-        locatarioSpouse.nome ? 34 : 20
+        locatarioSpouse.nome ? 36 : 22
       );
 
       // 5. Fiador (Optional)

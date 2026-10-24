@@ -5,6 +5,7 @@ import {
   Home, 
   PlusCircle, 
   Calendar, 
+  CalendarDays,
   Users, 
   DollarSign, 
   FileText, 
@@ -31,7 +32,8 @@ const Sidebar = ({ onClose }: { onClose?: () => void }) => {
   const menuItems = [
     { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
     { name: 'Imóveis', path: '/admin/imoveis', icon: Home },
-    { name: 'Locações', path: '/admin/locacoes', icon: FileText },
+    { name: 'Locação Tradicional', path: '/admin/locacoes', icon: FileText },
+    { name: 'Locação Temporária', path: '/admin/locacao-temporaria', icon: CalendarDays },
     { name: 'Bairros', path: '/admin/bairros', icon: MapPin },
     { name: 'Cadastrar Imóvel', path: '/admin/imoveis/novo', icon: PlusCircle },
     { name: 'Visitas', path: '/admin/visitas', icon: Calendar },

@@ -16,8 +16,12 @@ import { staggerContainer, slideUp, fadeIn } from '../../constants/animations';
 import { GoldenParticles } from '../../components/three/GoldenParticles';
 import { Canvas } from '@react-three/fiber';
 
-function normalizeTipoNegocio(tipo: any): "Venda" | "Locação" | "Venda e Locação" | "" {
+function normalizeTipoNegocio(tipo: any): "Venda" | "Locação" | "Locação Temporária" | "Venda e Locação" | "" {
   const value = String(tipo || "").toLowerCase();
+
+  if (value.includes("tempor")) {
+    return "Locação Temporária";
+  }
 
   if (
     (value.includes("venda") && value.includes("loca")) ||
@@ -263,6 +267,23 @@ const PropertyCard = ({ property, index, agencyWhatsApp }: any) => {
                     </span>
                   </div>
                 </>
+              ) : bizTypeNorm === 'Locação Temporária' ? (
+                <>
+                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">
+                     Valor por Diária
+                  </p>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-2xl font-display font-black text-primary-green">
+                      {formatCurrency(property.valorDiaria || property.priceDiaria || property.precoDiaria || property.diaria || 0)}
+                    </span>
+                    <span className="text-xs font-bold text-gray-400">/dia</span>
+                  </div>
+                  {(property.capacidadeHospedes || property.maxGuests) && (
+                    <p className="text-[9px] text-gray-500 mt-1 font-semibold">
+                      Capacidade: {property.capacidadeHospedes || property.maxGuests} hóspedes
+                    </p>
+                  )}
+                </>
               ) : bizTypeNorm === 'Locação' ? (
                 <>
                   <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">
@@ -499,6 +520,9 @@ export default function PropertyList() {
         
         data = data.filter((p: any) => {
           const pType = normalizeTipoNegocio(p.businessType || p.tipoNegocio);
+          if (normalizedSelected === 'Locação Temporária') {
+            return pType === 'Locação Temporária';
+          }
           if (normalizedSelected === 'Venda') {
             return pType === 'Venda' || pType === 'Venda e Locação';
           }
@@ -556,20 +580,25 @@ export default function PropertyList() {
       
       const normalizedBTypeForPrice = normalizeTipoNegocio(filters.businessType);
       const isRentalSearch = normalizedBTypeForPrice === 'Locação';
+      const isTemporarySearch = normalizedBTypeForPrice === 'Locação Temporária';
       
       if (filters.minPrice) {
         data = data.filter((p: any) => {
-          const price = isRentalSearch 
-            ? (getValorTotalMensal(p) || p.priceLocacao || p.valorAluguel || p.valor_aluguel || 0) 
-            : (p.priceVenda || p.valorVenda || p.valor_venda || 0);
+          const price = isTemporarySearch
+            ? (p.valorDiaria || p.priceDiaria || p.precoDiaria || p.diaria || 0)
+            : isRentalSearch 
+              ? (getValorTotalMensal(p) || p.priceLocacao || p.valorAluguel || p.valor_aluguel || 0) 
+              : (p.priceVenda || p.valorVenda || p.valor_venda || 0);
           return Number(price) >= parseFloat(filters.minPrice);
         });
       }
       if (filters.maxPrice) {
         data = data.filter((p: any) => {
-          const price = isRentalSearch 
-            ? (getValorTotalMensal(p) || p.priceLocacao || p.valorAluguel || p.valor_aluguel || 0) 
-            : (p.priceVenda || p.valorVenda || p.valor_venda || 0);
+          const price = isTemporarySearch
+            ? (p.valorDiaria || p.priceDiaria || p.precoDiaria || p.diaria || 0)
+            : isRentalSearch 
+              ? (getValorTotalMensal(p) || p.priceLocacao || p.valorAluguel || p.valor_aluguel || 0) 
+              : (p.priceVenda || p.valorVenda || p.valor_venda || 0);
           return Number(price) <= parseFloat(filters.maxPrice);
         });
       }
@@ -613,12 +642,17 @@ export default function PropertyList() {
     
     // Choose price field based on current business type search
     const isLocacao = normalizeTipoNegocio(searchFilters.businessType) === 'Locação';
-    const priceA = isLocacao 
-      ? (getValorTotalMensal(a) || a.priceLocacao || a.valorAluguel || a.valor_aluguel || 0) 
-      : (a.priceVenda || a.valorVenda || a.valor_venda || 0);
-    const priceB = isLocacao 
-      ? (getValorTotalMensal(b) || b.priceLocacao || b.valorAluguel || b.valor_aluguel || 0) 
-      : (b.priceVenda || b.valorVenda || b.valor_venda || 0);
+    const isTemporaria = normalizeTipoNegocio(searchFilters.businessType) === 'Locação Temporária';
+    const priceA = isTemporaria
+      ? (a.valorDiaria || a.priceDiaria || a.precoDiaria || a.diaria || 0)
+      : isLocacao 
+        ? (getValorTotalMensal(a) || a.priceLocacao || a.valorAluguel || a.valor_aluguel || 0) 
+        : (a.priceVenda || a.valorVenda || a.valor_venda || 0);
+    const priceB = isTemporaria
+      ? (b.valorDiaria || b.priceDiaria || b.precoDiaria || b.diaria || 0)
+      : isLocacao 
+        ? (getValorTotalMensal(b) || b.priceLocacao || b.valorAluguel || b.valor_aluguel || 0) 
+        : (b.priceVenda || b.valorVenda || b.valor_venda || 0);
     
     if (sortBy === 'menor-preco') return Number(priceA) - Number(priceB);
     if (sortBy === 'maior-preco') return Number(priceB) - Number(priceA);
@@ -670,6 +704,37 @@ export default function PropertyList() {
             transition={{ delay: 0.3 }}
             className="bg-white p-4 md:p-8 rounded-[2.5rem] shadow-2xl border border-gray-100 mb-12"
           >
+            {/* Modalidade de Negócio: 4 Botões */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 items-center justify-center gap-2 sm:gap-3 mb-8 w-full max-w-4xl mx-auto">
+              {[
+                { val: 'Venda', label: 'VENDA' },
+                { val: 'Locação', label: 'LOCAÇÃO' },
+                { val: 'Locação Temporária', label: 'LOCAÇÃO TEMPORÁRIA' },
+                { val: 'Venda e Locação', label: 'VENDA E LOCAÇÃO' }
+              ].map(({ val, label }) => {
+                const isSelected = normalizeTipoNegocio(searchFilters.businessType) === normalizeTipoNegocio(val);
+                return (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => {
+                      const nextType = isSelected ? 'Todos' : val;
+                      const updated = { ...searchFilters, businessType: nextType, maxPrice: '' };
+                      setSearchFilters(updated);
+                      fetchProperties(updated);
+                    }}
+                    className={`w-full px-2 sm:px-4 lg:px-5 py-3.5 rounded-2xl text-[11px] sm:text-xs font-black uppercase tracking-wider text-center transition-all cursor-pointer whitespace-nowrap ${
+                      isSelected
+                        ? 'bg-primary-black text-white shadow-xl scale-[1.01]' 
+                        : 'bg-gray-100/90 text-gray-500 hover:bg-gray-200/80 hover:text-primary-black font-bold'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+
             {/* Campo de Pesquisa Rápida Inteligente */}
             <div className="mb-6 space-y-3">
               <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest ml-1">
@@ -678,7 +743,7 @@ export default function PropertyList() {
               <div className="relative">
                 <Search size={18} className="absolute left-5 top-1/2 -translate-y-1/2 text-gold z-10" />
                 <input 
-                  type="text"
+                  type="text" 
                   className="w-full bg-gray-50 border border-gray-100 rounded-2xl pl-14 pr-5 py-4 text-sm font-medium text-primary-black placeholder-gray-400 outline-none focus:border-gold focus:ring-1 focus:ring-gold transition-all"
                   placeholder="Busque por apartamento 2 quartos, casa no centro..."
                   value={searchFilters.busca}
@@ -731,6 +796,7 @@ export default function PropertyList() {
                    <option value="Todos">Todos Negócios</option>
                    <option value="Venda">Venda</option>
                    <option value="Locação">Locação</option>
+                   <option value="Locação Temporária">Locação Temporária</option>
                    <option value="Venda e Locação">Venda e Locação</option>
                 </select>
                 <select 
@@ -940,18 +1006,23 @@ export default function PropertyList() {
 
                   <div className="space-y-5">
                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Tipo de Negócio</label>
-                    <div className="grid grid-cols-2 gap-4 bg-gray-50 p-2 rounded-2xl border border-gray-100">
+                    <div className="grid grid-cols-2 gap-3 bg-gray-50 p-2 rounded-2xl border border-gray-100">
                        {[
                          { id: 'todos', nome: 'Todos', label: 'Todos' },
                          { id: 'venda', nome: 'Venda', label: 'Venda' },
                          { id: 'locacao', nome: 'Locação', label: 'Locação' },
+                         { id: 'locacao_temporaria', nome: 'Locação Temporária', label: 'Locação Temporária' },
                          { id: 'venda_locacao', nome: 'Venda e Locação', label: 'Venda e Locação' }
                        ].map((o) => {
+                         const isSelected = o.nome === 'Todos'
+                           ? (!searchFilters.businessType || searchFilters.businessType === 'Todos')
+                           : normalizeTipoNegocio(searchFilters.businessType) === normalizeTipoNegocio(o.nome);
                          return (
                            <button 
                              key={o.id}
-                             onClick={() => setSearchFilters({...searchFilters, businessType: o.nome})}
-                             className={`py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${searchFilters.businessType === o.nome ? 'bg-white text-primary-black shadow-xl' : 'text-gray-400 hover:text-primary-black font-bold'}`}
+                             type="button"
+                             onClick={() => setSearchFilters({...searchFilters, businessType: o.nome, maxPrice: ''})}
+                             className={`py-3.5 px-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${isSelected ? 'bg-primary-black text-white shadow-xl' : 'text-gray-400 hover:text-primary-black font-bold'}`}
                            >
                              {o.label}
                            </button>

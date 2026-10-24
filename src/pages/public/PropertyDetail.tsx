@@ -4,6 +4,7 @@ import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firesto
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import VisitScheduler from '../../components/public/VisitScheduler';
+import TemporaryBookingWidget from '../../components/public/TemporaryBookingWidget';
 import { useSettings } from '../../hooks/useSettings';
 import { 
   MapPin, 
@@ -507,6 +508,7 @@ export default function PropertyDetail() {
   const isVendaOnly = normBusiness === 'Venda';
   const isLocacaoOnly = normBusiness === 'Locação';
   const isVendaAndLocacao = normBusiness === 'Venda e Locação';
+  const isTemporaria = normBusiness === 'Locação Temporária';
 
   const condoFeeVal = toNumber(property.condoFee || property.valorCondominio || 0);
   const iptuVal = getIptuValue(property);
@@ -724,6 +726,19 @@ export default function PropertyDetail() {
                     ) : (
                       <>
                         <div className="space-y-3">
+                           {/* Locação Temporária */}
+                           {isTemporaria && (
+                             <div>
+                               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-0.5 mb-1 bg-slate-100/10 inline-block px-1.5 py-0.5 rounded leading-none">
+                                 Valor por Diária
+                               </p>
+                               <p className="text-3xl font-display font-black text-primary-green tracking-tight leading-none">
+                                 {formatCurrency(property.valorDiaria || property.priceDiaria || property.precoDiaria || property.diaria || 0)}
+                                 <span className="text-xs font-semibold text-gray-400"> / diária</span>
+                               </p>
+                             </div>
+                           )}
+
                            {/* Venda / Venda e Locação - Valor de Venda */}
                            {(isVendaOnly || isVendaAndLocacao) && (
                              <div>
@@ -1183,6 +1198,8 @@ export default function PropertyDetail() {
                               </motion.a>
                            </div>
                         </div>
+                      ) : isTemporaria ? (
+                        <TemporaryBookingWidget property={property} settings={settings} />
                       ) : (
                         <div className="space-y-6">
                            <div className="bg-amber-50 rounded-2xl p-5 border border-amber-100 space-y-2.5">
@@ -1211,6 +1228,25 @@ export default function PropertyDetail() {
                        <div className="space-y-6">
                         {/* Standard pricing presentation */}
                         <div className="space-y-3">
+                           {/* Locação Temporária */}
+                           {isTemporaria && (
+                             <div>
+                               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-0.5 mb-1 bg-slate-100/10 inline-block px-1.5 py-0.5 rounded leading-none">
+                                 Valor por Diária
+                               </p>
+                               <h2 className="text-3xl font-display font-black text-primary-green tracking-tight flex items-baseline leading-none pt-1">
+                                 <span className="text-lg font-bold text-gold mr-1">R$</span>
+                                 {formatCurrency(property.valorDiaria || property.priceDiaria || property.precoDiaria || property.diaria || 0).replace('R$', '').trim()}
+                                 <span className="text-xs font-semibold text-slate-400 ml-1"> / diária</span>
+                               </h2>
+                               {(property.capacidadeHospedes || property.maxGuests) && (
+                                 <p className="text-xs text-slate-500 font-semibold mt-1">
+                                   Capacidade: {property.capacidadeHospedes || property.maxGuests} hóspedes
+                                 </p>
+                               )}
+                             </div>
+                           )}
+
                            {/* Venda / Venda e Locação - Valor de Venda */}
                            {(isVendaOnly || isVendaAndLocacao) && (
                              <div>
@@ -1407,26 +1443,40 @@ export default function PropertyDetail() {
           </div>
         </div>
 
-        {/* Visit Scheduler Section */}
+        {/* Visit Scheduler or Temporary Booking Section */}
         {!isImovelVendido(property) && (!isImovelAlugado(property) || (property.businessType === 'Venda e Locação' && property.priceVenda)) ? (
           <section id="agendamento" className="max-w-4xl mx-auto px-4 md:px-8 mt-16 md:mt-24">
-             <div className="bg-white p-6 md:p-12 rounded-[2.5rem] md:rounded-[3.5rem] border border-[#F1F5F9] shadow-xl mb-12">
-               <div className="text-center max-w-2xl mx-auto mb-8 md:mb-12">
-                 <h2 className="font-display text-2xl md:text-4xl font-black text-primary-black mb-3 tracking-tight">Agende sua Experiência VIP</h2>
-                 <p className="text-slate-500 leading-relaxed text-sm font-medium">Selecione uma data e horário de sua preferência para realizar uma visita dirigida conduzida por um corretor especialista.</p>
-                 {isImovelAlugado(property) && (
-                   <div className="mt-4 p-4 bg-amber-50 rounded-2xl border border-amber-100 text-amber-800 text-xs font-semibold leading-relaxed">
-                     Nota: Imóvel com locação em vigor. Visita programada será realizada exclusivamente para fins imobiliários direcionados à aquisição (venda).
+             {isTemporaria ? (
+                <div className="bg-white p-6 md:p-12 rounded-[2.5rem] md:rounded-[3.5rem] border border-[#F1F5F9] shadow-xl mb-12">
+                   <div className="text-center max-w-2xl mx-auto mb-8 md:mb-12">
+                     <div className="flex items-center justify-center gap-2 text-gold mb-2">
+                       <Sparkles size={18} />
+                       <span className="text-[10px] font-black uppercase tracking-[0.3em]">Reserva de Temporada</span>
+                     </div>
+                     <h2 className="font-display text-2xl md:text-4xl font-black text-primary-black mb-3 tracking-tight">Reserve sua Estadia Online</h2>
+                     <p className="text-slate-500 leading-relaxed text-sm font-medium">Consulte o calendário de disponibilidade em tempo real, escolha as datas de check-in e check-out e envie sua solicitação de reserva diretamente para nossa equipe.</p>
                    </div>
-                 )}
-               </div>
-               <VisitScheduler 
-                 property={{
-                   ...property,
-                   brokerWhatsapp: resolvedWhatsappPhone || property.brokerWhatsapp || settings.empresa.whatsapp
-                 }} 
-               />
-             </div>
+                   <TemporaryBookingWidget property={property} settings={settings} />
+                </div>
+             ) : (
+                <div className="bg-white p-6 md:p-12 rounded-[2.5rem] md:rounded-[3.5rem] border border-[#F1F5F9] shadow-xl mb-12">
+                  <div className="text-center max-w-2xl mx-auto mb-8 md:mb-12">
+                    <h2 className="font-display text-2xl md:text-4xl font-black text-primary-black mb-3 tracking-tight">Agende sua Experiência VIP</h2>
+                    <p className="text-slate-500 leading-relaxed text-sm font-medium">Selecione uma data e horário de sua preferência para realizar uma visita dirigida conduzida por um corretor especialista.</p>
+                    {isImovelAlugado(property) && (
+                      <div className="mt-4 p-4 bg-amber-50 rounded-2xl border border-amber-100 text-amber-800 text-xs font-semibold leading-relaxed">
+                        Nota: Imóvel com locação em vigor. Visita programada será realizada exclusivamente para fins imobiliários direcionados à aquisição (venda).
+                      </div>
+                    )}
+                  </div>
+                  <VisitScheduler 
+                    property={{
+                      ...property,
+                      brokerWhatsapp: resolvedWhatsappPhone || property.brokerWhatsapp || settings.empresa.whatsapp
+                    }} 
+                  />
+                </div>
+             )}
           </section>
         ) : null}
       </div>

@@ -107,7 +107,9 @@ export default function AdminContracts() {
       case 'contraproposta': return 'Contraproposta';
       case 'aceite': return 'Aceite de Termos';
       case 'locacao_temporaria': return 'Locação Temporária';
-      case 'arras_confirmatorios': return 'Arras Confirmatórios';
+      case 'administracao_temporaria': return 'Administração Temporária';
+      case 'arras_confirmatorios': return 'Administração Temporária (Legado)';
+      case 'compra_venda': return 'Compra e Venda';
       default: return type;
     }
   };
@@ -166,11 +168,13 @@ export default function AdminContracts() {
               onChange={(e) => setFilterType(e.target.value)}
             >
               <option value="all">Todos os Tipos</option>
-              <option value="proposta">Proposta</option>
+              <option value="proposta">Proposta de Compra</option>
               <option value="contraproposta">Contraproposta</option>
               <option value="aceite">Aceite</option>
               <option value="locacao_temporaria">Locação Temporária</option>
-              <option value="arras_confirmatorios">Arras Confirmatórios</option>
+              <option value="administracao_temporaria">Administração Temporária</option>
+              <option value="arras_confirmatorios">Administração Temporária (Legado)</option>
+              <option value="compra_venda">Compra e Venda</option>
             </select>
           </div>
 

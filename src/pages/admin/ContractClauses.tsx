@@ -36,12 +36,143 @@ interface ContractClause {
   id: string;
   titulo: string;
   texto: string;
-  tipo: 'todos' | 'proposta' | 'contraproposta' | 'aceite' | 'locacao_temporaria' | 'compra_venda' | 'locacao' | 'arras_confirmatorios';
+  tipo: 'todos' | 'proposta' | 'contraproposta' | 'aceite' | 'locacao_temporaria' | 'administracao_temporaria' | 'compra_venda' | 'locacao' | 'arras_confirmatorios';
   ordem: number;
   ativo: boolean;
   obrigatorio: boolean;
   atualizadoEm?: any;
 }
+
+export const CLAUSULAS_PADRAO_ADMINISTRACAO_TEMPORARIA = [
+  {
+    titulo: "CLÁUSULA 1ª - DA IDENTIFICAÇÃO DAS PARTES E QUALIFICAÇÃO",
+    texto: "O presente contrato é celebrado entre o(a) PROPRIETÁRIO(A) CONTRATANTE, devidamente qualificado(a) neste instrumento, e a IMOBILIÁRIA CONTRATADA (ADMINISTRADORA), sociedade empresária especializada em gestão e intermediação imobiliária, representada na forma de seus atos constitutivos.",
+    ordem: 1,
+    obrigatorio: true,
+    ativo: true,
+    tipo: 'administracao_temporaria' as const
+  },
+  {
+    titulo: "CLÁUSULA 2ª - DA IDENTIFICAÇÃO E DESCRIÇÃO DO IMÓVEL",
+    texto: "O objeto da presente administração é o imóvel residencial/comercial especificado neste instrumento, com suas características, localização, matrícula, Cartório de Registro de Imóveis (CRI), dependências, garagens e bens móveis/utensílios descritos no laudo de vistoria inicial e inventário anexo, parte integrante deste contrato.",
+    ordem: 2,
+    obrigatorio: true,
+    ativo: true,
+    tipo: 'administracao_temporaria' as const
+  },
+  {
+    titulo: "CLÁUSULA 3ª - DO OBJETO DA ADMINISTRAÇÃO TEMPORÁRIA",
+    texto: "O(A) PROPRIETÁRIO(A) confere à ADMINISTRADORA a gestão, representação e administração exclusiva para fins de locação por temporada e estadias temporárias do imóvel descrito, outorgando-lhe poderes para promover a publicidade, intermediar e operacionalizar as locações temporárias.",
+    ordem: 3,
+    obrigatorio: true,
+    ativo: true,
+    tipo: 'administracao_temporaria' as const
+  },
+  {
+    titulo: "CLÁUSULA 4ª - DOS PODERES E LIMITES DA ADMINISTRADORA",
+    texto: "São outorgados à ADMINISTRADORA poderes para: (a) divulgar o imóvel em canais digitais e plataformas parceiras; (b) celebrar contratos de locação temporária em nome do proprietário; (c) receber valores de diárias, taxas de limpeza e garantias/cauções; (d) coordenar vistorias e exigir o cumprimento das regras condominiais e contratuais.",
+    ordem: 4,
+    obrigatorio: true,
+    ativo: true,
+    tipo: 'administracao_temporaria' as const
+  },
+  {
+    titulo: "CLÁUSULA 5ª - DAS OBRIGAÇÕES DO PROPRIETÁRIO",
+    texto: "O(A) PROPRIETÁRIO(A) obriga-se a: (a) disponibilizar o imóvel higienizado, desocupado e em perfeito estado de habitabilidade, conservação e funcionamento de suas instalações; (b) manter em dia taxas condominiais, IPTU e seguros do imóvel; (c) fornecer inventário dos bens móveis e utensílios; (d) respeitar as reservas já confirmadas com hóspedes terceiros.",
+    ordem: 5,
+    obrigatorio: true,
+    ativo: true,
+    tipo: 'administracao_temporaria' as const
+  },
+  {
+    titulo: "CLÁUSULA 6ª - DAS OBRIGAÇÕES DA ADMINISTRADORA",
+    texto: "A ADMINISTRADORA obriga-se a: (a) promover diligente divulgação e seleção de hóspedes/locatários; (b) emitir e colher assinaturas nos contratos de locação temporária; (c) realizar vistorias de entrada (check-in) e saída (check-out); (d) prestar contas claras e repassar tempestivamente os valores líquidos arrecadados.",
+    ordem: 6,
+    obrigatorio: true,
+    ativo: true,
+    tipo: 'administracao_temporaria' as const
+  },
+  {
+    titulo: "CLÁUSULA 7ª - DAS CONDIÇÕES DE DISPONIBILIZAÇÃO E USO PRÓPRIO",
+    texto: "O imóvel ficará disponibilizado para locações no calendário comercial da ADMINISTRADORA. Caso o(a) PROPRIETÁRIO(A) deseje utilizar o imóvel para uso próprio ou de familiares, deverá comunicar previamente com antecedência mínima razoável, respeitando-se as reservas previamente contratadas e confirmadas.",
+    ordem: 7,
+    obrigatorio: true,
+    ativo: true,
+    tipo: 'administracao_temporaria' as const
+  },
+  {
+    titulo: "CLÁUSULA 8ª - DO PRAZO DE VIGÊNCIA E PRORROGAÇÃO",
+    texto: "O presente contrato de administração vigorará pelo prazo ajustado entre as partes a contar da data de sua assinatura, renovando-se automaticamente por iguais períodos, caso nenhuma das partes se manifeste por escrito em contrário com antecedência mínima de 30 (trinta) dias.",
+    ordem: 8,
+    obrigatorio: true,
+    ativo: true,
+    tipo: 'administracao_temporaria' as const
+  },
+  {
+    titulo: "CLÁUSULA 9ª - DA REMUNERAÇÃO DA ADMINISTRADORA E CONDIÇÕES COMERCIAIS",
+    texto: "Pelos serviços prestados, a ADMINISTRADORA perceberá a remuneração estipulada neste contrato, calculada percentualmente sobre o valor bruto das diárias das locações efetivamente concretizadas ou conforme o valor fixado entre as partes, dedutível no momento do repasse ao proprietário.",
+    ordem: 9,
+    obrigatorio: true,
+    ativo: true,
+    tipo: 'administracao_temporaria' as const
+  },
+  {
+    titulo: "CLÁUSULA 10ª - DAS DESPESAS OPERACIONAIS E RESPONSABILIDADES FINANCEIRAS",
+    texto: "As taxas de limpeza cobradas dos hóspedes destinam-se exclusivamente ao custeio da higienização e lavanderia do imóvel e não integram o repasse do proprietário. As despesas ordinárias do condomínio e impostos cabem ao proprietário, e despesas emergenciais autorizadas serão compensadas na prestação de contas.",
+    ordem: 10,
+    obrigatorio: true,
+    ativo: true,
+    tipo: 'administracao_temporaria' as const
+  },
+  {
+    titulo: "CLÁUSULA 11ª - DA PRESTAÇÃO DE CONTAS E REPASSE FINANCEIRO",
+    texto: "A ADMINISTRADORA prestará contas de todas as receitas e retenções contratuais, transferindo o valor líquido pertencente ao PROPRIETÁRIO(A) para os dados bancários ou chave PIX indicados neste instrumento, dentro do prazo convencionado após o encerramento do ciclo ou estadia.",
+    ordem: 11,
+    obrigatorio: true,
+    ativo: true,
+    tipo: 'administracao_temporaria' as const
+  },
+  {
+    titulo: "CLÁUSULA 12ª - DA CONSERVAÇÃO E MANUTENÇÃO DO IMÓVEL",
+    texto: "Constatada a necessidade de reparos de manutenção ordinária decorrentes do desgaste natural ou uso, a ADMINISTRADORA informará o(a) PROPRIETÁRIO(A). Em casos emergenciais para salvaguarda do patrimônio, fica autorizada a realização de reparos essenciais, com posterior comprovação de despesas.",
+    ordem: 12,
+    obrigatorio: true,
+    ativo: true,
+    tipo: 'administracao_temporaria' as const
+  },
+  {
+    titulo: "CLÁUSULA 13ª - DAS RESPONSABILIDADES POR DANOS E COBERTURAS",
+    texto: "Havendo danos comprovadamente provocados por locatários/hóspedes, a ADMINISTRADORA adotará as medidas administrativas e operacionais para retenção da caução ou cobrança das plataformas de reserva e seguradoras para ressarcimento integral das avarias verificadas.",
+    ordem: 13,
+    obrigatorio: true,
+    ativo: true,
+    tipo: 'administracao_temporaria' as const
+  },
+  {
+    titulo: "CLÁUSULA 14ª - DA RESCISÃO CONTRATUAL",
+    texto: "O presente contrato poderá ser rescindido por qualquer das partes mediante notificação prévia por escrito de 30 (trinta) dias, sendo imperativo o cumprimento e respeito a todas as reservas já confirmadas e pagas por terceiros para períodos posteriores.",
+    ordem: 14,
+    obrigatorio: true,
+    ativo: true,
+    tipo: 'administracao_temporaria' as const
+  },
+  {
+    titulo: "CLÁUSULA 15ª - DA DEVOLUÇÃO DE DOCUMENTOS E ENCERRAMENTO",
+    texto: "No encerramento da administração, a ADMINISTRADORA restituirá ao PROPRIETÁRIO todas as chaves, controles, tags de acesso, relatórios finais de prestação de contas e eventuais saldos remanescentes, encerrando-se formalmente as obrigações mútuas.",
+    ordem: 15,
+    obrigatorio: true,
+    ativo: true,
+    tipo: 'administracao_temporaria' as const
+  },
+  {
+    titulo: "CLÁUSULA 16ª - DO FORO E DISPOSIÇÕES GERAIS",
+    texto: "As partes elegem o foro da Comarca da situação do imóvel para dirimir quaisquer dúvidas ou litígios decorrentes do presente contrato, renunciando expressamente a qualquer outro por mais privilegiado que seja.",
+    ordem: 16,
+    obrigatorio: true,
+    ativo: true,
+    tipo: 'administracao_temporaria' as const
+  }
+];
 
 const CONTRACT_TYPE_LABELS: Record<string, string> = {
   todos: 'Todos os Contratos',
@@ -49,9 +180,10 @@ const CONTRACT_TYPE_LABELS: Record<string, string> = {
   contraproposta: 'Contraproposta',
   aceite: 'Aceite de Proposta',
   locacao_temporaria: 'Locação Temporária',
+  administracao_temporaria: 'Administração Temporária',
   compra_venda: 'Compra e Venda',
   locacao: 'Locatício Anual',
-  arras_confirmatorios: 'Arras Confirmatórios'
+  arras_confirmatorios: 'Administração Temporária (Legado)'
 };
 
 export default function ContractClauses() {

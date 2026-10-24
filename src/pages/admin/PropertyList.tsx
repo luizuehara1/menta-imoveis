@@ -21,7 +21,8 @@ import {
   EyeOff,
   X,
   Key,
-  Wrench
+  Wrench,
+  CalendarDays
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -30,6 +31,10 @@ import { isValidPublicProperty, getLinkPublicoImovel, getCodigoPublicoImovel } f
 
 function normalizeTipoNegocio(tipo: any): string {
   const value = String(tipo || "").toLowerCase();
+
+  if (value.includes("tempor")) {
+    return "Locação Temporária";
+  }
 
   if (
     (value.includes("venda") && value.includes("loca")) ||
@@ -219,11 +224,29 @@ export default function AdminPropertyList() {
     }
   };
 
-  const filtered = properties.filter(p => 
-    p.code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.city?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const [businessTypeFilter, setBusinessTypeFilter] = useState<'all' | 'Venda' | 'Locação' | 'Locação Temporária'>('all');
+
+  const filtered = properties.filter(p => {
+    const matchesSearch = 
+      p.code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.city?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    if (!matchesSearch) return false;
+
+    if (businessTypeFilter === 'all') return true;
+    const bType = String(p.businessType || '').toLowerCase();
+    if (businessTypeFilter === 'Locação Temporária') {
+      return bType.includes('tempor');
+    }
+    if (businessTypeFilter === 'Locação') {
+      return (bType.includes('loca') && !bType.includes('tempor')) || bType.includes('tradicional');
+    }
+    if (businessTypeFilter === 'Venda') {
+      return bType.includes('vend');
+    }
+    return true;
+  });
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -334,6 +357,24 @@ export default function AdminPropertyList() {
           </div>
         </div>
 
+        {/* Quick businessType Filter Tabs */}
+        <div className="px-10 py-4 bg-gray-50/50 border-b border-gray-100 flex flex-wrap items-center gap-2">
+          <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider mr-2">Negócio:</span>
+          {(['all', 'Venda', 'Locação', 'Locação Temporária'] as const).map((type) => (
+            <button
+              key={type}
+              onClick={() => setBusinessTypeFilter(type)}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                businessTypeFilter === type
+                  ? 'bg-primary-black text-gold shadow-md'
+                  : 'bg-white text-gray-500 hover:text-primary-black border border-gray-100 hover:border-gray-200'
+              }`}
+            >
+              {type === 'all' ? 'Todos os Imóveis' : type === 'Locação' ? 'Locação Tradicional' : type}
+            </button>
+          ))}
+        </div>
+
         {/* Table/List */}
         <div className="overflow-x-auto">
           <AnimatePresence mode="wait">
@@ -425,7 +466,13 @@ export default function AdminPropertyList() {
                       </td>
                       <td className="p-8">
                          <span className="text-sm font-bold text-primary-black block mb-2">{property.propertyType}</span>
-                         <span className={`inline-flex items-center px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border transition-colors ${property.businessType === 'Venda' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-gold/5 text-gold border-gold/20'}`}>
+                         <span className={`inline-flex items-center px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border transition-colors ${
+                           String(property.businessType || '').toLowerCase().includes('tempor') 
+                             ? 'bg-amber-50 text-amber-700 border-amber-200'
+                             : property.businessType === 'Venda' 
+                               ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
+                               : 'bg-gold/5 text-gold border-gold/20'
+                         }`}>
                            {property.businessType}
                          </span>
                       </td>
@@ -502,6 +549,15 @@ export default function AdminPropertyList() {
                               title="Cadastrar locação para este imóvel"
                             >
                               <Key size={18} />
+                            </Link>
+                          )}
+                          {normalizeTipoNegocio(property.businessType || property.tipoNegocio) === "Locação Temporária" && (
+                            <Link 
+                              to={`/admin/locacao-temporaria?imovelId=${property.id}&tab=calendario`}
+                              className="p-3 bg-white text-gold hover:text-black hover:bg-gold/20 hover:shadow-2xl hover:scale-110 rounded-xl border border-transparent hover:border-gold/30 transition-all cursor-pointer"
+                              title="Gerenciar Locação Temporária e Calendário"
+                            >
+                              <CalendarDays size={18} />
                             </Link>
                           )}
                           <Link 
