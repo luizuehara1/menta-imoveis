@@ -500,6 +500,24 @@ export interface Contract {
   locatarioConjugeTelefone?: string;
   locatarioConjugeEmail?: string;
   locatarioConjugeEndereco?: string;
+
+  // Locação Temporária
+  valorDiaria?: number;
+  valorDiario?: number;
+  quantidadeDiarias?: number;
+  quantidadeDias?: number;
+  totalDiarias?: number;
+  subtotalDiarias?: number;
+  taxaLimpeza?: number;
+  taxaCaucao?: number;
+  taxasAdicionais?: number;
+  outrasTaxas?: number;
+  desconto?: number;
+  descontos?: number;
+  valorTotalLocacao?: number;
+  valorFinal?: number;
+  reservaId?: string;
+  reservaCodigo?: string;
 }
 
 export interface SiteConfig {
@@ -608,6 +626,23 @@ export type TemporaryReservationStatus =
 
 export type TemporaryPaymentStatus = 'pendente' | 'parcial' | 'pago' | 'reembolsado';
 
+export interface TemporaryGuestCompanion {
+  id?: string;
+  nomeCompleto: string;
+  documento?: string;
+  parentesco?: string;
+  faixaEtaria?: 'adulto' | 'crianca' | string;
+}
+
+export interface TemporaryVehicle {
+  id?: string;
+  tipo: string;
+  marca: string;
+  modelo: string;
+  cor: string;
+  placa: string;
+}
+
 export interface TemporaryReservationRequest {
   id?: string;
   codigoSolicitacao?: string;
@@ -620,6 +655,8 @@ export interface TemporaryReservationRequest {
   telefone: string;
   whatsapp: string;
   email?: string;
+  hospedeCpf?: string;
+  hospedeDocumento?: string;
   dataEntrada: string; // YYYY-MM-DD
   dataSaida: string; // YYYY-MM-DD
   quantidadeDiarias: number;
@@ -628,6 +665,9 @@ export interface TemporaryReservationRequest {
   taxaLimpeza?: number;
   valorTotalEstimado: number;
   observacoes?: string;
+  possuiVeiculo?: boolean;
+  veiculos?: TemporaryVehicle[];
+  acompanhantes?: TemporaryGuestCompanion[];
   status: 'solicitacao_recebida' | 'pre_reserva' | 'aguardando_confirmacao' | 'confirmada' | 'recusada' | 'cancelada' | 'expirada';
   motivoRecusa?: string;
   reservaGeradaId?: string;
@@ -668,6 +708,11 @@ export interface TemporaryReservation {
   hospedeTelefone: string;
   hospedeWhatsapp: string;
   hospedeEmail: string;
+
+  // Acompanhantes e Veículos
+  possuiVeiculo?: boolean;
+  veiculos?: TemporaryVehicle[];
+  acompanhantes?: TemporaryGuestCompanion[];
 
   // Estadia
   dataEntrada: string; // YYYY-MM-DD

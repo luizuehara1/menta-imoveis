@@ -5,15 +5,48 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatCurrency(value: number | string | undefined | null) {
-  if (value === undefined || value === null || value === '') return 'Sob Consulta';
-  const val = typeof value === 'string' ? parseFloat(value) : value;
-  if (isNaN(val)) return 'Sob Consulta';
+export function parseCurrencyValue(value: number | string | undefined | null): number | null {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value === 'number') return isNaN(value) ? null : value;
   
-  return new Intl.NumberFormat('pt-BR', {
+  const cleanStr = String(value).trim();
+  if (cleanStr.toLowerCase() === 'sob consulta') return null;
+  
+  // Clean R$, non-breaking spaces
+  const withoutPrefix = cleanStr.replace(/^R\$\s*/i, '').replace(/[\u00A0\u202F]/g, ' ').trim();
+  if (!withoutPrefix) return null;
+  
+  // Format pt-BR like "1.250,50" or "360,00"
+  if (withoutPrefix.includes(',')) {
+    const normalized = withoutPrefix.replace(/[^\d,-]/g, '').replace(/\./g, '').replace(',', '.');
+    const n = parseFloat(normalized);
+    return isNaN(n) ? null : n;
+  }
+  
+  const normalized = withoutPrefix.replace(/[^\d.-]/g, '');
+  const n = parseFloat(normalized);
+  return isNaN(n) ? null : n;
+}
+
+export function formatCurrency(value: number | string | undefined | null): string {
+  const num = parseCurrencyValue(value);
+  if (num === null) return 'Sob Consulta';
+  
+  const formatted = new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
-  }).format(val);
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(num);
+  
+  // Normalize non-breaking spaces to standard space
+  return formatted.replace(/[\u00A0\u202F]/g, ' ');
+}
+
+export function formatCurrencyRaw(value: number | string | undefined | null): string {
+  const formatted = formatCurrency(value);
+  if (formatted === 'Sob Consulta') return formatted;
+  return formatted.replace(/^R\$\s*/, '').trim();
 }
 
 export function maskCurrency(value: string | number | undefined | null) {
@@ -2506,6 +2539,23 @@ export function normalizarDadosDocumento(origem: any = {}): any {
     proprietarioCpf: origem.proprietarioCpf || origem.vendedorCpf || parsedDados?.locador?.cpf || parsedDados?.vendedor?.cpf || "",
     administradoraNome: origem.administradoraNome || parsedDados?.administradora?.razaoSocial || "MENTA IMÓVEIS LTDA",
     administradoraCnpj: origem.administradoraCnpj || parsedDados?.administradora?.cnpj || "00.000.000/0001-00",
+
+    // Locação Temporária (Datas, Diárias e Valores)
+    dataInicio: origem.dataInicio || parsedDados?.prazo?.dataInicio || "",
+    dataTermino: origem.dataTermino || parsedDados?.prazo?.dataTermino || "",
+    horarioEntrada: origem.horarioEntrada || parsedDados?.prazo?.horarioEntrada || "14:00",
+    horarioSaida: origem.horarioSaida || parsedDados?.prazo?.horarioSaida || "10:00",
+    quantidadeDiarias: Number(origem.quantidadeDiarias || origem.quantidadeDias || origem.totalDiarias || parsedDados?.prazo?.quantidadeDiarias || parsedDados?.prazo?.quantidadeDias || parsedDados?.prazo?.totalDiarias || 0),
+    quantidadeDias: Number(origem.quantidadeDias || origem.quantidadeDiarias || origem.totalDiarias || parsedDados?.prazo?.quantidadeDias || parsedDados?.prazo?.quantidadeDiarias || parsedDados?.prazo?.totalDiarias || 0),
+    totalDiarias: Number(origem.totalDiarias || origem.quantidadeDiarias || origem.quantidadeDias || parsedDados?.prazo?.totalDiarias || parsedDados?.prazo?.quantidadeDiarias || parsedDados?.prazo?.quantidadeDias || 0),
+    valorDiaria: Number(origem.valorDiaria || origem.valorDiario || parsedDados?.valores?.valorDiaria || parsedDados?.valores?.valorDiario || 0),
+    valorDiario: Number(origem.valorDiario || origem.valorDiaria || parsedDados?.valores?.valorDiario || parsedDados?.valores?.valorDiaria || 0),
+    subtotalDiarias: Number(origem.subtotalDiarias || parsedDados?.valores?.subtotalDiarias || 0),
+    taxaLimpeza: Number(origem.taxaLimpeza || parsedDados?.valores?.taxaLimpeza || 0),
+    taxaCaucao: Number(origem.taxaCaucao || parsedDados?.valores?.taxaCaucao || 0),
+    taxasAdicionais: Number(origem.taxasAdicionais || origem.outrasTaxas || parsedDados?.valores?.taxasAdicionais || parsedDados?.valores?.outrasTaxas || 0),
+    desconto: Number(origem.desconto || origem.descontos || parsedDados?.valores?.desconto || parsedDados?.valores?.descontos || 0),
+    valorTotalLocacao: Number(origem.valorTotalLocacao || origem.valorFinal || parsedDados?.valores?.valorTotalLocacao || parsedDados?.valores?.valorFinal || origem.valor || 0),
 
     observacoes:
       origem.observacoes ||

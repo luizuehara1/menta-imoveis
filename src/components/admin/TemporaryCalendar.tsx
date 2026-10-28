@@ -216,7 +216,7 @@ export const TemporaryCalendar: React.FC<TemporaryCalendarProps> = ({
               >
                 {properties.map(p => (
                   <option key={p.id} value={p.id}>
-                    {p.code} • {p.title || p.nomeEdificio || 'Imóvel'} (R$ {formatCurrency(p.valorDiaria || p.priceDiaria || 0)}/noite)
+                    {p.code} • {p.title || p.nomeEdificio || 'Imóvel'} ({formatCurrency(p.valorDiaria || p.priceDiaria || 0)}/noite)
                   </option>
                 ))}
               </select>
@@ -272,7 +272,7 @@ export const TemporaryCalendar: React.FC<TemporaryCalendarProps> = ({
             <div>
               <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Diária Padrão</span>
               <span className="font-extrabold text-primary-black text-sm">
-                R$ {formatCurrency(selectedProperty.valorDiaria || selectedProperty.priceDiaria || 0)}
+                {formatCurrency(selectedProperty.valorDiaria || selectedProperty.priceDiaria || 0)}
               </span>
             </div>
             <div>
@@ -284,7 +284,7 @@ export const TemporaryCalendar: React.FC<TemporaryCalendarProps> = ({
             <div>
               <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Taxa de Limpeza</span>
               <span className="font-extrabold text-primary-black text-sm">
-                R$ {formatCurrency(selectedProperty.taxaLimpeza || 0)}
+                {formatCurrency(selectedProperty.taxaLimpeza || 0)}
               </span>
             </div>
           </div>
@@ -517,7 +517,7 @@ export const TemporaryCalendar: React.FC<TemporaryCalendarProps> = ({
             </p>
             {rangeEnd && (
               <p className="text-xs text-gray-300">
-                <strong>{selectedNights} diárias</strong> • Valor estimado estadia: <strong className="text-gold">R$ {formatCurrency(estimatedTotal)}</strong> (diárias + limpeza)
+                <strong>{selectedNights} diárias</strong> • Valor estimado estadia: <strong className="text-gold">{formatCurrency(estimatedTotal)}</strong> (diárias + limpeza)
               </p>
             )}
           </div>

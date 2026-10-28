@@ -11,12 +11,17 @@ import {
   MessageCircle, 
   ShieldCheck, 
   Info,
-  CalendarCheck
+  CalendarCheck,
+  Car,
+  UserPlus,
+  Trash2,
+  Plus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Property } from '../../types';
+import { Property, TemporaryGuestCompanion, TemporaryVehicle } from '../../types';
 import { 
   formatCurrency, 
+  formatCurrencyRaw,
   formatarDataBR, 
   cleanPhoneForWhatsapp 
 } from '../../lib/utils';
@@ -50,11 +55,21 @@ export default function TemporaryBookingWidget({
   const [checkOut, setCheckOut] = useState<string | null>(null);
   const [guests, setGuests] = useState<number>(2);
 
-  // Form state
+  // Principal Guest Form state
   const [nomeCliente, setNomeCliente] = useState('');
+  const [cpfCliente, setCpfCliente] = useState('');
   const [telefone, setTelefone] = useState('');
   const [email, setEmail] = useState('');
   const [observacoes, setObservacoes] = useState('');
+
+  // Companions state (for guests > 1)
+  const [acompanhantes, setAcompanhantes] = useState<TemporaryGuestCompanion[]>([]);
+
+  // Vehicle state
+  const [possuiVeiculo, setPossuiVeiculo] = useState<boolean>(false);
+  const [veiculos, setVeiculos] = useState<TemporaryVehicle[]>([
+    { tipo: 'Carro', marca: '', modelo: '', cor: '', placa: '' }
+  ]);
   
   // Submission state
   const [submitting, setSubmitting] = useState(false);
@@ -179,6 +194,22 @@ export default function TemporaryBookingWidget({
     }
   };
 
+  // Auto sync acompanhantes array length to guests - 1
+  useEffect(() => {
+    const needed = Math.max(0, guests - 1);
+    setAcompanhantes(prev => {
+      if (prev.length === needed) return prev;
+      if (prev.length < needed) {
+        const next = [...prev];
+        for (let i = prev.length; i < needed; i++) {
+          next.push({ nomeCompleto: '', parentesco: '', documento: '', faixaEtaria: 'adulto' });
+        }
+        return next;
+      }
+      return prev.slice(0, needed);
+    });
+  }, [guests]);
+
   // Calculations
   const calculatedNights = useMemo(() => {
     if (checkIn && checkOut) {
@@ -189,6 +220,34 @@ export default function TemporaryBookingWidget({
 
   const subtotal = calculatedNights * dailyRate;
   const estimatedTotal = subtotal > 0 ? subtotal + cleaningFee : 0;
+
+  // Add vehicle
+  const handleAddVehicle = () => {
+    setVeiculos(prev => [...prev, { tipo: 'Carro', marca: '', modelo: '', cor: '', placa: '' }]);
+  };
+
+  // Remove vehicle
+  const handleRemoveVehicle = (index: number) => {
+    setVeiculos(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Update vehicle
+  const handleUpdateVehicle = (index: number, field: keyof TemporaryVehicle, val: string) => {
+    setVeiculos(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: val };
+      return next;
+    });
+  };
+
+  // Update companion
+  const handleUpdateCompanion = (index: number, field: keyof TemporaryGuestCompanion, val: string) => {
+    setAcompanhantes(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: val };
+      return next;
+    });
+  };
 
   // Submit Handler
   const handleSubmit = async (e: React.FormEvent) => {
@@ -209,6 +268,14 @@ export default function TemporaryBookingWidget({
       return;
     }
 
+    if (possuiVeiculo) {
+      const hasInvalidVehicle = veiculos.some(v => !v.placa?.trim() || !v.modelo?.trim());
+      if (hasInvalidVehicle) {
+        setErrorMessage('Por favor, informe ao menos o modelo e a placa de cada veículo para cadastro na portaria.');
+        return;
+      }
+    }
+
     setSubmitting(true);
     try {
       // 1. Submit request to Firestore
@@ -220,6 +287,7 @@ export default function TemporaryBookingWidget({
         imovelTitulo: property.title || property.titulo || 'Imóvel de Temporada',
         imovelEndereco: `${property.neighborhood || ''}, ${property.city || 'Balneário Camboriú'} - ${property.state || 'SC'}`,
         nomeCliente: nomeCliente.trim(),
+        hospedeCpf: cpfCliente.trim(),
         telefone: cleanTel,
         whatsapp: cleanTel,
         email: email.trim(),
@@ -230,6 +298,9 @@ export default function TemporaryBookingWidget({
         valorDiaria: dailyRate,
         taxaLimpeza: cleaningFee,
         valorTotalEstimado: estimatedTotal,
+        possuiVeiculo,
+        veiculos: possuiVeiculo ? veiculos : [],
+        acompanhantes: acompanhantes.filter(a => a.nomeCompleto.trim()),
         observacoes: observacoes.trim()
       });
 
@@ -244,11 +315,15 @@ export default function TemporaryBookingWidget({
         quantidadeDiarias: calculatedNights,
         quantidadeHospedes: guests,
         valorDiaria: dailyRate,
+        taxaLimpeza: cleaningFee,
         valorTotalEstimado: estimatedTotal,
         nomeCliente: nomeCliente.trim(),
         telefone: cleanTel,
         whatsapp: cleanTel,
         email: email.trim(),
+        possuiVeiculo,
+        veiculos: possuiVeiculo ? veiculos : [],
+        acompanhantes: acompanhantes.filter(a => a.nomeCompleto.trim()),
         observacoes: observacoes.trim()
       }, destinationPhone);
 
@@ -286,8 +361,9 @@ export default function TemporaryBookingWidget({
 
         <div className="flex items-baseline gap-1.5">
           <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">A partir de</span>
-          <span className="text-3xl font-display font-black text-slate-900 tracking-tight">
-            R$ {formatCurrency(dailyRate).replace('R$', '').trim()}
+          <span className="text-3xl font-display font-black text-slate-900 tracking-tight flex items-baseline">
+            <span className="text-gold font-sans font-bold text-xl mr-1">R$</span>
+            {formatCurrencyRaw(dailyRate)}
           </span>
           <span className="text-xs font-semibold text-slate-500">/ noite</span>
         </div>
@@ -332,11 +408,11 @@ export default function TemporaryBookingWidget({
               </div>
               <div className="flex justify-between text-slate-600">
                 <span>Total Estimado:</span>
-                <span className="font-bold text-emerald-700">R$ {formatCurrency(submittedData.total)}</span>
+                <span className="font-bold text-emerald-700">{formatCurrency(submittedData.total)}</span>
               </div>
             </div>
 
-            {/* Prompt Requirement: WhatsApp Button formatted according to prompt */}
+            {/* WhatsApp CTA */}
             <div className="space-y-3 pt-2">
               <a 
                 href={submittedData.whatsAppUrl}
@@ -493,10 +569,10 @@ export default function TemporaryBookingWidget({
             <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between">
               <div>
                 <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block mb-0.5">
-                  Hóspedes
+                  Hóspedes Totais
                 </label>
                 <span className="text-xs font-bold text-slate-800">
-                  {guests} {guests === 1 ? 'hóspede' : 'hóspedes'}
+                  {guests} {guests === 1 ? 'hóspede (titular)' : 'hóspedes (titular + acompanhantes)'}
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -528,19 +604,19 @@ export default function TemporaryBookingWidget({
                 className="bg-amber-50/50 p-4 rounded-2xl border border-amber-200/60 space-y-2.5 text-xs"
               >
                 <div className="flex justify-between text-slate-600">
-                  <span>R$ {formatCurrency(dailyRate)} x {calculatedNights} {calculatedNights === 1 ? 'diária' : 'diárias'}</span>
-                  <span className="font-bold text-slate-800">R$ {formatCurrency(subtotal)}</span>
+                  <span>{formatCurrency(dailyRate)} x {calculatedNights} {calculatedNights === 1 ? 'diária' : 'diárias'}</span>
+                  <span className="font-bold text-slate-800">{formatCurrency(subtotal)}</span>
                 </div>
                 {cleaningFee > 0 && (
                   <div className="flex justify-between text-slate-600">
-                    <span>Taxa de limpeza</span>
-                    <span className="font-bold text-slate-800">R$ {formatCurrency(cleaningFee)}</span>
+                    <span>Taxa de limpeza (única)</span>
+                    <span className="font-bold text-slate-800">{formatCurrency(cleaningFee)}</span>
                   </div>
                 )}
                 <div className="border-t border-amber-200 pt-2 flex justify-between items-baseline">
                   <span className="font-bold text-slate-900 uppercase tracking-wide text-xs">Total Estimado</span>
                   <span className="text-lg font-display font-black text-slate-900">
-                    R$ {formatCurrency(estimatedTotal)}
+                    {formatCurrency(estimatedTotal)}
                   </span>
                 </div>
               </motion.div>
@@ -548,32 +624,51 @@ export default function TemporaryBookingWidget({
 
             {/* Client Contact Fields */}
             <div className="space-y-3 pt-1">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 border-b border-slate-100 pb-1">
+                <Users size={14} className="text-gold" /> Dados do Hóspede Titular
+              </div>
+
               <div>
                 <label className="text-[10px] font-black uppercase tracking-wider text-slate-600 block mb-1">
-                  Nome Completo *
+                  Nome Completo do Titular *
                 </label>
                 <input
                   type="text"
                   required
                   value={nomeCliente}
                   onChange={(e) => setNomeCliente(e.target.value)}
-                  placeholder="Seu nome completo"
+                  placeholder="Nome completo do responsável pela reserva"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold"
                 />
               </div>
 
-              <div>
-                <label className="text-[10px] font-black uppercase tracking-wider text-slate-600 block mb-1">
-                  Telefone / WhatsApp *
-                </label>
-                <input
-                  type="tel"
-                  required
-                  value={telefone}
-                  onChange={(e) => setTelefone(e.target.value)}
-                  placeholder="(47) 99999-9999"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-600 block mb-1">
+                    Telefone / WhatsApp *
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={telefone}
+                    onChange={(e) => setTelefone(e.target.value)}
+                    placeholder="(47) 99999-9999"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-600 block mb-1">
+                    CPF do Titular <span className="text-slate-400 font-normal">(opcional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={cpfCliente}
+                    onChange={(e) => setCpfCliente(e.target.value)}
+                    placeholder="000.000.000-00"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold"
+                  />
+                </div>
               </div>
 
               <div>
@@ -587,6 +682,157 @@ export default function TemporaryBookingWidget({
                   placeholder="seuemail@exemplo.com"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold"
                 />
+              </div>
+
+              {/* Companions Section (if guests > 1) */}
+              {guests > 1 && (
+                <div className="pt-2 space-y-3">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-1">
+                    <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                      <UserPlus size={14} className="text-gold" /> Lista de Acompanhantes ({guests - 1})
+                    </span>
+                    <span className="text-[10px] text-slate-400">Podem ser completados no contrato</span>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    {acompanhantes.map((acomp, idx) => (
+                      <div key={idx} className="p-3 bg-slate-50/80 rounded-xl border border-slate-200 text-xs space-y-2">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                          Acompanhante {idx + 1}
+                        </span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <input
+                            type="text"
+                            placeholder="Nome completo"
+                            value={acomp.nomeCompleto}
+                            onChange={(e) => handleUpdateCompanion(idx, 'nomeCompleto', e.target.value)}
+                            className="px-3 py-1.5 bg-white rounded-lg border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-gold"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Parentesco (ex: Esposa, Filho, Amigo)"
+                            value={acomp.parentesco || ''}
+                            onChange={(e) => handleUpdateCompanion(idx, 'parentesco', e.target.value)}
+                            className="px-3 py-1.5 bg-white rounded-lg border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-gold"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Vehicle Section */}
+              <div className="pt-2 space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-1">
+                  <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <Car size={14} className="text-gold" /> Veículo na Garagem
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-4 py-1">
+                  <label className="text-xs font-medium text-slate-700 flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="possuiVeiculo"
+                      checked={!possuiVeiculo}
+                      onChange={() => setPossuiVeiculo(false)}
+                      className="text-gold focus:ring-gold"
+                    />
+                    <span>Não possui veículo</span>
+                  </label>
+                  <label className="text-xs font-medium text-slate-700 flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="possuiVeiculo"
+                      checked={possuiVeiculo}
+                      onChange={() => setPossuiVeiculo(true)}
+                      className="text-gold focus:ring-gold"
+                    />
+                    <span>Sim, utilizará vaga de garagem</span>
+                  </label>
+                </div>
+
+                {possuiVeiculo && (
+                  <div className="space-y-3 bg-amber-50/40 p-3.5 rounded-2xl border border-amber-200/60">
+                    <p className="text-[11px] text-slate-600">
+                      Informe os dados do veículo para pré-autorização junto à portaria do edifício:
+                    </p>
+                    {veiculos.map((v, vIdx) => (
+                      <div key={vIdx} className="bg-white p-3 rounded-xl border border-amber-200/80 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                            Veículo {vIdx + 1}
+                          </span>
+                          {veiculos.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveVehicle(vIdx)}
+                              className="text-red-500 hover:text-red-700 text-xs flex items-center gap-1"
+                            >
+                              <Trash2 size={12} /> Remover
+                            </button>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          <div>
+                            <label className="text-[9px] font-bold uppercase text-slate-400 block mb-0.5">Tipo</label>
+                            <select
+                              value={v.tipo}
+                              onChange={(e) => handleUpdateVehicle(vIdx, 'tipo', e.target.value)}
+                              className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                            >
+                              <option value="Carro">Carro</option>
+                              <option value="SUV">SUV</option>
+                              <option value="Camionete">Camionete</option>
+                              <option value="Moto">Moto</option>
+                              <option value="Van">Van</option>
+                              <option value="Outro">Outro</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-bold uppercase text-slate-400 block mb-0.5">Marca/Modelo *</label>
+                            <input
+                              type="text"
+                              placeholder="Ex: Corolla"
+                              value={v.modelo}
+                              onChange={(e) => handleUpdateVehicle(vIdx, 'modelo', e.target.value)}
+                              className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-bold uppercase text-slate-400 block mb-0.5">Cor</label>
+                            <input
+                              type="text"
+                              placeholder="Ex: Prata"
+                              value={v.cor}
+                              onChange={(e) => handleUpdateVehicle(vIdx, 'cor', e.target.value)}
+                              className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-bold uppercase text-slate-400 block mb-0.5">Placa *</label>
+                            <input
+                              type="text"
+                              placeholder="ABC-1234"
+                              value={v.placa}
+                              onChange={(e) => handleUpdateVehicle(vIdx, 'placa', e.target.value.toUpperCase())}
+                              className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs uppercase"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
+                    <button
+                      type="button"
+                      onClick={handleAddVehicle}
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-gold hover:text-amber-600 transition-colors"
+                    >
+                      <Plus size={14} /> Adicionar outro veículo
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div>

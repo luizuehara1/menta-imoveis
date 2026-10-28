@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { 
   Calendar, 
   CalendarDays, 
@@ -81,6 +81,7 @@ export default function TemporaryRentals() {
   const { user, isAdmin } = useAuth();
   const { settings } = useSettings();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('visao_geral');
   const [loading, setLoading] = useState(true);
@@ -633,13 +634,13 @@ export default function TemporaryRentals() {
 
             <div className="bg-white p-6 rounded-[2rem] shadow-xl border border-gray-100 space-y-3">
               <span className="text-[10px] font-black uppercase tracking-widest text-gold block">Total Recebido Confirmado</span>
-              <p className="text-2xl font-display font-black text-primary-black">R$ {formatCurrency(kpis.totalRecebido)}</p>
+              <p className="text-2xl font-display font-black text-primary-black">{formatCurrency(kpis.totalRecebido)}</p>
               <span className="text-xs text-gray-400 font-medium">{payments.length} pagamentos processados</span>
             </div>
 
             <div className="bg-white p-6 rounded-[2rem] shadow-xl border border-gray-100 space-y-3">
               <span className="text-[10px] font-black uppercase tracking-widest text-amber-600 block">Saldo Restante a Receber</span>
-              <p className="text-2xl font-display font-black text-amber-700">R$ {formatCurrency(kpis.saldoPendente)}</p>
+              <p className="text-2xl font-display font-black text-amber-700">{formatCurrency(kpis.saldoPendente)}</p>
               <span className="text-xs text-amber-600 font-medium">Aguardando quitação</span>
             </div>
 
@@ -694,7 +695,7 @@ export default function TemporaryRentals() {
                       </div>
 
                       <div className="text-right">
-                        <p className="font-bold text-sm text-primary-black">R$ {formatCurrency(res.valorTotal)}</p>
+                        <p className="font-bold text-sm text-primary-black">{formatCurrency(res.valorTotal)}</p>
                         <span className={`inline-block text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
                           res.status === 'confirmada' ? 'bg-emerald-50 text-emerald-700' :
                           res.status === 'pre_reserva' ? 'bg-amber-50 text-amber-700' :
@@ -830,11 +831,11 @@ export default function TemporaryRentals() {
                         <span className="text-[10px] text-gray-400 font-semibold">{res.quantidadeDiarias} diárias • {res.quantidadeHospedes} hóspedes</span>
                       </td>
                       <td className="py-4 px-4 font-bold text-primary-black text-sm">
-                        R$ {formatCurrency(res.valorTotal)}
+                        {formatCurrency(res.valorTotal)}
                       </td>
                       <td className="py-4 px-4">
-                        <span className="text-emerald-700 font-bold block">Pago: R$ {formatCurrency(res.valorPago)}</span>
-                        <span className="text-amber-700 text-[11px]">Restante: R$ {formatCurrency(res.saldoRestante)}</span>
+                        <span className="text-emerald-700 font-bold block">Pago: {formatCurrency(res.valorPago)}</span>
+                        <span className="text-amber-700 text-[11px]">Restante: {formatCurrency(res.saldoRestante)}</span>
                       </td>
                       <td className="py-4 px-4">
                         <span className={`inline-block px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider ${
@@ -995,10 +996,10 @@ export default function TemporaryRentals() {
 
                         <td className="py-4 px-4">
                           <span className="font-black text-emerald-700 block text-sm">
-                            R$ {formatCurrency(req.valorTotalEstimado || 0)}
+                            {formatCurrency(req.valorTotalEstimado || 0)}
                           </span>
                           <span className="text-[10px] text-gray-400">
-                            Diária: R$ {formatCurrency(req.valorDiaria || 0)}
+                            Diária: {formatCurrency(req.valorDiaria || 0)}
                           </span>
                         </td>
 
@@ -1120,7 +1121,7 @@ export default function TemporaryRentals() {
               <p className="text-xs text-gray-400">Histórico de sinais, pagamentos parciais e quitações</p>
             </div>
             <span className="text-sm font-black text-emerald-700 bg-emerald-50 px-4 py-2 rounded-xl border border-emerald-200">
-              Total Confirmado: R$ {formatCurrency(kpis.totalRecebido)}
+              Total Confirmado: {formatCurrency(kpis.totalRecebido)}
             </span>
           </div>
 
@@ -1153,7 +1154,7 @@ export default function TemporaryRentals() {
                     </td>
                     <td className="py-4 px-4 font-semibold">{pay.formaPagamento}</td>
                     <td className="py-4 px-4 font-black text-emerald-700 text-sm">
-                      R$ {formatCurrency(pay.valor)}
+                      {formatCurrency(pay.valor)}
                     </td>
                     <td className="py-4 px-4 text-right">
                       {pay.reciboEmitido ? (
@@ -1213,7 +1214,7 @@ export default function TemporaryRentals() {
 
                 <div className="pt-2 border-t border-gray-200 flex items-center justify-between">
                   <span className="font-black text-emerald-700 text-base">
-                    R$ {formatCurrency(rec.valorRecebido)}
+                    {formatCurrency(rec.valorRecebido)}
                   </span>
                   <button
                     onClick={() => {
@@ -1302,7 +1303,7 @@ export default function TemporaryRentals() {
                         <div>
                           <span className="text-[10px] text-gray-400 font-black uppercase block tracking-wider">Valor Diária</span>
                           <span className="font-black text-emerald-700 text-sm">
-                            R$ {formatCurrency(p.valorDiaria || p.priceDiaria || 0)}
+                            {formatCurrency(p.valorDiaria || p.priceDiaria || 0)}
                           </span>
                         </div>
                         <div>
@@ -1767,13 +1768,52 @@ export default function TemporaryRentals() {
                   </div>
                   <div>
                     <span className="text-gray-400 text-[10px] uppercase font-bold block">Valor Total</span>
-                    <span className="font-black text-primary-black text-sm">R$ {formatCurrency(selectedReservation.valorTotal)}</span>
+                    <span className="font-black text-primary-black text-sm">{formatCurrency(selectedReservation.valorTotal)}</span>
                   </div>
                 </div>
 
-                <div className="pt-2 border-t border-gold/20 flex items-center justify-between">
-                  <span className="text-emerald-700 font-bold">Total Pago: R$ {formatCurrency(selectedReservation.valorPago)}</span>
-                  <span className="text-amber-800 font-bold">Saldo Restante: R$ {formatCurrency(selectedReservation.saldoRestante)}</span>
+                <div className="pt-2 border-t border-gold/20 flex items-center justify-between text-xs">
+                  <span className="text-emerald-700 font-bold">Total Pago: {formatCurrency(selectedReservation.valorPago)}</span>
+                  <span className="text-amber-800 font-bold">Saldo Restante: {formatCurrency(selectedReservation.saldoRestante)}</span>
+                </div>
+              </div>
+
+              {/* Companions & Vehicles Cards if available */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 space-y-2">
+                  <h5 className="font-black text-gray-400 uppercase tracking-widest text-[10px]">
+                    Acompanhantes Cadastrados ({selectedReservation.acompanhantes?.length || 0})
+                  </h5>
+                  {selectedReservation.acompanhantes && selectedReservation.acompanhantes.length > 0 ? (
+                    <div className="space-y-1.5 text-xs text-gray-700">
+                      {selectedReservation.acompanhantes.map((acomp, aIdx) => (
+                        <div key={aIdx} className="p-2 bg-white rounded-lg border border-gray-200 flex justify-between">
+                          <span className="font-semibold">{acomp.nomeCompleto}</span>
+                          <span className="text-gray-500">{acomp.parentesco || 'Acompanhante'} {acomp.documento ? `• Doc: ${acomp.documento}` : ''}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-400 italic">Nenhum acompanhante adicional registrado.</p>
+                  )}
+                </div>
+
+                <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 space-y-2">
+                  <h5 className="font-black text-gray-400 uppercase tracking-widest text-[10px]">
+                    Veículos na Garagem
+                  </h5>
+                  {selectedReservation.possuiVeiculo && selectedReservation.veiculos && selectedReservation.veiculos.length > 0 ? (
+                    <div className="space-y-1.5 text-xs text-gray-700">
+                      {selectedReservation.veiculos.map((veh, vIdx) => (
+                        <div key={vIdx} className="p-2 bg-white rounded-lg border border-gray-200 flex justify-between">
+                          <span className="font-semibold">{veh.tipo}: {veh.marca} {veh.modelo}</span>
+                          <span className="font-mono font-bold text-primary-black uppercase bg-gray-100 px-2 py-0.5 rounded">{veh.placa}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-400 italic">Sem veículo registrado para garagem.</p>
+                  )}
                 </div>
               </div>
 
@@ -1845,6 +1885,16 @@ export default function TemporaryRentals() {
                       <span>Gerar Recibo</span>
                     </button>
                   )}
+
+                  <button
+                    onClick={() => {
+                      navigate(`/admin/contratos/novo?tipo=locacao_temporaria&reservaId=${selectedReservation.id}`);
+                    }}
+                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gold hover:bg-gold/90 text-primary-black font-extrabold text-xs shadow-md transition-colors"
+                  >
+                    <FileText size={16} />
+                    <span>Emitir Contrato</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -1871,8 +1921,8 @@ export default function TemporaryRentals() {
             <form onSubmit={handleRegisterPaymentSubmit} className="p-8 space-y-4 text-xs">
               <div className="p-4 rounded-xl bg-gray-50 border border-gray-200">
                 <p className="text-gray-500">Hóspede: <strong>{selectedReservation.hospedeNome}</strong></p>
-                <p className="text-gray-500">Valor Total da Reserva: <strong>R$ {formatCurrency(selectedReservation.valorTotal)}</strong></p>
-                <p className="text-amber-700 font-bold mt-1">Saldo Pendente: R$ {formatCurrency(selectedReservation.saldoRestante)}</p>
+                <p className="text-gray-500">Valor Total da Reserva: <strong>{formatCurrency(selectedReservation.valorTotal)}</strong></p>
+                <p className="text-amber-700 font-bold mt-1">Saldo Pendente: {formatCurrency(selectedReservation.saldoRestante)}</p>
               </div>
 
               <div className="space-y-1">
@@ -2150,22 +2200,55 @@ export default function TemporaryRentals() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Valor da Diária:</span>
-                    <span className="font-bold text-gray-800">R$ {formatCurrency(selectedRequest.valorDiaria)}</span>
+                    <span className="font-bold text-gray-800">{formatCurrency(selectedRequest.valorDiaria)}</span>
                   </div>
-                  {selectedRequest.taxaLimpeza > 0 && (
+                  {(selectedRequest.taxaLimpeza || 0) > 0 && (
                     <div className="flex justify-between">
                       <span className="text-gray-600">Taxa de Limpeza:</span>
-                      <span className="font-bold text-gray-800">R$ {formatCurrency(selectedRequest.taxaLimpeza)}</span>
+                      <span className="font-bold text-gray-800">{formatCurrency(selectedRequest.taxaLimpeza || 0)}</span>
                     </div>
                   )}
                   <div className="border-t border-amber-200 pt-2 flex justify-between items-baseline font-bold">
                     <span className="text-primary-black uppercase tracking-wide text-xs">Total Estimado:</span>
                     <span className="text-base font-display font-black text-emerald-800">
-                      R$ {formatCurrency(selectedRequest.valorTotalEstimado)}
+                      {formatCurrency(selectedRequest.valorTotalEstimado)}
                     </span>
                   </div>
                 </div>
               </div>
+
+              {/* Companions and Vehicles info for request */}
+              {((selectedRequest.acompanhantes && selectedRequest.acompanhantes.length > 0) || selectedRequest.possuiVeiculo) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {selectedRequest.acompanhantes && selectedRequest.acompanhantes.length > 0 && (
+                    <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 space-y-1.5 text-xs">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block">
+                        Acompanhantes ({selectedRequest.acompanhantes.length})
+                      </span>
+                      {selectedRequest.acompanhantes.map((a, i) => (
+                        <div key={i} className="p-2 bg-white rounded-lg border border-gray-200 flex justify-between">
+                          <span className="font-semibold text-gray-800">{a.nomeCompleto}</span>
+                          <span className="text-gray-500">{a.parentesco || 'Acompanhante'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {selectedRequest.possuiVeiculo && selectedRequest.veiculos && selectedRequest.veiculos.length > 0 && (
+                    <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 space-y-1.5 text-xs">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block">
+                        Veículo para Garagem
+                      </span>
+                      {selectedRequest.veiculos.map((v, i) => (
+                        <div key={i} className="p-2 bg-white rounded-lg border border-gray-200 flex justify-between items-center">
+                          <span className="font-semibold text-gray-800">{v.tipo}: {v.marca} {v.modelo}</span>
+                          <span className="font-mono font-bold uppercase bg-gray-100 px-2 py-0.5 rounded text-[11px]">{v.placa}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Actions Footer */}
               <div className="pt-4 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">

@@ -26,13 +26,13 @@ export const TemporaryReceiptModal: React.FC<TemporaryReceiptModalProps> = ({ re
       `Número: ${receipt.numeroRecibo}\n` +
       `Data: ${formatarDataBR(receipt.dataEmissao)}\n\n` +
       `Recebemos de: *${receipt.pagadorNome}*` + (receipt.pagadorCpf ? ` (CPF: ${receipt.pagadorCpf})` : '') + `\n` +
-      `A quantia de: *R$ ${formatCurrency(receipt.valorRecebido)}* (${receipt.valorPorExtenso})\n` +
+      `A quantia de: *${formatCurrency(receipt.valorRecebido)}* (${receipt.valorPorExtenso})\n` +
       `Referente a: ${receipt.descricao}\n` +
       `Imóvel: ${receipt.imovelTitulo} (${receipt.imovelCodigo})\n` +
       `Período: ${receipt.periodoHospedagem}\n` +
       `Forma de Pagamento: ${receipt.formaPagamento}\n` +
-      `Valor Total da Reserva: R$ ${formatCurrency(receipt.valorTotalReserva)}\n` +
-      `Saldo Restante: R$ ${formatCurrency(receipt.saldoRestante)}\n\n` +
+      `Valor Total da Reserva: ${formatCurrency(receipt.valorTotalReserva)}\n` +
+      `Saldo Restante: ${formatCurrency(receipt.saldoRestante)}\n\n` +
       `Menta Negócios Imobiliários • Balneário Camboriú/SC`;
     
     const phone = (receipt.pagadorTelefone || '').replace(/\D/g, '');
@@ -123,7 +123,7 @@ export const TemporaryReceiptModal: React.FC<TemporaryReceiptModalProps> = ({ re
               <div>
                 <span className="text-xs font-black uppercase tracking-widest text-gray-400 block mb-1">Valor Efetivamente Recebido</span>
                 <span className="text-3xl font-display font-black text-emerald-700">
-                  R$ {formatCurrency(receipt.valorRecebido)}
+                  {formatCurrency(receipt.valorRecebido)}
                 </span>
                 <p className="text-xs text-gray-600 font-semibold italic mt-1">
                   ({receipt.valorPorExtenso})
@@ -149,7 +149,7 @@ export const TemporaryReceiptModal: React.FC<TemporaryReceiptModalProps> = ({ re
               <p>
                 Declaramos para os devidos fins que recebemos de <strong>{receipt.pagadorNome}</strong>
                 {receipt.pagadorCpf ? `, inscrito(a) no CPF/MF sob o nº ${receipt.pagadorCpf}` : ''}, 
-                a quantia líquida e certa de <strong>R$ {formatCurrency(receipt.valorRecebido)}</strong> ({receipt.valorPorExtenso}), 
+                a quantia líquida e certa de <strong>{formatCurrency(receipt.valorRecebido)}</strong> ({receipt.valorPorExtenso}), 
                 referente a <strong>{receipt.descricao}</strong>.
               </p>
 
@@ -187,14 +187,14 @@ export const TemporaryReceiptModal: React.FC<TemporaryReceiptModalProps> = ({ re
                   <tbody className="divide-y divide-gray-100">
                     <tr>
                       <td className="py-2.5 px-4 text-gray-700">Valor Total Negociado da Reserva ({receipt.codigoReserva})</td>
-                      <td className="py-2.5 px-4 text-right font-semibold">R$ {formatCurrency(receipt.valorTotalReserva)}</td>
+                      <td className="py-2.5 px-4 text-right font-semibold">{formatCurrency(receipt.valorTotalReserva)}</td>
                     </tr>
                     <tr className="bg-emerald-50/40">
                       <td className="py-2.5 px-4 font-bold text-emerald-900">
                         Valor Efetivamente Pago / Recebido neste Recibo
                       </td>
                       <td className="py-2.5 px-4 text-right font-black text-emerald-800 text-sm">
-                        R$ {formatCurrency(receipt.valorRecebido)}
+                        {formatCurrency(receipt.valorRecebido)}
                       </td>
                     </tr>
                     <tr>
@@ -202,7 +202,7 @@ export const TemporaryReceiptModal: React.FC<TemporaryReceiptModalProps> = ({ re
                         {isQuitado ? 'Saldo Restante (Quitação Completa)' : 'Saldo Pendente de Pagamento'}
                       </td>
                       <td className={`py-2.5 px-4 text-right font-bold ${isQuitado ? 'text-gray-500' : 'text-amber-700 font-bold'}`}>
-                        R$ {formatCurrency(receipt.saldoRestante)}
+                        {formatCurrency(receipt.saldoRestante)}
                       </td>
                     </tr>
                   </tbody>
@@ -217,7 +217,7 @@ export const TemporaryReceiptModal: React.FC<TemporaryReceiptModalProps> = ({ re
                   </span>
                 ) : (
                   <span>
-                    <strong>Atenção:</strong> Este recibo comprova unicamente o recebimento do valor parcial de <strong>R$ {formatCurrency(receipt.valorRecebido)}</strong>, permanecendo o saldo pendente de <strong>R$ {formatCurrency(receipt.saldoRestante)}</strong> a ser adimplido conforme as condições acordadas.
+                    <strong>Atenção:</strong> Este recibo comprova unicamente o recebimento do valor parcial de <strong>{formatCurrency(receipt.valorRecebido)}</strong>, permanecendo o saldo pendente de <strong>{formatCurrency(receipt.saldoRestante)}</strong> a ser adimplido conforme as condições acordadas.
                   </span>
                 )}
               </div>

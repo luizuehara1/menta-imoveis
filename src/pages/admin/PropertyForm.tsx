@@ -695,6 +695,23 @@ export default function AdminPropertyForm() {
             const loadedNomeEdificio = data.nomeEdificio || data.buildingName || data.edificio || data.nomeEmpreendimento || data.empreendimento || data.condoName || data.condominioNome || "";
             setValue('nomeEdificio', loadedNomeEdificio);
             setValue('buildingName', loadedNomeEdificio);
+            setValue('isBuilding', data.isBuilding === true || data.isBuilding === 'true' || Boolean(loadedNomeEdificio));
+            setValue('isCondo', data.isCondo === true || data.isCondo === 'true' || Boolean(data.condoName));
+            setValue('condoName', data.condoName || data.condominioNome || '');
+
+            // Ensure checkboxes stay checked on reload
+            setValue('financing', data.financing === true || data.financing === 'Sim' || data.financing === 'true');
+            setValue('exchange', data.exchange === true || data.exchange === 'Sim' || data.exchange === 'true' || data.permuta === true || data.permuta === 'Sim');
+            setValue('furnished', data.furnished === true || data.furnished === 'Sim' || data.furnished === 'true' || data.mobiliado === true || data.mobiliado === 'Sim');
+            
+            // Lease and visit fields
+            const isAvailForVisit = data.disponivelParaVisita === true || data.availableForVisit === 'Sim' || data.availableForVisit === true;
+            setValue('disponivelParaVisita', isAvailForVisit);
+            setValue('availableForVisit', isAvailForVisit ? 'Sim' : 'Não');
+            setValue('leaseWarrantyType', data.leaseWarrantyType || data.garantiaLocaticia || data.garantia || '');
+            setValue('minLeaseTerm', data.minLeaseTerm || data.prazoMinimo || '');
+            setValue('leaseNotes', data.leaseNotes || data.observacoesLocacao || '');
+            setValue('taxes', Number(data.taxes ?? data.outrasTaxas ?? 0));
 
             // Parse stats using getCardStats and pre-fill flat field inputs
             const stats = getCardStats(data);
@@ -1182,6 +1199,18 @@ export default function AdminPropertyForm() {
         videos,
         valorGarantiaCaucao: toNumber(data.valorGarantiaCaucao || 0),
         garantiaLocaticia: data.leaseWarrantyType || '',
+        leaseWarrantyType: data.leaseWarrantyType || data.garantiaLocaticia || '',
+        minLeaseTerm: data.minLeaseTerm || '',
+        leaseNotes: data.leaseNotes || '',
+        taxes: toNumber(data.taxes || 0),
+        isBuilding: Boolean(data.isBuilding || data.buildingName || data.nomeEdificio),
+        isCondo: Boolean(data.isCondo || data.condoName),
+        condoName: data.condoName || '',
+        financing: Boolean(data.financing),
+        exchange: Boolean(data.exchange),
+        furnished: Boolean(data.furnished),
+        disponivelParaVisita: data.disponivelParaVisita === true || data.availableForVisit === 'Sim' || data.availableForVisit === true,
+        availableForVisit: (data.disponivelParaVisita === true || data.availableForVisit === 'Sim' || data.availableForVisit === true) ? 'Sim' : 'Não',
         updatedAt: serverTimestamp(),
         destaque: data.destaque === true
       };

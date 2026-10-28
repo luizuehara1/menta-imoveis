@@ -27,6 +27,7 @@ import {
   limparEnderecoDuplicadoSalvo
 } from '../../lib/utils';
 import { useSettings } from '../../hooks/useSettings';
+import { calculateNights } from '../../services/temporaryRentalService';
 
 // ============================================================================
 // HELPER FUNCTIONS & TEXT DEDUPLICATION
@@ -759,17 +760,54 @@ export const PdfPaymentBlock: React.FC<PdfPaymentBlockProps> = ({
             </div>
           )}
 
-          {tipoContrato === 'locacao_temporaria' && (
-            <div className="grid grid-cols-2 gap-y-1 gap-x-4 text-[12px] text-gray-800 leading-normal mb-1.5">
-              <p><strong>Valor da Diária:</strong> {safeMoney(dados.valores?.valorDiaria || 0)}</p>
-              <p><strong>Subtotal Diárias:</strong> {safeMoney(dados.valores?.subtotalDiarias || 0)}</p>
-              <p><strong>Taxa de Limpeza:</strong> {safeMoney(dados.valores?.taxaLimpeza || 0)}</p>
-              <p><strong>Taxa Caução/Garantia:</strong> {safeMoney(dados.valores?.taxaCaucao || 0)}</p>
-              <p className="col-span-2 text-primary-black font-extrabold text-[12.5px] border-t border-gray-100 pt-0.5">
-                TOTAL GERAL DA LOCAÇÃO: {safeMoney(dados.valores?.valorTotalLocacao || 0)}
-              </p>
-            </div>
-          )}
+          {tipoContrato === 'locacao_temporaria' && (() => {
+            let qtdDiarias = Number(dados?.prazo?.quantidadeDiarias ?? dados?.prazo?.quantidadeDias ?? dados?.prazo?.totalDiarias ?? contract?.quantidadeDiarias ?? 0);
+            if (qtdDiarias <= 0 && dados?.prazo?.dataInicio && dados?.prazo?.dataTermino) {
+              qtdDiarias = calculateNights(dados.prazo.dataInicio, dados.prazo.dataTermino);
+            }
+            const valDiaria = Number(
+              dados?.valores?.valorDiaria ?? 
+              dados?.valores?.valorDiario ?? 
+              dados?.valorDiaria ?? 
+              dados?.imovel?.valorDiaria ?? 
+              contract?.valorDiaria ?? 
+              contract?.imovel?.valorDiaria ?? 
+              0
+            );
+            const subtotal = Number(dados?.valores?.subtotalDiarias) || (valDiaria * qtdDiarias);
+            const txLimpeza = Number(dados?.valores?.taxaLimpeza ?? dados?.taxaLimpeza ?? dados?.imovel?.taxaLimpeza ?? 0);
+            const txAdicionais = Number(dados?.valores?.taxasAdicionais ?? dados?.valores?.outrasTaxas ?? dados?.outrasTaxas ?? 0);
+            const desc = Number(dados?.valores?.desconto ?? dados?.valores?.descontos ?? dados?.valorDesconto ?? 0);
+            const txCaucao = Number(dados?.valores?.taxaCaucao ?? dados?.taxaCaucao ?? 0);
+            const computedTotal = subtotal + txLimpeza + txAdicionais - desc;
+            const totalGeral = Number(dados?.valores?.valorTotalLocacao ?? dados?.valores?.valorFinal ?? contract?.valor ?? (computedTotal > 0 ? computedTotal : 0));
+            const totalExtenso = totalGeral > 0 ? valorMonetarioPorExtenso(totalGeral) : '';
+
+            return (
+              <div className="space-y-2 mb-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-1.5 gap-x-4 text-[12px] text-gray-800 leading-normal">
+                  <p><strong>Valor da Diária:</strong> {safeMoney(valDiaria)}</p>
+                  <p><strong>Quantidade de Diárias:</strong> {qtdDiarias} diária(s)</p>
+                  <p><strong>Subtotal das Diárias:</strong> {safeMoney(subtotal)}</p>
+                  <p><strong>Taxa de Limpeza:</strong> {safeMoney(txLimpeza)}</p>
+                  {txAdicionais > 0 && (
+                    <p><strong>Outras Taxas:</strong> {safeMoney(txAdicionais)}</p>
+                  )}
+                  {desc > 0 && (
+                    <p className="text-red-700"><strong>Descontos:</strong> - {safeMoney(desc)}</p>
+                  )}
+                  {txCaucao > 0 && (
+                    <p><strong>Taxa Caução/Garantia:</strong> {safeMoney(txCaucao)}</p>
+                  )}
+                </div>
+                <div className="border-t border-gray-200 pt-1.5 mt-1">
+                  <p className="text-primary-black font-extrabold text-[12.5px]">
+                    TOTAL GERAL DA LOCAÇÃO: {safeMoney(totalGeral)} {totalExtenso ? `(${totalExtenso})` : ''}
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
 
           {formaPagamentoSimple && (
             <p className="text-[12px] text-gray-800 mb-1.5">
@@ -1878,10 +1916,28 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
         locatarioSpouse.nome ? 36 : 22
       );
 
+      // 4.1. Acompanhantes Autorizados (Seção II.1)
+      const acompanhantesList = dados.acompanhantes || dados.locatario?.acompanhantes || contract.acompanhantes || contract.dados?.acompanhantes || [];
+      if (acompanhantesList && acompanhantesList.length > 0) {
+        addBlock(
+          <PdfSection title="II.1 - Relação de Acompanhantes Autorizados">
+            <div className="space-y-1 text-[11px] text-gray-800">
+              {acompanhantesList.map((acomp: any, idx: number) => (
+                <div key={idx} className="flex justify-between py-1 border-b border-gray-100 last:border-0">
+                  <span><strong>{idx + 1}. {safeText(acomp.nomeCompleto || acomp.nome)}</strong></span>
+                  <span className="text-gray-600">{acomp.parentesco ? `Parentesco: ${acomp.parentesco} ` : ''}{acomp.documento ? `• Doc/CPF: ${acomp.documento}` : ''}</span>
+                </div>
+              ))}
+            </div>
+          </PdfSection>,
+          12 + (acompanhantesList.length * 4.5)
+        );
+      }
+
       // 5. Fiador (Optional)
       if (dados.fiador && dados.fiador.nome) {
         addBlock(
-          <PdfSection title="II.1 - Dados do Fiador">
+          <PdfSection title="II.2 - Dados do Fiador">
             <PdfFieldGrid>
               <p className="col-span-2"><strong>Nome Completo:</strong> {safeText(dados.fiador.nome)}</p>
               <p><strong>CPF/CNPJ:</strong> {safeText(dados.fiador.cpfCnpj)}</p>
@@ -1902,21 +1958,60 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
         26
       );
 
+      // 6.1. Veículos Autorizados para a Garagem (Seção III.1)
+      const possuiVeiculo = dados.possuiVeiculo ?? dados.locatario?.possuiVeiculo ?? contract.possuiVeiculo ?? false;
+      const veiculosList = dados.veiculos || dados.locatario?.veiculos || contract.veiculos || [];
+      if (possuiVeiculo && veiculosList && veiculosList.length > 0) {
+        addBlock(
+          <PdfSection title="III.1 - Veículos Autorizados para a Garagem">
+            <div className="space-y-1 text-[11px] text-gray-800">
+              {veiculosList.map((veh: any, idx: number) => (
+                <div key={idx} className="flex justify-between py-1 border-b border-gray-100 last:border-0">
+                  <span><strong>{idx + 1}. {veh.tipo || 'Veículo'}: {safeText(veh.marca)} {safeText(veh.modelo)} {veh.cor ? `(${veh.cor})` : ''}</strong></span>
+                  <span className="font-mono font-bold uppercase bg-gray-100 px-2 py-0.5 rounded text-[11px]">Placa: {safeText(veh.placa?.toUpperCase())}</span>
+                </div>
+              ))}
+            </div>
+          </PdfSection>,
+          12 + (veiculosList.length * 4.5)
+        );
+      }
+
       // 7. Prazo Locacao
+      let totalDiariasContrato = Number(
+        p.totalDiarias || 
+        p.quantidadeDiarias || 
+        p.quantidadeDias || 
+        contract?.quantidadeDiarias || 
+        contract?.quantidadeDias || 
+        0
+      );
+
+      if (totalDiariasContrato <= 0 && p.dataInicio && p.dataTermino) {
+        totalDiariasContrato = calculateNights(p.dataInicio, p.dataTermino);
+      }
+
       addBlock(
         <PdfSection title="IV - Prazo da Locação">
           <PdfFieldGrid>
             <p><strong>Início:</strong> {safeDate(p.dataInicio)} às {safeText(p.horarioEntrada || '14:00')}</p>
             <p><strong>Término:</strong> {safeDate(p.dataTermino)} às {safeText(p.horarioSaida || '10:00')}</p>
-            <p className="col-span-2 font-bold text-[11.5px] text-gray-600">Total de diárias: {Number(p.totalDiarias) || 0} diária(s)</p>
+            <p className="col-span-2 font-bold text-[11.5px] text-gray-700">Total de diárias: {totalDiariasContrato} diária(s)</p>
           </PdfFieldGrid>
         </PdfSection>,
         18
       );
 
       // 8. Valores e Detalhamento
+      const totalLocacaoParaPdf = Number(
+        dados?.valores?.valorTotalLocacao || 
+        dados?.valores?.valorFinal || 
+        contract?.valor || 
+        0
+      );
+
       addBlock(
-        <PdfPaymentBlock dados={dados} tipoContrato={tipoContrato} totalValor={0} contract={contract} />,
+        <PdfPaymentBlock dados={dados} tipoContrato={tipoContrato} totalValor={totalLocacaoParaPdf} contract={contract} />,
         28 + (showDetalhes ? estimateHeight(rawDetalhes) + 8 : 0) + (showOutras ? estimateHeight(rawOutras) + 8 : 0)
       );
 

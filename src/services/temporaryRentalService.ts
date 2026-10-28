@@ -36,12 +36,44 @@ export function doIntervalsOverlap(startA: string, endA: string, startB: string,
 }
 
 /**
+ * Parses date string in YYYY-MM-DD or DD/MM/YYYY into midday Date to prevent timezone drift.
+ */
+export function parseDateToMidnight(dateStr: string): Date | null {
+  if (!dateStr) return null;
+  const str = String(dateStr).trim().split('T')[0];
+  if (str.includes('/')) {
+    const parts = str.split('/');
+    if (parts.length === 3) {
+      const d = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10) - 1;
+      const y = parseInt(parts[2], 10);
+      if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+        return new Date(y, m, d, 12, 0, 0);
+      }
+    }
+  } else if (str.includes('-')) {
+    const parts = str.split('-');
+    if (parts.length === 3) {
+      const y = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10) - 1;
+      const d = parseInt(parts[2], 10);
+      if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+        return new Date(y, m, d, 12, 0, 0);
+      }
+    }
+  }
+  const fallback = new Date(dateStr);
+  return isNaN(fallback.getTime()) ? null : fallback;
+}
+
+/**
  * Calculates number of nights between check-in and check-out.
  */
 export function calculateNights(checkIn: string, checkOut: string): number {
   if (!checkIn || !checkOut) return 0;
-  const d1 = new Date(checkIn + 'T00:00:00');
-  const d2 = new Date(checkOut + 'T00:00:00');
+  const d1 = parseDateToMidnight(checkIn);
+  const d2 = parseDateToMidnight(checkOut);
+  if (!d1 || !d2) return 0;
   const diffTime = d2.getTime() - d1.getTime();
   const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
   return Math.max(0, diffDays);
@@ -622,9 +654,9 @@ export function buildTemporaryRentalWhatsAppUrl(
       (data.imovelEndereco ? `📍 *Endereço:* ${data.imovelEndereco}\n` : '') +
       `📅 *Período:* ${formatarDataBR(data.dataEntrada || '')} a ${formatarDataBR(data.dataSaida || '')} (${data.quantidadeDiarias || 0} diárias)\n` +
       `👥 *Hóspedes:* ${data.quantidadeHospedes || 1} pessoa(s)\n` +
-      `💰 *Valor Total:* R$ ${formatCurrency(data.valorTotal || 0)}\n` +
-      `💵 *Valor Pago:* R$ ${formatCurrency(data.valorPago || 0)}\n` +
-      `⏳ *Saldo Pendente:* R$ ${formatCurrency(data.saldoRestante || 0)}\n\n` +
+      `💰 *Valor Total:* ${formatCurrency(data.valorTotal || 0)}\n` +
+      `💵 *Valor Pago:* ${formatCurrency(data.valorPago || 0)}\n` +
+      `⏳ *Saldo Pendente:* ${formatCurrency(data.saldoRestante || 0)}\n\n` +
       `Caso tenha dúvidas, nossa equipe está à total disposição!`;
   }
 
@@ -782,6 +814,12 @@ export async function approveReservationRequest(
   userUid?: string
 ): Promise<string> {
   if (!solicitacao.id) throw new Error('ID da solicitação não informado.');
+  if (solicitacao.status === 'confirmada') {
+    throw new Error('Esta solicitação já foi aprovada e confirmada anteriormente.');
+  }
+  if (solicitacao.status === 'cancelada' || solicitacao.status === 'recusada') {
+    throw new Error(`Não é possível aprovar uma solicitação com status "${solicitacao.status}".`);
+  }
 
   // Re-verify availability
   const avail = await checkAvailability(solicitacao.imovelId, solicitacao.dataEntrada, solicitacao.dataSaida);
@@ -796,7 +834,7 @@ export async function approveReservationRequest(
     imovelTitulo: solicitacao.imovelTitulo,
     imovelEndereco: solicitacao.imovelEndereco,
     hospedeNome: solicitacao.nomeCliente,
-    hospedeCpf: '',
+    hospedeCpf: solicitacao.hospedeCpf || '',
     hospedeTelefone: solicitacao.telefone || solicitacao.whatsapp,
     hospedeWhatsapp: solicitacao.whatsapp || solicitacao.telefone,
     hospedeEmail: solicitacao.email || '',
@@ -807,6 +845,9 @@ export async function approveReservationRequest(
     valorDiaria: solicitacao.valorDiaria,
     taxaLimpeza: solicitacao.taxaLimpeza || 0,
     valorTotal: solicitacao.valorTotalEstimado,
+    possuiVeiculo: solicitacao.possuiVeiculo ?? (Boolean(solicitacao.veiculos && solicitacao.veiculos.length > 0)),
+    veiculos: solicitacao.veiculos || [],
+    acompanhantes: solicitacao.acompanhantes || [],
     status: 'confirmada',
     statusPagamento: 'pendente',
     observacoes: `Aprovado a partir da Solicitação pública #${solicitacao.codigoSolicitacao || solicitacao.id}. Observações do cliente: ${solicitacao.observacoes || 'Nenhuma'}`
@@ -816,6 +857,8 @@ export async function approveReservationRequest(
   await updateDoc(doc(db, 'solicitacoesReservaTemporada', solicitacao.id), {
     status: 'confirmada',
     reservaGeradaId: reservaId,
+    aprovadoEm: serverTimestamp(),
+    aprovadoPor: userUid || null,
     atualizadoEm: serverTimestamp()
   });
 
@@ -829,6 +872,7 @@ export async function refuseReservationRequest(requestId: string, motivo?: strin
   await updateDoc(doc(db, 'solicitacoesReservaTemporada', requestId), {
     status: 'recusada',
     motivoRecusa: motivo || 'Recusada pelo administrador',
+    recusadoEm: serverTimestamp(),
     atualizadoEm: serverTimestamp()
   });
 }
@@ -839,6 +883,7 @@ export async function refuseReservationRequest(requestId: string, motivo?: strin
 export async function cancelReservationRequest(requestId: string): Promise<void> {
   await updateDoc(doc(db, 'solicitacoesReservaTemporada', requestId), {
     status: 'cancelada',
+    canceladoEm: serverTimestamp(),
     atualizadoEm: serverTimestamp()
   });
 }
@@ -857,12 +902,16 @@ export function buildPublicTemporaryRentalWhatsAppUrl(
     quantidadeDiarias: number;
     quantidadeHospedes: number;
     valorDiaria: number;
+    taxaLimpeza?: number;
     valorTotalEstimado: number;
     nomeCliente: string;
     telefone: string;
     whatsapp?: string;
     email?: string;
     observacoes?: string;
+    acompanhantes?: any[];
+    possuiVeiculo?: boolean;
+    veiculos?: any[];
   },
   destinationPhone?: string
 ): string {
@@ -870,6 +919,8 @@ export function buildPublicTemporaryRentalWhatsAppUrl(
   const targetPhone = cleanDestination.startsWith('55') ? cleanDestination : `55${cleanDestination}`;
 
   const link = solicitacao.imovelLink || `https://mentaimoveis.com/imovel/${encodeURIComponent(solicitacao.imovelCodigo || '')}`;
+
+  const subtotalDiarias = (solicitacao.quantidadeDiarias || 0) * (solicitacao.valorDiaria || 0);
 
   const lines = [
     'Olá! Tenho interesse em uma locação temporária pela Menta Imóveis.',
@@ -885,13 +936,21 @@ export function buildPublicTemporaryRentalWhatsAppUrl(
     `* Saída: ${formatarDataBR(solicitacao.dataSaida)}`,
     `* Quantidade de diárias: ${solicitacao.quantidadeDiarias}`,
     `* Quantidade de hóspedes: ${solicitacao.quantidadeHospedes}`,
-    `* Valor por diária: R$ ${formatCurrency(solicitacao.valorDiaria)}`,
-    `* Valor total estimado: R$ ${formatCurrency(solicitacao.valorTotalEstimado)}`,
+    `* Valor por diária: ${formatCurrency(solicitacao.valorDiaria)}`,
+    `* Subtotal das diárias: ${formatCurrency(subtotalDiarias)}`,
+    ...(solicitacao.taxaLimpeza && solicitacao.taxaLimpeza > 0 ? [`* Taxa de limpeza: ${formatCurrency(solicitacao.taxaLimpeza)}`] : []),
+    `* Valor total estimado: ${formatCurrency(solicitacao.valorTotalEstimado)}`,
     '',
     'DADOS DO CLIENTE',
-    `* Nome: ${solicitacao.nomeCliente}`,
-    `* WhatsApp: ${solicitacao.whatsapp || solicitacao.telefone}`,
-    `* E-mail: ${solicitacao.email || 'Não informado'}`,
+    `* Titular da reserva: ${solicitacao.nomeCliente}`,
+    `* WhatsApp / Telefone: ${solicitacao.whatsapp || solicitacao.telefone}`,
+    ...(solicitacao.email ? [`* E-mail: ${solicitacao.email}`] : []),
+    ...(solicitacao.acompanhantes && solicitacao.acompanhantes.length > 0 
+      ? [`* Acompanhantes (${solicitacao.acompanhantes.length}): ${solicitacao.acompanhantes.map(a => a.nomeCompleto + (a.parentesco ? ` (${a.parentesco})` : '')).join(', ')}`] 
+      : []),
+    ...(solicitacao.possuiVeiculo && solicitacao.veiculos && solicitacao.veiculos.length > 0
+      ? [`* Veículo(s) na garagem: ${solicitacao.veiculos.map(v => `${v.tipo || 'Carro'} ${v.marca || ''} ${v.modelo || ''} (Placa ${v.placa})`).join(' | ')}`]
+      : [`* Veículo para garagem: Não possui`]),
     `* Observações: ${solicitacao.observacoes || 'Nenhuma'}`,
     '',
     'Gostaria de confirmar a disponibilidade e receber informações sobre os próximos passos para concluir a reserva.'

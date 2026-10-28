@@ -14,6 +14,7 @@ import {
   MessageCircle, 
   Maximize, 
   Calendar, 
+  CalendarCheck,
   ChevronLeft, 
   ChevronRight,
   ChevronDown,
@@ -840,7 +841,15 @@ export default function PropertyDetail() {
                             onClick={scrollToScheduler}
                             className="flex items-center justify-center gap-2.5 bg-gold hover:bg-[#EEBF32] text-primary-black py-4 rounded-xl font-bold text-xs uppercase tracking-wider shadow-md active:scale-97 transition-all"
                           >
-                            <Calendar size={16} /> Agendar Visita
+                            {isTemporaria ? (
+                              <>
+                                <CalendarCheck size={16} /> Consultar Calendário e Reservar
+                              </>
+                            ) : (
+                              <>
+                                <Calendar size={16} /> Agendar Visita
+                              </>
+                            )}
                           </button>
                         </div>
                       </>
@@ -1356,6 +1365,29 @@ export default function PropertyDetail() {
                             >
                               <MessageCircle size={20} />
                               Solicitar Similares no WhatsApp
+                            </motion.a>
+                          </div>
+                        ) : isTemporaria ? (
+                          <div className="space-y-3">
+                            <motion.button 
+                              whileHover={{ scale: 1.01, y: -1 }}
+                              whileTap={{ scale: 0.99 }}
+                              onClick={scrollToScheduler}
+                              className="flex items-center justify-center gap-2.5 bg-gold hover:bg-[#EEBF32] text-primary-black font-black text-xs uppercase tracking-wider py-4.5 rounded-2xl shadow-lg active:scale-97 transition-all w-full"
+                            >
+                              <CalendarCheck size={18} />
+                              Consultar Calendário e Reservar
+                            </motion.button>
+                            <motion.a 
+                              whileHover={{ scale: 1.01, y: -1 }}
+                              whileTap={{ scale: 0.99 }}
+                              href={whatsappUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center justify-center gap-2.5 bg-emerald-500 text-white font-bold text-xs uppercase tracking-wider py-4.5 rounded-2xl shadow-md hover:bg-emerald-600 transition-all w-full"
+                            >
+                              <MessageCircle size={20} />
+                              Falar no WhatsApp
                             </motion.a>
                           </div>
                         ) : (
