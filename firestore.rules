@@ -31,11 +31,15 @@ service cloud.firestore {
 
     function isAdminAtivo() {
       return isMasterAdmin() || (
-        isSignedIn() && request.auth.token.email != null && (
-          (exists(/databases/$(database)/documents/admins/$(request.auth.token.email)) &&
-           get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.ativo == true) ||
-          (exists(/databases/$(database)/documents/administradores/$(request.auth.token.email)) &&
-           get(/databases/$(database)/documents/administradores/$(request.auth.token.email)).data.ativo == true)
+        isSignedIn() && (
+          (request.auth.token.email != null && (
+            (exists(/databases/$(database)/documents/admins/$(request.auth.token.email)) &&
+             get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.ativo != false) ||
+            (exists(/databases/$(database)/documents/administradores/$(request.auth.token.email)) &&
+             get(/databases/$(database)/documents/administradores/$(request.auth.token.email)).data.ativo != false)
+          )) ||
+          (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.ativo != false)
         )
       );
     }
@@ -108,7 +112,7 @@ service cloud.firestore {
                     && request.resource.data.dataEntrada is string
                     && request.resource.data.dataSaida is string
                     && request.resource.data.nomeCliente is string
-                    && request.resource.data.status == 'solicitacao_recebida';
+                    && (request.resource.data.status == 'pendente' || request.resource.data.status == 'solicitacao_recebida');
       allow read, update, delete: if isAdminAtivo();
     }
 

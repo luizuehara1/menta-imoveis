@@ -31,7 +31,10 @@ import {
   RefreshCw,
   Home,
   ExternalLink,
-  Tag
+  Tag,
+  Check,
+  Send,
+  MessageCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -62,6 +65,11 @@ import {
   approveReservationRequest,
   refuseReservationRequest,
   cancelReservationRequest,
+  updateRequestStatus,
+  buildAdminConfirmationWhatsAppUrl,
+  buildAdminConfirmationWhatsAppMessage,
+  buildAdminContactWhatsAppUrl,
+  buildAdminRefusalWhatsAppUrl,
   checkAvailability,
   saveReservation,
   cancelReservation,
@@ -116,6 +124,20 @@ export default function TemporaryRentals() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [selectedReservation, setSelectedReservation] = useState<TemporaryReservation | null>(null);
   const [selectedRequest, setSelectedRequest] = useState<TemporaryReservationRequest | null>(null);
+
+  // Requests management state
+  const [requestStatusFilter, setRequestStatusFilter] = useState<string>('todos');
+  const [requestSearchTerm, setRequestSearchTerm] = useState<string>('');
+  const [confirmationSuccessData, setConfirmationSuccessData] = useState<{
+    solicitacao: TemporaryReservationRequest;
+    reservaId: string;
+    codigoReserva: string;
+    clientPhone: string;
+  } | null>(null);
+  const [refusalModalData, setRefusalModalData] = useState<{
+    solicitacao: TemporaryReservationRequest;
+    motivo: string;
+  } | null>(null);
 
   // Seasonal Prices State & Modal
   const [seasonalPrices, setSeasonalPrices] = useState<TemporarySeasonalPrice[]>([]);
@@ -545,13 +567,20 @@ export default function TemporaryRentals() {
 
   // Request Action Handlers
   const handleApproveRequest = async (req: TemporaryReservationRequest) => {
-    if (!window.confirm(`Deseja aprovar a solicitação de reserva de ${req.nomeCliente} para o período de ${formatarDataBR(req.dataEntrada)} a ${formatarDataBR(req.dataSaida)}? Uma reserva confirmada será gerada imediatamente.`)) {
+    if (!window.confirm(`Deseja confirmar a reserva de ${req.nomeCliente} para o período de ${formatarDataBR(req.dataEntrada)} a ${formatarDataBR(req.dataSaida)}? A reserva será gravada no sistema e as datas ficarão imediatamente bloqueadas no calendário.`)) {
       return;
     }
     try {
-      await approveReservationRequest(req, user?.uid);
-      triggerToast('Solicitação aprovada e reserva confirmada com sucesso!', 'success');
+      const adminIdentifier = user?.email || user?.uid || 'Administrador';
+      const result = await approveReservationRequest(req, adminIdentifier);
+      triggerToast('Reserva confirmada com sucesso! O período agora está bloqueado no calendário.', 'success');
       setIsRequestDetailsModalOpen(false);
+      setConfirmationSuccessData({
+        solicitacao: req,
+        reservaId: result.reservaId,
+        codigoReserva: result.codigoReserva,
+        clientPhone: req.whatsapp || req.telefone || ''
+      });
       await loadData();
     } catch (err: any) {
       console.error('Erro ao aprovar solicitação:', err);
@@ -559,12 +588,46 @@ export default function TemporaryRentals() {
     }
   };
 
-  const handleRefuseRequest = async (req: TemporaryReservationRequest) => {
-    const motivo = window.prompt('Informe o motivo da recusa desta solicitação:');
-    if (motivo === null) return;
+  const handleSetUnderAnalysis = async (req: TemporaryReservationRequest) => {
     try {
-      await refuseReservationRequest(req.id, motivo);
+      const adminIdentifier = user?.email || user?.uid || 'Administrador';
+      await updateRequestStatus(req.id!, 'em_analise', { adminUser: adminIdentifier });
+      triggerToast('Solicitação colocada em análise.', 'success');
+      if (selectedRequest && selectedRequest.id === req.id) {
+        setSelectedRequest(prev => prev ? { ...prev, status: 'em_analise' } : null);
+      }
+      await loadData();
+    } catch (err: any) {
+      console.error('Erro ao alterar status:', err);
+      triggerToast(err.message || 'Erro ao atualizar status da solicitação.', 'error');
+    }
+  };
+
+  const handleOpenRefusalModal = (req: TemporaryReservationRequest) => {
+    setRefusalModalData({
+      solicitacao: req,
+      motivo: ''
+    });
+  };
+
+  const handleConfirmRefusal = async (openWhatsApp = false) => {
+    if (!refusalModalData) return;
+    const { solicitacao, motivo } = refusalModalData;
+    try {
+      const adminIdentifier = user?.email || user?.uid || 'Administrador';
+      await refuseReservationRequest(solicitacao.id!, motivo || 'Indisponibilidade nas datas solicitadas', adminIdentifier);
       triggerToast('Solicitação recusada.', 'success');
+      
+      if (openWhatsApp) {
+        const whats = buildAdminRefusalWhatsAppUrl(solicitacao, motivo);
+        if (whats.isValid) {
+          window.open(whats.url, '_blank');
+        } else {
+          triggerToast('Telefone do cliente incompleto para abertura do WhatsApp.', 'error');
+        }
+      }
+
+      setRefusalModalData(null);
       setIsRequestDetailsModalOpen(false);
       await loadData();
     } catch (err: any) {
@@ -573,10 +636,20 @@ export default function TemporaryRentals() {
     }
   };
 
+  const handleInitiateWhatsAppContact = (req: TemporaryReservationRequest) => {
+    const whats = buildAdminContactWhatsAppUrl(req);
+    if (!whats.isValid) {
+      triggerToast('O número de telefone informado na solicitação é inválido ou incompleto.', 'error');
+      return;
+    }
+    window.open(whats.url, '_blank');
+  };
+
   const handleCancelRequest = async (requestId: string) => {
     if (!window.confirm('Deseja cancelar esta solicitação de reserva?')) return;
     try {
-      await cancelReservationRequest(requestId);
+      const adminIdentifier = user?.email || user?.uid || 'Administrador';
+      await cancelReservationRequest(requestId, adminIdentifier);
       triggerToast('Solicitação cancelada.', 'success');
       setIsRequestDetailsModalOpen(false);
       await loadData();
@@ -1071,14 +1144,18 @@ export default function TemporaryRentals() {
             <div>
               <div className="flex items-center gap-2 text-gold mb-1">
                 <MessageSquare size={16} />
-                <span className="text-[10px] font-black uppercase tracking-widest">Site Público Menta Imóveis</span>
+                <span className="text-[10px] font-black uppercase tracking-widest">Painel Administrativo</span>
               </div>
-              <h3 className="text-xl font-display font-bold text-primary-black">Solicitações de Reserva</h3>
-              <p className="text-xs text-gray-400">Pedidos de reserva enviados diretamente pelos clientes via site</p>
+              <h3 className="text-xl font-display font-bold text-primary-black">
+                Reservas Temporárias → Solicitações de Reserva
+              </h3>
+              <p className="text-xs text-gray-400">
+                Gerencie, coloque em análise, recuse ou confirme as solicitações enviadas pelos clientes pelo site
+              </p>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-amber-800 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-xl">
-                {requests.filter(r => r.status === 'solicitacao_recebida' || !r.status).length} pendente(s)
+                {requests.filter(r => r.status === 'pendente' || r.status === 'solicitacao_recebida' || !r.status).length} pendente(s)
               </span>
               <span className="text-xs font-bold text-gray-500 bg-gray-100 px-3 py-1.5 rounded-xl">
                 {requests.length} no total
@@ -1086,160 +1163,307 @@ export default function TemporaryRentals() {
             </div>
           </div>
 
+          {/* Filter Bar: Status Pills & Search */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+              {[
+                { id: 'todos', label: 'Todas', count: requests.length },
+                { id: 'pendente', label: 'Pendentes', count: requests.filter(r => r.status === 'pendente' || r.status === 'solicitacao_recebida' || !r.status).length },
+                { id: 'em_analise', label: 'Em análise', count: requests.filter(r => r.status === 'em_analise').length },
+                { id: 'confirmada', label: 'Confirmadas', count: requests.filter(r => r.status === 'confirmada').length },
+                { id: 'recusada', label: 'Recusadas', count: requests.filter(r => r.status === 'recusada').length },
+                { id: 'cancelada', label: 'Canceladas', count: requests.filter(r => r.status === 'cancelada').length },
+              ].map(filter => (
+                <button
+                  key={filter.id}
+                  onClick={() => setRequestStatusFilter(filter.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                    requestStatusFilter === filter.id
+                      ? 'bg-primary-black text-gold shadow-sm'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  <span>{filter.label}</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                    requestStatusFilter === filter.id ? 'bg-gold/30 text-gold' : 'bg-white text-gray-700'
+                  }`}>
+                    {filter.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className="relative min-w-[260px]">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Buscar por cliente, imóvel, protocolo..."
+                value={requestSearchTerm}
+                onChange={e => setRequestSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-800 placeholder:text-gray-400 focus:outline-none focus:border-gold"
+              />
+            </div>
+          </div>
+
           <div className="overflow-x-auto">
-            {requests.length === 0 ? (
-              <div className="p-12 text-center text-gray-400 space-y-2">
-                <MessageSquare size={36} className="mx-auto text-gray-300 opacity-50" />
-                <p className="font-bold text-sm">Nenhuma solicitação de reserva recebida até o momento.</p>
-                <p className="text-xs">Quando um cliente solicitar uma reserva pela página do imóvel, ela aparecerá aqui instantaneamente.</p>
-              </div>
-            ) : (
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="border-b border-gray-100 text-[10px] font-black uppercase tracking-wider text-gray-400">
-                    <th className="py-4 px-4">Protocolo / Data</th>
-                    <th className="py-4 px-4">Imóvel</th>
-                    <th className="py-4 px-4">Cliente</th>
-                    <th className="py-4 px-4">Período Solicitado</th>
-                    <th className="py-4 px-4">Valor Estimado</th>
-                    <th className="py-4 px-4">Status</th>
-                    <th className="py-4 px-4 text-right">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {requests.map(req => {
-                    const isPending = req.status === 'solicitacao_recebida' || !req.status;
-                    const isConfirmed = req.status === 'confirmada';
-                    const isRefused = req.status === 'recusada';
-                    const isCancelled = req.status === 'cancelada';
+            {(() => {
+              const filteredList = requests.filter(req => {
+                const reqStatus = req.status || 'pendente';
+                if (requestStatusFilter !== 'todos') {
+                  if (requestStatusFilter === 'pendente') {
+                    if (reqStatus !== 'pendente' && reqStatus !== 'solicitacao_recebida') return false;
+                  } else if (reqStatus !== requestStatusFilter) {
+                    return false;
+                  }
+                }
+                if (requestSearchTerm.trim()) {
+                  const term = requestSearchTerm.toLowerCase();
+                  const matchName = req.nomeCliente?.toLowerCase().includes(term);
+                  const matchProp = req.imovelTitulo?.toLowerCase().includes(term) || req.imovelCodigo?.toLowerCase().includes(term);
+                  const matchPhone = (req.whatsapp || req.telefone || '').replace(/\D/g, '').includes(term.replace(/\D/g, ''));
+                  const matchCode = req.codigoSolicitacao?.toLowerCase().includes(term);
+                  if (!matchName && !matchProp && !matchPhone && !matchCode) return false;
+                }
+                return true;
+              });
 
-                    let statusBadge = (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
-                        <Clock size={10} /> Pendente
-                      </span>
-                    );
-                    if (isConfirmed) {
-                      statusBadge = (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                          <CheckCircle2 size={10} /> Reserva Criada
+              if (filteredList.length === 0) {
+                return (
+                  <div className="p-12 text-center text-gray-400 space-y-2">
+                    <MessageSquare size={36} className="mx-auto text-gray-300 opacity-50" />
+                    <p className="font-bold text-sm">Nenhuma solicitação encontrada com os filtros selecionados.</p>
+                    <p className="text-xs">Altere os filtros acima ou aguarde novas solicitações enviadas pelos clientes pelo site.</p>
+                  </div>
+                );
+              }
+
+              return (
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-gray-100 text-[10px] font-black uppercase tracking-wider text-gray-400">
+                      <th className="py-4 px-4">Protocolo / Data</th>
+                      <th className="py-4 px-4">Imóvel</th>
+                      <th className="py-4 px-4">Cliente</th>
+                      <th className="py-4 px-4">Período Solicitado</th>
+                      <th className="py-4 px-4">Veículo / Vaga</th>
+                      <th className="py-4 px-4">Valor Estimado</th>
+                      <th className="py-4 px-4">Status</th>
+                      <th className="py-4 px-4 text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {filteredList.map(req => {
+                      const isPending = req.status === 'solicitacao_recebida' || req.status === 'pendente' || !req.status;
+                      const isAnalysis = req.status === 'em_analise';
+                      const isConfirmed = req.status === 'confirmada';
+                      const isRefused = req.status === 'recusada';
+                      const isCancelled = req.status === 'cancelada';
+
+                      let statusBadge = (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300">
+                          <Clock size={11} className="text-amber-600" /> Pendente
                         </span>
                       );
-                    } else if (isRefused) {
-                      statusBadge = (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-red-100 text-red-800 border border-red-300">
-                          <X size={10} /> Recusada
-                        </span>
-                      );
-                    } else if (isCancelled) {
-                      statusBadge = (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-gray-100 text-gray-700 border border-gray-300">
-                          Cancelada
-                        </span>
-                      );
-                    }
-
-                    return (
-                      <tr key={req.id} className="hover:bg-gray-50/80 transition-colors">
-                        <td className="py-4 px-4">
-                          <span className="font-mono font-bold text-primary-black text-xs block">
-                            {req.codigoSolicitacao || req.id.slice(0, 8)}
+                      if (isAnalysis) {
+                        statusBadge = (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-300">
+                            <Search size={11} className="text-blue-600" /> Em análise
                           </span>
-                          <span className="text-gray-400 text-[10px] block">
-                            {req.criadoEm?.seconds ? new Date(req.criadoEm.seconds * 1000).toLocaleDateString('pt-BR') : 'Hoje'}
+                        );
+                      } else if (isConfirmed) {
+                        statusBadge = (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300">
+                            <CheckCircle2 size={11} className="text-emerald-600" /> Confirmada
                           </span>
-                        </td>
-
-                        <td className="py-4 px-4">
-                          <span className="font-bold text-primary-black block truncate max-w-[180px]">
-                            {req.imovelTitulo || 'Imóvel'}
+                        );
+                      } else if (isRefused) {
+                        statusBadge = (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-red-50 text-red-800 border border-red-300">
+                            <X size={11} className="text-red-600" /> Recusada
                           </span>
-                          <span className="text-gray-400 text-[10px] font-semibold">
-                            Cód: {req.imovelCodigo}
+                        );
+                      } else if (isCancelled) {
+                        statusBadge = (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-gray-100 text-gray-700 border border-gray-300">
+                            Cancelada
                           </span>
-                        </td>
+                        );
+                      }
 
-                        <td className="py-4 px-4">
-                          <p className="font-bold text-primary-black">{req.nomeCliente}</p>
-                          <p className="text-gray-500 text-[11px]">{req.whatsapp || req.telefone}</p>
-                          {req.email && <p className="text-gray-400 text-[10px] truncate max-w-[150px]">{req.email}</p>}
-                        </td>
+                      return (
+                        <tr key={req.id} className="hover:bg-gray-50/80 transition-colors">
+                          <td className="py-4 px-4">
+                            <span className="font-mono font-bold text-primary-black text-xs block">
+                              {req.codigoSolicitacao || req.id?.slice(0, 8)}
+                            </span>
+                            <span className="text-gray-400 text-[10px] block">
+                              {req.criadoEm?.seconds ? new Date(req.criadoEm.seconds * 1000).toLocaleString('pt-BR') : 'Hoje'}
+                            </span>
+                          </td>
 
-                        <td className="py-4 px-4">
-                          <span className="font-bold text-gray-700 block">
-                            {formatarDataBR(req.dataEntrada)} a {formatarDataBR(req.dataSaida)}
-                          </span>
-                          <span className="text-[10px] text-gray-400 font-semibold">
-                            {req.quantidadeDiarias} diárias • {req.quantidadeHospedes} hóspede(s)
-                          </span>
-                        </td>
+                          <td className="py-4 px-4">
+                            <span className="font-bold text-primary-black block truncate max-w-[170px]" title={req.imovelTitulo}>
+                              {req.imovelTitulo || 'Imóvel de Temporada'}
+                            </span>
+                            <span className="text-gray-400 text-[10px] font-semibold">
+                              Cód: {req.imovelCodigo || '---'}
+                            </span>
+                          </td>
 
-                        <td className="py-4 px-4">
-                          <span className="font-black text-emerald-700 block text-sm">
-                            {formatCurrency(req.valorTotalEstimado || 0)}
-                          </span>
-                          <span className="text-[10px] text-gray-400">
-                            Diária: {formatCurrency(req.valorDiaria || 0)}
-                          </span>
-                        </td>
+                          <td className="py-4 px-4">
+                            <p className="font-bold text-primary-black">{req.nomeCliente}</p>
+                            <p className="text-gray-600 text-[11px] font-medium">{req.whatsapp || req.telefone}</p>
+                            {req.email && <p className="text-gray-400 text-[10px] truncate max-w-[140px]">{req.email}</p>}
+                          </td>
 
-                        <td className="py-4 px-4">
-                          {statusBadge}
-                        </td>
+                          <td className="py-4 px-4">
+                            <span className="font-bold text-gray-800 block">
+                              {formatarDataBR(req.dataEntrada)} a {formatarDataBR(req.dataSaida)}
+                            </span>
+                            <span className="text-[10px] text-gray-500 font-medium">
+                              {req.quantidadeDiarias} diárias • {req.quantidadeHospedes} hóspede(s)
+                              {req.acompanhantes && req.acompanhantes.length > 0 && ` (+${req.acompanhantes.length} acomp.)`}
+                            </span>
+                          </td>
 
-                        <td className="py-4 px-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            {/* WhatsApp link */}
-                            <button
-                              onClick={() => {
-                                const cleanNum = (req.whatsapp || req.telefone || '').replace(/\D/g, '');
-                                const whatsUrl = cleanNum ? `https://wa.me/55${cleanNum.replace(/^55/, '')}` : '#';
-                                window.open(whatsUrl, '_blank');
-                              }}
-                              className="p-2 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors"
-                              title="Conversar com o cliente no WhatsApp"
-                            >
-                              <MessageSquare size={14} />
-                            </button>
-
-                            {/* View details */}
-                            <button
-                              onClick={() => {
-                                setSelectedRequest(req);
-                                setIsRequestDetailsModalOpen(true);
-                              }}
-                              className="p-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
-                              title="Visualizar detalhes da solicitação"
-                            >
-                              <Eye size={14} />
-                            </button>
-
-                            {/* If pending: Approve / Refuse */}
-                            {isPending && (
-                              <>
-                                <button
-                                  onClick={() => handleApproveRequest(req)}
-                                  className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] transition-colors shadow-xs"
-                                  title="Aprovar e Gerar Reserva Confirmada"
-                                >
-                                  Aprovar
-                                </button>
-                                <button
-                                  onClick={() => handleRefuseRequest(req)}
-                                  className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
-                                  title="Recusar Solicitação"
-                                >
-                                  <X size={14} />
-                                </button>
-                              </>
+                          <td className="py-4 px-4">
+                            {req.possuiVeiculo && req.veiculos && req.veiculos.length > 0 ? (
+                              <div className="space-y-0.5">
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-900 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                  {req.veiculos.length} vaga(s)
+                                </span>
+                                <span className="text-[10px] text-gray-500 block truncate max-w-[130px]">
+                                  {req.veiculos.map(v => v.placa || v.modelo).join(', ')}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 text-[10px]">Sem garagem</span>
                             )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
+                          </td>
+
+                          <td className="py-4 px-4">
+                            <span className="font-black text-emerald-700 block text-sm">
+                              {formatCurrency(req.valorTotalEstimado || 0)}
+                            </span>
+                            <span className="text-[10px] text-gray-400">
+                              Diária: {formatCurrency(req.valorDiaria || 0)}
+                            </span>
+                          </td>
+
+                          <td className="py-4 px-4">
+                            {statusBadge}
+                          </td>
+
+                          <td className="py-4 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              {/* VER DETALHES */}
+                              <button
+                                onClick={() => {
+                                  setSelectedRequest(req);
+                                  setIsRequestDetailsModalOpen(true);
+                                }}
+                                className="p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors"
+                                title="Ver detalhes completos"
+                              >
+                                <Eye size={14} />
+                              </button>
+
+                              {/* INICIAR ATENDIMENTO NO WHATSAPP */}
+                              <button
+                                onClick={() => handleInitiateWhatsAppContact(req)}
+                                className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 transition-colors"
+                                title="Iniciar atendimento no WhatsApp"
+                              >
+                                <MessageSquare size={14} />
+                              </button>
+
+                              {/* PENDENTE ACTIONS */}
+                              {isPending && (
+                                <>
+                                  <button
+                                    onClick={() => handleSetUnderAnalysis(req)}
+                                    className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 transition-colors"
+                                    title="Colocar em Análise"
+                                  >
+                                    <Clock size={14} />
+                                  </button>
+                                  <button
+                                    onClick={() => handleApproveRequest(req)}
+                                    className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase tracking-wider shadow-xs transition-all flex items-center gap-1"
+                                    title="Confirmar Reserva"
+                                  >
+                                    <Check size={13} /> Confirmar
+                                  </button>
+                                  <button
+                                    onClick={() => handleOpenRefusalModal(req)}
+                                    className="p-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 transition-colors"
+                                    title="Recusar Solicitação"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                </>
+                              )}
+
+                              {/* EM ANÁLISE ACTIONS */}
+                              {isAnalysis && (
+                                <>
+                                  <button
+                                    onClick={() => handleApproveRequest(req)}
+                                    className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase tracking-wider shadow-xs transition-all flex items-center gap-1"
+                                    title="Confirmar Reserva"
+                                  >
+                                    <Check size={13} /> Confirmar
+                                  </button>
+                                  <button
+                                    onClick={() => handleOpenRefusalModal(req)}
+                                    className="p-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 transition-colors"
+                                    title="Recusar Solicitação"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                </>
+                              )}
+
+                              {/* CONFIRMADA ACTIONS */}
+                              {isConfirmed && (
+                                <button
+                                  onClick={() => setConfirmationSuccessData({
+                                    solicitacao: req,
+                                    reservaId: req.reservaGeradaId || '',
+                                    codigoReserva: req.codigoReservaGerada || '',
+                                    clientPhone: req.whatsapp || req.telefone || ''
+                                  })}
+                                  className="px-2 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 font-bold text-[10px] transition-colors flex items-center gap-1"
+                                  title="Enviar confirmação por WhatsApp"
+                                >
+                                  <MessageCircle size={13} className="text-amber-700" />
+                                  <span>WhatsApp</span>
+                                </button>
+                              )}
+
+                              {/* RECUSADA ACTIONS */}
+                              {isRefused && (
+                                <button
+                                  onClick={() => {
+                                    const whats = buildAdminRefusalWhatsAppUrl(req, req.motivoRecusa);
+                                    if (whats.isValid) window.open(whats.url, '_blank');
+                                    else triggerToast('Telefone do cliente incompleto.', 'error');
+                                  }}
+                                  className="p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors"
+                                  title="Explicar motivo no WhatsApp"
+                                >
+                                  <MessageSquare size={13} />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              );
+            })()}
           </div>
         </div>
       )}
@@ -2767,46 +2991,344 @@ export default function TemporaryRentals() {
                 </div>
               )}
 
+              {/* Audit trail and info */}
+              {(selectedRequest.emAnaliseEm || selectedRequest.aprovadoEm || selectedRequest.recusadoEm || selectedRequest.motivoRecusa) && (
+                <div className="p-3.5 bg-gray-50 rounded-2xl border border-gray-200 space-y-1 text-[11px]">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block">Histórico de Atendimento</span>
+                  {selectedRequest.emAnaliseEm && (
+                    <p className="text-blue-800">
+                      <strong>Colocado em análise:</strong> {new Date(selectedRequest.emAnaliseEm.seconds * 1000).toLocaleString('pt-BR')} {selectedRequest.emAnalisePor ? `por ${selectedRequest.emAnalisePor}` : ''}
+                    </p>
+                  )}
+                  {selectedRequest.aprovadoEm && (
+                    <p className="text-emerald-800">
+                      <strong>Confirmado em:</strong> {new Date(selectedRequest.aprovadoEm.seconds * 1000).toLocaleString('pt-BR')} {selectedRequest.aprovadoPor ? `por ${selectedRequest.aprovadoPor}` : ''}
+                      {selectedRequest.reservaId && ` • Reserva ID: ${selectedRequest.reservaId}`}
+                    </p>
+                  )}
+                  {selectedRequest.recusadoEm && (
+                    <div className="text-red-800">
+                      <p><strong>Recusado em:</strong> {new Date(selectedRequest.recusadoEm.seconds * 1000).toLocaleString('pt-BR')} {selectedRequest.recusadoPor ? `por ${selectedRequest.recusadoPor}` : ''}</p>
+                      {selectedRequest.motivoRecusa && <p className="italic">Motivo: {selectedRequest.motivoRecusa}</p>}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Actions Footer */}
               <div className="pt-4 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
                 <button
                   type="button"
-                  onClick={() => {
-                    const cleanNum = (selectedRequest.whatsapp || selectedRequest.telefone || '').replace(/\D/g, '');
-                    const whatsUrl = cleanNum ? `https://wa.me/55${cleanNum.replace(/^55/, '')}` : '#';
-                    window.open(whatsUrl, '_blank');
-                  }}
-                  className="flex items-center gap-2 px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-colors shadow-sm"
+                  onClick={() => handleInitiateWhatsAppContact(selectedRequest)}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-colors shadow-sm text-xs"
                 >
                   <MessageSquare size={16} />
                   <span>Falar no WhatsApp</span>
                 </button>
 
-                <div className="flex items-center gap-2">
-                  {(selectedRequest.status === 'solicitacao_recebida' || !selectedRequest.status) && (
+                <div className="flex flex-wrap items-center gap-2">
+                  {(selectedRequest.status === 'pendente' || selectedRequest.status === 'solicitacao_recebida' || !selectedRequest.status) && (
                     <>
                       <button
                         type="button"
-                        onClick={() => handleRefuseRequest(selectedRequest)}
-                        className="px-4 py-3 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 font-bold transition-colors"
+                        onClick={() => handleSetUnderAnalysis(selectedRequest)}
+                        className="px-3.5 py-2 rounded-xl border border-blue-200 text-blue-700 hover:bg-blue-50 font-bold transition-colors text-xs"
                       >
-                        Recusar
+                        Colocar em Análise
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenRefusalModal(selectedRequest)}
+                        className="px-3.5 py-2 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 font-bold transition-colors text-xs"
+                      >
+                        Recusar Solicitação
                       </button>
                       <button
                         type="button"
                         onClick={() => handleApproveRequest(selectedRequest)}
-                        className="px-5 py-3 rounded-xl btn-gold font-black uppercase tracking-wider shadow-lg"
+                        className="px-4 py-2 rounded-xl btn-gold font-black uppercase tracking-wider shadow-lg text-xs"
                       >
-                        Aprovar e Criar Reserva
+                        Confirmar Reserva
                       </button>
                     </>
                   )}
+
+                  {selectedRequest.status === 'em_analise' && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenRefusalModal(selectedRequest)}
+                        className="px-3.5 py-2 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 font-bold transition-colors text-xs"
+                      >
+                        Recusar Solicitação
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleApproveRequest(selectedRequest)}
+                        className="px-4 py-2 rounded-xl btn-gold font-black uppercase tracking-wider shadow-lg text-xs"
+                      >
+                        Confirmar Reserva
+                      </button>
+                    </>
+                  )}
+
                   {selectedRequest.status === 'confirmada' && (
-                    <span className="text-emerald-700 font-bold text-xs flex items-center gap-1">
-                      <CheckCircle2 size={16} /> Reserva ativa no sistema
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setConfirmationSuccessData({
+                          solicitacao: selectedRequest,
+                          reservaId: selectedRequest.reservaId || '',
+                          codigoReserva: selectedRequest.codigoReserva || 'RES-CONFIRMADA',
+                          clientPhone: selectedRequest.whatsapp || selectedRequest.telefone || ''
+                        });
+                      }}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs"
+                    >
+                      <CheckCircle2 size={15} />
+                      <span>Reenviar WhatsApp Confirmação</span>
+                    </button>
+                  )}
+
+                  {selectedRequest.status === 'recusada' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const whats = buildAdminRefusalWhatsAppUrl(selectedRequest, selectedRequest.motivoRecusa);
+                        if (whats.isValid) window.open(whats.url, '_blank');
+                      }}
+                      className="px-3.5 py-2 rounded-xl border border-red-200 text-red-700 hover:bg-red-50 font-bold text-xs"
+                    >
+                      Conversar no WhatsApp
+                    </button>
                   )}
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: CONFIRMAÇÃO DE RESERVA COM SUCESSO & WHATSAPP */}
+      {/* ======================================================== */}
+      {confirmationSuccessData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in overflow-y-auto">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-2xl w-full overflow-hidden border border-gray-100 my-8">
+            <div className="p-6 sm:p-8 bg-gradient-to-br from-emerald-600 to-teal-800 text-white relative">
+              <button 
+                onClick={() => setConfirmationSuccessData(null)}
+                className="absolute top-6 right-6 w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-colors"
+              >
+                <X size={18} />
+              </button>
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-white shadow-inner">
+                  <CheckCircle2 size={32} />
+                </div>
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-emerald-100 bg-white/10 px-2.5 py-0.5 rounded-full inline-block mb-1">
+                    Operação Concluída
+                  </span>
+                  <h3 className="text-xl font-display font-black">Reserva Confirmada com Sucesso!</h3>
+                  <p className="text-xs text-emerald-100 mt-0.5">
+                    A reserva foi registrada no sistema e as datas foram imediatamente bloqueadas no calendário.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 sm:p-8 space-y-6 text-xs">
+              {/* Resumo da Reserva */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-3 bg-gray-50 rounded-xl border border-gray-200">
+                  <span className="text-[10px] uppercase font-black tracking-wider text-gray-400 block">Código Reserva</span>
+                  <span className="font-mono font-black text-primary-black text-sm">{confirmationSuccessData.codigoReserva}</span>
+                </div>
+                <div className="p-3 bg-gray-50 rounded-xl border border-gray-200">
+                  <span className="text-[10px] uppercase font-black tracking-wider text-gray-400 block">Protocolo</span>
+                  <span className="font-mono font-bold text-gray-700 text-xs">#{confirmationSuccessData.solicitacao.codigoSolicitacao || confirmationSuccessData.solicitacao.id?.slice(0, 8)}</span>
+                </div>
+                <div className="p-3 bg-gray-50 rounded-xl border border-gray-200">
+                  <span className="text-[10px] uppercase font-black tracking-wider text-gray-400 block">Hóspede</span>
+                  <span className="font-bold text-gray-800 truncate block">{confirmationSuccessData.solicitacao.nomeCliente}</span>
+                </div>
+                <div className="p-3 bg-gray-50 rounded-xl border border-gray-200">
+                  <span className="text-[10px] uppercase font-black tracking-wider text-gray-400 block">Total</span>
+                  <span className="font-black text-emerald-700 text-sm">{formatCurrency(confirmationSuccessData.solicitacao.valorTotalEstimado)}</span>
+                </div>
+              </div>
+
+              {/* Informações de Período e Imóvel */}
+              <div className="p-4 rounded-2xl bg-amber-50/50 border border-amber-200/60 space-y-1">
+                <p className="font-bold text-gray-900 text-sm">{confirmationSuccessData.solicitacao.imovelTitulo}</p>
+                <p className="text-gray-600 text-[11px]">
+                  <strong>Período:</strong> {formatarDataBR(confirmationSuccessData.solicitacao.dataEntrada)} a {formatarDataBR(confirmationSuccessData.solicitacao.dataSaida)} ({confirmationSuccessData.solicitacao.quantidadeDiarias} diárias) • {confirmationSuccessData.solicitacao.quantidadeHospedes} hóspede(s)
+                </p>
+              </div>
+
+              {/* Seção WhatsApp */}
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-black uppercase tracking-wider text-gray-700 flex items-center gap-1.5">
+                    <MessageSquare size={14} className="text-emerald-600" />
+                    Enviar Notificação ao Hóspede via WhatsApp
+                  </label>
+                  <span className="text-[10px] text-gray-400">Verifique o número abaixo</span>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider pl-1">
+                    Número de WhatsApp do Hóspede:
+                  </label>
+                  <input
+                    type="text"
+                    value={confirmationSuccessData.clientPhone}
+                    onChange={(e) => setConfirmationSuccessData(prev => prev ? ({ ...prev, clientPhone: e.target.value }) : null)}
+                    className="input-field text-xs font-bold"
+                    placeholder="Ex: (47) 99999-9999"
+                  />
+                  <p className="text-[10px] text-gray-400 pl-1">
+                    A mensagem será aberta diretamente para o número do hóspede com todos os detalhes da confirmação.
+                  </p>
+                </div>
+
+                {/* Prévia da Mensagem */}
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider pl-1">
+                    Prévia da Mensagem Formatada:
+                  </span>
+                  <div className="p-4 rounded-xl bg-gray-900 text-gray-200 font-mono text-[11px] whitespace-pre-wrap max-h-48 overflow-y-auto leading-relaxed border border-gray-800">
+                    {buildAdminConfirmationWhatsAppMessage(confirmationSuccessData.solicitacao, confirmationSuccessData.codigoReserva)}
+                  </div>
+                </div>
+              </div>
+
+              {/* Botões do Rodapé */}
+              <div className="pt-4 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => setConfirmationSuccessData(null)}
+                  className="px-5 py-2.5 rounded-xl border border-gray-200 text-gray-600 font-bold hover:bg-gray-50 transition-colors"
+                >
+                  Concluir e Fechar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const whats = buildAdminConfirmationWhatsAppUrl(
+                      confirmationSuccessData.solicitacao,
+                      confirmationSuccessData.codigoReserva,
+                      confirmationSuccessData.clientPhone
+                    );
+                    if (!whats.isValid) {
+                      triggerToast('O número de telefone informado é inválido.', 'error');
+                      return;
+                    }
+                    window.open(whats.url, '_blank');
+                  }}
+                  className="flex items-center gap-2 px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-600/20 transition-all hover:scale-[1.02]"
+                >
+                  <Send size={15} />
+                  <span>ENVIAR CONFIRMAÇÃO PELO WHATSAPP</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: RECUSAR SOLICITAÇÃO DE RESERVA */}
+      {/* ======================================================== */}
+      {refusalModalData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in overflow-y-auto">
+          <div className="bg-white rounded-[2rem] shadow-2xl max-w-lg w-full overflow-hidden border border-gray-100 my-8">
+            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between bg-red-50/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-red-100 text-red-700 flex items-center justify-center font-bold">
+                  <AlertCircle size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-display font-bold text-gray-900">Recusar Solicitação de Reserva</h3>
+                  <p className="text-xs text-gray-500">#{refusalModalData.solicitacao.codigoSolicitacao || refusalModalData.solicitacao.id?.slice(0, 8)} • {refusalModalData.solicitacao.nomeCliente}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setRefusalModalData(null)}
+                className="w-8 h-8 rounded-lg bg-white border border-gray-200 text-gray-500 hover:text-black flex items-center justify-center"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 text-xs">
+              <div className="p-3 bg-gray-50 rounded-xl border border-gray-200">
+                <p className="text-gray-700"><strong>Imóvel:</strong> {refusalModalData.solicitacao.imovelTitulo}</p>
+                <p className="text-gray-600 text-[11px] mt-0.5">
+                  <strong>Período:</strong> {formatarDataBR(refusalModalData.solicitacao.dataEntrada)} a {formatarDataBR(refusalModalData.solicitacao.dataSaida)} ({refusalModalData.solicitacao.quantidadeDiarias} diárias)
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-wider text-gray-500 block">
+                  Motivo da Recusa (ficará registrado no histórico)
+                </label>
+                <textarea
+                  rows={3}
+                  value={refusalModalData.motivo}
+                  onChange={(e) => setRefusalModalData(prev => prev ? ({ ...prev, motivo: e.target.value }) : null)}
+                  className="input-field text-xs resize-none"
+                  placeholder="Ex: Datas indisponíveis / Imóvel em manutenção / Não atende regras do condomínio"
+                />
+              </div>
+
+              {/* Sugestões rápidas de motivos */}
+              <div className="space-y-1">
+                <span className="text-[10px] text-gray-400 font-semibold block">Sugestões rápidas:</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    'Datas já reservadas por outro canal',
+                    'Imóvel em manutenção no período',
+                    'Capacidade de hóspedes excedida',
+                    'Mínimo de diárias não atendido'
+                  ].map((motivoPreset, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setRefusalModalData(prev => prev ? ({ ...prev, motivo: motivoPreset }) : null)}
+                      className="px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-[10px] font-medium transition-colors"
+                    >
+                      {motivoPreset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-gray-100 flex flex-wrap items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setRefusalModalData(null)}
+                  className="px-4 py-2 rounded-xl border border-gray-200 text-gray-600 font-bold hover:bg-gray-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleConfirmRefusal(false)}
+                  className="px-4 py-2 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 font-bold"
+                >
+                  Apenas Recusar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleConfirmRefusal(true)}
+                  className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold flex items-center gap-1.5 shadow-md"
+                >
+                  <MessageSquare size={14} />
+                  <span>Recusar e Abrir WhatsApp</span>
+                </button>
               </div>
             </div>
           </div>

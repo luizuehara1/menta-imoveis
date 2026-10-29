@@ -1110,6 +1110,7 @@ export function normalizeReservationRequest(
     quantidadeHospedes: Math.max(1, Number(request.quantidadeHospedes || 1)),
     valorDiaria: Math.max(0, Number(request.valorDiaria || 0)),
     taxaLimpeza: Math.max(0, Number(request.taxaLimpeza || 0)),
+    outrasTaxas: Math.max(0, Number(request.outrasTaxas || 0)),
     valorTotalEstimado: Math.max(0, Number(request.valorTotalEstimado || 0)),
     possuiVeiculo: Boolean(request.possuiVeiculo && cleanVeiculos.length > 0),
     veiculos: cleanVeiculos,
@@ -1117,7 +1118,7 @@ export function normalizeReservationRequest(
     detalhamentoDiarias: cleanDiarias,
     observacoes: String(request.observacoes || '').trim(),
     codigoSolicitacao: codigo,
-    status: 'solicitacao_recebida',
+    status: (request.status as any) || 'pendente',
     origem: 'site_publico',
     criadoEm: serverTimestamp()
   };
@@ -1185,7 +1186,7 @@ export async function submitReservationRequest(
       undefinedPaths: findUndefinedPaths(normalizedPayload)
     });
     if (err?.code === 'permission-denied') {
-      throw new Error('Permissão negada ao salvar sua solicitação no sistema. Por favor, envie diretamente pelo WhatsApp para nossa equipe.');
+      throw new Error('Não foi possível registrar sua solicitação no sistema por uma questão de permissão. Por favor, tente novamente ou contate nossa equipe.');
     }
     throw new Error(err?.message || 'Falha ao registrar a solicitação de reserva no sistema.');
   }
@@ -1214,28 +1215,72 @@ export async function fetchReservationRequests(imovelId?: string): Promise<Tempo
 }
 
 /**
- * Approves a reservation request and creates the official reservation in Firestore.
+ * Updates status of a reservation request with audit logging (who and when).
+ */
+export async function updateRequestStatus(
+  requestId: string,
+  newStatus: 'pendente' | 'em_analise' | 'confirmada' | 'recusada' | 'cancelada',
+  options?: {
+    motivo?: string;
+    adminUser?: string;
+  }
+): Promise<void> {
+  const adminName = options?.adminUser || 'Administrador';
+  const updateData: Record<string, any> = {
+    status: newStatus,
+    statusAlteradoEm: serverTimestamp(),
+    statusAlteradoPor: adminName,
+    atualizadoEm: serverTimestamp()
+  };
+
+  if (newStatus === 'recusada') {
+    updateData.motivoRecusa = options?.motivo || 'Recusada pelo administrador';
+    updateData.recusadoEm = serverTimestamp();
+    updateData.recusadoPor = adminName;
+  } else if (newStatus === 'em_analise') {
+    updateData.emAnaliseEm = serverTimestamp();
+    updateData.emAnalisePor = adminName;
+  } else if (newStatus === 'cancelada') {
+    updateData.canceladoEm = serverTimestamp();
+    updateData.canceladoPor = adminName;
+  }
+
+  await updateDoc(doc(db, 'solicitacoesReservaTemporada', requestId), updateData);
+}
+
+/**
+ * Approves a reservation request, creates the official confirmed reservation in Firestore,
+ * and synchronizes occupied dates in the calendar.
  */
 export async function approveReservationRequest(
   solicitacao: TemporaryReservationRequest, 
-  userUid?: string
-): Promise<string> {
+  adminUser?: { uid?: string; email?: string } | string
+): Promise<{ reservaId: string; codigoReserva: string }> {
   if (!solicitacao.id) throw new Error('ID da solicitação não informado.');
   if (solicitacao.status === 'confirmada') {
     throw new Error('Esta solicitação já foi aprovada e confirmada anteriormente.');
   }
-  if (solicitacao.status === 'cancelada' || solicitacao.status === 'recusada') {
-    throw new Error(`Não é possível aprovar uma solicitação com status "${solicitacao.status}".`);
-  }
 
-  // Re-verify availability
+  const adminName = typeof adminUser === 'string' 
+    ? adminUser 
+    : (adminUser?.email || adminUser?.uid || 'Administrador');
+
+  // 1. Re-verify availability atomically to avoid double booking
   const avail = await checkAvailability(solicitacao.imovelId, solicitacao.dataEntrada, solicitacao.dataSaida);
   if (!avail.available) {
     throw new Error(`Não é possível aprovar esta solicitação: ${avail.reason}`);
   }
 
-  // Create confirmed reservation
-  const reservaId = await saveReservation({
+  // 2. Create confirmed reservation
+  const codigoReserva = generateReservationCode();
+  const subtotalDiarias = solicitacao.detalhamentoDiarias && solicitacao.detalhamentoDiarias.length > 0
+    ? solicitacao.detalhamentoDiarias.reduce((sum, d) => sum + (Number(d.valor) || 0), 0)
+    : (Number(solicitacao.valorDiaria || 0) * Number(solicitacao.quantidadeDiarias || 1));
+  const taxaLimpeza = Number(solicitacao.taxaLimpeza || 0);
+  const outrasTaxas = Number(solicitacao.outrasTaxas || 0);
+  const valorTotal = Number(solicitacao.valorTotalEstimado || (subtotalDiarias + taxaLimpeza + outrasTaxas));
+
+  const reservaPayload: Partial<TemporaryReservation> = {
     imovelId: solicitacao.imovelId,
     imovelCodigo: solicitacao.imovelCodigo,
     imovelTitulo: solicitacao.imovelTitulo,
@@ -1250,54 +1295,217 @@ export async function approveReservationRequest(
     quantidadeDiarias: solicitacao.quantidadeDiarias,
     quantidadeHospedes: solicitacao.quantidadeHospedes,
     valorDiaria: solicitacao.valorDiaria,
-    taxaLimpeza: solicitacao.taxaLimpeza || 0,
-    valorTotal: solicitacao.valorTotalEstimado,
+    taxaLimpeza: taxaLimpeza,
+    outrasTaxas: outrasTaxas,
+    valorTotal: valorTotal,
+    codigoReserva: codigoReserva,
     possuiVeiculo: solicitacao.possuiVeiculo ?? (Boolean(solicitacao.veiculos && solicitacao.veiculos.length > 0)),
     veiculos: solicitacao.veiculos || [],
     acompanhantes: solicitacao.acompanhantes || [],
     detalhamentoDiarias: solicitacao.detalhamentoDiarias || [],
     status: 'confirmada',
     statusPagamento: 'pendente',
-    observacoes: `Aprovado a partir da Solicitação pública #${solicitacao.codigoSolicitacao || solicitacao.id}. Observações do cliente: ${solicitacao.observacoes || 'Nenhuma'}`
-  }, userUid);
+    observacoes: `Aprovado a partir da Solicitação pública #${solicitacao.codigoSolicitacao || solicitacao.id} por ${adminName}. Observações do cliente: ${solicitacao.observacoes || 'Nenhuma'}`
+  };
 
-  // Update request document
+  const userUid = typeof adminUser === 'object' ? adminUser?.uid : undefined;
+  const reservaId = await saveReservation(reservaPayload, userUid);
+
+  // 3. Update request document status to confirmada with audit trail
   await updateDoc(doc(db, 'solicitacoesReservaTemporada', solicitacao.id), {
     status: 'confirmada',
     reservaGeradaId: reservaId,
+    codigoReservaGerada: codigoReserva,
     aprovadoEm: serverTimestamp(),
-    aprovadoPor: userUid || null,
+    aprovadoPor: adminName,
+    statusAlteradoEm: serverTimestamp(),
+    statusAlteradoPor: adminName,
     atualizadoEm: serverTimestamp()
   });
 
-  return reservaId;
+  return { reservaId, codigoReserva };
 }
 
 /**
- * Refuses a reservation request.
+ * Refuses a reservation request with reason and logs responsible admin.
  */
-export async function refuseReservationRequest(requestId: string, motivo?: string): Promise<void> {
-  await updateDoc(doc(db, 'solicitacoesReservaTemporada', requestId), {
-    status: 'recusada',
-    motivoRecusa: motivo || 'Recusada pelo administrador',
-    recusadoEm: serverTimestamp(),
-    atualizadoEm: serverTimestamp()
-  });
+export async function refuseReservationRequest(
+  requestId: string, 
+  motivo?: string, 
+  adminUser?: string
+): Promise<void> {
+  await updateRequestStatus(requestId, 'recusada', { motivo, adminUser });
 }
 
 /**
- * Cancels a reservation request.
+ * Cancels a reservation request and logs responsible admin.
  */
-export async function cancelReservationRequest(requestId: string): Promise<void> {
-  await updateDoc(doc(db, 'solicitacoesReservaTemporada', requestId), {
-    status: 'cancelada',
-    canceladoEm: serverTimestamp(),
-    atualizadoEm: serverTimestamp()
-  });
+export async function cancelReservationRequest(
+  requestId: string, 
+  adminUser?: string
+): Promise<void> {
+  await updateRequestStatus(requestId, 'cancelada', { adminUser });
 }
 
 /**
- * Builds the exact public WhatsApp URL required by the user prompt.
+ * Formats standard message for administrator to confirm reservation to client on WhatsApp.
+ */
+export function buildAdminConfirmationWhatsAppMessage(
+  solicitacao: TemporaryReservationRequest,
+  reservaConfirmada?: { codigoReserva?: string; valorTotal?: number } | string
+): string {
+  const nome = solicitacao.nomeCliente || 'Cliente';
+  const imovel = solicitacao.imovelTitulo || 'Imóvel de Temporada';
+  const codigo = solicitacao.imovelCodigo || '';
+  const endereco = solicitacao.imovelEndereco || '';
+  const entrada = formatarDataBR(solicitacao.dataEntrada);
+  const saida = formatarDataBR(solicitacao.dataSaida);
+  const diarias = solicitacao.quantidadeDiarias;
+  const hospedes = solicitacao.quantidadeHospedes;
+  
+  const subtotalDiarias = solicitacao.detalhamentoDiarias && solicitacao.detalhamentoDiarias.length > 0
+    ? solicitacao.detalhamentoDiarias.reduce((sum, d) => sum + (Number(d.valor) || 0), 0)
+    : (Number(solicitacao.valorDiaria || 0) * diarias);
+    
+  const taxaLimpeza = Number(solicitacao.taxaLimpeza || 0);
+  const outrasTaxas = Number(solicitacao.outrasTaxas || 0);
+
+  const parsedTotal = typeof reservaConfirmada === 'object' && reservaConfirmada?.valorTotal !== undefined
+    ? reservaConfirmada.valorTotal
+    : (solicitacao.valorTotalEstimado ?? (subtotalDiarias + taxaLimpeza + outrasTaxas));
+  const total = Number(parsedTotal);
+
+  const lines = [
+    `Olá, ${nome}! Tudo bem?`,
+    '',
+    'Aqui é da equipe Menta Imóveis.',
+    '',
+    'Temos o prazer de informar que sua reserva de locação temporária foi confirmada!',
+    '',
+    `Imóvel: ${imovel}`,
+    ...(codigo ? [`Código: ${codigo}`] : []),
+    ...(endereco ? [`Endereço: ${endereco}`] : []),
+    `Entrada: ${entrada} às 16:00`,
+    `Saída: ${saida} às 11:00`,
+    `Quantidade de diárias: ${diarias}`,
+    `Hóspedes: ${hospedes}`,
+    `Valor das diárias: ${formatCurrency(subtotalDiarias)}`,
+    `Taxa de limpeza: ${formatCurrency(taxaLimpeza)}`,
+    ...(outrasTaxas > 0 ? [`Outras taxas: ${formatCurrency(outrasTaxas)}`] : []),
+    `Total da reserva: ${formatCurrency(total)}`,
+    '',
+    'Em breve, nossa equipe poderá entrar em contato para alinhar os detalhes da hospedagem.',
+    '',
+    'Agradecemos por escolher a Menta Imóveis!'
+  ];
+
+  return lines.join('\n');
+}
+
+/**
+ * Builds WhatsApp link to send confirmation directly to the client's phone number.
+ */
+export function buildAdminConfirmationWhatsAppUrl(
+  solicitacao: TemporaryReservationRequest,
+  reservaConfirmada?: { codigoReserva?: string; valorTotal?: number } | string,
+  customPhone?: string
+): { url: string; cleanPhone: string; isValid: boolean; message: string } {
+  const rawPhone = (customPhone || solicitacao.whatsapp || solicitacao.telefone || '').replace(/\D/g, '');
+  const isValid = rawPhone.length >= 10;
+  const cleanPhone = rawPhone.startsWith('55') ? rawPhone : `55${rawPhone}`;
+  const message = buildAdminConfirmationWhatsAppMessage(solicitacao, reservaConfirmada);
+  const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+  return { url, cleanPhone, isValid, message };
+}
+
+/**
+ * Formats message for administrator to initiate contact with client via WhatsApp.
+ */
+export function buildAdminContactWhatsAppMessage(
+  solicitacao: TemporaryReservationRequest
+): string {
+  const nome = solicitacao.nomeCliente || 'Cliente';
+  const imovel = solicitacao.imovelTitulo || 'Imóvel de Temporada';
+  const codigo = solicitacao.imovelCodigo || '';
+  const entrada = formatarDataBR(solicitacao.dataEntrada);
+  const saida = formatarDataBR(solicitacao.dataSaida);
+  const diarias = solicitacao.quantidadeDiarias;
+
+  const lines = [
+    `Olá, ${nome}! Tudo bem?`,
+    '',
+    'Aqui é da equipe Menta Imóveis.',
+    '',
+    `Recebemos sua solicitação de reserva (Protocolo: ${solicitacao.codigoSolicitacao || solicitacao.id?.slice(0, 8) || ''}) para o imóvel *${imovel}*` + (codigo ? ` (Cód: ${codigo})` : '') + `, para o período de ${entrada} a ${saida} (${diarias} diárias).`,
+    '',
+    'Gostaria de confirmar alguns detalhes e tirar eventuais dúvidas antes de prosseguirmos com a sua confirmação. Como podemos te ajudar?'
+  ];
+
+  return lines.join('\n');
+}
+
+/**
+ * Builds WhatsApp link for administrator to initiate contact with client.
+ */
+export function buildAdminContactWhatsAppUrl(
+  solicitacao: TemporaryReservationRequest,
+  customPhone?: string
+): { url: string; cleanPhone: string; isValid: boolean; message: string } {
+  const rawPhone = (customPhone || solicitacao.whatsapp || solicitacao.telefone || '').replace(/\D/g, '');
+  const isValid = rawPhone.length >= 10;
+  const cleanPhone = rawPhone.startsWith('55') ? rawPhone : `55${rawPhone}`;
+  const message = buildAdminContactWhatsAppMessage(solicitacao);
+  const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+  return { url, cleanPhone, isValid, message };
+}
+
+/**
+ * Formats message for administrator when refusing a request.
+ */
+export function buildAdminRefusalWhatsAppMessage(
+  solicitacao: TemporaryReservationRequest,
+  motivo?: string
+): string {
+  const nome = solicitacao.nomeCliente || 'Cliente';
+  const imovel = solicitacao.imovelTitulo || 'Imóvel de Temporada';
+  const entrada = formatarDataBR(solicitacao.dataEntrada);
+  const saida = formatarDataBR(solicitacao.dataSaida);
+
+  const lines = [
+    `Olá, ${nome}! Tudo bem?`,
+    '',
+    'Aqui é da equipe Menta Imóveis.',
+    '',
+    `Agradecemos seu interesse na locação temporária do imóvel *${imovel}* para o período de ${entrada} a ${saida}.`,
+    '',
+    'Infelizmente não foi possível confirmar sua solicitação para este período' + (motivo ? ` pelo seguinte motivo: ${motivo}.` : '.'),
+    '',
+    'Temos outras opções de imóveis disponíveis e estamos à disposição para te apresentar alternativas que combinem com suas datas e preferências!',
+    '',
+    'Equipe Menta Imóveis'
+  ];
+
+  return lines.join('\n');
+}
+
+/**
+ * Builds WhatsApp link for administrator to communicate refusal to client.
+ */
+export function buildAdminRefusalWhatsAppUrl(
+  solicitacao: TemporaryReservationRequest,
+  motivo?: string,
+  customPhone?: string
+): { url: string; cleanPhone: string; isValid: boolean; message: string } {
+  const rawPhone = (customPhone || solicitacao.whatsapp || solicitacao.telefone || '').replace(/\D/g, '');
+  const isValid = rawPhone.length >= 10;
+  const cleanPhone = rawPhone.startsWith('55') ? rawPhone : `55${rawPhone}`;
+  const message = buildAdminRefusalWhatsAppMessage(solicitacao, motivo);
+  const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+  return { url, cleanPhone, isValid, message };
+}
+
+/**
+ * Builds the public WhatsApp URL (retained for backward compatibility).
  */
 export function buildPublicTemporaryRentalWhatsAppUrl(
   solicitacao: {

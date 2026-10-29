@@ -423,42 +423,52 @@ export default function TemporaryBookingWidget({
             </div>
 
             <div>
-              <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full inline-block mb-2">
-                Solicitação Registrada
+              <span className="text-[10px] font-black uppercase tracking-widest text-emerald-700 bg-emerald-50 border border-emerald-200 px-3.5 py-1 rounded-full inline-block mb-2">
+                Solicitação Recebida com Sucesso
               </span>
               <h3 className="text-xl font-display font-black text-slate-900">
                 Protocolo: {submittedData.codigo}
               </h3>
-              <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                Sua solicitação para o período de <strong>{formatarDataBR(submittedData.checkIn)}</strong> a <strong>{formatarDataBR(submittedData.checkOut)}</strong> ({submittedData.nights} diárias) foi recebida pela nossa equipe!
+              <p className="text-xs text-slate-500 mt-2 max-w-sm mx-auto leading-relaxed">
+                Sua solicitação de reserva para o período de <strong>{formatarDataBR(submittedData.checkIn)}</strong> a <strong>{formatarDataBR(submittedData.checkOut)}</strong> ({submittedData.nights} diárias) foi gravada com sucesso em nosso sistema!
               </p>
             </div>
 
             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 text-left text-xs space-y-2">
               <div className="flex justify-between text-slate-600">
                 <span>Check-in:</span>
-                <span className="font-bold text-slate-800">{formatarDataBR(submittedData.checkIn)}</span>
+                <span className="font-bold text-slate-800">{formatarDataBR(submittedData.checkIn)} a partir das 16:00</span>
               </div>
               <div className="flex justify-between text-slate-600">
                 <span>Check-out:</span>
-                <span className="font-bold text-slate-800">{formatarDataBR(submittedData.checkOut)}</span>
+                <span className="font-bold text-slate-800">{formatarDataBR(submittedData.checkOut)} até 11:00</span>
               </div>
               <div className="flex justify-between text-slate-600">
                 <span>Total Estimado:</span>
-                <span className="font-bold text-emerald-700">{formatCurrency(submittedData.total)}</span>
+                <span className="font-bold text-emerald-700 text-sm">{formatCurrency(submittedData.total)}</span>
               </div>
             </div>
 
-            {/* WhatsApp CTA */}
-            <div className="space-y-3 pt-2">
+            <div className="p-4 bg-amber-50/70 rounded-2xl border border-amber-200/80 text-left text-xs text-amber-900 space-y-1.5">
+              <div className="flex items-center gap-1.5 font-bold text-[11px] uppercase tracking-wide text-amber-800">
+                <Clock size={14} className="text-amber-600" />
+                Status: Aguardando Confirmação da Equipe
+              </div>
+              <p className="text-[11px] text-amber-800/90 leading-relaxed">
+                Nossa equipe irá verificar a disponibilidade e entrar em contato com você pelo WhatsApp para confirmar sua reserva.
+              </p>
+            </div>
+
+            {/* Optional Actions */}
+            <div className="space-y-3 pt-1">
               <a 
                 href={submittedData.whatsAppUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full flex items-center justify-center gap-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs uppercase tracking-wider py-4 rounded-xl shadow-lg shadow-emerald-500/20 active:scale-97 transition-all"
+                className="w-full flex items-center justify-center gap-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs py-3 rounded-xl transition-all"
               >
-                <MessageCircle size={18} />
-                Enviar solicitação pelo WhatsApp
+                <MessageCircle size={16} className="text-emerald-600" />
+                Dúvidas urgentes? Fale com a equipe no WhatsApp
               </a>
 
               <button
@@ -468,7 +478,7 @@ export default function TemporaryBookingWidget({
                   setCheckIn(null);
                   setCheckOut(null);
                 }}
-                className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 underline transition-colors"
+                className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 underline transition-colors block mx-auto pt-1"
               >
                 Fazer outra consulta ou alterar datas
               </button>
