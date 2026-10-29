@@ -1847,18 +1847,25 @@ export default function AdminContractForm() {
               applyPropertySelection(propData, true);
             }
 
+            // Fallback to property rate and cleaning fee if zero in reservation
+            const finalDaily = daily > 0 ? daily : Number(propData?.valorDiaria || propData?.priceDiaria || 0);
+            const finalSubtotal = subtotal > 0 ? subtotal : (days * finalDaily);
+            const finalCleaning = cleaning > 0 ? cleaning : Number(propData?.taxaLimpeza || 0);
+            const finalTotal = total > 0 ? total : (finalSubtotal + finalCleaning + additional - discount);
+
             setContract(prev => ({
               ...prev,
               tipoContrato: 'locacao_temporaria',
               reservaId: reservaId,
               reservaCodigo: reserva.codigoReserva || '',
               nomeCliente: reserva.hospedeNome || prev.nomeCliente,
-              valor: total,
-              valorDiaria: daily,
+              valor: finalTotal,
+              valorDiaria: finalDaily,
               quantidadeDiarias: days,
               imovelId: reserva.imovelId || prev.imovelId,
               imovelCodigo: reserva.imovelCodigo || prev.imovelCodigo,
               imovelTitulo: reserva.imovelTitulo || prev.imovelTitulo,
+              acompanhantes: reserva.acompanhantes || [],
               dados: {
                 ...prev.dados,
                 locatario: {
@@ -1868,7 +1875,8 @@ export default function AdminContractForm() {
                   rg: reserva.hospedeRg || '',
                   telefone: reserva.hospedeTelefone || '',
                   whatsapp: reserva.hospedeWhatsapp || reserva.hospedeTelefone || '',
-                  email: reserva.hospedeEmail || ''
+                  email: reserva.hospedeEmail || '',
+                  acompanhantes: reserva.acompanhantes || []
                 },
                 prazo: {
                   ...prev.dados?.prazo,

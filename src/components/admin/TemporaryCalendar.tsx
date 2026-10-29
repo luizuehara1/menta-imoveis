@@ -13,21 +13,25 @@ import {
   CheckCircle2, 
   AlertTriangle,
   HelpCircle,
-  Share2
+  Share2,
+  Tag
 } from 'lucide-react';
 import { 
   Property, 
   TemporaryReservation, 
   TemporaryBlock,
+  TemporarySeasonalPrice,
   TemporaryReservationStatus 
 } from '../../types';
 import { 
   formatCurrency, 
+  formatCurrencyRaw,
   formatarDataBR 
 } from '../../lib/utils';
 import { 
   calculateNights, 
   doIntervalsOverlap, 
+  addDays,
   buildTemporaryRentalWhatsAppUrl 
 } from '../../services/temporaryRentalService';
 
@@ -37,9 +41,12 @@ interface TemporaryCalendarProps {
   onSelectPropertyId: (id: string) => void;
   reservations: TemporaryReservation[];
   blocks: TemporaryBlock[];
+  seasonalPrices?: TemporarySeasonalPrice[];
   onOpenNewReservation: (initialDates: { checkIn: string; checkOut: string; propertyId: string }) => void;
   onOpenNewBlock: (initialDates: { checkIn: string; checkOut: string; propertyId: string }) => void;
+  onOpenNewSeasonalPrice?: (initialDates: { checkIn: string; checkOut: string; propertyId: string }) => void;
   onSelectReservation: (reserva: TemporaryReservation) => void;
+  onSelectSeasonalPrice?: (rule: TemporarySeasonalPrice) => void;
   onRemoveBlock: (blockId: string) => void;
 }
 
@@ -49,9 +56,12 @@ export const TemporaryCalendar: React.FC<TemporaryCalendarProps> = ({
   onSelectPropertyId,
   reservations,
   blocks,
+  seasonalPrices = [],
   onOpenNewReservation,
   onOpenNewBlock,
+  onOpenNewSeasonalPrice,
   onSelectReservation,
+  onSelectSeasonalPrice,
   onRemoveBlock
 }) => {
   const [currentDate, setCurrentDate] = useState(() => new Date());
@@ -94,6 +104,11 @@ export const TemporaryCalendar: React.FC<TemporaryCalendarProps> = ({
     return blocks.filter(b => b.imovelId === selectedProperty.id);
   }, [blocks, selectedProperty]);
 
+  const propertySeasonalPrices = useMemo(() => {
+    if (!selectedProperty?.id) return [];
+    return seasonalPrices.filter(p => p.imovelId === selectedProperty.id);
+  }, [seasonalPrices, selectedProperty]);
+
   // Days in month calculation
   const firstDayOfWeek = new Date(year, month, 1).getDay(); // 0 is Sunday
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -118,8 +133,14 @@ export const TemporaryCalendar: React.FC<TemporaryCalendarProps> = ({
     const isCheckin = propertyReservations.some(r => r.dataEntrada === dayKey);
     const isCheckout = propertyReservations.some(r => r.dataSaida === dayKey);
 
-    // 2. Check block
-    const activeBlock = propertyBlocks.find(b => b.dataInicio <= dayKey && dayKey < b.dataFim);
+    // 2. Check block (respecting single-day and period blocks)
+    const activeBlock = propertyBlocks.find(b => {
+      const end = b.dataFimEfetivo || (b.dataFim === b.dataInicio ? addDays(b.dataFim, 1) : addDays(b.dataFim, 1));
+      return b.dataInicio <= dayKey && dayKey < end;
+    });
+
+    // 3. Check seasonal / special price rule
+    const activeSeasonalPrice = propertySeasonalPrices.find(p => p.dataInicio <= dayKey && dayKey <= p.dataFim);
 
     let status: 'disponivel' | 'pre_reserva' | 'reservado' | 'bloqueado' | 'manutencao' = 'disponivel';
     if (activeBlock) {
@@ -132,6 +153,7 @@ export const TemporaryCalendar: React.FC<TemporaryCalendarProps> = ({
       status,
       activeRes,
       activeBlock,
+      activeSeasonalPrice,
       isCheckin,
       isCheckout
     };
@@ -236,6 +258,21 @@ export const TemporaryCalendar: React.FC<TemporaryCalendarProps> = ({
               <Lock size={15} />
               <span>Bloquear datas</span>
             </button>
+
+            {onOpenNewSeasonalPrice && (
+              <button
+                onClick={() => onOpenNewSeasonalPrice({
+                  propertyId: selectedProperty?.id || '',
+                  checkIn: rangeStart || '',
+                  checkOut: rangeEnd || rangeStart || ''
+                })}
+                className="flex items-center gap-2 px-4 py-3 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-bold transition-all border border-amber-300 shadow-xs"
+                title="Definir tarifa especial para datas selecionadas"
+              >
+                <Tag size={15} className="text-gold" />
+                <span>Preço especial</span>
+              </button>
+            )}
 
             <button
               onClick={() => onOpenNewReservation({
@@ -424,7 +461,20 @@ export const TemporaryCalendar: React.FC<TemporaryCalendarProps> = ({
                   </span>
                   
                   {/* Daily Rate indication */}
-                  {info.status === 'disponivel' && (
+                  {info.activeSeasonalPrice ? (
+                    <span 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onSelectSeasonalPrice && info.activeSeasonalPrice) {
+                          onSelectSeasonalPrice(info.activeSeasonalPrice);
+                        }
+                      }}
+                      className="text-[9px] font-black text-amber-800 bg-amber-100 hover:bg-amber-200 px-1.5 py-0.5 rounded cursor-pointer transition-colors shadow-2xs border border-amber-300"
+                      title={`Tarifa Especial: ${info.activeSeasonalPrice.descricao} - R$ ${info.activeSeasonalPrice.valorDiaria.toFixed(2)}`}
+                    >
+                      R${info.activeSeasonalPrice.valorDiaria}*
+                    </span>
+                  ) : info.status === 'disponivel' && (
                     <span className="text-[10px] font-semibold text-emerald-600 hidden sm:inline">
                       R${dailyRate}
                     </span>
@@ -553,6 +603,22 @@ export const TemporaryCalendar: React.FC<TemporaryCalendarProps> = ({
                   <Share2 size={16} />
                   <span>Consultar WhatsApp</span>
                 </button>
+
+                {onOpenNewSeasonalPrice && (
+                  <button
+                    onClick={() => {
+                      onOpenNewSeasonalPrice({
+                        propertyId: selectedProperty.id || '',
+                        checkIn: rangeStart,
+                        checkOut: rangeEnd
+                      });
+                    }}
+                    className="flex items-center gap-2 px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-primary-black text-xs font-black transition-colors shadow-md"
+                  >
+                    <Tag size={16} />
+                    <span>Preço Especial</span>
+                  </button>
+                )}
 
                 <button
                   onClick={() => {

@@ -18,7 +18,7 @@ import {
   Plus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Property, TemporaryGuestCompanion, TemporaryVehicle } from '../../types';
+import { Property, TemporaryGuestCompanion, TemporaryVehicle, TemporarySeasonalPrice } from '../../types';
 import { 
   formatCurrency, 
   formatCurrencyRaw,
@@ -29,6 +29,8 @@ import {
   fetchPublicOccupiedDates, 
   checkPublicAvailability, 
   calculateNights, 
+  fetchSeasonalPrices,
+  calculateReservationBreakdown,
   submitReservationRequest, 
   buildPublicTemporaryRentalWhatsAppUrl,
   doIntervalsOverlap 
@@ -48,12 +50,12 @@ export default function TemporaryBookingWidget({
   // Calendar Navigation State
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [occupiedIntervals, setOccupiedIntervals] = useState<Array<{ dataEntrada: string; dataSaida: string; tipo: string }>>([]);
+  const [seasonalPrices, setSeasonalPrices] = useState<TemporarySeasonalPrice[]>([]);
   const [loadingOccupancy, setLoadingOccupancy] = useState(true);
 
   // Selection state
   const [checkIn, setCheckIn] = useState<string | null>(null);
   const [checkOut, setCheckOut] = useState<string | null>(null);
-  const [guests, setGuests] = useState<number>(2);
 
   // Principal Guest Form state
   const [nomeCliente, setNomeCliente] = useState('');
@@ -62,7 +64,7 @@ export default function TemporaryBookingWidget({
   const [email, setEmail] = useState('');
   const [observacoes, setObservacoes] = useState('');
 
-  // Companions state (for guests > 1)
+  // Companions state
   const [acompanhantes, setAcompanhantes] = useState<TemporaryGuestCompanion[]>([]);
 
   // Vehicle state
@@ -95,24 +97,28 @@ export default function TemporaryBookingWidget({
   const dailyRate = Number(property.valorDiaria || property.priceDiaria || property.precoDiaria || property.diaria || 0);
   const cleaningFee = Number(property.taxaLimpeza || property.taxaLimpezaTemporada || 0);
 
-  // Load public occupied dates
+  // Load public occupied dates & seasonal price rules
   useEffect(() => {
     let isMounted = true;
-    async function loadOccupancy() {
+    async function loadData() {
       if (!property?.id) return;
       setLoadingOccupancy(true);
       try {
-        const dates = await fetchPublicOccupiedDates(property.id);
+        const [dates, prices] = await Promise.all([
+          fetchPublicOccupiedDates(property.id),
+          fetchSeasonalPrices(property.id)
+        ]);
         if (isMounted) {
           setOccupiedIntervals(dates);
+          setSeasonalPrices(prices);
         }
       } catch (err) {
-        console.error('Erro ao carregar datas ocupadas:', err);
+        console.error('Erro ao carregar dados do imóvel:', err);
       } finally {
         if (isMounted) setLoadingOccupancy(false);
       }
     }
-    loadOccupancy();
+    loadData();
     return () => {
       isMounted = false;
     };
@@ -194,32 +200,26 @@ export default function TemporaryBookingWidget({
     }
   };
 
-  // Auto sync acompanhantes array length to guests - 1
-  useEffect(() => {
-    const needed = Math.max(0, guests - 1);
-    setAcompanhantes(prev => {
-      if (prev.length === needed) return prev;
-      if (prev.length < needed) {
-        const next = [...prev];
-        for (let i = prev.length; i < needed; i++) {
-          next.push({ nomeCompleto: '', parentesco: '', documento: '', faixaEtaria: 'adulto' });
-        }
-        return next;
-      }
-      return prev.slice(0, needed);
-    });
-  }, [guests]);
+  // Companions and guests count
+  const totalGuests = 1 + acompanhantes.length;
+  const isExceedingCapacity = totalGuests > maxGuests;
 
-  // Calculations
-  const calculatedNights = useMemo(() => {
-    if (checkIn && checkOut) {
-      return calculateNights(checkIn, checkOut);
-    }
-    return 0;
-  }, [checkIn, checkOut]);
+  const handleAddCompanion = () => {
+    setAcompanhantes(prev => [...prev, { nomeCompleto: '', parentesco: '', documento: '', faixaEtaria: 'adulto' }]);
+  };
 
-  const subtotal = calculatedNights * dailyRate;
-  const estimatedTotal = subtotal > 0 ? subtotal + cleaningFee : 0;
+  const handleRemoveCompanion = (index: number) => {
+    setAcompanhantes(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Calculations with deterministic seasonal prices priority
+  const breakdown = useMemo(() => {
+    return calculateReservationBreakdown(property, checkIn || '', checkOut || '', seasonalPrices);
+  }, [property, checkIn, checkOut, seasonalPrices]);
+
+  const calculatedNights = breakdown.nights;
+  const subtotal = breakdown.subtotalDiarias;
+  const estimatedTotal = breakdown.valorTotal;
 
   // Add vehicle
   const handleAddVehicle = () => {
@@ -268,6 +268,16 @@ export default function TemporaryBookingWidget({
       return;
     }
 
+    if (isExceedingCapacity) {
+      setErrorMessage(`A capacidade máxima deste imóvel é de ${maxGuests} hóspedes. Atualmente você cadastrou ${totalGuests} pessoas. Remova acompanhantes para continuar.`);
+      return;
+    }
+
+    if (acompanhantes.some(a => !a.nomeCompleto.trim())) {
+      setErrorMessage('Por favor, informe o nome completo de todos os acompanhantes adicionados ou remova os campos não preenchidos.');
+      return;
+    }
+
     if (possuiVeiculo) {
       const hasInvalidVehicle = veiculos.some(v => !v.placa?.trim() || !v.modelo?.trim());
       if (hasInvalidVehicle) {
@@ -294,10 +304,11 @@ export default function TemporaryBookingWidget({
         dataEntrada: checkIn,
         dataSaida: checkOut,
         quantidadeDiarias: calculatedNights,
-        quantidadeHospedes: guests,
-        valorDiaria: dailyRate,
+        quantidadeHospedes: totalGuests,
+        valorDiaria: breakdown.averageDailyRate,
         taxaLimpeza: cleaningFee,
         valorTotalEstimado: estimatedTotal,
+        detalhamentoDiarias: breakdown.dailyRates,
         possuiVeiculo,
         veiculos: possuiVeiculo ? veiculos : [],
         acompanhantes: acompanhantes.filter(a => a.nomeCompleto.trim()),
@@ -306,6 +317,7 @@ export default function TemporaryBookingWidget({
 
       // 2. Build WhatsApp URL
       const whatsUrl = buildPublicTemporaryRentalWhatsAppUrl({
+        codigoSolicitacao: res.codigo,
         imovelTitulo: property.title,
         imovelCodigo: property.code,
         imovelEndereco: `${property.neighborhood || ''}, ${property.city || 'Balneário Camboriú'}`,
@@ -313,8 +325,8 @@ export default function TemporaryBookingWidget({
         dataEntrada: checkIn,
         dataSaida: checkOut,
         quantidadeDiarias: calculatedNights,
-        quantidadeHospedes: guests,
-        valorDiaria: dailyRate,
+        quantidadeHospedes: totalGuests,
+        valorDiaria: breakdown.averageDailyRate,
         taxaLimpeza: cleaningFee,
         valorTotalEstimado: estimatedTotal,
         nomeCliente: nomeCliente.trim(),
@@ -565,59 +577,90 @@ export default function TemporaryBookingWidget({
               </div>
             </div>
 
-            {/* Guests selector */}
-            <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between">
+            {/* Capacidade e Hóspedes Totais */}
+            <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between">
               <div>
                 <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block mb-0.5">
-                  Hóspedes Totais
+                  Capacidade Máxima do Imóvel
                 </label>
                 <span className="text-xs font-bold text-slate-800">
-                  {guests} {guests === 1 ? 'hóspede (titular)' : 'hóspedes (titular + acompanhantes)'}
+                  Até {maxGuests} hóspedes
                 </span>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  disabled={guests <= 1}
-                  onClick={() => setGuests(g => Math.max(1, g - 1))}
-                  className="w-8 h-8 rounded-lg bg-white border border-slate-200 text-slate-700 flex items-center justify-center font-bold disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors"
-                >
-                  -
-                </button>
-                <span className="w-6 text-center text-xs font-bold">{guests}</span>
-                <button
-                  type="button"
-                  disabled={guests >= maxGuests}
-                  onClick={() => setGuests(g => Math.min(maxGuests, g + 1))}
-                  className="w-8 h-8 rounded-lg bg-white border border-slate-200 text-slate-700 flex items-center justify-center font-bold disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors"
-                >
-                  +
-                </button>
+              <div className="text-right">
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold ${
+                  isExceedingCapacity 
+                    ? 'bg-red-100 text-red-700 border border-red-300' 
+                    : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                }`}>
+                  <Users size={12} />
+                  {totalGuests} {totalGuests === 1 ? 'hóspede (titular)' : 'hóspedes'}
+                </span>
               </div>
             </div>
+
+            {/* Aviso de Capacidade Excedida */}
+            {isExceedingCapacity && (
+              <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center gap-2">
+                <AlertCircle size={16} className="shrink-0 text-red-600" />
+                <span>
+                  <strong>Capacidade excedida:</strong> Este imóvel acomoda no máximo {maxGuests} hóspedes. Remova acompanhantes para enviar a solicitação.
+                </span>
+              </div>
+            )}
 
             {/* Financial Breakdown (shows when dates selected) */}
             {calculatedNights > 0 && (
               <motion.div 
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
-                className="bg-amber-50/50 p-4 rounded-2xl border border-amber-200/60 space-y-2.5 text-xs"
+                className="bg-amber-50/50 p-4 rounded-2xl border border-amber-200/60 space-y-3 text-xs"
               >
-                <div className="flex justify-between text-slate-600">
-                  <span>{formatCurrency(dailyRate)} x {calculatedNights} {calculatedNights === 1 ? 'diária' : 'diárias'}</span>
-                  <span className="font-bold text-slate-800">{formatCurrency(subtotal)}</span>
-                </div>
-                {cleaningFee > 0 && (
-                  <div className="flex justify-between text-slate-600">
-                    <span>Taxa de limpeza (única)</span>
-                    <span className="font-bold text-slate-800">{formatCurrency(cleaningFee)}</span>
-                  </div>
-                )}
-                <div className="border-t border-amber-200 pt-2 flex justify-between items-baseline">
-                  <span className="font-bold text-slate-900 uppercase tracking-wide text-xs">Total Estimado</span>
-                  <span className="text-lg font-display font-black text-slate-900">
-                    {formatCurrency(estimatedTotal)}
+                <div className="flex items-center justify-between pb-1.5 border-b border-amber-200/60">
+                  <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                    <Sparkles size={13} className="text-gold" /> Detalhamento das Diárias
                   </span>
+                  <span className="text-[11px] font-bold text-slate-600">
+                    {calculatedNights} {calculatedNights === 1 ? 'noite' : 'noites'}
+                  </span>
+                </div>
+
+                {/* Day by Day List */}
+                <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1 divide-y divide-amber-200/40">
+                  {breakdown.dailyRates.map((d, dIdx) => (
+                    <div key={dIdx} className="flex justify-between items-center text-[11px] pt-1.5 text-slate-700">
+                      <span className="flex items-center gap-1.5 truncate">
+                        <span className="font-semibold text-slate-800">{d.dataFmt}</span>
+                        {d.isSpecialPrice ? (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-200 text-amber-900 font-extrabold uppercase tracking-wider">
+                            {d.descricao || 'Tarifa Especial'}
+                          </span>
+                        ) : (
+                          <span className="text-[9px] text-slate-400 font-medium">Diária Padrão</span>
+                        )}
+                      </span>
+                      <span className="font-mono font-bold text-slate-900">{formatCurrency(d.valor)}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="border-t border-amber-200/60 pt-2 space-y-1.5 text-xs">
+                  <div className="flex justify-between text-slate-600">
+                    <span>Subtotal das diárias:</span>
+                    <span className="font-bold text-slate-800">{formatCurrency(subtotal)}</span>
+                  </div>
+                  {cleaningFee > 0 && (
+                    <div className="flex justify-between text-slate-600">
+                      <span>Taxa de limpeza (taxa única):</span>
+                      <span className="font-bold text-slate-800">{formatCurrency(cleaningFee)}</span>
+                    </div>
+                  )}
+                  <div className="border-t border-amber-300 pt-2 flex justify-between items-baseline">
+                    <span className="font-black text-slate-900 uppercase tracking-wide text-xs">Total Estimado</span>
+                    <span className="text-lg font-display font-black text-slate-900">
+                      {formatCurrency(estimatedTotal)}
+                    </span>
+                  </div>
                 </div>
               </motion.div>
             )}
@@ -684,43 +727,103 @@ export default function TemporaryBookingWidget({
                 />
               </div>
 
-              {/* Companions Section (if guests > 1) */}
-              {guests > 1 && (
-                <div className="pt-2 space-y-3">
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-1">
+              {/* Companions Section */}
+              <div className="pt-2 space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <div>
                     <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                      <UserPlus size={14} className="text-gold" /> Lista de Acompanhantes ({guests - 1})
+                      <UserPlus size={14} className="text-gold" /> Acompanhantes ({acompanhantes.length})
                     </span>
-                    <span className="text-[10px] text-slate-400">Podem ser completados no contrato</span>
+                    <p className="text-[10px] text-slate-400">
+                      Cadastre os acompanhantes que estarão no imóvel
+                    </p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={handleAddCompanion}
+                    disabled={isExceedingCapacity}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-gold-750 border border-gold/30 text-xs font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+                  >
+                    <Plus size={14} /> Adicionar acompanhante
+                  </button>
+                </div>
 
-                  <div className="space-y-2.5">
+                {acompanhantes.length === 0 ? (
+                  <p className="text-[11px] text-slate-400 italic py-1">
+                    Nenhum acompanhante adicionado. Clique no botão acima para incluir membros da família ou amigos.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
                     {acompanhantes.map((acomp, idx) => (
-                      <div key={idx} className="p-3 bg-slate-50/80 rounded-xl border border-slate-200 text-xs space-y-2">
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                          Acompanhante {idx + 1}
-                        </span>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          <input
-                            type="text"
-                            placeholder="Nome completo"
-                            value={acomp.nomeCompleto}
-                            onChange={(e) => handleUpdateCompanion(idx, 'nomeCompleto', e.target.value)}
-                            className="px-3 py-1.5 bg-white rounded-lg border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-gold"
-                          />
-                          <input
-                            type="text"
-                            placeholder="Parentesco (ex: Esposa, Filho, Amigo)"
-                            value={acomp.parentesco || ''}
-                            onChange={(e) => handleUpdateCompanion(idx, 'parentesco', e.target.value)}
-                            className="px-3 py-1.5 bg-white rounded-lg border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-gold"
-                          />
+                      <div key={idx} className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/90 text-xs space-y-2.5 relative">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-slate-600 flex items-center gap-1">
+                            Acompanhante {idx + 1}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveCompanion(idx)}
+                            className="text-red-500 hover:text-red-700 text-xs flex items-center gap-1 font-semibold transition-colors"
+                            title="Remover acompanhante"
+                          >
+                            <Trash2 size={13} /> Remover
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          <div>
+                            <label className="text-[9px] font-bold uppercase text-slate-400 block mb-0.5">Nome Completo *</label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="Nome do acompanhante"
+                              value={acomp.nomeCompleto}
+                              onChange={(e) => handleUpdateCompanion(idx, 'nomeCompleto', e.target.value)}
+                              className="w-full px-3 py-1.5 bg-white rounded-lg border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-gold"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-[9px] font-bold uppercase text-slate-400 block mb-0.5">Documento (CPF ou RG)</label>
+                            <input
+                              type="text"
+                              placeholder="000.000.000-00 ou RG"
+                              value={acomp.documento || ''}
+                              onChange={(e) => handleUpdateCompanion(idx, 'documento', e.target.value)}
+                              className="w-full px-3 py-1.5 bg-white rounded-lg border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-gold"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          <div>
+                            <label className="text-[9px] font-bold uppercase text-slate-400 block mb-0.5">Parentesco / Relação</label>
+                            <input
+                              type="text"
+                              placeholder="Ex: Cônjuge, Filho(a), Amigo(a)"
+                              value={acomp.parentesco || ''}
+                              onChange={(e) => handleUpdateCompanion(idx, 'parentesco', e.target.value)}
+                              className="w-full px-3 py-1.5 bg-white rounded-lg border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-gold"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-[9px] font-bold uppercase text-slate-400 block mb-0.5">Faixa Etária</label>
+                            <select
+                              value={acomp.faixaEtaria || 'adulto'}
+                              onChange={(e) => handleUpdateCompanion(idx, 'faixaEtaria', e.target.value)}
+                              className="w-full px-3 py-1.5 bg-white rounded-lg border border-slate-200 text-xs text-slate-800 focus:outline-none focus:border-gold"
+                            >
+                              <option value="adulto">Adulto</option>
+                              <option value="crianca">Criança (até 12 anos)</option>
+                            </select>
+                          </div>
                         </div>
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
+                )}
+              </div>
 
               {/* Vehicle Section */}
               <div className="pt-2 space-y-3">
@@ -860,7 +963,7 @@ export default function TemporaryBookingWidget({
             {/* Submit Action */}
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || isExceedingCapacity}
               className="w-full flex items-center justify-center gap-2 py-4 rounded-xl bg-gold hover:bg-[#EEBF32] text-primary-black font-extrabold text-xs uppercase tracking-wider shadow-md active:scale-97 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {submitting ? (

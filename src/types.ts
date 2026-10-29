@@ -628,11 +628,14 @@ export type TemporaryPaymentStatus = 'pendente' | 'parcial' | 'pago' | 'reembols
 
 export interface TemporaryGuestCompanion {
   id?: string;
-  nomeCompleto: string;
+  nomeCompleto?: string;
+  nome?: string;
   documento?: string;
   parentesco?: string;
   faixaEtaria?: 'adulto' | 'crianca' | string;
 }
+
+export type TemporaryCompanion = TemporaryGuestCompanion;
 
 export interface TemporaryVehicle {
   id?: string;
@@ -668,6 +671,7 @@ export interface TemporaryReservationRequest {
   possuiVeiculo?: boolean;
   veiculos?: TemporaryVehicle[];
   acompanhantes?: TemporaryGuestCompanion[];
+  detalhamentoDiarias?: TemporaryDailyRateDetail[];
   status: 'solicitacao_recebida' | 'pre_reserva' | 'aguardando_confirmacao' | 'confirmada' | 'recusada' | 'cancelada' | 'expirada';
   motivoRecusa?: string;
   reservaGeradaId?: string;
@@ -733,6 +737,7 @@ export interface TemporaryReservation {
   valorPago: number;
   saldoRestante: number;
   formaPagamento: string;
+  detalhamentoDiarias?: TemporaryDailyRateDetail[];
 
   // Status & Controle
   status: TemporaryReservationStatus;
@@ -755,10 +760,33 @@ export interface TemporaryBlock {
   imovelTitulo?: string;
   dataInicio: string; // YYYY-MM-DD
   dataFim: string; // YYYY-MM-DD
+  dataFimEfetivo?: string; // YYYY-MM-DD para intervalos semiabertos de ocupação
   motivo: TemporaryBlockReason;
   observacoes?: string;
   criadoEm: any;
   criadoPor?: string;
+}
+
+export interface TemporarySeasonalPrice {
+  id?: string;
+  imovelId: string;
+  imovelCodigo?: string;
+  imovelTitulo?: string;
+  dataInicio: string; // YYYY-MM-DD
+  dataFim: string; // YYYY-MM-DD (se for 1 dia, dataInicio === dataFim)
+  valorDiaria: number;
+  descricao: string; // Ex: "Réveillon", "Carnaval", "Feriado", "Alta Temporada"
+  criadoEm?: any;
+  atualizadoEm?: any;
+  criadoPor?: string;
+}
+
+export interface TemporaryDailyRateDetail {
+  data: string; // YYYY-MM-DD
+  dataFmt: string; // DD/MM/AAAA
+  valor: number;
+  isSpecialPrice: boolean;
+  descricao?: string;
 }
 
 export interface TemporaryGuest {

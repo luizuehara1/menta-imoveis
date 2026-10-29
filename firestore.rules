@@ -98,8 +98,17 @@ service cloud.firestore {
       allow create, update, delete: if isAdminAtivo();
     }
 
+    match /precosTemporada/{docId} {
+      allow read: if true;
+      allow create, update, delete: if isAdminAtivo();
+    }
+
     match /solicitacoesReservaTemporada/{docId} {
-      allow create: if true;
+      allow create: if request.resource.data.imovelId is string
+                    && request.resource.data.dataEntrada is string
+                    && request.resource.data.dataSaida is string
+                    && request.resource.data.nomeCliente is string
+                    && request.resource.data.status == 'solicitacao_recebida';
       allow read, update, delete: if isAdminAtivo();
     }
 
@@ -145,6 +154,26 @@ service cloud.firestore {
       allow write: if isAdminAtivo();
     }
 
+    match /siteSettings/{docId} {
+      allow read: if true;
+      allow write: if isAdminAtivo();
+    }
+
+    match /bairros/{docId} {
+      allow read: if true;
+      allow write: if isAdminAtivo();
+    }
+
+    match /corretores/{docId} {
+      allow read: if true;
+      allow write: if isAdminAtivo();
+    }
+
+    match /opcoes_imoveis/{docId} {
+      allow read: if true;
+      allow write: if isAdminAtivo();
+    }
+
     match /configuracoes/{docId} {
       allow read: if isSignedIn();
       allow write: if isAdminAtivo();
@@ -156,7 +185,7 @@ service cloud.firestore {
       allow update, delete: if isAdminAtivo();
     }
 
-    // Fallback permissivo para qualquer outra coleção
+    // Fallback restritivo para administradores ativos
     match /{document=**} {
       allow read, write: if isAdminAtivo();
     }

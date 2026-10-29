@@ -1,5 +1,7 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { Printer, Download, X, Share2, CheckCircle2, Building2, Calendar, FileText } from 'lucide-react';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import { TemporaryReceipt } from '../../types';
 import { useSettings } from '../../hooks/useSettings';
 import { formatCurrency, formatarDataBR } from '../../lib/utils';
@@ -14,11 +16,36 @@ interface TemporaryReceiptModalProps {
 export const TemporaryReceiptModal: React.FC<TemporaryReceiptModalProps> = ({ receipt, isOpen, onClose }) => {
   const { settings } = useSettings();
   const printRef = useRef<HTMLDivElement>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   if (!isOpen || !receipt) return null;
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!printRef.current) return;
+    setIsDownloading(true);
+    try {
+      const canvas = await html2canvas(printRef.current, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff'
+      });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`Recibo_${receipt.numeroRecibo.replace(/\//g, '-')}.pdf`);
+    } catch (err) {
+      console.error('Erro ao gerar PDF do recibo:', err);
+      window.print();
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   const handleShareWhatsApp = () => {
@@ -69,12 +96,21 @@ export const TemporaryReceiptModal: React.FC<TemporaryReceiptModalProps> = ({ re
               <span className="hidden sm:inline">WhatsApp</span>
             </button>
             <button
+              onClick={handleDownloadPdf}
+              disabled={isDownloading}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gold text-primary-black hover:bg-gold/90 text-xs font-black transition-colors shadow-md disabled:opacity-50"
+              title="Baixar arquivo PDF direto no dispositivo"
+            >
+              <Download size={16} />
+              <span>{isDownloading ? 'Gerando...' : 'Baixar PDF'}</span>
+            </button>
+            <button
               onClick={handlePrint}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary-black text-gold hover:bg-black text-xs font-bold transition-colors shadow-md"
               title="Imprimir ou Salvar PDF"
             >
               <Printer size={16} />
-              <span>Imprimir / PDF</span>
+              <span>Imprimir</span>
             </button>
             <button
               onClick={onClose}

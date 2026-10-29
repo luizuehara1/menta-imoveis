@@ -22,9 +22,23 @@ import {
   TemporaryReceipt,
   TemporaryReservationRequest,
   TemporaryOccupancy,
+  TemporarySeasonalPrice,
+  TemporaryDailyRateDetail,
   Property 
 } from '../types';
 import { formatarDataBR, formatCurrency, valorMonetarioPorExtenso } from '../lib/utils';
+
+/**
+ * Adds N days to a YYYY-MM-DD date string.
+ */
+export function addDays(dateStr: string, days: number): string {
+  const d = parseDateToMidnight(dateStr) || new Date();
+  d.setDate(d.getDate() + days);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
 /**
  * Checks whether two half-open date intervals [startA, endA) and [startB, endB) overlap.
@@ -170,6 +184,175 @@ export async function fetchBlocks(imovelId?: string): Promise<TemporaryBlock[]> 
 }
 
 /**
+ * Fetches seasonal / special pricing rules for a property or all properties.
+ */
+export async function fetchSeasonalPrices(imovelId?: string): Promise<TemporarySeasonalPrice[]> {
+  try {
+    const ref = collection(db, 'precosTemporada');
+    const snap = await getDocs(ref);
+    let list = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as TemporarySeasonalPrice[];
+    if (imovelId) {
+      list = list.filter(p => p.imovelId === imovelId);
+    }
+    list.sort((a, b) => (a.dataInicio || '').localeCompare(b.dataInicio || ''));
+    return list;
+  } catch (error) {
+    console.error('[temporaryRentalService] Erro ao buscar preços sazonais:', error);
+    return [];
+  }
+}
+
+/**
+ * Saves (creates or updates) a seasonal price rule.
+ */
+export async function saveSeasonalPrice(
+  priceRule: Partial<TemporarySeasonalPrice>, 
+  userUid?: string
+): Promise<string> {
+  if (!priceRule.imovelId) throw new Error('Selecione um imóvel para definir o preço especial.');
+  if (!priceRule.dataInicio || !priceRule.dataFim) throw new Error('Informe o período (data inicial e final) do preço especial.');
+  if (priceRule.dataInicio > priceRule.dataFim) throw new Error('A data final deve ser igual ou posterior à data inicial.');
+  const val = Number(priceRule.valorDiaria || 0);
+  if (val <= 0) throw new Error('Informe um valor de diária válido e maior que zero.');
+
+  const payload: any = {
+    ...priceRule,
+    valorDiaria: val,
+    descricao: (priceRule.descricao || 'Tarifa Especial').trim(),
+    atualizadoEm: serverTimestamp()
+  };
+
+  if (!priceRule.id) {
+    payload.criadoEm = serverTimestamp();
+    payload.criadoPor = userUid || null;
+    const docRef = await addDoc(collection(db, 'precosTemporada'), payload);
+    return docRef.id;
+  } else {
+    await updateDoc(doc(db, 'precosTemporada', priceRule.id), payload);
+    return priceRule.id;
+  }
+}
+
+/**
+ * Deletes a seasonal price rule.
+ */
+export async function deleteSeasonalPrice(priceId: string): Promise<void> {
+  await deleteDoc(doc(db, 'precosTemporada', priceId));
+}
+
+/**
+ * Calculates day-by-day reservation breakdown applying deterministic pricing priority:
+ * 1. Matching seasonal price rule for the specific date.
+ *    If multiple rules match the same date:
+ *    a) The rule with smaller interval (most specific date range) has highest precedence.
+ *    b) Ties are broken by newest creation/update.
+ * 2. Default property daily rate if no special rule applies.
+ * 3. Cleaning fee + other fees - discount.
+ */
+export function calculateReservationBreakdown(
+  property: Property | null,
+  checkIn: string,
+  checkOut: string,
+  seasonalPrices: TemporarySeasonalPrice[] = [],
+  desconto = 0,
+  outrasTaxas = 0
+): {
+  nights: number;
+  dailyRates: TemporaryDailyRateDetail[];
+  subtotalDiarias: number;
+  taxaLimpeza: number;
+  outrasTaxas: number;
+  desconto: number;
+  valorTotal: number;
+  averageDailyRate: number;
+} {
+  const nights = calculateNights(checkIn, checkOut);
+  const defaultDailyRate = Number(property?.valorDiaria || property?.priceDiaria || property?.precoDiaria || property?.diaria || 0);
+  const taxaLimpeza = Number(property?.taxaLimpeza || property?.taxaLimpezaTemporada || 0);
+
+  if (nights <= 0 || !checkIn) {
+    return {
+      nights: 0,
+      dailyRates: [],
+      subtotalDiarias: 0,
+      taxaLimpeza,
+      outrasTaxas: 0,
+      desconto: 0,
+      valorTotal: 0,
+      averageDailyRate: defaultDailyRate
+    };
+  }
+
+  const dailyRates: TemporaryDailyRateDetail[] = [];
+  const propertyRules = (seasonalPrices || []).filter(p => !property?.id || p.imovelId === property.id);
+
+  for (let i = 0; i < nights; i++) {
+    const dayDate = parseDateToMidnight(checkIn) || new Date();
+    dayDate.setDate(dayDate.getDate() + i);
+    const y = dayDate.getFullYear();
+    const m = String(dayDate.getMonth() + 1).padStart(2, '0');
+    const d = String(dayDate.getDate()).padStart(2, '0');
+    const dayKey = `${y}-${m}-${d}`;
+
+    // Find all matching rules
+    const matchingRules = propertyRules.filter(r => 
+      r.dataInicio <= dayKey && 
+      dayKey <= r.dataFim && 
+      Number(r.valorDiaria) > 0
+    );
+
+    let appliedRate = defaultDailyRate;
+    let isSpecial = false;
+    let desc: string | undefined = undefined;
+
+    if (matchingRules.length > 0) {
+      // Deterministic priority:
+      // 1. Smaller interval length (dataFim - dataInicio in days) -> most specific
+      // 2. Newest rule
+      matchingRules.sort((a, b) => {
+        const spanA = calculateNights(a.dataInicio, a.dataFim);
+        const spanB = calculateNights(b.dataInicio, b.dataFim);
+        if (spanA !== spanB) return spanA - spanB;
+        const timeA = a.atualizadoEm?.seconds || a.criadoEm?.seconds || 0;
+        const timeB = b.atualizadoEm?.seconds || b.criadoEm?.seconds || 0;
+        return timeB - timeA;
+      });
+
+      const bestRule = matchingRules[0];
+      appliedRate = Number(bestRule.valorDiaria);
+      isSpecial = true;
+      desc = bestRule.descricao;
+    }
+
+    dailyRates.push({
+      data: dayKey,
+      dataFmt: formatarDataBR(dayKey),
+      valor: appliedRate,
+      isSpecialPrice: isSpecial,
+      descricao: desc
+    });
+  }
+
+  const subtotalDiarias = dailyRates.reduce((sum, item) => sum + item.valor, 0);
+  const cleanFee = Math.max(0, taxaLimpeza);
+  const other = Math.max(0, outrasTaxas);
+  const disc = Math.max(0, desconto);
+  const valorTotal = Math.max(0, subtotalDiarias + cleanFee + other - disc);
+  const averageDailyRate = nights > 0 ? subtotalDiarias / nights : defaultDailyRate;
+
+  return {
+    nights,
+    dailyRates,
+    subtotalDiarias,
+    taxaLimpeza: cleanFee,
+    outrasTaxas: other,
+    desconto: disc,
+    valorTotal,
+    averageDailyRate
+  };
+}
+
+/**
  * Fetches guests.
  */
 export async function fetchGuests(): Promise<TemporaryGuest[]> {
@@ -268,7 +451,8 @@ export async function checkAvailability(
   const activeBlocks = allBlocks.filter(b => (!excludeBlockId || b.id !== excludeBlockId));
 
   for (const b of activeBlocks) {
-    if (doIntervalsOverlap(dataEntrada, dataSaida, b.dataInicio, b.dataFim)) {
+    const blockEnd = b.dataFimEfetivo || (b.dataFim === b.dataInicio ? addDays(b.dataFim, 1) : addDays(b.dataFim, 1));
+    if (doIntervalsOverlap(dataEntrada, dataSaida, b.dataInicio, blockEnd)) {
       const motivoLabel = b.motivo === 'manutencao' ? 'Manutenção' : b.motivo === 'uso_proprietario' ? 'Uso do Proprietário' : 'Bloqueio Manual';
       return {
         available: false,
@@ -384,6 +568,8 @@ export async function saveReservation(
     valorPago,
     saldoRestante,
     statusPagamento,
+    acompanhantes: Array.isArray(reservation.acompanhantes) ? reservation.acompanhantes : [],
+    detalhamentoDiarias: Array.isArray(reservation.detalhamentoDiarias) ? reservation.detalhamentoDiarias : [],
     status: reservation.status || 'confirmada',
     atualizadoEm: serverTimestamp()
   };
@@ -478,35 +664,47 @@ export async function cancelReservation(reservaId: string, motivo?: string): Pro
 export async function addBlock(block: Partial<TemporaryBlock>, userUid?: string): Promise<string> {
   if (!block.imovelId) throw new Error('Selecione um imóvel para bloquear datas.');
   if (!block.dataInicio || !block.dataFim) throw new Error('Informe o início e fim do bloqueio.');
+  if (block.dataInicio > block.dataFim) throw new Error('A data final deve ser igual ou posterior à data inicial.');
+
+  // Bloqueio administrativo cobre todas as pernoites de dataInicio até dataFim (inclusive).
+  // No intervalo semi-aberto [dataEntrada, dataSaida), a data de liberação é o dia seguinte a dataFim:
+  const dataSaidaEfetiva = addDays(block.dataFim, 1);
 
   // Verify no overlap with confirmed bookings
-  const avail = await checkAvailability(block.imovelId, block.dataInicio, block.dataFim);
+  const avail = await checkAvailability(block.imovelId, block.dataInicio, dataSaidaEfetiva, undefined, block.id);
   if (!avail.available && avail.conflictingReservation) {
     throw new Error(`Não é possível bloquear: ${avail.reason}`);
   }
 
   const payload: any = {
     ...block,
+    dataFimEfetivo: dataSaidaEfetiva,
     motivo: block.motivo || 'bloqueio_manual',
     criadoEm: serverTimestamp(),
     criadoPor: userUid || null
   };
 
-  const docRef = await addDoc(collection(db, 'bloqueiosTemporada'), payload);
+  let docId = block.id;
+  if (!docId) {
+    const docRef = await addDoc(collection(db, 'bloqueiosTemporada'), payload);
+    docId = docRef.id;
+  } else {
+    await updateDoc(doc(db, 'bloqueiosTemporada', docId), payload);
+  }
 
   try {
-    await setDoc(doc(db, 'ocupacaoTemporada', docRef.id), {
+    await setDoc(doc(db, 'ocupacaoTemporada', docId), {
       imovelId: block.imovelId,
       dataEntrada: block.dataInicio,
-      dataSaida: block.dataFim,
+      dataSaida: dataSaidaEfetiva,
       tipo: block.motivo === 'manutencao' ? 'manutencao' : 'bloqueio',
-      referenciaId: docRef.id
+      referenciaId: docId
     });
   } catch (occErr) {
     console.warn('[temporaryRentalService] Aviso ao sincronizar bloqueio na ocupação anônima:', occErr);
   }
 
-  return docRef.id;
+  return docId;
 }
 
 /**
@@ -681,9 +879,10 @@ export async function fetchPublicOccupiedDates(imovelId: string): Promise<Array<
     blocksSnap.docs.forEach(d => {
       const b = d.data();
       if (b.dataInicio && b.dataFim) {
+        const effectiveEnd = b.dataFimEfetivo || (b.dataFim === b.dataInicio ? addDays(b.dataFim, 1) : addDays(b.dataFim, 1));
         list.push({
           dataEntrada: b.dataInicio,
-          dataSaida: b.dataFim,
+          dataSaida: effectiveEnd,
           tipo: b.motivo === 'manutencao' ? 'manutencao' : 'bloqueio'
         });
       }
@@ -768,20 +967,54 @@ export async function submitReservationRequest(
   }
 
   const codigo = generateRequestCode();
-  const payload: any = {
-    ...request,
-    codigoSolicitacao: codigo,
+  const cleanedPayload: any = {
+    imovelId: String(request.imovelId),
+    imovelCodigo: String(request.imovelCodigo || ''),
+    imovelTitulo: String(request.imovelTitulo || 'Imóvel de Temporada'),
+    imovelEndereco: String(request.imovelEndereco || ''),
     nomeCliente: request.nomeCliente.trim(),
+    hospedeCpf: String(request.hospedeCpf || '').trim(),
     telefone: phone,
     whatsapp: phone,
     email: (request.email || '').trim(),
+    dataEntrada: String(request.dataEntrada),
+    dataSaida: String(request.dataSaida),
+    quantidadeDiarias: Number(request.quantidadeDiarias || 0),
+    quantidadeHospedes: Number(request.quantidadeHospedes || 1),
+    valorDiaria: Number(request.valorDiaria || 0),
+    taxaLimpeza: Number(request.taxaLimpeza || 0),
+    valorTotalEstimado: Number(request.valorTotalEstimado || 0),
+    possuiVeiculo: Boolean(request.possuiVeiculo),
+    veiculos: Array.isArray(request.veiculos) ? request.veiculos : [],
+    acompanhantes: Array.isArray(request.acompanhantes) ? request.acompanhantes : [],
+    detalhamentoDiarias: Array.isArray(request.detalhamentoDiarias) ? request.detalhamentoDiarias : [],
+    observacoes: String(request.observacoes || '').trim(),
+    codigoSolicitacao: codigo,
     status: 'solicitacao_recebida',
     origem: 'site_publico',
     criadoEm: serverTimestamp()
   };
 
-  const docRef = await addDoc(collection(db, 'solicitacoesReservaTemporada'), payload);
-  return { id: docRef.id, codigo };
+  try {
+    const docRef = await addDoc(collection(db, 'solicitacoesReservaTemporada'), cleanedPayload);
+    console.info('[temporaryRentalService] Solicitação de reserva salva com sucesso:', {
+      id: docRef.id,
+      codigo
+    });
+    return { id: docRef.id, codigo };
+  } catch (err: any) {
+    console.error('[temporaryRentalService] Erro ao gravar solicitação de reserva:', {
+      collection: 'solicitacoesReservaTemporada',
+      operation: 'addDoc',
+      errorCode: err?.code,
+      errorMessage: err?.message,
+      payload: cleanedPayload
+    });
+    if (err?.code === 'permission-denied') {
+      throw new Error('Permissão negada ao salvar sua solicitação no sistema. Por favor, envie diretamente pelo WhatsApp para nossa equipe.');
+    }
+    throw new Error(err?.message || 'Falha ao registrar a solicitação de reserva no sistema.');
+  }
 }
 
 /**
@@ -848,6 +1081,7 @@ export async function approveReservationRequest(
     possuiVeiculo: solicitacao.possuiVeiculo ?? (Boolean(solicitacao.veiculos && solicitacao.veiculos.length > 0)),
     veiculos: solicitacao.veiculos || [],
     acompanhantes: solicitacao.acompanhantes || [],
+    detalhamentoDiarias: solicitacao.detalhamentoDiarias || [],
     status: 'confirmada',
     statusPagamento: 'pendente',
     observacoes: `Aprovado a partir da Solicitação pública #${solicitacao.codigoSolicitacao || solicitacao.id}. Observações do cliente: ${solicitacao.observacoes || 'Nenhuma'}`
@@ -893,6 +1127,7 @@ export async function cancelReservationRequest(requestId: string): Promise<void>
  */
 export function buildPublicTemporaryRentalWhatsAppUrl(
   solicitacao: {
+    codigoSolicitacao?: string;
     imovelTitulo?: string;
     imovelCodigo?: string;
     imovelEndereco?: string;
@@ -925,6 +1160,7 @@ export function buildPublicTemporaryRentalWhatsAppUrl(
   const lines = [
     'Olá! Tenho interesse em uma locação temporária pela Menta Imóveis.',
     '',
+    ...(solicitacao.codigoSolicitacao ? [`📋 *PROTOCOLO DA SOLICITAÇÃO:* ${solicitacao.codigoSolicitacao}`, ''] : []),
     'DADOS DO IMÓVEL',
     `* Imóvel: ${solicitacao.imovelTitulo || 'Imóvel de Temporada'}`,
     `* Código: ${solicitacao.imovelCodigo || '---'}`,

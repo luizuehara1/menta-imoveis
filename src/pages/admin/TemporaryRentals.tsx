@@ -30,7 +30,8 @@ import {
   Sparkles,
   RefreshCw,
   Home,
-  ExternalLink
+  ExternalLink,
+  Tag
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -45,7 +46,9 @@ import {
   TemporaryReservationStatus,
   TemporaryPaymentType,
   TemporaryBlockReason,
-  TemporaryReservationRequest
+  TemporaryReservationRequest,
+  TemporarySeasonalPrice,
+  TemporaryCompanion
 } from '../../types';
 import { 
   fetchTemporaryProperties, 
@@ -69,13 +72,17 @@ import {
   buildTemporaryRentalWhatsAppUrl,
   buildPublicTemporaryRentalWhatsAppUrl,
   calculateNights,
-  doIntervalsOverlap
+  doIntervalsOverlap,
+  fetchSeasonalPrices,
+  saveSeasonalPrice,
+  deleteSeasonalPrice,
+  calculateReservationBreakdown
 } from '../../services/temporaryRentalService';
 import { formatCurrency, formatarDataBR, maskCurrency, parseCurrencyToNumber } from '../../lib/utils';
 import { TemporaryCalendar } from '../../components/admin/TemporaryCalendar';
 import { TemporaryReceiptModal } from '../../components/admin/TemporaryReceiptModal';
 
-type ActiveTab = 'visao_geral' | 'calendario' | 'reservas' | 'solicitacoes' | 'hospedes' | 'pagamentos' | 'recibos' | 'imoveis';
+type ActiveTab = 'visao_geral' | 'calendario' | 'reservas' | 'solicitacoes' | 'precos' | 'hospedes' | 'pagamentos' | 'recibos' | 'imoveis';
 
 export default function TemporaryRentals() {
   const { user, isAdmin } = useAuth();
@@ -109,6 +116,27 @@ export default function TemporaryRentals() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [selectedReservation, setSelectedReservation] = useState<TemporaryReservation | null>(null);
   const [selectedRequest, setSelectedRequest] = useState<TemporaryReservationRequest | null>(null);
+
+  // Seasonal Prices State & Modal
+  const [seasonalPrices, setSeasonalPrices] = useState<TemporarySeasonalPrice[]>([]);
+  const [isSeasonalPriceModalOpen, setIsSeasonalPriceModalOpen] = useState(false);
+  const [editingSeasonalPrice, setEditingSeasonalPrice] = useState<TemporarySeasonalPrice | null>(null);
+  const [seasonalPriceForm, setSeasonalPriceForm] = useState<{
+    imovelId: string;
+    dataInicio: string;
+    dataFim: string;
+    valorDiaria: number | string;
+    descricao: string;
+  }>({
+    imovelId: '',
+    dataInicio: '',
+    dataFim: '',
+    valorDiaria: '',
+    descricao: ''
+  });
+
+  // Multiple companions state for reservation form
+  const [companions, setCompanions] = useState<TemporaryCompanion[]>([]);
 
   // Receipt Modal
   const [activeReceipt, setActiveReceipt] = useState<TemporaryReceipt | null>(null);
@@ -165,14 +193,15 @@ export default function TemporaryRentals() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [propsData, resData, blocksData, guestsData, paysData, recsData, reqsData] = await Promise.all([
+      const [propsData, resData, blocksData, guestsData, paysData, recsData, reqsData, pricesData] = await Promise.all([
         fetchTemporaryProperties(),
         fetchReservations(),
         fetchBlocks(),
         fetchGuests(),
         fetchPayments(),
         fetchReceipts(),
-        fetchReservationRequests()
+        fetchReservationRequests(),
+        fetchSeasonalPrices()
       ]);
 
       setProperties(propsData);
@@ -187,7 +216,7 @@ export default function TemporaryRentals() {
         setSelectedPropertyId(propsData[0].id || '');
       }
 
-      if (urlTab && ['visao_geral', 'calendario', 'reservas', 'solicitacoes', 'hospedes', 'pagamentos', 'recibos', 'imoveis'].includes(urlTab)) {
+      if (urlTab && ['visao_geral', 'calendario', 'reservas', 'solicitacoes', 'precos', 'hospedes', 'pagamentos', 'recibos', 'imoveis'].includes(urlTab)) {
         setActiveTab(urlTab as ActiveTab);
       }
 
@@ -197,6 +226,7 @@ export default function TemporaryRentals() {
       setPayments(paysData);
       setReceipts(recsData);
       setRequests(reqsData);
+      setSeasonalPrices(pricesData);
 
       if (urlAction === 'nova-reserva' && urlImovelId) {
         setTimeout(() => {
@@ -265,11 +295,24 @@ export default function TemporaryRentals() {
     tomorrow.setDate(tomorrow.getDate() + 3);
     const checkOut = dates?.checkOut || tomorrow.toISOString().split('T')[0];
 
-    const nights = calculateNights(checkIn, checkOut);
-    const daily = Number(prop?.valorDiaria || prop?.priceDiaria || 350);
-    const cleaning = Number(prop?.taxaLimpeza || 150);
-    const subtotal = nights * daily;
-    const total = subtotal + cleaning;
+    let nights = calculateNights(checkIn, checkOut);
+    let daily = Number(prop?.valorDiaria || prop?.priceDiaria || 350);
+    let cleaning = Number(prop?.taxaLimpeza || 150);
+    let subtotal = nights * daily;
+    let total = subtotal + cleaning;
+    let breakdownDetails = undefined;
+
+    if (prop && checkIn && checkOut && checkIn < checkOut) {
+      const bd = calculateReservationBreakdown(prop, checkIn, checkOut, seasonalPrices);
+      nights = bd.nights;
+      daily = bd.averageDailyRate;
+      cleaning = bd.taxaLimpeza;
+      subtotal = bd.subtotalDiarias;
+      total = bd.valorTotal;
+      breakdownDetails = bd.dailyRates;
+    }
+
+    setCompanions([]);
 
     setReservationForm({
       imovelId: propId,
@@ -281,7 +324,7 @@ export default function TemporaryRentals() {
       dataEntrada: checkIn,
       dataSaida: checkOut,
       quantidadeDiarias: nights,
-      quantidadeHospedes: prop?.maxHospedes || 2,
+      quantidadeHospedes: 1,
       valorDiaria: daily,
       subtotalDiarias: subtotal,
       taxaLimpeza: cleaning,
@@ -293,10 +336,87 @@ export default function TemporaryRentals() {
       saldoRestante: total,
       formaPagamento: 'PIX',
       status: 'confirmada',
-      statusPagamento: 'pendente'
+      statusPagamento: 'pendente',
+      detalhamentoDiarias: breakdownDetails
     });
 
     setIsNewReservationModalOpen(true);
+  };
+
+  // Companions management helpers
+  const handleAddCompanion = () => {
+    const prop = properties.find(p => p.id === reservationForm.imovelId) || currentProperty;
+    const maxGuests = Number(prop?.capacidadeHospedes || prop?.maxHospedes || 10);
+    const currentTotal = 1 + companions.length;
+    if (currentTotal >= maxGuests) {
+      triggerToast(`Capacidade máxima do imóvel atingida (${maxGuests} pessoas). Não é possível adicionar mais acompanhantes.`, 'error');
+      return;
+    }
+    setCompanions(prev => [
+      ...prev,
+      {
+        id: String(Date.now()),
+        nome: '',
+        documento: '',
+        parentesco: '',
+        faixaEtaria: 'adulto'
+      }
+    ]);
+  };
+
+  const handleRemoveCompanion = (id: string) => {
+    setCompanions(prev => prev.filter(c => c.id !== id));
+  };
+
+  const handleUpdateCompanion = (id: string, field: keyof TemporaryCompanion, value: string) => {
+    setCompanions(prev => prev.map(c => c.id === id ? { ...c, [field]: value } : c));
+  };
+
+  // Seasonal Price Handlers
+  const handleSaveSeasonalPrice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      if (!seasonalPriceForm.imovelId) throw new Error('Selecione o imóvel.');
+      if (!seasonalPriceForm.dataInicio || !seasonalPriceForm.dataFim) throw new Error('Informe o período (data inicial e final).');
+      if (seasonalPriceForm.dataInicio > seasonalPriceForm.dataFim) throw new Error('A data final deve ser igual ou posterior à data inicial.');
+      const rate = typeof seasonalPriceForm.valorDiaria === 'string' 
+        ? parseCurrencyToNumber(seasonalPriceForm.valorDiaria) 
+        : Number(seasonalPriceForm.valorDiaria || 0);
+      if (rate <= 0) throw new Error('Informe um valor de diária válido maior que zero.');
+
+      const prop = properties.find(p => p.id === seasonalPriceForm.imovelId);
+
+      await saveSeasonalPrice({
+        id: editingSeasonalPrice?.id,
+        imovelId: seasonalPriceForm.imovelId,
+        imovelCodigo: prop?.code || '',
+        imovelTitulo: prop?.title || '',
+        dataInicio: seasonalPriceForm.dataInicio,
+        dataFim: seasonalPriceForm.dataFim,
+        valorDiaria: rate,
+        descricao: seasonalPriceForm.descricao.trim() || 'Tarifa Especial'
+      }, user?.uid);
+
+      triggerToast('Preço especial por período salvo com sucesso!', 'success');
+      setIsSeasonalPriceModalOpen(false);
+      setEditingSeasonalPrice(null);
+      await loadData();
+    } catch (err: any) {
+      console.error('[TemporaryRentals] Erro ao salvar preço por período:', err);
+      triggerToast(err.message || 'Erro ao salvar preço especial.', 'error');
+    }
+  };
+
+  const handleDeleteSeasonalPrice = async (priceId: string) => {
+    if (!window.confirm('Tem certeza que deseja remover esta regra de preço por período?')) return;
+    try {
+      await deleteSeasonalPrice(priceId);
+      triggerToast('Regra de preço por período removida com sucesso!', 'success');
+      await loadData();
+    } catch (err: any) {
+      console.error('[TemporaryRentals] Erro ao remover preço:', err);
+      triggerToast(err.message || 'Erro ao remover preço especial.', 'error');
+    }
   };
 
   // Open New Block Modal
@@ -321,10 +441,28 @@ export default function TemporaryRentals() {
   const updateReservationCalculation = (updates: Partial<TemporaryReservation>) => {
     setReservationForm(prev => {
       const next = { ...prev, ...updates };
-      const nights = calculateNights(next.dataEntrada || '', next.dataSaida || '');
-      const daily = Number(next.valorDiaria || 0);
-      const subtotal = nights * daily;
-      const cleaning = Number(next.taxaLimpeza || 0);
+      const prop = properties.find(p => p.id === next.imovelId) || properties[0] || null;
+
+      let nights = calculateNights(next.dataEntrada || '', next.dataSaida || '');
+      let daily = Number(next.valorDiaria || 0);
+      let subtotal = nights * daily;
+      let cleaning = Number(next.taxaLimpeza || (prop?.taxaLimpeza || 150));
+      let breakdownDetails = next.detalhamentoDiarias;
+
+      if (prop && next.dataEntrada && next.dataSaida && next.dataEntrada < next.dataSaida) {
+        const bd = calculateReservationBreakdown(
+          prop,
+          next.dataEntrada,
+          next.dataSaida,
+          seasonalPrices,
+          Number(next.valorDesconto || 0),
+          Number(next.outrasTaxas || 0)
+        );
+        nights = bd.nights;
+        subtotal = bd.subtotalDiarias;
+        breakdownDetails = bd.dailyRates;
+      }
+
       const extra = Number(next.outrasTaxas || 0);
       const discount = Number(next.valorDesconto || 0);
       const total = Math.max(0, subtotal + cleaning + extra - discount);
@@ -336,7 +474,8 @@ export default function TemporaryRentals() {
         quantidadeDiarias: nights,
         subtotalDiarias: subtotal,
         valorTotal: total,
-        saldoRestante: balance
+        saldoRestante: balance,
+        detalhamentoDiarias: breakdownDetails
       };
     });
   };
@@ -348,8 +487,23 @@ export default function TemporaryRentals() {
       if (!reservationForm.imovelId) throw new Error('Selecione o imóvel.');
       if (!reservationForm.hospedeNome) throw new Error('Informe o nome do hóspede.');
       if (!reservationForm.dataEntrada || !reservationForm.dataSaida) throw new Error('Selecione as datas de entrada e saída.');
+      if (reservationForm.dataEntrada >= reservationForm.dataSaida) throw new Error('A data de saída deve ser posterior à data de entrada.');
 
-      await saveReservation(reservationForm, user?.uid);
+      const prop = properties.find(p => p.id === reservationForm.imovelId);
+      const maxGuests = Number(prop?.capacidadeHospedes || prop?.maxHospedes || 10);
+      const totalGuests = 1 + companions.length;
+
+      if (totalGuests > maxGuests) {
+        throw new Error(`Limite de capacidade excedido: O imóvel permite no máximo ${maxGuests} hóspedes, mas foram cadastrados ${totalGuests} (titular + ${companions.length} acompanhantes).`);
+      }
+
+      const payload: Partial<TemporaryReservation> = {
+        ...reservationForm,
+        quantidadeHospedes: totalGuests,
+        acompanhantes: companions
+      };
+
+      await saveReservation(payload, user?.uid);
       triggerToast('Locação temporária cadastrada com sucesso!', 'success');
       setIsNewReservationModalOpen(false);
       await loadData();
@@ -591,6 +745,7 @@ export default function TemporaryRentals() {
             label: `Solicitações (${requests.filter(r => r.status === 'solicitacao_recebida' || !r.status).length})`, 
             icon: MessageSquare 
           },
+          { id: 'precos', label: `Preços por Período (${seasonalPrices.length})`, icon: Tag },
           { id: 'hospedes', label: `Hóspedes (${guests.length})`, icon: Users },
           { id: 'pagamentos', label: 'Pagamentos & Recebimentos', icon: DollarSign },
           { id: 'recibos', label: `Recibos Emitidos (${receipts.length})`, icon: FileText },
@@ -753,6 +908,30 @@ export default function TemporaryRentals() {
           onSelectPropertyId={setSelectedPropertyId}
           reservations={reservations}
           blocks={blocks}
+          seasonalPrices={seasonalPrices}
+          onOpenNewSeasonalPrice={(params) => {
+            const propId = params?.propertyId || selectedPropertyId || (properties[0]?.id || '');
+            setSeasonalPriceForm({
+              imovelId: propId,
+              dataInicio: params?.checkIn || '',
+              dataFim: params?.checkOut || '',
+              valorDiaria: '',
+              descricao: ''
+            });
+            setEditingSeasonalPrice(null);
+            setIsSeasonalPriceModalOpen(true);
+          }}
+          onSelectSeasonalPrice={(sp) => {
+            setEditingSeasonalPrice(sp);
+            setSeasonalPriceForm({
+              imovelId: sp.imovelId,
+              dataInicio: sp.dataInicio,
+              dataFim: sp.dataFim,
+              valorDiaria: sp.valorDiaria,
+              descricao: sp.descricao
+            });
+            setIsSeasonalPriceModalOpen(true);
+          }}
           onOpenNewReservation={handleOpenNewReservation}
           onOpenNewBlock={handleOpenNewBlock}
           onSelectReservation={(res) => {
@@ -1062,6 +1241,175 @@ export default function TemporaryRentals() {
               </table>
             )}
           </div>
+        </div>
+      )}
+
+      {/* TAB: PREÇOS POR PERÍODO */}
+      {activeTab === 'precos' && (
+        <div className="bg-white rounded-[2.5rem] shadow-xl border border-gray-100 p-8 space-y-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-gray-100">
+            <div>
+              <div className="flex items-center gap-2 text-gold font-bold text-xs uppercase tracking-wider mb-1">
+                <Tag size={16} />
+                <span>Tarifação Dinâmica & Sazonal</span>
+              </div>
+              <h3 className="text-xl font-display font-bold text-primary-black">Preços Especiais por Período</h3>
+              <p className="text-xs text-gray-400">
+                Defina valores de diária diferenciados para feriados, fins de semana, alta temporada ou datas comemorativas.
+              </p>
+            </div>
+            
+            <div className="flex flex-wrap items-center gap-3">
+              <select
+                value={selectedPropertyId}
+                onChange={(e) => setSelectedPropertyId(e.target.value)}
+                className="text-xs font-bold px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-gray-700"
+              >
+                <option value="">Todos os Imóveis</option>
+                {properties.map(p => (
+                  <option key={p.id} value={p.id}>{p.code} - {p.title}</option>
+                ))}
+              </select>
+
+              <button
+                onClick={() => {
+                  setSeasonalPriceForm({
+                    imovelId: selectedPropertyId || (properties[0]?.id || ''),
+                    dataInicio: '',
+                    dataFim: '',
+                    valorDiaria: '',
+                    descricao: ''
+                  });
+                  setEditingSeasonalPrice(null);
+                  setIsSeasonalPriceModalOpen(true);
+                }}
+                className="btn-gold !py-3 !px-5 flex items-center gap-2 text-xs font-black uppercase tracking-wider shadow-md"
+              >
+                <Plus size={16} />
+                <span>Novo Preço Especial</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Pricing Rules Content */}
+          {seasonalPrices.length === 0 ? (
+            <div className="text-center py-16 space-y-4">
+              <div className="w-16 h-16 rounded-3xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto shadow-inner">
+                <Tag size={28} />
+              </div>
+              <div className="space-y-1">
+                <h4 className="font-bold text-base text-primary-black">Nenhum preço especial cadastrado</h4>
+                <p className="text-xs text-gray-400 max-w-md mx-auto">
+                  Todos os imóveis estão utilizando suas diárias padrão cadastradas. Clique no botão abaixo para adicionar tarifas especiais para feriados ou temporadas.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setSeasonalPriceForm({
+                    imovelId: selectedPropertyId || (properties[0]?.id || ''),
+                    dataInicio: '',
+                    dataFim: '',
+                    valorDiaria: '',
+                    descricao: ''
+                  });
+                  setEditingSeasonalPrice(null);
+                  setIsSeasonalPriceModalOpen(true);
+                }}
+                className="btn-gold !py-2.5 !px-6 text-xs font-bold inline-flex items-center gap-2 shadow-md"
+              >
+                <Plus size={16} />
+                <span>Cadastrar Primeiro Preço Especial</span>
+              </button>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-gray-50/80 border-b border-gray-100 text-[10px] font-black uppercase tracking-wider text-gray-400">
+                  <tr>
+                    <th className="py-4 px-4">Imóvel</th>
+                    <th className="py-4 px-4">Período de Aplicação</th>
+                    <th className="py-4 px-4">Valor da Diária</th>
+                    <th className="py-4 px-4">Motivo / Descrição</th>
+                    <th className="py-4 px-4 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {seasonalPrices
+                    .filter(sp => !selectedPropertyId || sp.imovelId === selectedPropertyId)
+                    .map(sp => {
+                      const prop = properties.find(p => p.id === sp.imovelId);
+                      return (
+                        <tr key={sp.id} className="hover:bg-gray-50/50 transition-colors">
+                          <td className="py-4 px-4">
+                            <span className="font-bold text-primary-black block">
+                              {sp.imovelTitulo || prop?.title || 'Imóvel'}
+                            </span>
+                            <span className="text-[10px] text-gray-400">
+                              Código: <strong>{sp.imovelCodigo || prop?.code || '-'}</strong>
+                            </span>
+                          </td>
+
+                          <td className="py-4 px-4">
+                            <div className="flex items-center gap-1.5 font-bold text-gray-800">
+                              <Calendar size={14} className="text-gold shrink-0" />
+                              <span>{formatarDataBR(sp.dataInicio)}</span>
+                              <span className="text-gray-400 font-normal">até</span>
+                              <span>{formatarDataBR(sp.dataFim)}</span>
+                            </div>
+                          </td>
+
+                          <td className="py-4 px-4">
+                            <span className="font-display font-black text-emerald-700 text-sm block">
+                              {formatCurrency(sp.valorDiaria)}
+                            </span>
+                            {prop && (
+                              <span className="text-[10px] text-gray-400">
+                                Padrão: {formatCurrency(prop.valorDiaria || prop.priceDiaria || 0)}
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="py-4 px-4">
+                            <span className="inline-block px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 font-bold border border-amber-200 text-[11px]">
+                              {sp.descricao}
+                            </span>
+                          </td>
+
+                          <td className="py-4 px-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => {
+                                  setEditingSeasonalPrice(sp);
+                                  setSeasonalPriceForm({
+                                    imovelId: sp.imovelId,
+                                    dataInicio: sp.dataInicio,
+                                    dataFim: sp.dataFim,
+                                    valorDiaria: sp.valorDiaria,
+                                    descricao: sp.descricao
+                                  });
+                                  setIsSeasonalPriceModalOpen(true);
+                                }}
+                                className="p-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+                                title="Editar Preço por Período"
+                              >
+                                <Edit size={14} />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteSeasonalPrice(sp.id)}
+                                className="p-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                                title="Excluir Regra"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -1563,20 +1911,137 @@ export default function TemporaryRentals() {
                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-1">Qtd Hóspedes</label>
                     <input
                       type="number"
-                      min="1"
-                      className="input-field"
-                      value={reservationForm.quantidadeHospedes || 2}
-                      onChange={e => setReservationForm(prev => ({ ...prev, quantidadeHospedes: parseInt(e.target.value) || 1 }))}
+                      className="input-field bg-gray-50 font-bold"
+                      value={1 + companions.length}
+                      readOnly
                     />
                   </div>
+                </div>
+
+                {/* Sub-section: Companions management */}
+                <div className="pt-4 border-t border-gray-100 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-gold block">
+                        Acompanhantes do Hóspede
+                      </span>
+                      <p className="text-xs text-gray-500">
+                        Total: <strong>{1 + companions.length}</strong> de <strong>{properties.find(p => p.id === reservationForm.imovelId)?.capacidadeHospedes || properties.find(p => p.id === reservationForm.imovelId)?.maxHospedes || 10}</strong> pessoas permitidas no imóvel (1 titular + {companions.length} adicionais)
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAddCompanion}
+                      className="px-3.5 py-2 rounded-xl bg-gold/15 text-gold-dark hover:bg-gold/25 font-bold text-xs flex items-center gap-1.5 transition-colors self-start sm:self-auto border border-gold/30"
+                    >
+                      <Plus size={14} />
+                      <span>+ Adicionar acompanhante</span>
+                    </button>
+                  </div>
+
+                  {companions.length === 0 ? (
+                    <div className="p-4 rounded-xl bg-gray-50 border border-gray-200 text-xs text-gray-500 text-center">
+                      Nenhum acompanhante cadastrado. A reserva será gerada apenas para o titular.
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {companions.map((comp, idx) => (
+                        <div key={comp.id || idx} className="p-3 rounded-xl bg-gray-50 border border-gray-200 grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+                          <div className="sm:col-span-4">
+                            <label className="text-[9px] font-bold text-gray-400 block mb-0.5">Nome do Acompanhante</label>
+                            <input
+                              type="text"
+                              placeholder="Nome completo"
+                              value={comp.nome}
+                              onChange={(e) => handleUpdateCompanion(comp.id, 'nome', e.target.value)}
+                              className="input-field !py-1.5 text-xs bg-white"
+                              required
+                            />
+                          </div>
+                          <div className="sm:col-span-3">
+                            <label className="text-[9px] font-bold text-gray-400 block mb-0.5">Documento (CPF / RG)</label>
+                            <input
+                              type="text"
+                              placeholder="Documento"
+                              value={comp.documento || ''}
+                              onChange={(e) => handleUpdateCompanion(comp.id, 'documento', e.target.value)}
+                              className="input-field !py-1.5 text-xs bg-white"
+                            />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="text-[9px] font-bold text-gray-400 block mb-0.5">Parentesco</label>
+                            <input
+                              type="text"
+                              placeholder="Ex: Esposa, Filho"
+                              value={comp.parentesco || ''}
+                              onChange={(e) => handleUpdateCompanion(comp.id, 'parentesco', e.target.value)}
+                              className="input-field !py-1.5 text-xs bg-white"
+                            />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="text-[9px] font-bold text-gray-400 block mb-0.5">Faixa Etária</label>
+                            <select
+                              value={comp.faixaEtaria || 'adulto'}
+                              onChange={(e) => handleUpdateCompanion(comp.id, 'faixaEtaria', e.target.value as any)}
+                              className="input-field !py-1.5 text-xs bg-white"
+                            >
+                              <option value="adulto">Adulto</option>
+                              <option value="crianca">Criança</option>
+                            </select>
+                          </div>
+                          <div className="sm:col-span-1 text-right pt-4 sm:pt-0">
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveCompanion(comp.id)}
+                              className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Remover acompanhante"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* 4. Valores & Financeiro */}
               <div className="space-y-4 p-6 rounded-2xl bg-gold/5 border border-gold/20">
-                <h4 className="text-xs font-black uppercase tracking-widest text-gold flex items-center gap-2">
-                  <DollarSign size={16} /> 4. Condições Financeiras
-                </h4>
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-black uppercase tracking-widest text-gold flex items-center gap-2">
+                    <DollarSign size={16} /> 4. Condições Financeiras
+                  </h4>
+                  {reservationForm.detalhamentoDiarias && reservationForm.detalhamentoDiarias.length > 0 && (
+                    <span className="text-[10px] font-bold text-gray-500">
+                      Calculado dia a dia com base nas regras sazonais
+                    </span>
+                  )}
+                </div>
+
+                {/* Day-by-Day Rates Breakdown */}
+                {reservationForm.detalhamentoDiarias && reservationForm.detalhamentoDiarias.length > 0 && (
+                  <div className="p-4 bg-white rounded-2xl border border-gold/20 space-y-2">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-gold flex items-center gap-1.5">
+                      <Tag size={12} /> Discriminação de cada Diária ({reservationForm.detalhamentoDiarias.length} noites)
+                    </span>
+                    <div className="max-h-36 overflow-y-auto space-y-1 text-xs">
+                      {reservationForm.detalhamentoDiarias.map((d, dIdx) => (
+                        <div key={dIdx} className="flex items-center justify-between py-1 px-2.5 rounded-lg bg-gray-50 border border-gray-100 text-[11px]">
+                          <span className="font-semibold text-gray-700">Noite {dIdx + 1} ({d.dataFmt || d.data})</span>
+                          <div className="flex items-center gap-2">
+                            {d.isSpecialPrice && (
+                              <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[9px] font-bold">
+                                {d.descricao || 'Tarifa Especial'}
+                              </span>
+                            )}
+                            <span className="font-bold text-emerald-700">{formatCurrency(d.valor)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div className="space-y-1">
@@ -1776,6 +2241,30 @@ export default function TemporaryRentals() {
                   <span className="text-emerald-700 font-bold">Total Pago: {formatCurrency(selectedReservation.valorPago)}</span>
                   <span className="text-amber-800 font-bold">Saldo Restante: {formatCurrency(selectedReservation.saldoRestante)}</span>
                 </div>
+
+                {/* Day-by-day detail breakdown if present */}
+                {selectedReservation.detalhamentoDiarias && selectedReservation.detalhamentoDiarias.length > 0 && (
+                  <div className="pt-3 border-t border-gold/20 space-y-1.5">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-gold block">
+                      Discriminação das Diárias ({selectedReservation.detalhamentoDiarias.length} noites)
+                    </span>
+                    <div className="max-h-32 overflow-y-auto space-y-1 text-xs">
+                      {selectedReservation.detalhamentoDiarias.map((d, dIdx) => (
+                        <div key={dIdx} className="flex items-center justify-between py-1 px-2.5 rounded-lg bg-white/60 border border-gold/15 text-[11px]">
+                          <span className="text-gray-700">Noite {dIdx + 1} ({d.dataFmt || d.data})</span>
+                          <div className="flex items-center gap-2">
+                            {d.isSpecialPrice && (
+                              <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 text-[9px] font-bold">
+                                {d.descricao || 'Especial'}
+                              </span>
+                            )}
+                            <span className="font-bold text-emerald-800">{formatCurrency(d.valor)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Companions & Vehicles Cards if available */}
@@ -1787,9 +2276,11 @@ export default function TemporaryRentals() {
                   {selectedReservation.acompanhantes && selectedReservation.acompanhantes.length > 0 ? (
                     <div className="space-y-1.5 text-xs text-gray-700">
                       {selectedReservation.acompanhantes.map((acomp, aIdx) => (
-                        <div key={aIdx} className="p-2 bg-white rounded-lg border border-gray-200 flex justify-between">
-                          <span className="font-semibold">{acomp.nomeCompleto}</span>
-                          <span className="text-gray-500">{acomp.parentesco || 'Acompanhante'} {acomp.documento ? `• Doc: ${acomp.documento}` : ''}</span>
+                        <div key={aIdx} className="p-2 bg-white rounded-lg border border-gray-200 flex justify-between items-center">
+                          <span className="font-semibold text-gray-800">{acomp.nomeCompleto || acomp.nome}</span>
+                          <span className="text-[11px] text-gray-500">
+                            {acomp.parentesco || 'Acompanhante'} {acomp.faixaEtaria ? `(${acomp.faixaEtaria})` : ''} {acomp.documento ? `• Doc: ${acomp.documento}` : ''}
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -2214,6 +2705,30 @@ export default function TemporaryRentals() {
                       {formatCurrency(selectedRequest.valorTotalEstimado)}
                     </span>
                   </div>
+
+                  {/* Day-by-day detail breakdown if present */}
+                  {selectedRequest.detalhamentoDiarias && selectedRequest.detalhamentoDiarias.length > 0 && (
+                    <div className="pt-2 border-t border-amber-200/80 space-y-1">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-amber-900 block">
+                        Detalhamento das Diárias
+                      </span>
+                      <div className="max-h-28 overflow-y-auto space-y-1 text-[11px]">
+                        {selectedRequest.detalhamentoDiarias.map((d, dIdx) => (
+                          <div key={dIdx} className="flex items-center justify-between py-0.5 px-2 rounded bg-white/70">
+                            <span className="text-gray-700">Noite {dIdx + 1} ({d.dataFmt || d.data})</span>
+                            <div className="flex items-center gap-1.5">
+                              {d.isSpecialPrice && (
+                                <span className="px-1 py-0.2 rounded bg-amber-200 text-amber-900 text-[9px] font-bold">
+                                  {d.descricao || 'Tarifa Especial'}
+                                </span>
+                              )}
+                              <span className="font-bold text-emerald-800">{formatCurrency(d.valor)}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -2226,9 +2741,11 @@ export default function TemporaryRentals() {
                         Acompanhantes ({selectedRequest.acompanhantes.length})
                       </span>
                       {selectedRequest.acompanhantes.map((a, i) => (
-                        <div key={i} className="p-2 bg-white rounded-lg border border-gray-200 flex justify-between">
-                          <span className="font-semibold text-gray-800">{a.nomeCompleto}</span>
-                          <span className="text-gray-500">{a.parentesco || 'Acompanhante'}</span>
+                        <div key={i} className="p-2 bg-white rounded-lg border border-gray-200 flex justify-between items-center">
+                          <span className="font-semibold text-gray-800">{a.nomeCompleto || (a as any).nome}</span>
+                          <span className="text-[11px] text-gray-500">
+                            {a.parentesco || 'Acompanhante'} {a.faixaEtaria ? `(${a.faixaEtaria})` : ''} {a.documento ? `• Doc: ${a.documento}` : ''}
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -2292,6 +2809,135 @@ export default function TemporaryRentals() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: PREÇO ESPECIAL POR PERÍODO */}
+      {/* ======================================================== */}
+      {isSeasonalPriceModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-[2rem] shadow-2xl max-w-lg w-full overflow-hidden border border-gray-100 space-y-6 p-8">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
+                  <Tag size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-display font-bold text-primary-black">
+                    {editingSeasonalPrice ? 'Editar Preço por Período' : 'Novo Preço por Período'}
+                  </h3>
+                  <p className="text-xs text-gray-400">Tarifa diferenciada para feriados ou temporadas</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => {
+                  setIsSeasonalPriceModalOpen(false);
+                  setEditingSeasonalPrice(null);
+                }}
+                className="w-8 h-8 rounded-lg bg-gray-100 text-gray-500 hover:text-black flex items-center justify-center"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveSeasonalPrice} className="space-y-4 text-xs">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 pl-1">
+                  Imóvel de Temporada
+                </label>
+                <select
+                  value={seasonalPriceForm.imovelId}
+                  onChange={(e) => setSeasonalPriceForm(prev => ({ ...prev, imovelId: e.target.value }))}
+                  className="input-field font-bold text-xs"
+                  required
+                >
+                  <option value="">Selecione o imóvel...</option>
+                  {properties.map(p => (
+                    <option key={p.id} value={p.id}>{p.code} • {p.title}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 pl-1">
+                    Data de Início
+                  </label>
+                  <input
+                    type="date"
+                    value={seasonalPriceForm.dataInicio}
+                    onChange={(e) => setSeasonalPriceForm(prev => ({ ...prev, dataInicio: e.target.value }))}
+                    className="input-field text-xs font-medium"
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 pl-1">
+                    Data de Término
+                  </label>
+                  <input
+                    type="date"
+                    value={seasonalPriceForm.dataFim}
+                    onChange={(e) => setSeasonalPriceForm(prev => ({ ...prev, dataFim: e.target.value }))}
+                    className="input-field text-xs font-medium"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 pl-1">
+                  Valor da Diária neste Período (R$)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: 850,00"
+                  value={maskCurrency(seasonalPriceForm.valorDiaria)}
+                  onChange={(e) => setSeasonalPriceForm(prev => ({ ...prev, valorDiaria: parseCurrencyToNumber(e.target.value) }))}
+                  className="input-field text-xs font-bold bg-amber-50/50 text-amber-900 border-amber-200"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 pl-1">
+                  Motivo / Descrição do Período
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: Réveillon, Feriado de Finados, Alta Temporada..."
+                  value={seasonalPriceForm.descricao}
+                  onChange={(e) => setSeasonalPriceForm(prev => ({ ...prev, descricao: e.target.value }))}
+                  className="input-field text-xs"
+                  required
+                />
+              </div>
+
+              <div className="p-3 rounded-xl bg-gray-50 border border-gray-200 text-gray-500 text-[11px] leading-relaxed">
+                <span className="font-bold text-gray-700">Regra de Aplicação:</span> Todas as diárias compreendidas entre a data de início e término serão calculadas com este valor diferenciado. Se houver mais de uma regra para a mesma data, o período mais específico terá prioridade.
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSeasonalPriceModalOpen(false);
+                    setEditingSeasonalPrice(null);
+                  }}
+                  className="px-4 py-2.5 rounded-xl border border-gray-200 font-bold text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 rounded-xl btn-gold font-black uppercase tracking-wider shadow-md"
+                >
+                  Salvar Preço Especial
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
