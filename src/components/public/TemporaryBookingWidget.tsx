@@ -279,6 +279,10 @@ export default function TemporaryBookingWidget({
     }
 
     if (possuiVeiculo) {
+      if (veiculos.length === 0) {
+        setErrorMessage('Por favor, adicione os dados do veículo ou desmarque a opção de vaga de garagem.');
+        return;
+      }
       const hasInvalidVehicle = veiculos.some(v => !v.placa?.trim() || !v.modelo?.trim());
       if (hasInvalidVehicle) {
         setErrorMessage('Por favor, informe ao menos o modelo e a placa de cada veículo para cadastro na portaria.');
@@ -288,6 +292,27 @@ export default function TemporaryBookingWidget({
 
     setSubmitting(true);
     try {
+      const cleanVeiculosList = possuiVeiculo
+        ? veiculos
+            .filter(v => (v.placa?.trim() || v.modelo?.trim()))
+            .map(v => ({
+              tipo: (v.tipo || 'Carro').trim(),
+              marca: (v.marca || '').trim(),
+              modelo: (v.modelo || '').trim(),
+              cor: (v.cor || '').trim(),
+              placa: (v.placa || '').trim().toUpperCase()
+            }))
+        : [];
+
+      const cleanAcompanhantesList = acompanhantes
+        .filter(a => a && a.nomeCompleto?.trim())
+        .map(a => ({
+          nomeCompleto: a.nomeCompleto.trim(),
+          documento: (a.documento || '').trim(),
+          parentesco: (a.parentesco || '').trim(),
+          faixaEtaria: (a.faixaEtaria === 'crianca' ? 'crianca' : 'adulto') as 'adulto' | 'crianca'
+        }));
+
       // 1. Submit request to Firestore
       const destinationPhone = settings?.empresa?.whatsapp || property.brokerWhatsapp || '47999999999';
       
@@ -309,9 +334,9 @@ export default function TemporaryBookingWidget({
         taxaLimpeza: cleaningFee,
         valorTotalEstimado: estimatedTotal,
         detalhamentoDiarias: breakdown.dailyRates,
-        possuiVeiculo,
-        veiculos: possuiVeiculo ? veiculos : [],
-        acompanhantes: acompanhantes.filter(a => a.nomeCompleto.trim()),
+        possuiVeiculo: Boolean(possuiVeiculo && cleanVeiculosList.length > 0),
+        veiculos: cleanVeiculosList,
+        acompanhantes: cleanAcompanhantesList,
         observacoes: observacoes.trim()
       });
 
@@ -333,9 +358,9 @@ export default function TemporaryBookingWidget({
         telefone: cleanTel,
         whatsapp: cleanTel,
         email: email.trim(),
-        possuiVeiculo,
-        veiculos: possuiVeiculo ? veiculos : [],
-        acompanhantes: acompanhantes.filter(a => a.nomeCompleto.trim()),
+        possuiVeiculo: Boolean(possuiVeiculo && cleanVeiculosList.length > 0),
+        veiculos: cleanVeiculosList,
+        acompanhantes: cleanAcompanhantesList,
         observacoes: observacoes.trim()
       }, destinationPhone);
 

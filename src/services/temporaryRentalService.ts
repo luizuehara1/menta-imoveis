@@ -50,6 +50,88 @@ export function doIntervalsOverlap(startA: string, endA: string, startB: string,
 }
 
 /**
+ * Recursively locates any properties or array elements that are strictly `undefined`.
+ * Returns an array of dot/bracket notation paths (e.g. "detalhamentoDiarias[0].descricao").
+ */
+export function findUndefinedPaths(obj: any, currentPath = ''): string[] {
+  const paths: string[] = [];
+
+  if (obj === undefined) {
+    paths.push(currentPath || '(root)');
+    return paths;
+  }
+
+  if (obj === null || typeof obj !== 'object') {
+    return paths;
+  }
+
+  // Preserve Firestore FieldValues (serverTimestamp) and dates
+  if (obj.constructor && obj.constructor.name !== 'Object' && obj.constructor.name !== 'Array') {
+    return paths;
+  }
+
+  if (Array.isArray(obj)) {
+    obj.forEach((item, index) => {
+      const itemPath = `${currentPath}[${index}]`;
+      if (item === undefined) {
+        paths.push(itemPath);
+      } else {
+        paths.push(...findUndefinedPaths(item, itemPath));
+      }
+    });
+    return paths;
+  }
+
+  for (const key of Object.keys(obj)) {
+    const val = obj[key];
+    const keyPath = currentPath ? `${currentPath}.${key}` : key;
+    if (val === undefined) {
+      paths.push(keyPath);
+    } else {
+      paths.push(...findUndefinedPaths(val, keyPath));
+    }
+  }
+
+  return paths;
+}
+
+/**
+ * Deeply removes any keys whose values are strictly `undefined`.
+ * Ensures Firestore addDoc/setDoc/updateDoc never throws "Unsupported field value: undefined".
+ * Preserves Date, serverTimestamp, booleans, numbers, arrays, and strings.
+ */
+export function sanitizeFirestorePayload<T>(value: T): T {
+  if (value === undefined) {
+    return undefined as any;
+  }
+  if (value === null || typeof value !== 'object') {
+    return value;
+  }
+
+  // Preserve Firestore FieldValues (e.g. serverTimestamp), Timestamps, Dates
+  if (value.constructor && value.constructor.name !== 'Object' && value.constructor.name !== 'Array') {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return (value as any[])
+      .map(item => sanitizeFirestorePayload(item))
+      .filter(item => item !== undefined) as any;
+  }
+
+  const cleaned: Record<string, any> = {};
+  for (const [key, val] of Object.entries(value as Record<string, any>)) {
+    if (val !== undefined) {
+      const sanitized = sanitizeFirestorePayload(val);
+      if (sanitized !== undefined) {
+        cleaned[key] = sanitized;
+      }
+    }
+  }
+  return cleaned as T;
+}
+
+/**
  * Parses date string in YYYY-MM-DD or DD/MM/YYYY into midday Date to prevent timezone drift.
  */
 export function parseDateToMidnight(dateStr: string): Date | null {
@@ -303,7 +385,7 @@ export function calculateReservationBreakdown(
 
     let appliedRate = defaultDailyRate;
     let isSpecial = false;
-    let desc: string | undefined = undefined;
+    let desc = '';
 
     if (matchingRules.length > 0) {
       // Deterministic priority:
@@ -321,7 +403,7 @@ export function calculateReservationBreakdown(
       const bestRule = matchingRules[0];
       appliedRate = Number(bestRule.valorDiaria);
       isSpecial = true;
-      desc = bestRule.descricao;
+      desc = bestRule.descricao || 'Tarifa Especial';
     }
 
     dailyRates.push({
@@ -560,7 +642,7 @@ export async function saveReservation(
     statusPagamento = 'parcial';
   }
 
-  const payload: any = {
+  const payload: any = sanitizeFirestorePayload({
     ...reservation,
     codigoReserva: codigo,
     valorTotal,
@@ -568,11 +650,22 @@ export async function saveReservation(
     valorPago,
     saldoRestante,
     statusPagamento,
-    acompanhantes: Array.isArray(reservation.acompanhantes) ? reservation.acompanhantes : [],
-    detalhamentoDiarias: Array.isArray(reservation.detalhamentoDiarias) ? reservation.detalhamentoDiarias : [],
+    acompanhantes: (Array.isArray(reservation.acompanhantes) ? reservation.acompanhantes : []).map(a => ({
+      nomeCompleto: a.nomeCompleto || (a as any).nome || '',
+      documento: a.documento || '',
+      parentesco: a.parentesco || '',
+      faixaEtaria: a.faixaEtaria || 'adulto'
+    })),
+    detalhamentoDiarias: (Array.isArray(reservation.detalhamentoDiarias) ? reservation.detalhamentoDiarias : []).map(d => ({
+      data: d.data,
+      dataFmt: d.dataFmt || formatarDataBR(d.data),
+      valor: Number(d.valor || 0),
+      isSpecialPrice: Boolean(d.isSpecialPrice),
+      descricao: d.descricao ? String(d.descricao).trim() : ''
+    })),
     status: reservation.status || 'confirmada',
     atualizadoEm: serverTimestamp()
-  };
+  });
 
   if (!reservation.id) {
     payload.criadoEm = serverTimestamp();
@@ -949,6 +1042,90 @@ export function generateRequestCode(): string {
 }
 
 /**
+ * Normalizes and deeply sanitizes a public reservation request object prior to persisting in Firestore.
+ * Ensures:
+ * - No property or array item property has value `undefined`.
+ * - String fields are trimmed strings.
+ * - Numerical fields (prices, counts) remain numbers.
+ * - Boolean fields remain booleans.
+ * - Arrays (veiculos, acompanhantes, detalhamentoDiarias) are normalized item-by-item without undefined attributes.
+ * - If possuiVeiculo is false, veiculos is an empty array.
+ * - Missing optional strings default to clean empty strings or are safely omitted.
+ */
+export function normalizeReservationRequest(
+  request: Partial<TemporaryReservationRequest>,
+  codigo: string
+): Record<string, any> {
+  const phone = String(request.whatsapp || request.telefone || '').trim();
+
+  // Normalize vehicles: only keep vehicles with some identity and ensure all props are defined strings
+  const cleanVeiculos = (request.possuiVeiculo && Array.isArray(request.veiculos))
+    ? request.veiculos
+        .filter(v => v && (String(v.placa || '').trim() || String(v.modelo || '').trim()))
+        .map(v => ({
+          tipo: String(v.tipo || 'Carro').trim(),
+          marca: String(v.marca || '').trim(),
+          modelo: String(v.modelo || '').trim(),
+          cor: String(v.cor || '').trim(),
+          placa: String(v.placa || '').trim().toUpperCase()
+        }))
+    : [];
+
+  // Normalize companions: only keep companions with a name and ensure all props are defined strings
+  const cleanAcompanhantes = Array.isArray(request.acompanhantes)
+    ? request.acompanhantes
+        .filter(a => a && String(a.nomeCompleto || (a as any).nome || '').trim())
+        .map(a => ({
+          nomeCompleto: String(a.nomeCompleto || (a as any).nome || '').trim(),
+          documento: String(a.documento || '').trim(),
+          parentesco: String(a.parentesco || '').trim(),
+          faixaEtaria: (a.faixaEtaria === 'crianca' ? 'crianca' : 'adulto') as 'adulto' | 'crianca'
+        }))
+    : [];
+
+  // Normalize daily rate breakdown: ensure numbers are numbers, boolean is boolean, string is string
+  const cleanDiarias = Array.isArray(request.detalhamentoDiarias)
+    ? request.detalhamentoDiarias.map(d => ({
+        data: String(d.data || ''),
+        dataFmt: String(d.dataFmt || (d.data ? formatarDataBR(d.data) : '')),
+        valor: Number(d.valor || 0),
+        isSpecialPrice: Boolean(d.isSpecialPrice),
+        descricao: String(d.descricao || '')
+      }))
+    : [];
+
+  const rawPayload: Record<string, any> = {
+    imovelId: String(request.imovelId || '').trim(),
+    imovelCodigo: String(request.imovelCodigo || '').trim(),
+    imovelTitulo: String(request.imovelTitulo || 'Imóvel de Temporada').trim(),
+    imovelEndereco: String(request.imovelEndereco || '').trim(),
+    nomeCliente: String(request.nomeCliente || '').trim(),
+    hospedeCpf: String(request.hospedeCpf || '').trim(),
+    telefone: phone,
+    whatsapp: phone,
+    email: String(request.email || '').trim(),
+    dataEntrada: String(request.dataEntrada || '').trim(),
+    dataSaida: String(request.dataSaida || '').trim(),
+    quantidadeDiarias: Math.max(0, Number(request.quantidadeDiarias || 0)),
+    quantidadeHospedes: Math.max(1, Number(request.quantidadeHospedes || 1)),
+    valorDiaria: Math.max(0, Number(request.valorDiaria || 0)),
+    taxaLimpeza: Math.max(0, Number(request.taxaLimpeza || 0)),
+    valorTotalEstimado: Math.max(0, Number(request.valorTotalEstimado || 0)),
+    possuiVeiculo: Boolean(request.possuiVeiculo && cleanVeiculos.length > 0),
+    veiculos: cleanVeiculos,
+    acompanhantes: cleanAcompanhantes,
+    detalhamentoDiarias: cleanDiarias,
+    observacoes: String(request.observacoes || '').trim(),
+    codigoSolicitacao: codigo,
+    status: 'solicitacao_recebida',
+    origem: 'site_publico',
+    criadoEm: serverTimestamp()
+  };
+
+  return sanitizeFirestorePayload(rawPayload);
+}
+
+/**
  * Submits a public reservation request to Firestore and checks availability.
  */
 export async function submitReservationRequest(
@@ -967,48 +1144,45 @@ export async function submitReservationRequest(
   }
 
   const codigo = generateRequestCode();
-  const cleanedPayload: any = {
-    imovelId: String(request.imovelId),
-    imovelCodigo: String(request.imovelCodigo || ''),
-    imovelTitulo: String(request.imovelTitulo || 'Imóvel de Temporada'),
-    imovelEndereco: String(request.imovelEndereco || ''),
-    nomeCliente: request.nomeCliente.trim(),
-    hospedeCpf: String(request.hospedeCpf || '').trim(),
-    telefone: phone,
-    whatsapp: phone,
-    email: (request.email || '').trim(),
-    dataEntrada: String(request.dataEntrada),
-    dataSaida: String(request.dataSaida),
-    quantidadeDiarias: Number(request.quantidadeDiarias || 0),
-    quantidadeHospedes: Number(request.quantidadeHospedes || 1),
-    valorDiaria: Number(request.valorDiaria || 0),
-    taxaLimpeza: Number(request.taxaLimpeza || 0),
-    valorTotalEstimado: Number(request.valorTotalEstimado || 0),
-    possuiVeiculo: Boolean(request.possuiVeiculo),
-    veiculos: Array.isArray(request.veiculos) ? request.veiculos : [],
-    acompanhantes: Array.isArray(request.acompanhantes) ? request.acompanhantes : [],
-    detalhamentoDiarias: Array.isArray(request.detalhamentoDiarias) ? request.detalhamentoDiarias : [],
-    observacoes: String(request.observacoes || '').trim(),
-    codigoSolicitacao: codigo,
-    status: 'solicitacao_recebida',
-    origem: 'site_publico',
-    criadoEm: serverTimestamp()
-  };
+  const normalizedPayload = normalizeReservationRequest(request, codigo);
+
+  // Diagnostic assertion: check for any remaining undefined values
+  const undefinedPaths = findUndefinedPaths(normalizedPayload);
+  if (undefinedPaths.length > 0) {
+    console.error('[temporaryRentalService] ERRO CRÍTICO: Campo(s) undefined detectado(s) no payload de reserva:', undefinedPaths);
+    throw new Error(`Dados inválidos para envio ao Firestore: campo undefined em ${undefinedPaths.join(', ')}.`);
+  }
+
+  // Safe diagnostics log (masking sensitive personal data like full CPF)
+  console.info('[temporaryRentalService] Gravando solicitação de reserva normalizada:', {
+    codigo,
+    imovelId: normalizedPayload.imovelId,
+    imovelCodigo: normalizedPayload.imovelCodigo,
+    dataEntrada: normalizedPayload.dataEntrada,
+    dataSaida: normalizedPayload.dataSaida,
+    quantidadeDiarias: normalizedPayload.quantidadeDiarias,
+    totalHospedes: normalizedPayload.quantidadeHospedes,
+    veiculosCount: normalizedPayload.veiculos.length,
+    acompanhantesCount: normalizedPayload.acompanhantes.length,
+    detalhamentoCount: normalizedPayload.detalhamentoDiarias.length,
+    possuiVeiculo: normalizedPayload.possuiVeiculo,
+    hasCpf: Boolean(normalizedPayload.hospedeCpf)
+  });
 
   try {
-    const docRef = await addDoc(collection(db, 'solicitacoesReservaTemporada'), cleanedPayload);
-    console.info('[temporaryRentalService] Solicitação de reserva salva com sucesso:', {
+    const docRef = await addDoc(collection(db, 'solicitacoesReservaTemporada'), normalizedPayload);
+    console.info('[temporaryRentalService] Solicitação gravada com sucesso no Firestore:', {
       id: docRef.id,
       codigo
     });
     return { id: docRef.id, codigo };
   } catch (err: any) {
-    console.error('[temporaryRentalService] Erro ao gravar solicitação de reserva:', {
+    console.error('[temporaryRentalService] Erro ao gravar solicitação de reserva no Firestore:', {
       collection: 'solicitacoesReservaTemporada',
       operation: 'addDoc',
       errorCode: err?.code,
       errorMessage: err?.message,
-      payload: cleanedPayload
+      undefinedPaths: findUndefinedPaths(normalizedPayload)
     });
     if (err?.code === 'permission-denied') {
       throw new Error('Permissão negada ao salvar sua solicitação no sistema. Por favor, envie diretamente pelo WhatsApp para nossa equipe.');
