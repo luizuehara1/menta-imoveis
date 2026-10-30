@@ -36,8 +36,12 @@ service cloud.firestore {
       return isMasterAdmin() || (
         isSignedIn() && (
           (request.auth.token.email != null && (
+            (exists(/databases/$(database)/documents/admins/$(request.auth.token.email.lower())) &&
+             get(/databases/$(database)/documents/admins/$(request.auth.token.email.lower())).data.ativo != false) ||
             (exists(/databases/$(database)/documents/admins/$(request.auth.token.email)) &&
              get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.ativo != false) ||
+            (exists(/databases/$(database)/documents/administradores/$(request.auth.token.email.lower())) &&
+             get(/databases/$(database)/documents/administradores/$(request.auth.token.email.lower())).data.ativo != false) ||
             (exists(/databases/$(database)/documents/administradores/$(request.auth.token.email)) &&
              get(/databases/$(database)/documents/administradores/$(request.auth.token.email)).data.ativo != false)
           )) ||
@@ -111,7 +115,11 @@ service cloud.firestore {
     }
 
     match /solicitacoesReservaTemporada/{docId} {
-      allow create: if true;
+      allow create: if request.resource.data.status in ['pendente', 'solicitacao_recebida'] &&
+                       request.resource.data.nomeCliente is string &&
+                       request.resource.data.imovelId is string &&
+                       request.resource.data.dataEntrada is string &&
+                       request.resource.data.dataSaida is string;
       allow read, update, delete: if isAdminAtivo();
     }
 

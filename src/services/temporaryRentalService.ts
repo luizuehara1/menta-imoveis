@@ -10,6 +10,7 @@ import {
   query, 
   where, 
   orderBy, 
+  onSnapshot,
   serverTimestamp,
   runTransaction
 } from 'firebase/firestore';
@@ -335,6 +336,263 @@ export async function deleteSeasonalPrice(priceId: string): Promise<void> {
 }
 
 /**
+ * Groups a list of unique YYYY-MM-DD date strings into contiguous ranges [{ start, end }].
+ */
+export function groupContiguousDates(dates: string[]): Array<{ start: string; end: string }> {
+  if (!dates || dates.length === 0) return [];
+  const sorted = Array.from(new Set(dates)).sort();
+  const ranges: Array<{ start: string; end: string }> = [];
+
+  let rangeStart = sorted[0];
+  let prevDate = sorted[0];
+
+  for (let i = 1; i < sorted.length; i++) {
+    const curDate = sorted[i];
+    const expectedNext = addDays(prevDate, 1);
+    if (curDate === expectedNext) {
+      prevDate = curDate;
+    } else {
+      ranges.push({ start: rangeStart, end: prevDate });
+      rangeStart = curDate;
+      prevDate = curDate;
+    }
+  }
+  ranges.push({ start: rangeStart, end: prevDate });
+  return ranges;
+}
+
+/**
+ * Saves or updates a daily rate for a single specific date.
+ */
+export async function saveSingleDatePrice(
+  propertyId: string,
+  date: string,
+  valorDiaria: number,
+  descricao?: string,
+  userUid?: string
+): Promise<string> {
+  if (!propertyId || !date) throw new Error('Imóvel e data são obrigatórios.');
+  const val = Number(valorDiaria);
+  if (val <= 0) throw new Error('Informe um valor de diária válido e maior que zero.');
+
+  const allRules = await fetchSeasonalPrices(propertyId);
+  const exactRule = allRules.find(r => r.imovelId === propertyId && r.dataInicio === date && r.dataFim === date);
+
+  if (exactRule) {
+    await updateDoc(doc(db, 'precosTemporada', exactRule.id), {
+      valorDiaria: val,
+      descricao: (descricao || 'Tarifa Personalizada').trim(),
+      atualizadoEm: serverTimestamp()
+    });
+    return exactRule.id;
+  } else {
+    const docRef = await addDoc(collection(db, 'precosTemporada'), {
+      imovelId: propertyId,
+      dataInicio: date,
+      dataFim: date,
+      valorDiaria: val,
+      descricao: (descricao || 'Tarifa Personalizada').trim(),
+      criadoEm: serverTimestamp(),
+      atualizadoEm: serverTimestamp(),
+      criadoPor: userUid || null
+    });
+    return docRef.id;
+  }
+}
+
+/**
+ * Removes custom price on a specific date, reverting to standard rate or splitting existing range.
+ */
+export async function removeSingleDatePrice(
+  propertyId: string,
+  date: string
+): Promise<void> {
+  if (!propertyId || !date) return;
+  const allRules = await fetchSeasonalPrices(propertyId);
+  
+  const matching = allRules.filter(r => r.imovelId === propertyId && r.dataInicio <= date && date <= r.dataFim);
+  for (const rule of matching) {
+    if (rule.dataInicio === date && rule.dataFim === date) {
+      await deleteDoc(doc(db, 'precosTemporada', rule.id));
+    } else {
+      await deleteDoc(doc(db, 'precosTemporada', rule.id));
+      if (rule.dataInicio < date) {
+        const leftEnd = addDays(date, -1);
+        if (rule.dataInicio <= leftEnd) {
+          await addDoc(collection(db, 'precosTemporada'), {
+            imovelId: propertyId,
+            dataInicio: rule.dataInicio,
+            dataFim: leftEnd,
+            valorDiaria: rule.valorDiaria,
+            descricao: rule.descricao,
+            criadoEm: rule.criadoEm || serverTimestamp(),
+            atualizadoEm: serverTimestamp()
+          });
+        }
+      }
+      if (date < rule.dataFim) {
+        const rightStart = addDays(date, 1);
+        if (rightStart <= rule.dataFim) {
+          await addDoc(collection(db, 'precosTemporada'), {
+            imovelId: propertyId,
+            dataInicio: rightStart,
+            dataFim: rule.dataFim,
+            valorDiaria: rule.valorDiaria,
+            descricao: rule.descricao,
+            criadoEm: rule.criadoEm || serverTimestamp(),
+            atualizadoEm: serverTimestamp()
+          });
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Saves bulk seasonal prices for arbitrary selected dates.
+ * Groups contiguous dates into ranges and preserves non-selected dates cleanly.
+ */
+export async function saveBulkSeasonalPrices(
+  propertyId: string,
+  dates: string[],
+  valorDiaria: number,
+  descricao?: string,
+  userUid?: string
+): Promise<number> {
+  if (!propertyId) throw new Error('Selecione um imóvel.');
+  if (!dates || dates.length === 0) throw new Error('Nenhuma data selecionada para alteração em massa.');
+  const val = Number(valorDiaria);
+  if (val <= 0) throw new Error('Informe um valor de diária válido e maior que zero.');
+
+  const dateSet = new Set(dates);
+
+  // Check if any date has a confirmed reservation
+  const allReservations = await fetchReservations(propertyId);
+  const activeRes = allReservations.filter(r => r.status !== 'cancelada');
+  for (const d of dates) {
+    const conflict = activeRes.find(r => r.dataEntrada <= d && d < r.dataSaida);
+    if (conflict) {
+      throw new Error(`A data ${formatarDataBR(d)} possui uma reserva confirmada (${conflict.codigoReserva}) e não pode ter o valor alterado.`);
+    }
+  }
+
+  // Clean or split overlapping rules for these dates
+  const existingRules = await fetchSeasonalPrices(propertyId);
+  for (const rule of existingRules) {
+    const ruleNights = calculateNights(rule.dataInicio, rule.dataFim) + 1;
+    let allInSet = true;
+    let anyInSet = false;
+    for (let i = 0; i < ruleNights; i++) {
+      const cur = addDays(rule.dataInicio, i);
+      if (dateSet.has(cur)) {
+        anyInSet = true;
+      } else {
+        allInSet = false;
+      }
+    }
+
+    if (allInSet) {
+      await deleteDoc(doc(db, 'precosTemporada', rule.id));
+    } else if (anyInSet) {
+      await deleteDoc(doc(db, 'precosTemporada', rule.id));
+      const preservedDays: string[] = [];
+      for (let i = 0; i < ruleNights; i++) {
+        const cur = addDays(rule.dataInicio, i);
+        if (!dateSet.has(cur)) {
+          preservedDays.push(cur);
+        }
+      }
+      const preservedRanges = groupContiguousDates(preservedDays);
+      for (const pr of preservedRanges) {
+        await addDoc(collection(db, 'precosTemporada'), {
+          imovelId: propertyId,
+          dataInicio: pr.start,
+          dataFim: pr.end,
+          valorDiaria: rule.valorDiaria,
+          descricao: rule.descricao,
+          criadoEm: rule.criadoEm || serverTimestamp(),
+          atualizadoEm: serverTimestamp()
+        });
+      }
+    }
+  }
+
+  // Persist newly grouped ranges
+  const ranges = groupContiguousDates(dates);
+  const desc = (descricao || 'Tarifa em Massa').trim();
+
+  for (const r of ranges) {
+    await addDoc(collection(db, 'precosTemporada'), {
+      imovelId: propertyId,
+      dataInicio: r.start,
+      dataFim: r.end,
+      valorDiaria: val,
+      descricao: desc,
+      criadoEm: serverTimestamp(),
+      atualizadoEm: serverTimestamp(),
+      criadoPor: userUid || null
+    });
+  }
+
+  return dates.length;
+}
+
+/**
+ * Removes custom pricing rules on specified dates, reverting them to property standard rate.
+ */
+export async function removeBulkSeasonalPrices(
+  propertyId: string,
+  dates: string[]
+): Promise<number> {
+  if (!propertyId || !dates || dates.length === 0) return 0;
+  const dateSet = new Set(dates);
+  const existingRules = await fetchSeasonalPrices(propertyId);
+
+  for (const rule of existingRules) {
+    const ruleNights = calculateNights(rule.dataInicio, rule.dataFim) + 1;
+    let allInSet = true;
+    let anyInSet = false;
+    for (let i = 0; i < ruleNights; i++) {
+      const cur = addDays(rule.dataInicio, i);
+      if (dateSet.has(cur)) {
+        anyInSet = true;
+      } else {
+        allInSet = false;
+      }
+    }
+
+    if (allInSet) {
+      await deleteDoc(doc(db, 'precosTemporada', rule.id));
+    } else if (anyInSet) {
+      await deleteDoc(doc(db, 'precosTemporada', rule.id));
+      const preservedDays: string[] = [];
+      for (let i = 0; i < ruleNights; i++) {
+        const cur = addDays(rule.dataInicio, i);
+        if (!dateSet.has(cur)) {
+          preservedDays.push(cur);
+        }
+      }
+      const preservedRanges = groupContiguousDates(preservedDays);
+      for (const pr of preservedRanges) {
+        await addDoc(collection(db, 'precosTemporada'), {
+          imovelId: propertyId,
+          dataInicio: pr.start,
+          dataFim: pr.end,
+          valorDiaria: rule.valorDiaria,
+          descricao: rule.descricao,
+          criadoEm: rule.criadoEm || serverTimestamp(),
+          atualizadoEm: serverTimestamp()
+        });
+      }
+    }
+  }
+
+  return dates.length;
+}
+
+
+
+/**
  * Calculates day-by-day reservation breakdown applying deterministic pricing priority:
  * 1. Matching seasonal price rule for the specific date.
  *    If multiple rules match the same date:
@@ -383,12 +641,7 @@ export function calculateReservationBreakdown(
   const propertyRules = (seasonalPrices || []).filter(p => !property?.id || p.imovelId === property.id);
 
   for (let i = 0; i < nights; i++) {
-    const dayDate = parseDateToMidnight(checkIn) || new Date();
-    dayDate.setDate(dayDate.getDate() + i);
-    const y = dayDate.getFullYear();
-    const m = String(dayDate.getMonth() + 1).padStart(2, '0');
-    const d = String(dayDate.getDate()).padStart(2, '0');
-    const dayKey = `${y}-${m}-${d}`;
+    const dayKey = addDays(checkIn, i);
 
     // Find all matching rules
     const matchingRules = propertyRules.filter(r => 
@@ -1130,6 +1383,7 @@ export function normalizeReservationRequest(
     imovelCodigo: String(request.imovelCodigo || '').trim(),
     imovelTitulo: String(request.imovelTitulo || 'Imóvel de Temporada').trim(),
     imovelEndereco: String(request.imovelEndereco || '').trim(),
+    imovelLink: String((request as any).imovelLink || '').trim(),
     nomeCliente: String(request.nomeCliente || '').trim(),
     hospedeCpf: String(request.hospedeCpf || '').trim(),
     telefone: phone,
@@ -1149,6 +1403,7 @@ export function normalizeReservationRequest(
     detalhamentoDiarias: cleanDiarias,
     observacoes: String(request.observacoes || '').trim(),
     codigoSolicitacao: codigo,
+    codigo: codigo,
     status: (request.status as any) || 'pendente',
     origem: 'site_publico',
     criadoEm: serverTimestamp()
@@ -1246,6 +1501,40 @@ export async function fetchReservationRequests(imovelId?: string): Promise<Tempo
       console.error('[temporaryRentalService] Erro ao buscar solicitações de reserva:', error);
     }
     return [];
+  }
+}
+
+/**
+ * Subscribes to real-time updates for reservation requests from Firestore.
+ * Automatically triggers callback whenever any user creates, approves, or modifies a request.
+ */
+export function subscribeReservationRequests(
+  callback: (requests: TemporaryReservationRequest[]) => void,
+  onError?: (error: any) => void,
+  imovelId?: string
+): () => void {
+  try {
+    const colRef = collection(db, 'solicitacoesReservaTemporada');
+    const unsubscribe = onSnapshot(colRef, (snap) => {
+      let list = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as TemporaryReservationRequest[];
+      if (imovelId) {
+        list = list.filter(r => r.imovelId === imovelId);
+      }
+      list.sort((a, b) => {
+        const timeA = a.criadoEm?.seconds || 0;
+        const timeB = b.criadoEm?.seconds || 0;
+        return timeB - timeA;
+      });
+      callback(list);
+    }, (err) => {
+      console.error('[temporaryRentalService] Erro no listener em tempo real de solicitações:', err);
+      if (onError) onError(err);
+    });
+    return unsubscribe;
+  } catch (err) {
+    console.error('[temporaryRentalService] Erro ao iniciar listener de solicitações:', err);
+    if (onError) onError(err);
+    return () => {};
   }
 }
 
@@ -1428,6 +1717,10 @@ export function buildAdminConfirmationWhatsAppMessage(
     `Taxa de limpeza: ${formatCurrency(taxaLimpeza)}`,
     ...(outrasTaxas > 0 ? [`Outras taxas: ${formatCurrency(outrasTaxas)}`] : []),
     `Total da reserva: ${formatCurrency(total)}`,
+    ...((solicitacao as any).imovelLink || solicitacao.imovelId ? [
+      '',
+      `Link do imóvel: ${(solicitacao as any).imovelLink || (typeof window !== 'undefined' ? `${window.location.origin}/imovel/${solicitacao.imovelId}` : `https://mentaimoveis.com/imovel/${solicitacao.imovelId}`)}`
+    ] : []),
     '',
     'Em breve, nossa equipe poderá entrar em contato para alinhar os detalhes da hospedagem.',
     '',

@@ -1861,17 +1861,63 @@ export function getTituloImovel(imovel: any): string {
 export function formatarDataBR(data: any): string {
   if (!data) return "Não informado";
 
+  // 1. String inputs
+  if (typeof data === 'string') {
+    const trimmed = data.trim();
+    if (!trimmed) return "Não informado";
+
+    // Format YYYY-MM-DD (e.g. "2026-11-01" or "2026-11-01T...")
+    // Pure string parse: prevents UTC midnight timezone shift (e.g. 01/11 becoming 31/10 in UTC-3)
+    if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+      const datePart = trimmed.split('T')[0];
+      const parts = datePart.split('-');
+      if (parts.length === 3) {
+        const [year, month, day] = parts;
+        return `${day.padStart(2, '0')}/${month.padStart(2, '0')}/${year}`;
+      }
+    }
+
+    // Already in DD/MM/YYYY format
+    if (/^\d{2}\/\d{2}\/\d{4}/.test(trimmed)) {
+      return trimmed.split(' ')[0];
+    }
+  }
+
+  // 2. Firestore Timestamp with toDate()
   if (data?.toDate && typeof data.toDate === 'function') {
-    return data.toDate().toLocaleDateString("pt-BR");
+    const d = data.toDate();
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+  }
+
+  // 3. Firestore Timestamp raw object { seconds, nanoseconds }
+  if (typeof data === 'object' && typeof data?.seconds === 'number') {
+    const d = new Date(data.seconds * 1000);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+  }
+
+  // 4. JavaScript Date object
+  if (data instanceof Date && !isNaN(data.getTime())) {
+    const day = String(data.getDate()).padStart(2, '0');
+    const month = String(data.getMonth() + 1).padStart(2, '0');
+    const year = data.getFullYear();
+    return `${day}/${month}/${year}`;
   }
 
   const date = new Date(data);
-
-  if (Number.isNaN(date.getTime())) {
-    return String(data);
+  if (!Number.isNaN(date.getTime())) {
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
   }
 
-  return date.toLocaleDateString("pt-BR");
+  return String(data);
 }
 
 export function getOutrasCondicoes(dados: any = {}): string {

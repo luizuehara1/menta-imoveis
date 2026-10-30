@@ -62,6 +62,7 @@ import {
   fetchPayments, 
   fetchReceipts,
   fetchReservationRequests,
+  subscribeReservationRequests,
   approveReservationRequest,
   refuseReservationRequest,
   cancelReservationRequest,
@@ -271,11 +272,21 @@ export default function TemporaryRentals() {
   };
 
   useEffect(() => {
+    let unsubscribeRequests: (() => void) | undefined;
     if (user && isAdmin) {
       loadData();
+      unsubscribeRequests = subscribeReservationRequests((liveRequests) => {
+        setRequests(liveRequests);
+      }, (err) => {
+        console.warn('[TemporaryRentals] Aviso no listener de solicitações:', err);
+      });
     } else {
       setLoading(false);
     }
+
+    return () => {
+      if (unsubscribeRequests) unsubscribeRequests();
+    };
   }, [user, isAdmin, searchParams]);
 
   // Selected Property Object
@@ -860,7 +871,7 @@ export default function TemporaryRentals() {
           { id: 'reservas', label: `Reservas (${reservations.length})`, icon: Clock },
           { 
             id: 'solicitacoes', 
-            label: `Solicitações (${requests.filter(r => r.status === 'solicitacao_recebida' || !r.status).length})`, 
+            label: `Solicitações (${requests.filter(r => r.status === 'pendente' || r.status === 'solicitacao_recebida' || !r.status).length})`, 
             icon: MessageSquare 
           },
           { id: 'precos', label: `Preços por Período (${seasonalPrices.length})`, icon: Tag },
@@ -1057,6 +1068,7 @@ export default function TemporaryRentals() {
             setIsReservationDetailsModalOpen(true);
           }}
           onRemoveBlock={handleRemoveBlock}
+          onReloadData={loadData}
         />
       )}
 
@@ -1283,7 +1295,7 @@ export default function TemporaryRentals() {
                   const matchName = req.nomeCliente?.toLowerCase().includes(term);
                   const matchProp = req.imovelTitulo?.toLowerCase().includes(term) || req.imovelCodigo?.toLowerCase().includes(term);
                   const matchPhone = (req.whatsapp || req.telefone || '').replace(/\D/g, '').includes(term.replace(/\D/g, ''));
-                  const matchCode = req.codigoSolicitacao?.toLowerCase().includes(term);
+                  const matchCode = (req.codigoSolicitacao || (req as any).codigo || '').toLowerCase().includes(term);
                   if (!matchName && !matchProp && !matchPhone && !matchCode) return false;
                 }
                 return true;
@@ -1356,7 +1368,7 @@ export default function TemporaryRentals() {
                         <tr key={req.id} className="hover:bg-gray-50/80 transition-colors">
                           <td className="py-4 px-4">
                             <span className="font-mono font-bold text-primary-black text-xs block">
-                              {req.codigoSolicitacao || req.id?.slice(0, 8)}
+                              {req.codigoSolicitacao || (req as any).codigo || req.id?.slice(0, 8)}
                             </span>
                             <span className="text-gray-400 text-[10px] block">
                               {req.criadoEm?.seconds ? new Date(req.criadoEm.seconds * 1000).toLocaleString('pt-BR') : 'Hoje'}
@@ -1373,8 +1385,8 @@ export default function TemporaryRentals() {
                           </td>
 
                           <td className="py-4 px-4">
-                            <p className="font-bold text-primary-black">{req.nomeCliente}</p>
-                            <p className="text-gray-600 text-[11px] font-medium">{req.whatsapp || req.telefone}</p>
+                            <p className="font-bold text-primary-black">{req.nomeCliente || 'Solicitante'}</p>
+                            <p className="text-gray-600 text-[11px] font-medium">{req.whatsapp || req.telefone || 'Sem telefone'}</p>
                             {req.email && <p className="text-gray-400 text-[10px] truncate max-w-[140px]">{req.email}</p>}
                           </td>
 
@@ -1383,7 +1395,7 @@ export default function TemporaryRentals() {
                               {formatarDataBR(req.dataEntrada)} a {formatarDataBR(req.dataSaida)}
                             </span>
                             <span className="text-[10px] text-gray-500 font-medium">
-                              {req.quantidadeDiarias} diárias • {req.quantidadeHospedes} hóspede(s)
+                              {req.quantidadeDiarias ?? 0} diárias • {req.quantidadeHospedes ?? 1} hóspede(s)
                               {req.acompanhantes && req.acompanhantes.length > 0 && ` (+${req.acompanhantes.length} acomp.)`}
                             </span>
                           </td>
@@ -2914,7 +2926,7 @@ export default function TemporaryRentals() {
                 </div>
                 <div>
                   <h3 className="text-base font-display font-bold text-primary-black">
-                    Solicitação #{selectedRequest.codigoSolicitacao || selectedRequest.id.slice(0, 8)}
+                    Solicitação #{selectedRequest.codigoSolicitacao || (selectedRequest as any).codigo || selectedRequest.id.slice(0, 8)}
                   </h3>
                   <p className="text-xs text-gray-400">
                     Recebida em {selectedRequest.criadoEm?.seconds ? new Date(selectedRequest.criadoEm.seconds * 1000).toLocaleString('pt-BR') : 'Hoje'}
@@ -2949,9 +2961,21 @@ export default function TemporaryRentals() {
               {/* Property Info */}
               <div className="space-y-1">
                 <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block">Imóvel Solicitado</span>
-                <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200">
-                  <p className="font-bold text-sm text-primary-black">{selectedRequest.imovelTitulo}</p>
-                  <p className="text-xs text-gray-500">Código: {selectedRequest.imovelCodigo} • {selectedRequest.imovelEndereco || 'Balneário Camboriú/SC'}</p>
+                <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <p className="font-bold text-sm text-primary-black">{selectedRequest.imovelTitulo}</p>
+                    <p className="text-xs text-gray-500">Código: {selectedRequest.imovelCodigo} • {selectedRequest.imovelEndereco || 'Balneário Camboriú/SC'}</p>
+                  </div>
+                  {((selectedRequest as any).imovelLink || selectedRequest.imovelId) && (
+                    <a
+                      href={(selectedRequest as any).imovelLink || `/imovel/${selectedRequest.imovelId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-gray-200 text-gold-750 hover:bg-amber-50 font-bold text-xs transition-colors shrink-0 shadow-xs"
+                    >
+                      <ExternalLink size={13} /> Ver página pública
+                    </a>
+                  )}
                 </div>
               </div>
 
@@ -2960,8 +2984,9 @@ export default function TemporaryRentals() {
                 <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block">Dados do Solicitante</span>
                 <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 space-y-2">
                   <p className="font-bold text-sm text-primary-black">{selectedRequest.nomeCliente}</p>
-                  <div className="grid grid-cols-2 gap-2 text-gray-600">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-gray-600">
                     <p>WhatsApp: <strong>{selectedRequest.whatsapp || selectedRequest.telefone}</strong></p>
+                    <p>CPF: <strong>{selectedRequest.hospedeCpf || 'Não informado'}</strong></p>
                     <p>E-mail: <strong>{selectedRequest.email || 'Não informado'}</strong></p>
                   </div>
                   {selectedRequest.observacoes && (

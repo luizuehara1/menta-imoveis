@@ -29,6 +29,7 @@ import {
   fetchPublicOccupiedDates, 
   checkPublicAvailability, 
   calculateNights, 
+  addDays,
   fetchSeasonalPrices,
   calculateReservationBreakdown,
   submitReservationRequest, 
@@ -180,9 +181,7 @@ export default function TemporaryBookingWidget({
         let hasConflict = false;
 
         for (let i = 0; i < nights; i++) {
-          const d = new Date(checkIn + 'T00:00:00');
-          d.setDate(d.getDate() + i);
-          const curKey = d.toISOString().split('T')[0];
+          const curKey = addDays(checkIn, i);
           if (isNightOccupied(curKey)) {
             hasConflict = true;
             break;
@@ -326,6 +325,7 @@ export default function TemporaryBookingWidget({
         imovelCodigo: property.code || property.codigo || '',
         imovelTitulo: property.title || property.titulo || 'Imóvel de Temporada',
         imovelEndereco: `${property.neighborhood || ''}, ${property.city || 'Balneário Camboriú'} - ${property.state || 'SC'}`,
+        imovelLink: typeof window !== 'undefined' ? window.location.href : '',
         nomeCliente: nomeCliente.trim(),
         hospedeCpf: cpfCliente.trim(),
         telefone: cleanTel,
