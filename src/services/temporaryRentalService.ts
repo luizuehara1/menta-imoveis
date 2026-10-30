@@ -240,8 +240,12 @@ export async function fetchReservations(imovelId?: string): Promise<TemporaryRes
     // Sort by dataEntrada descending
     list.sort((a, b) => (b.dataEntrada || '').localeCompare(a.dataEntrada || ''));
     return list;
-  } catch (error) {
-    console.error('[temporaryRentalService] Erro ao buscar reservas:', error);
+  } catch (error: any) {
+    if (error?.code === 'permission-denied') {
+      console.warn('[temporaryRentalService] Permissão insuficiente para listar reservas administrativas (usuário precisa estar logado como admin).');
+    } else {
+      console.error('[temporaryRentalService] Erro ao buscar reservas:', error);
+    }
     return [];
   }
 }
@@ -259,8 +263,12 @@ export async function fetchBlocks(imovelId?: string): Promise<TemporaryBlock[]> 
     }
     list.sort((a, b) => (a.dataInicio || '').localeCompare(b.dataInicio || ''));
     return list;
-  } catch (error) {
-    console.error('[temporaryRentalService] Erro ao buscar bloqueios:', error);
+  } catch (error: any) {
+    if (error?.code === 'permission-denied') {
+      console.warn('[temporaryRentalService] Permissão insuficiente para listar bloqueios.');
+    } else {
+      console.error('[temporaryRentalService] Erro ao buscar bloqueios:', error);
+    }
     return [];
   }
 }
@@ -278,8 +286,12 @@ export async function fetchSeasonalPrices(imovelId?: string): Promise<TemporaryS
     }
     list.sort((a, b) => (a.dataInicio || '').localeCompare(b.dataInicio || ''));
     return list;
-  } catch (error) {
-    console.error('[temporaryRentalService] Erro ao buscar preços sazonais:', error);
+  } catch (error: any) {
+    if (error?.code === 'permission-denied') {
+      console.warn('[temporaryRentalService] Permissão insuficiente para listar preços sazonais.');
+    } else {
+      console.error('[temporaryRentalService] Erro ao buscar preços sazonais:', error);
+    }
     return [];
   }
 }
@@ -347,6 +359,7 @@ export function calculateReservationBreakdown(
   desconto: number;
   valorTotal: number;
   averageDailyRate: number;
+  hasZeroRate: boolean;
 } {
   const nights = calculateNights(checkIn, checkOut);
   const defaultDailyRate = Number(property?.valorDiaria || property?.priceDiaria || property?.precoDiaria || property?.diaria || 0);
@@ -361,7 +374,8 @@ export function calculateReservationBreakdown(
       outrasTaxas: 0,
       desconto: 0,
       valorTotal: 0,
-      averageDailyRate: defaultDailyRate
+      averageDailyRate: defaultDailyRate,
+      hasZeroRate: false
     };
   }
 
@@ -421,6 +435,7 @@ export function calculateReservationBreakdown(
   const disc = Math.max(0, desconto);
   const valorTotal = Math.max(0, subtotalDiarias + cleanFee + other - disc);
   const averageDailyRate = nights > 0 ? subtotalDiarias / nights : defaultDailyRate;
+  const hasZeroRate = nights > 0 ? (dailyRates.some(d => d.valor <= 0) || (dailyRates.length === 0 && defaultDailyRate <= 0)) : false;
 
   return {
     nights,
@@ -430,7 +445,8 @@ export function calculateReservationBreakdown(
     outrasTaxas: other,
     desconto: disc,
     valorTotal,
-    averageDailyRate
+    averageDailyRate,
+    hasZeroRate
   };
 }
 
@@ -444,8 +460,12 @@ export async function fetchGuests(): Promise<TemporaryGuest[]> {
     const list = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as TemporaryGuest[];
     list.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
     return list;
-  } catch (error) {
-    console.error('[temporaryRentalService] Erro ao buscar hóspedes:', error);
+  } catch (error: any) {
+    if (error?.code === 'permission-denied') {
+      console.warn('[temporaryRentalService] Permissão insuficiente para listar hóspedes.');
+    } else {
+      console.error('[temporaryRentalService] Erro ao buscar hóspedes:', error);
+    }
     return [];
   }
 }
@@ -463,8 +483,12 @@ export async function fetchPayments(reservaId?: string): Promise<TemporaryPaymen
     }
     list.sort((a, b) => (b.dataPagamento || '').localeCompare(a.dataPagamento || ''));
     return list;
-  } catch (error) {
-    console.error('[temporaryRentalService] Erro ao buscar pagamentos:', error);
+  } catch (error: any) {
+    if (error?.code === 'permission-denied') {
+      console.warn('[temporaryRentalService] Permissão insuficiente para listar pagamentos.');
+    } else {
+      console.error('[temporaryRentalService] Erro ao buscar pagamentos:', error);
+    }
     return [];
   }
 }
@@ -482,8 +506,12 @@ export async function fetchReceipts(reservaId?: string): Promise<TemporaryReceip
     }
     list.sort((a, b) => (b.dataEmissao || '').localeCompare(a.dataEmissao || ''));
     return list;
-  } catch (error) {
-    console.error('[temporaryRentalService] Erro ao buscar recibos:', error);
+  } catch (error: any) {
+    if (error?.code === 'permission-denied') {
+      console.warn('[temporaryRentalService] Permissão insuficiente para listar recibos.');
+    } else {
+      console.error('[temporaryRentalService] Erro ao buscar recibos:', error);
+    }
     return [];
   }
 }
@@ -1036,9 +1064,12 @@ export async function checkPublicAvailability(
  * Generates unique reservation request code.
  */
 export function generateRequestCode(): string {
-  const year = new Date().getFullYear();
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
   const random = Math.floor(1000 + Math.random() * 9000);
-  return `SOL-${year}-${random}`;
+  return `TMP-${y}${m}${d}-${random}`;
 }
 
 /**
@@ -1208,8 +1239,12 @@ export async function fetchReservationRequests(imovelId?: string): Promise<Tempo
       return timeB - timeA;
     });
     return list;
-  } catch (error) {
-    console.error('[temporaryRentalService] Erro ao buscar solicitações de reserva:', error);
+  } catch (error: any) {
+    if (error?.code === 'permission-denied') {
+      console.warn('[temporaryRentalService] Permissão insuficiente para listar solicitações de reserva.');
+    } else {
+      console.error('[temporaryRentalService] Erro ao buscar solicitações de reserva:', error);
+    }
     return [];
   }
 }

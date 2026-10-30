@@ -48,19 +48,33 @@ export const TemporaryReceiptModal: React.FC<TemporaryReceiptModalProps> = ({ re
     }
   };
 
+  const isDemonstrativo = receipt.tipoDocumento === 'demonstrativo' || receipt.valorRecebido <= 0;
+  const isQuitado = !isDemonstrativo && receipt.saldoRestante <= 0;
+
   const handleShareWhatsApp = () => {
-    const text = `*RECIBO DE PAGAMENTO - MENTA NEGÓCIOS IMOBILIÁRIOS*\n` +
-      `Número: ${receipt.numeroRecibo}\n` +
-      `Data: ${formatarDataBR(receipt.dataEmissao)}\n\n` +
-      `Recebemos de: *${receipt.pagadorNome}*` + (receipt.pagadorCpf ? ` (CPF: ${receipt.pagadorCpf})` : '') + `\n` +
-      `A quantia de: *${formatCurrency(receipt.valorRecebido)}* (${receipt.valorPorExtenso})\n` +
-      `Referente a: ${receipt.descricao}\n` +
-      `Imóvel: ${receipt.imovelTitulo} (${receipt.imovelCodigo})\n` +
-      `Período: ${receipt.periodoHospedagem}\n` +
-      `Forma de Pagamento: ${receipt.formaPagamento}\n` +
-      `Valor Total da Reserva: ${formatCurrency(receipt.valorTotalReserva)}\n` +
-      `Saldo Restante: ${formatCurrency(receipt.saldoRestante)}\n\n` +
-      `Menta Negócios Imobiliários • Balneário Camboriú/SC`;
+    const text = isDemonstrativo
+      ? `*DEMONSTRATIVO DE VALORES - MENTA NEGÓCIOS IMOBILIÁRIOS*\n` +
+        `Reserva: ${receipt.codigoReserva}\n` +
+        `Data: ${formatarDataBR(receipt.dataEmissao)}\n\n` +
+        `Hóspede: *${receipt.pagadorNome}*` + (receipt.pagadorCpf ? ` (CPF: ${receipt.pagadorCpf})` : '') + `\n` +
+        `Imóvel: ${receipt.imovelTitulo} (${receipt.imovelCodigo})\n` +
+        `Período: ${receipt.periodoHospedagem} (${receipt.quantidadeDiarias} diárias)\n` +
+        `Valor Total: *${formatCurrency(receipt.valorTotalReserva)}*\n` +
+        `Status Financeiro: *Aguardando Pagamento*\n\n` +
+        `_Este documento é um demonstrativo prévio e não constitui comprovante de quitação._\n\n` +
+        `Menta Negócios Imobiliários • Balneário Camboriú/SC`
+      : `*RECIBO DE PAGAMENTO - MENTA NEGÓCIOS IMOBILIÁRIOS*\n` +
+        `Número: ${receipt.numeroRecibo}\n` +
+        `Data: ${formatarDataBR(receipt.dataEmissao)}\n\n` +
+        `Recebemos de: *${receipt.pagadorNome}*` + (receipt.pagadorCpf ? ` (CPF: ${receipt.pagadorCpf})` : '') + `\n` +
+        `A quantia de: *${formatCurrency(receipt.valorRecebido)}* (${receipt.valorPorExtenso})\n` +
+        `Referente a: ${receipt.descricao}\n` +
+        `Imóvel: ${receipt.imovelTitulo} (${receipt.imovelCodigo})\n` +
+        `Período: ${receipt.periodoHospedagem}\n` +
+        `Forma de Pagamento: ${receipt.formaPagamento}\n` +
+        `Valor Total da Reserva: ${formatCurrency(receipt.valorTotalReserva)}\n` +
+        `Saldo Restante: ${formatCurrency(receipt.saldoRestante)}\n\n` +
+        `Menta Negócios Imobiliários • Balneário Camboriú/SC`;
     
     const phone = (receipt.pagadorTelefone || '').replace(/\D/g, '');
     const url = phone 
@@ -69,8 +83,6 @@ export const TemporaryReceiptModal: React.FC<TemporaryReceiptModalProps> = ({ re
     window.open(url, '_blank');
   };
 
-  const isQuitado = receipt.saldoRestante <= 0;
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/70 backdrop-blur-sm overflow-y-auto print:p-0 print:bg-white print:static">
       <div className="bg-white rounded-[2rem] shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden border border-gray-100 print:shadow-none print:max-w-none print:w-full print:rounded-none print:border-none print:max-h-none">
@@ -78,12 +90,18 @@ export const TemporaryReceiptModal: React.FC<TemporaryReceiptModalProps> = ({ re
         {/* Action Header - Hidden on Print */}
         <div className="flex items-center justify-between px-8 py-5 border-b border-gray-100 bg-gray-50/80 print:hidden shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gold/10 text-gold flex items-center justify-center font-bold">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold ${
+              isDemonstrativo ? 'bg-blue-50 text-blue-700' : 'bg-gold/10 text-gold'
+            }`}>
               <FileText size={20} />
             </div>
             <div>
-              <h3 className="text-base font-display font-bold text-primary-black">Recibo de Pagamento de Locação Temporária</h3>
-              <p className="text-xs text-gray-400">Emissão oficial para o consumidor</p>
+              <h3 className="text-base font-display font-bold text-primary-black">
+                {isDemonstrativo ? 'Demonstrativo de Valores da Reserva' : 'Recibo de Pagamento de Locação Temporária'}
+              </h3>
+              <p className="text-xs text-gray-400">
+                {isDemonstrativo ? 'Resumo financeiro prévio (sem quitação)' : 'Emissão oficial de comprovante de pagamento'}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -148,7 +166,9 @@ export const TemporaryReceiptModal: React.FC<TemporaryReceiptModalProps> = ({ re
                 </div>
               </div>
               <div className="sm:text-right w-full sm:w-auto p-4 bg-gold/5 rounded-2xl border border-gold/20">
-                <span className="text-[10px] font-black uppercase tracking-widest text-gold block">Recibo Nº</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-gold block">
+                  {isDemonstrativo ? 'Demonstrativo Nº' : 'Recibo Nº'}
+                </span>
                 <span className="text-lg font-mono font-bold text-primary-black">{receipt.numeroRecibo}</span>
                 <span className="text-xs text-gray-500 block mt-1">Data: {formatarDataBR(receipt.dataEmissao)}</span>
               </div>
@@ -157,37 +177,54 @@ export const TemporaryReceiptModal: React.FC<TemporaryReceiptModalProps> = ({ re
             {/* Receipt Main Value Banner */}
             <div className="my-8 p-6 rounded-2xl bg-gradient-to-r from-gray-50 via-gold/5 to-gray-50 border border-gold/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
-                <span className="text-xs font-black uppercase tracking-widest text-gray-400 block mb-1">Valor Efetivamente Recebido</span>
-                <span className="text-3xl font-display font-black text-emerald-700">
-                  {formatCurrency(receipt.valorRecebido)}
+                <span className="text-xs font-black uppercase tracking-widest text-gray-400 block mb-1">
+                  {isDemonstrativo ? 'Valor Total Negociado da Reserva' : 'Valor Efetivamente Recebido'}
+                </span>
+                <span className={`text-3xl font-display font-black ${isDemonstrativo ? 'text-primary-black' : 'text-emerald-700'}`}>
+                  {formatCurrency(isDemonstrativo ? receipt.valorTotalReserva : receipt.valorRecebido)}
                 </span>
                 <p className="text-xs text-gray-600 font-semibold italic mt-1">
-                  ({receipt.valorPorExtenso})
+                  {isDemonstrativo ? '(Aguardando confirmação de pagamento)' : `(${receipt.valorPorExtenso})`}
                 </p>
               </div>
               <div className="sm:text-right">
                 <span className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider ${
-                  isQuitado 
-                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
-                    : 'bg-amber-100 text-amber-800 border border-amber-300'
+                  isDemonstrativo
+                    ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                    : isQuitado 
+                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
+                      : 'bg-blue-100 text-blue-800 border border-blue-300'
                 }`}>
                   <CheckCircle2 size={14} />
-                  {isQuitado ? 'Quitação Integral' : 'Pagamento Parcial'}
+                  {isDemonstrativo ? 'Demonstrativo de Valores' : isQuitado ? 'Quitação Integral' : 'Pagamento Parcial'}
                 </span>
                 <span className="text-[11px] text-gray-500 block mt-2">
-                  Forma: <strong>{receipt.formaPagamento}</strong> em {formatarDataBR(receipt.dataPagamento)}
+                  {isDemonstrativo ? (
+                    <span>Status: <strong>Pendente de Pagamento</strong></span>
+                  ) : (
+                    <span>Forma: <strong>{receipt.formaPagamento}</strong> em {formatarDataBR(receipt.dataPagamento)}</span>
+                  )}
                 </span>
               </div>
             </div>
 
             {/* Declaration Text */}
             <div className="space-y-6 text-sm text-gray-700 leading-relaxed font-normal">
-              <p>
-                Declaramos para os devidos fins que recebemos de <strong>{receipt.pagadorNome}</strong>
-                {receipt.pagadorCpf ? `, inscrito(a) no CPF/MF sob o nº ${receipt.pagadorCpf}` : ''}, 
-                a quantia líquida e certa de <strong>{formatCurrency(receipt.valorRecebido)}</strong> ({receipt.valorPorExtenso}), 
-                referente a <strong>{receipt.descricao}</strong>.
-              </p>
+              {isDemonstrativo ? (
+                <p>
+                  Apresentamos para os devidos fins o <strong>Demonstrativo de Valores</strong> referente à locação temporária em nome de <strong>{receipt.pagadorNome}</strong>
+                  {receipt.pagadorCpf ? `, inscrito(a) no CPF/MF sob o nº ${receipt.pagadorCpf}` : ''}, 
+                  referente a <strong>{receipt.descricao}</strong>. 
+                  Declaramos expressamente que este documento constitui um resumo descritivo de valores e <strong>NÃO representa comprovante de quitação ou de recebimento de valores</strong> até que o pagamento correspondente seja formalmente lançado e registrado.
+                </p>
+              ) : (
+                <p>
+                  Declaramos para os devidos fins que recebemos de <strong>{receipt.pagadorNome}</strong>
+                  {receipt.pagadorCpf ? `, inscrito(a) no CPF/MF sob o nº ${receipt.pagadorCpf}` : ''}, 
+                  a quantia líquida e certa de <strong>{formatCurrency(receipt.valorRecebido)}</strong> ({receipt.valorPorExtenso}), 
+                  referente a <strong>{receipt.descricao}</strong>.
+                </p>
+              )}
 
               {/* Property & Stay Box */}
               <div className="p-6 bg-gray-50 rounded-2xl border border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -225,19 +262,19 @@ export const TemporaryReceiptModal: React.FC<TemporaryReceiptModalProps> = ({ re
                       <td className="py-2.5 px-4 text-gray-700">Valor Total Negociado da Reserva ({receipt.codigoReserva})</td>
                       <td className="py-2.5 px-4 text-right font-semibold">{formatCurrency(receipt.valorTotalReserva)}</td>
                     </tr>
-                    <tr className="bg-emerald-50/40">
-                      <td className="py-2.5 px-4 font-bold text-emerald-900">
-                        Valor Efetivamente Pago / Recebido neste Recibo
+                    <tr className={isDemonstrativo ? 'bg-amber-50/40' : 'bg-emerald-50/40'}>
+                      <td className={`py-2.5 px-4 font-bold ${isDemonstrativo ? 'text-amber-900' : 'text-emerald-900'}`}>
+                        {isDemonstrativo ? 'Valor Pago / Recebido até o momento' : 'Valor Efetivamente Pago / Recebido neste Recibo'}
                       </td>
-                      <td className="py-2.5 px-4 text-right font-black text-emerald-800 text-sm">
-                        {formatCurrency(receipt.valorRecebido)}
+                      <td className={`py-2.5 px-4 text-right font-black text-sm ${isDemonstrativo ? 'text-gray-700' : 'text-emerald-800'}`}>
+                        {formatCurrency(receipt.valorRecebido || 0)}
                       </td>
                     </tr>
                     <tr>
                       <td className="py-2.5 px-4 text-gray-700">
-                        {isQuitado ? 'Saldo Restante (Quitação Completa)' : 'Saldo Pendente de Pagamento'}
+                        {isDemonstrativo ? 'Saldo Restante a Ser Pago' : isQuitado ? 'Saldo Restante (Quitação Completa)' : 'Saldo Pendente de Pagamento'}
                       </td>
-                      <td className={`py-2.5 px-4 text-right font-bold ${isQuitado ? 'text-gray-500' : 'text-amber-700 font-bold'}`}>
+                      <td className={`py-2.5 px-4 text-right font-bold ${!isDemonstrativo && isQuitado ? 'text-gray-500' : 'text-amber-700 font-bold'}`}>
                         {formatCurrency(receipt.saldoRestante)}
                       </td>
                     </tr>
@@ -247,7 +284,11 @@ export const TemporaryReceiptModal: React.FC<TemporaryReceiptModalProps> = ({ re
 
               {/* Clarification Note */}
               <div className="p-4 bg-gray-50 rounded-xl text-xs text-gray-500 italic border-l-4 border-gold">
-                {isQuitado ? (
+                {isDemonstrativo ? (
+                  <span>
+                    <strong>Aviso Informativo:</strong> Este demonstrativo tem caráter estritamente ilustrativo sobre os valores acordados para a locação temporária, não constituindo quitação ou recebimento financeiro até que haja o registro oficial do pagamento no sistema.
+                  </span>
+                ) : isQuitado ? (
                   <span>
                     Com a liquidação do valor acima, conferimos a plena e geral quitação para a locação temporária especificada.
                   </span>

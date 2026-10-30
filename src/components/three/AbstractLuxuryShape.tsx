@@ -44,19 +44,52 @@ export const AbstractLuxuryShape: React.FC<AbstractLuxuryShapeProps> = ({
   );
 };
 
+class ShapeErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch() {}
+  render() {
+    if (this.state.hasError) return null;
+    return this.props.children;
+  }
+}
+
 export const LuxuryShapeCanvas: React.FC<AbstractLuxuryShapeProps> = (props) => {
+  const [canRender, setCanRender] = React.useState(false);
+
+  React.useEffect(() => {
+    try {
+      const canvas = document.createElement('canvas');
+      const gl = !!(window.WebGLRenderingContext && (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')));
+      setCanRender(gl);
+    } catch {
+      setCanRender(false);
+    }
+  }, []);
+
+  if (!canRender) {
+    return null;
+  }
+
   return (
-    <div className="w-64 h-64 pointer-events-none select-none">
-      <Canvas 
-        camera={{ position: [0, 0, 3] }} 
-        gl={{ alpha: true }}
-        dpr={[1, 1.5]}
-      >
-        <ambientLight intensity={0.5} />
-        <pointLight position={[10, 10, 10]} intensity={1.5} color="#E5BC53" />
-        <AbstractLuxuryShape {...props} />
-      </Canvas>
-    </div>
+    <ShapeErrorBoundary>
+      <div className="w-64 h-64 pointer-events-none select-none">
+        <Canvas 
+          camera={{ position: [0, 0, 3] }} 
+          gl={{ alpha: true, powerPreference: 'default' }}
+          dpr={[1, 1.25]}
+        >
+          <ambientLight intensity={0.5} />
+          <pointLight position={[10, 10, 10]} intensity={1.5} color="#E5BC53" />
+          <AbstractLuxuryShape {...props} />
+        </Canvas>
+      </div>
+    </ShapeErrorBoundary>
   );
 };
 

@@ -3,23 +3,42 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 
-// Limpar caches antigos e Service Workers para evitar exibição de dados desatualizados
+// Limpar caches antigos e Service Workers com proteção contra falhas em iframes/sandboxes
 if (typeof window !== "undefined") {
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.getRegistrations().then((registrations) => {
-      registrations.forEach((registration) => registration.unregister());
-    });
+  try {
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.getRegistrations()
+        .then((registrations) => {
+          registrations.forEach((registration) => {
+            registration.unregister().catch(() => {});
+          });
+        })
+        .catch(() => {});
+    }
+  } catch {
+    // Silently ignore serviceWorker sandbox restrictions
   }
 
-  if ("caches" in window) {
-    caches.keys().then((names) => {
-      names.forEach((name) => caches.delete(name));
-    });
+  try {
+    if ("caches" in window) {
+      caches.keys()
+        .then((names) => {
+          names.forEach((name) => {
+            caches.delete(name).catch(() => {});
+          });
+        })
+        .catch(() => {});
+    }
+  } catch {
+    // Silently ignore cache sandbox restrictions
   }
 }
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-);
+const rootElement = document.getElementById('root');
+if (rootElement) {
+  createRoot(rootElement).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  );
+}

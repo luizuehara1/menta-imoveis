@@ -432,9 +432,9 @@ export default function Home() {
             <div>
               <span className="text-gold font-bold uppercase tracking-widest text-xs mb-2 block">Destaques da semana</span>
               <h2 className="section-title">
-                {homeSettings.secoes.imoveisDestaque.titulo.split(' ')[0]} <span className="text-gold">{homeSettings.secoes.imoveisDestaque.titulo.split(' ').slice(1).join(' ')}</span>
+                {(homeSettings?.secoes?.imoveisDestaque?.titulo || 'Imóveis em Destaque').split(' ')[0]} <span className="text-gold">{(homeSettings?.secoes?.imoveisDestaque?.titulo || 'Imóveis em Destaque').split(' ').slice(1).join(' ')}</span>
               </h2>
-              <p className="text-gray-500 max-w-lg mt-2">{homeSettings.secoes.imoveisDestaque.subtitulo}</p>
+              <p className="text-gray-500 max-w-lg mt-2">{homeSettings?.secoes?.imoveisDestaque?.subtitulo || 'Uma seleção exclusiva das melhores oportunidades no mercado.'}</p>
             </div>
             <button onClick={() => navigate('/imoveis')} className="text-primary-gray font-bold border-b-2 border-gold pb-1 hover:text-gold transition-colors">
               Ver catálogo completo
@@ -578,10 +578,10 @@ export default function Home() {
               </div>
               <span className="text-gold font-black uppercase tracking-[0.3em] text-[10px] mb-4 block">Institucional</span>
               <h2 className="font-display text-4xl md:text-5xl font-bold mb-8 leading-[1.1] tracking-tighter">
-                {homeSettings.secoes.sobre.titulo.split(' ').slice(0, -1).join(' ')} <span className="text-gold font-light italic">{homeSettings.secoes.sobre.titulo.split(' ').slice(-1)}</span>
+                {(homeSettings?.secoes?.sobre?.titulo || 'Sobre a Menta').split(' ').slice(0, -1).join(' ')} <span className="text-gold font-light italic">{(homeSettings?.secoes?.sobre?.titulo || 'Sobre a Menta').split(' ').slice(-1)}</span>
               </h2>
               <p className="text-gray-400 text-lg mb-8 leading-relaxed font-light">
-                {homeSettings.secoes.sobre.texto}
+                {homeSettings?.secoes?.sobre?.texto || 'A Menta é uma boutique imobiliária focada na excelência, transparência e exclusividade.'}
               </p>
               <div className="space-y-5">
                 {[

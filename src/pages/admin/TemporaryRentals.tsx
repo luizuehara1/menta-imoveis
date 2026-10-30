@@ -213,6 +213,10 @@ export default function TemporaryRentals() {
 
   // Load all initial data
   const loadData = async () => {
+    if (!user || !isAdmin) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const [propsData, resData, blocksData, guestsData, paysData, recsData, reqsData, pricesData] = await Promise.all([
@@ -260,16 +264,19 @@ export default function TemporaryRentals() {
         }, 150);
       }
     } catch (err: any) {
-      console.error('[TemporaryRentals] Erro ao carregar dados:', err);
-      triggerToast('Erro ao carregar dados de locação temporária.', 'error');
+      console.warn('[TemporaryRentals] Aviso ao carregar dados:', err?.message || err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
-  }, [searchParams]);
+    if (user && isAdmin) {
+      loadData();
+    } else {
+      setLoading(false);
+    }
+  }, [user, isAdmin, searchParams]);
 
   // Selected Property Object
   const currentProperty = useMemo(() => {
@@ -755,6 +762,44 @@ export default function TemporaryRentals() {
     }
   };
 
+  // Emit Demonstrativo Helper (when reservation has no payments registered yet)
+  const handleEmitDemonstrativo = (reserva: TemporaryReservation) => {
+    const draft: TemporaryReceipt = {
+      id: `DEMO-${reserva.id || reserva.codigoReserva}`,
+      numeroRecibo: `DEMO-${reserva.codigoReserva}`,
+      tipoDocumento: 'demonstrativo',
+      reservaId: reserva.id || '',
+      codigoReserva: reserva.codigoReserva,
+      pagadorNome: reserva.hospedeNome,
+      pagadorCpf: reserva.hospedeCpf || '',
+      pagadorTelefone: reserva.hospedeTelefone || reserva.hospedeWhatsapp || '',
+      pagadorEmail: reserva.hospedeEmail || '',
+      imovelId: reserva.imovelId,
+      imovelCodigo: reserva.imovelCodigo,
+      imovelTitulo: reserva.imovelTitulo,
+      imovelEndereco: reserva.imovelEndereco || 'Balneário Camboriú/SC',
+      imovelNomeEdificio: reserva.imovelNomeEdificio || '',
+      periodoHospedagem: `${formatarDataBR(reserva.dataEntrada)} a ${formatarDataBR(reserva.dataSaida)}`,
+      dataEntrada: reserva.dataEntrada,
+      dataSaida: reserva.dataSaida,
+      quantidadeDiarias: reserva.quantidadeDiarias,
+      descricao: `Demonstrativo prévio de valores da locação temporária (${reserva.quantidadeDiarias} diárias)`,
+      valorRecebido: 0,
+      valorPorExtenso: 'Zero reais',
+      formaPagamento: 'Pendente de pagamento',
+      dataPagamento: new Date().toISOString().split('T')[0],
+      dataEmissao: new Date().toISOString().split('T')[0],
+      valorTotalReserva: reserva.valorTotal,
+      saldoRestante: reserva.valorTotal,
+      emissorNome: settings.empresa?.razaoSocial || settings.empresa?.nome || "MENTA NEGÓCIOS IMOBILIÁRIOS",
+      emissorCnpj: settings.empresa?.cnpj || "00.000.000/0001-00",
+      emissorCreci: settings.empresa?.creci || settings.empresa?.creciPj || "",
+      criadoEm: new Date()
+    };
+    setActiveReceipt(draft);
+    setIsReceiptModalOpen(true);
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
       
@@ -1127,6 +1172,23 @@ export default function TemporaryRentals() {
                         >
                           Pagar
                         </button>
+                        {res.valorPago > 0 ? (
+                          <button
+                            onClick={() => handleEmitReceiptForPayment(res, res.valorPago)}
+                            className="px-3 py-1.5 rounded-lg bg-gold/15 text-primary-black hover:bg-gold/25 font-bold text-xs transition-colors"
+                            title="Gerar Recibo Oficial"
+                          >
+                            Recibo
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleEmitDemonstrativo(res)}
+                            className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs transition-colors"
+                            title="Demonstrativo de Valores (Sem quitação)"
+                          >
+                            Demonstrativo
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -2589,15 +2651,27 @@ export default function TemporaryRentals() {
                     <span>Registrar Pagamento</span>
                   </button>
 
-                  {selectedReservation.valorPago > 0 && (
+                  {selectedReservation.valorPago > 0 ? (
                     <button
                       onClick={() => {
                         handleEmitReceiptForPayment(selectedReservation, selectedReservation.valorPago);
                       }}
                       className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl btn-gold font-black text-xs shadow-md"
+                      title="Emitir Recibo Oficial com comprovante de pagamento"
                     >
                       <Printer size={16} />
-                      <span>Gerar Recibo</span>
+                      <span>Gerar Recibo Oficial</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        handleEmitDemonstrativo(selectedReservation);
+                      }}
+                      className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50 font-bold text-xs shadow-sm"
+                      title="Gerar demonstrativo de valores antes do pagamento"
+                    >
+                      <FileText size={16} />
+                      <span>Demonstrativo de Valores</span>
                     </button>
                   )}
 

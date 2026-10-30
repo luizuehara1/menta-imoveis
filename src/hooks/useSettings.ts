@@ -86,6 +86,26 @@ export function useSettings() {
               marcaDaguaUrl: data.empresaMarcaDaguaUrl || data.marcaDaguaUrl || data.empresa?.marcaDaguaUrl || DEFAULT_SITE_CONFIG.empresa.marcaDaguaUrl,
               rodapeContratos: data.empresaRodapeContratos || data.empresa?.rodapeContratos || DEFAULT_SITE_CONFIG.empresa.rodapeContratos,
             },
+            secoes: {
+              ...DEFAULT_SITE_CONFIG.secoes,
+              ...(data.secoes || {}),
+              imoveisDestaque: {
+                ...DEFAULT_SITE_CONFIG.secoes.imoveisDestaque,
+                ...(data.secoes?.imoveisDestaque || {})
+              },
+              sobre: {
+                ...DEFAULT_SITE_CONFIG.secoes.sobre,
+                ...(data.secoes?.sobre || {})
+              },
+              corretores: {
+                ...DEFAULT_SITE_CONFIG.secoes.corretores,
+                ...(data.secoes?.corretores || {})
+              },
+              contato: {
+                ...DEFAULT_SITE_CONFIG.secoes.contato,
+                ...(data.secoes?.contato || {})
+              }
+            },
             aparencia: {
               ...DEFAULT_SITE_CONFIG.aparencia,
               logoUrl: data.logoUrl || data.aparencia?.logoUrl || DEFAULT_SITE_CONFIG.aparencia.logoUrl,

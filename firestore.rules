@@ -10,6 +10,9 @@ service cloud.firestore {
       return isSignedIn() && (
         request.auth.uid == 'T6XcUvoTBDh353qYJJEGTmghSsF3' ||
         (request.auth.token.email != null && (
+          request.auth.token.email.lower() == 'luiz.uehara1@gmail.com' ||
+          request.auth.token.email.lower() == 'edson.menta@hotmail.com' ||
+          request.auth.token.email.lower() == 'anamariamenta@hotmail.com' ||
           request.auth.token.email == 'luiz.uehara1@gmail.com' ||
           request.auth.token.email == 'edson.menta@hotmail.com' ||
           request.auth.token.email == 'anamariamenta@hotmail.com' ||
@@ -108,11 +111,7 @@ service cloud.firestore {
     }
 
     match /solicitacoesReservaTemporada/{docId} {
-      allow create: if request.resource.data.imovelId is string
-                    && request.resource.data.dataEntrada is string
-                    && request.resource.data.dataSaida is string
-                    && request.resource.data.nomeCliente is string
-                    && (request.resource.data.status == 'pendente' || request.resource.data.status == 'solicitacao_recebida');
+      allow create: if true;
       allow read, update, delete: if isAdminAtivo();
     }
 

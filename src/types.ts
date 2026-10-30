@@ -842,6 +842,7 @@ export interface TemporaryPayment {
 
 export interface TemporaryReceipt {
   id?: string;
+  tipoDocumento?: 'recibo' | 'demonstrativo';
   numeroRecibo: string; // Ex: REC-TEMP-2026-0001
   reservaId: string;
   pagamentoId?: string;

@@ -273,6 +273,11 @@ export default function TemporaryBookingWidget({
       return;
     }
 
+    if (breakdown.hasZeroRate || breakdown.valorTotal <= 0) {
+      setErrorMessage('A tarifa para o período selecionado não está configurada corretamente no sistema (valor zerado). Por favor, entre em contato diretamente com nossa equipe.');
+      return;
+    }
+
     if (acompanhantes.some(a => !a.nomeCompleto.trim())) {
       setErrorMessage('Por favor, informe o nome completo de todos os acompanhantes adicionados ou remova os campos não preenchidos.');
       return;
@@ -429,8 +434,8 @@ export default function TemporaryBookingWidget({
               <h3 className="text-xl font-display font-black text-slate-900">
                 Protocolo: {submittedData.codigo}
               </h3>
-              <p className="text-xs text-slate-500 mt-2 max-w-sm mx-auto leading-relaxed">
-                Sua solicitação de reserva para o período de <strong>{formatarDataBR(submittedData.checkIn)}</strong> a <strong>{formatarDataBR(submittedData.checkOut)}</strong> ({submittedData.nights} diárias) foi gravada com sucesso em nosso sistema!
+              <p className="text-xs text-slate-700 mt-2 max-w-sm mx-auto leading-relaxed font-semibold">
+                Sua solicitação de reserva foi enviada com sucesso! Nossa equipe irá analisar a disponibilidade e confirmar sua reserva. Você receberá a confirmação pelo WhatsApp informado.
               </p>
             </div>
 
@@ -455,22 +460,12 @@ export default function TemporaryBookingWidget({
                 Status: Aguardando Confirmação da Equipe
               </div>
               <p className="text-[11px] text-amber-800/90 leading-relaxed">
-                Nossa equipe irá verificar a disponibilidade e entrar em contato com você pelo WhatsApp para confirmar sua reserva.
+                Nossa equipe irá verificar a disponibilidade e entrar em contato com você pelo WhatsApp para confirmar sua reserva. Não é necessário enviar nenhuma mensagem no momento.
               </p>
             </div>
 
-            {/* Optional Actions */}
+            {/* Actions */}
             <div className="space-y-3 pt-1">
-              <a 
-                href={submittedData.whatsAppUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full flex items-center justify-center gap-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs py-3 rounded-xl transition-all"
-              >
-                <MessageCircle size={16} className="text-emerald-600" />
-                Dúvidas urgentes? Fale com a equipe no WhatsApp
-              </a>
-
               <button
                 type="button"
                 onClick={() => {
@@ -478,7 +473,7 @@ export default function TemporaryBookingWidget({
                   setCheckIn(null);
                   setCheckOut(null);
                 }}
-                className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 underline transition-colors block mx-auto pt-1"
+                className="w-full py-3 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-xs transition-colors"
               >
                 Fazer outra consulta ou alterar datas
               </button>
