@@ -4,16 +4,14 @@ import { getFirestore } from 'firebase/firestore';
 import { getAnalytics, isSupported } from 'firebase/analytics';
 import firebaseAppletConfig from '../../firebase-applet-config.json';
 
-const metaEnv = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env : ({} as any);
-
 const firebaseConfig = {
-  apiKey: metaEnv.VITE_FIREBASE_API_KEY || firebaseAppletConfig.apiKey,
-  authDomain: metaEnv.VITE_FIREBASE_AUTH_DOMAIN || firebaseAppletConfig.authDomain,
-  projectId: metaEnv.VITE_FIREBASE_PROJECT_ID || firebaseAppletConfig.projectId,
-  storageBucket: metaEnv.VITE_FIREBASE_STORAGE_BUCKET || firebaseAppletConfig.storageBucket,
-  messagingSenderId: metaEnv.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseAppletConfig.messagingSenderId,
-  appId: metaEnv.VITE_FIREBASE_APP_ID || firebaseAppletConfig.appId,
-  measurementId: metaEnv.VITE_FIREBASE_MEASUREMENT_ID || firebaseAppletConfig.measurementId || ""
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || firebaseAppletConfig.apiKey,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || firebaseAppletConfig.authDomain,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || firebaseAppletConfig.projectId,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || firebaseAppletConfig.storageBucket,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseAppletConfig.messagingSenderId,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || firebaseAppletConfig.appId,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || firebaseAppletConfig.measurementId || ""
 };
 
 // --------------------------------------------------------------------------
@@ -46,7 +44,7 @@ export const auth = getAuth(app);
 
 // Always pass the firestoreDatabaseId if defined in fallback/env to ensure connection to correct database instance in all environments
 // However, ONLY use block databaseId if we are on the AI Studio project or if VITE_FIREBASE_DATABASE_ID is explicitly provided
-const databaseId = metaEnv.VITE_FIREBASE_DATABASE_ID || 
+const databaseId = import.meta.env.VITE_FIREBASE_DATABASE_ID || 
   (firebaseConfig.projectId === firebaseAppletConfig.projectId ? firebaseAppletConfig.firestoreDatabaseId : undefined);
 export const db = databaseId ? getFirestore(app, databaseId) : getFirestore(app);
 

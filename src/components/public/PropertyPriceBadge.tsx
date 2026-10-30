@@ -41,18 +41,6 @@ export function PropertyPriceBadge({ imovel }: PropertyPriceBadgeProps) {
     );
   }
 
-  // Se tipo = Locação Temporária
-  if (tipo === 'Locação Temporária') {
-    const valorDiaria = toNumber(imovel.valorDiaria || imovel.priceDiaria || imovel.precoDiaria || imovel.diaria || 0);
-    return (
-      <div className="absolute left-4 bottom-4 bg-[#ffffff] rounded-[10px] p-[10px_14px] shadow-[0_8px_24px_rgba(0,0,0,0.12)] z-10 max-w-[85%] flex flex-col gap-1">
-        <strong className="text-[#065f46] font-extrabold text-[13px] block">
-          DIÁRIA: {valorDiaria > 0 ? `${formatCurrency(valorDiaria)}/dia` : "Sob consulta"}
-        </strong>
-      </div>
-    );
-  }
-
   // Se tipo = Locação
   if (tipo === 'Locação') {
     return (

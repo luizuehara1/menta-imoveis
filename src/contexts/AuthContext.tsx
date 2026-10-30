@@ -42,38 +42,14 @@ interface AuthContextType {
   checkAdminAccess: (user: User | null) => Promise<boolean>;
 }
 
-const safeSession = {
-  getItem: (key: string): string | null => {
-    try {
-      return typeof window !== 'undefined' && window.sessionStorage ? window.sessionStorage.getItem(key) : null;
-    } catch {
-      return null;
-    }
-  },
-  setItem: (key: string, value: string): void => {
-    try {
-      if (typeof window !== 'undefined' && window.sessionStorage) {
-        window.sessionStorage.setItem(key, value);
-      }
-    } catch {}
-  },
-  removeItem: (key: string): void => {
-    try {
-      if (typeof window !== 'undefined' && window.sessionStorage) {
-        window.sessionStorage.removeItem(key);
-      }
-    } catch {}
-  }
-};
-
 export async function checkAdminAccess(currentUser: User | null): Promise<boolean> {
   if (!currentUser || !currentUser.email) return false;
   const email = currentUser.email.toLowerCase().trim();
   const allowedEmails = ['luiz.uehara1@gmail.com', 'edson.menta@hotmail.com', 'anamariamenta@hotmail.com'];
   if (allowedEmails.includes(email)) return true;
 
-  const cachedAdmin = safeSession.getItem("adminVerified");
-  const cachedEmail = safeSession.getItem("adminEmail");
+  const cachedAdmin = sessionStorage.getItem("adminVerified");
+  const cachedEmail = sessionStorage.getItem("adminEmail");
   if (cachedAdmin === "true" && cachedEmail === email) {
     return true;
   }
@@ -89,8 +65,8 @@ export async function checkAdminAccess(currentUser: User | null): Promise<boolea
       (administradorSnap.data()?.ativo === true);
 
     if (adminValido) {
-      safeSession.setItem("adminVerified", "true");
-      safeSession.setItem("adminEmail", email);
+      sessionStorage.setItem("adminVerified", "true");
+      sessionStorage.setItem("adminEmail", email);
     }
     return adminValido;
   } catch (error) {
@@ -140,8 +116,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.log("[Auth] Usuário:", email);
 
           // Local session cache check for faster UX
-          const cachedAdmin = safeSession.getItem("adminVerified");
-          const cachedEmail = safeSession.getItem("adminEmail");
+          const cachedAdmin = sessionStorage.getItem("adminVerified");
+          const cachedEmail = sessionStorage.getItem("adminEmail");
           
           if (cachedAdmin === "true" && cachedEmail === email) {
             console.log("[Auth] Cache de sessão encontrado. Liberando painel antecipadamente.");
@@ -185,17 +161,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setIsAdmin(adminValido);
 
           if (adminValido) {
-            safeSession.setItem("adminVerified", "true");
-            safeSession.setItem("adminEmail", email);
+            sessionStorage.setItem("adminVerified", "true");
+            sessionStorage.setItem("adminEmail", email);
           } else {
-            safeSession.removeItem("adminVerified");
-            safeSession.removeItem("adminEmail");
+            sessionStorage.removeItem("adminVerified");
+            sessionStorage.removeItem("adminEmail");
             console.warn("Acesso negado. Este e-mail não possui permissão administrativa.");
           }
         } else {
           setIsAdmin(false);
-          safeSession.removeItem("adminVerified");
-          safeSession.removeItem("adminEmail");
+          sessionStorage.removeItem("adminVerified");
+          sessionStorage.removeItem("adminEmail");
           console.log("[Auth] Nenhum usuário logado.");
         }
       } catch (error: any) {
@@ -262,8 +238,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     try {
-      safeSession.removeItem("adminVerified");
-      safeSession.removeItem("adminEmail");
+      sessionStorage.removeItem("adminVerified");
+      sessionStorage.removeItem("adminEmail");
       await signOut(auth);
     } catch (error) {
       console.error("Logout failed:", error);

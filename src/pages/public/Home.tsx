@@ -144,9 +144,7 @@ const SearchSection = ({ options }: { options: any }) => {
     let bType = filters.businessType;
     const normalized = normalizeText(bType);
     
-    if (normalized === 'locacao_temporaria' || normalized.includes('tempor')) {
-      bType = 'Locação Temporária';
-    } else if (normalized === 'alugar' || normalized === 'locacao' || normalized === 'aluguel') {
+    if (normalized === 'alugar' || normalized === 'locacao' || normalized === 'aluguel') {
       bType = 'Locação';
     } else if (normalized === 'venda' || normalized === 'comprar') {
       bType = 'Venda';
@@ -178,65 +176,41 @@ const SearchSection = ({ options }: { options: any }) => {
   const neighborhoods = (options.bairros || []).filter((o: any) => o.ativo);
   
   // Filter price ranges based on selected business type
-  const isTemporaria = normalizeText(filters.businessType).includes('tempor');
-  const isLocacao = normalizeText(filters.businessType) === 'locacao' || normalizeText(filters.businessType) === 'alugar';
-
-  const priceRanges = (() => {
-    const fromOptions = (options.faixasPreco || [])
-      .filter((o: any) => o.ativo)
-      .filter((o: any) => {
-        if (o.valor === 0) return true; // Sem limite
-        if (isTemporaria) {
-          return o.tipo === 'temporaria' || o.tipo === 'locacao_temporaria';
-        }
-        if (isLocacao) {
-          return o.tipo === 'locacao';
-        }
-        return o.tipo === 'venda' || !o.tipo; // Default to venda if no type specified
-      });
-
-    if (isTemporaria && fromOptions.length <= 1) {
-      return [
-        { id: 'sem-limite', nome: 'Sem limite', valor: 0 },
-        { id: 'temp-300', nome: 'Diária: Até R$ 300', valor: 300 },
-        { id: 'temp-500', nome: 'Diária: Até R$ 500', valor: 500 },
-        { id: 'temp-1000', nome: 'Diária: Até R$ 1.000', valor: 1000 },
-        { id: 'temp-2000', nome: 'Diária: Até R$ 2.000', valor: 2000 },
-        { id: 'temp-5000', nome: 'Diária: Até R$ 5.000', valor: 5000 }
-      ];
-    }
-
-    return fromOptions;
-  })();
-
-  const searchButtons = [
-    { val: 'venda', label: 'VENDA' },
-    { val: 'locacao', label: 'LOCAÇÃO' },
-    { val: 'locacao_temporaria', label: 'LOCAÇÃO TEMPORÁRIA' },
-    { val: 'venda_locacao', label: 'VENDA E LOCAÇÃO' }
-  ];
+  const priceRanges = (options.faixasPreco || [])
+    .filter((o: any) => o.ativo)
+    .filter((o: any) => {
+      if (o.valor === 0) return true; // Sem limite
+      const normalizedBType = normalizeText(filters.businessType);
+      if (normalizedBType === 'locacao' || normalizedBType === 'alugar') {
+        return o.tipo === 'locacao';
+      }
+      return o.tipo === 'venda' || !o.tipo; // Default to venda if no type specified
+    });
 
   return (
     <section className="relative z-30 -mt-24 max-w-6xl mx-auto px-6">
-      <div className="bg-white/95 backdrop-blur-2xl rounded-[2.5rem] shadow-[0_30px_60px_-12px_rgba(0,0,0,0.3)] p-6 sm:p-10 border border-white/20">
-        <div className="grid grid-cols-2 lg:grid-cols-4 items-center justify-center gap-2 sm:gap-3 mb-8 w-full max-w-4xl mx-auto">
-          {searchButtons.map(({ val, label }) => {
-            const isSelected = filters.businessType === val;
-            return (
-              <button
-                key={val}
-                type="button"
-                onClick={() => setFilters({ ...filters, businessType: val, maxPrice: '' })}
-                className={`w-full px-2 sm:px-4 lg:px-5 py-3.5 rounded-2xl text-[11px] sm:text-xs font-black uppercase tracking-wider text-center transition-all cursor-pointer whitespace-nowrap ${
-                  isSelected
-                    ? 'bg-primary-black text-white shadow-xl scale-[1.01]' 
-                    : 'bg-gray-100/90 text-gray-500 hover:bg-gray-200/80 hover:text-primary-black font-bold'
-                }`}
-              >
-                {label}
-              </button>
-            );
-          })}
+      <div className="bg-white/95 backdrop-blur-2xl rounded-[2.5rem] shadow-[0_30px_60px_-12px_rgba(0,0,0,0.3)] p-10 border border-white/20">
+        <div className="flex flex-wrap items-center justify-center gap-4 mb-8">
+           {['venda', 'locacao', 'venda_locacao'].map((val) => {
+             const label = val === 'locacao' ? 'Locação' : 
+                          val === 'venda' ? 'Venda' : 
+                          'Venda e Locação';
+             
+             // Check if this type exists in options or just use common ones
+             return (
+               <button
+                 key={val}
+                 onClick={() => setFilters({...filters, businessType: val, maxPrice: ''})}
+                 className={`px-4 sm:px-8 py-3 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all ${
+                   filters.businessType === val 
+                   ? 'bg-primary-black text-white shadow-xl scale-105' 
+                   : 'bg-gray-50 text-gray-400 hover:bg-gray-100 font-bold'
+                 }`}
+               >
+                 {label}
+               </button>
+             );
+           })}
         </div>
 
         {/* Campo de Pesquisa Rápida Inteligente */}
@@ -432,9 +406,9 @@ export default function Home() {
             <div>
               <span className="text-gold font-bold uppercase tracking-widest text-xs mb-2 block">Destaques da semana</span>
               <h2 className="section-title">
-                {(homeSettings?.secoes?.imoveisDestaque?.titulo || 'Imóveis em Destaque').split(' ')[0]} <span className="text-gold">{(homeSettings?.secoes?.imoveisDestaque?.titulo || 'Imóveis em Destaque').split(' ').slice(1).join(' ')}</span>
+                {homeSettings.secoes.imoveisDestaque.titulo.split(' ')[0]} <span className="text-gold">{homeSettings.secoes.imoveisDestaque.titulo.split(' ').slice(1).join(' ')}</span>
               </h2>
-              <p className="text-gray-500 max-w-lg mt-2">{homeSettings?.secoes?.imoveisDestaque?.subtitulo || 'Uma seleção exclusiva das melhores oportunidades no mercado.'}</p>
+              <p className="text-gray-500 max-w-lg mt-2">{homeSettings.secoes.imoveisDestaque.subtitulo}</p>
             </div>
             <button onClick={() => navigate('/imoveis')} className="text-primary-gray font-bold border-b-2 border-gold pb-1 hover:text-gold transition-colors">
               Ver catálogo completo
@@ -578,10 +552,10 @@ export default function Home() {
               </div>
               <span className="text-gold font-black uppercase tracking-[0.3em] text-[10px] mb-4 block">Institucional</span>
               <h2 className="font-display text-4xl md:text-5xl font-bold mb-8 leading-[1.1] tracking-tighter">
-                {(homeSettings?.secoes?.sobre?.titulo || 'Sobre a Menta').split(' ').slice(0, -1).join(' ')} <span className="text-gold font-light italic">{(homeSettings?.secoes?.sobre?.titulo || 'Sobre a Menta').split(' ').slice(-1)}</span>
+                {homeSettings.secoes.sobre.titulo.split(' ').slice(0, -1).join(' ')} <span className="text-gold font-light italic">{homeSettings.secoes.sobre.titulo.split(' ').slice(-1)}</span>
               </h2>
               <p className="text-gray-400 text-lg mb-8 leading-relaxed font-light">
-                {homeSettings?.secoes?.sobre?.texto || 'A Menta é uma boutique imobiliária focada na excelência, transparência e exclusividade.'}
+                {homeSettings.secoes.sobre.texto}
               </p>
               <div className="space-y-5">
                 {[

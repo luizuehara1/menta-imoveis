@@ -1023,20 +1023,15 @@ export default function AdminContractForm() {
   }, [contract.tipoContrato, allSysClauses, contract.dados?.clausulasSelecionadas]);
 
   const diffInDays = (start: string, end: string) => {
-    if (!start || !end) return 0;
+    if (!start || !end) return 1;
     try {
-      const cleanStart = String(start).split('T')[0];
-      const cleanEnd = String(end).split('T')[0];
-      const [y1, m1, d1] = cleanStart.split('-').map(Number);
-      const [y2, m2, d2] = cleanEnd.split('-').map(Number);
-      if (!y1 || !m1 || !d1 || !y2 || !m2 || !d2) return 0;
-      const date1 = new Date(y1, m1 - 1, d1);
-      const date2 = new Date(y2, m2 - 1, d2);
-      const diffTime = date2.getTime() - date1.getTime();
-      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-      return diffDays > 0 ? diffDays : 0;
+      const d1 = new Date(start);
+      const d2 = new Date(end);
+      const diffTime = d2.getTime() - d1.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays > 0 ? diffDays : 1;
     } catch (e) {
-      return 0;
+      return 1;
     }
   };
 
@@ -1077,89 +1072,49 @@ export default function AdminContractForm() {
        const start = p.dataInicio;
        const end = p.dataTermino;
        
-       const days = (start && end) ? diffInDays(start, end) : 0;
-       const daily = Number(v.valorDiaria ?? v.valorDiario ?? contract.valorDiaria ?? 0);
-       const subtotal = days * daily;
-       const cleaning = Number(v.taxaLimpeza) || 0;
-       const security = Number(v.taxaCaucao) || 0;
-       const additional = Number(v.taxasAdicionais ?? v.outrasTaxas) || 0;
-       const discount = Number(v.desconto ?? v.descontos) || 0;
-       
-       // FÓRMULA OFICIAL DA LOCAÇÃO TEMPORÁRIA:
-       // Subtotal das diárias = quantidade de diárias × valor da diária
-       // Total geral = subtotal das diárias + taxa de limpeza + outras taxas aplicáveis − descontos
-       const totalLease = subtotal + cleaning + additional - discount;
-       
-       const percComissao = v.percentualComissaoImobiliaria ?? 20;
-       const comissao = (subtotal * percComissao) / 100;
-       const repasse = subtotal - comissao;
-       
-       const needsUpdate = 
-         p.quantidadeDias !== days || 
-         p.quantidadeDiarias !== days ||
-         p.totalDiarias !== days ||
-         v.valorDiaria !== daily ||
-         v.valorDiario !== daily ||
-         v.quantidadeDiarias !== days ||
-         v.subtotalDiarias !== subtotal ||
-         v.valorTotalLocacao !== totalLease || 
-         v.valorFinal !== totalLease || 
-         contract.valor !== totalLease ||
-         contract.valorDiaria !== daily ||
-         contract.quantidadeDiarias !== days ||
-         v.valorComissaoImobiliaria !== comissao ||
-         v.valorRepassadoProprietario !== repasse;
-
-       if (needsUpdate) {
-         setContract(prev => ({
-           ...prev,
-           valor: totalLease,
-           valorDiaria: daily,
-           quantidadeDiarias: days,
-           dados: {
-             ...prev.dados,
-             prazo: { 
-               ...prev.dados?.prazo, 
-               quantidadeDias: days,
-               quantidadeDiarias: days,
-               totalDiarias: days,
-               diarias: days
-             },
-             valores: { 
-               ...prev.dados?.valores, 
-               valorDiaria: daily,
-               valorDiario: daily,
-               quantidadeDiarias: days,
-               subtotalDiarias: subtotal,
-               taxaLimpeza: cleaning,
-               taxaCaucao: security,
-               taxasAdicionais: additional,
-               outrasTaxas: additional,
-               desconto: discount,
-               descontos: discount,
-               valorTotalLocacao: totalLease, 
-               valorFinal: totalLease,
-               percentualComissaoImobiliaria: percComissao,
-               valorComissaoImobiliaria: comissao,
-               valorRepassadoProprietario: repasse
+       if (start && end) {
+         const days = diffInDays(start, end);
+         const daily = Number(v.valorDiario) || 0;
+         const totalLease = days * daily;
+         const cleaning = Number(v.taxaLimpeza) || 0;
+         const security = Number(v.taxaCaucao) || 0;
+         const additional = Number(v.taxasAdicionais) || 0;
+         const discount = Number(v.desconto) || 0;
+         const final = totalLease + cleaning + security + additional - discount;
+         
+         const percComissao = v.percentualComissaoImobiliaria ?? 20;
+         const comissao = totalLease * percComissao / 100;
+         const repasse = totalLease - comissao;
+         
+         if (p.quantidadeDias !== days || v.valorTotalLocacao !== totalLease || v.valorFinal !== final || contract.valor !== final || v.valorComissaoImobiliaria !== comissao) {
+           setContract(prev => ({
+             ...prev,
+             valor: final,
+             dados: {
+               ...prev.dados,
+               prazo: { ...prev.dados.prazo, quantidadeDias: days },
+               valores: { 
+                 ...prev.dados.valores, 
+                 valorTotalLocacao: totalLease, 
+                 valorFinal: final,
+                 percentualComissaoImobiliaria: percComissao,
+                 valorComissaoImobiliaria: comissao,
+                 valorRepassadoProprietario: repasse
+               }
              }
-           }
-         }));
+           }));
+         }
        }
     }
   }, [
     contract.tipoContrato,
     contract.dados?.prazo?.dataInicio, 
     contract.dados?.prazo?.dataTermino, 
-    contract.dados?.valores?.valorDiaria,
     contract.dados?.valores?.valorDiario, 
     contract.dados?.valores?.taxaLimpeza, 
     contract.dados?.valores?.taxaCaucao, 
     contract.dados?.valores?.taxasAdicionais, 
-    contract.dados?.valores?.outrasTaxas, 
-    contract.dados?.valores?.desconto,
-    contract.dados?.valores?.descontos,
-    contract.dados?.valores?.percentualComissaoImobiliaria
+    contract.dados?.valores?.desconto
   ]);
 
   const sincronizarECompletarDocumento = (docObj: any) => {
@@ -1306,37 +1261,6 @@ export default function AdminContractForm() {
       observacoes: flatData.observacoes || existingDados.termos?.observacoes || ""
     };
 
-    const prazoMerged = {
-      ...existingDados.prazo,
-      dataInicio: flatData.dataInicio || existingDados.prazo?.dataInicio || docObj.dataInicio || "",
-      dataTermino: flatData.dataTermino || existingDados.prazo?.dataTermino || docObj.dataTermino || "",
-      horarioEntrada: flatData.horarioEntrada || existingDados.prazo?.horarioEntrada || docObj.horarioEntrada || "14:00",
-      horarioSaida: flatData.horarioSaida || existingDados.prazo?.horarioSaida || docObj.horarioSaida || "10:00",
-      quantidadeDias: Number(flatData.quantidadeDias || existingDados.prazo?.quantidadeDias || docObj.quantidadeDias || existingDados.prazo?.quantidadeDiarias || 0),
-      quantidadeDiarias: Number(flatData.quantidadeDiarias || existingDados.prazo?.quantidadeDiarias || docObj.quantidadeDiarias || existingDados.prazo?.quantidadeDias || 0),
-      totalDiarias: Number(flatData.totalDiarias || existingDados.prazo?.totalDiarias || docObj.totalDiarias || existingDados.prazo?.quantidadeDiarias || 0),
-      diarias: Number(flatData.diarias || existingDados.prazo?.diarias || docObj.diarias || existingDados.prazo?.quantidadeDiarias || 0)
-    };
-
-    const valoresMerged = {
-      ...existingDados.valores,
-      valorDiaria: Number(flatData.valorDiaria || existingDados.valores?.valorDiaria || docObj.valorDiaria || existingDados.valores?.valorDiario || 0),
-      valorDiario: Number(flatData.valorDiario || existingDados.valores?.valorDiario || docObj.valorDiario || existingDados.valores?.valorDiaria || 0),
-      quantidadeDiarias: Number(prazoMerged.quantidadeDiarias || 0),
-      subtotalDiarias: Number(flatData.subtotalDiarias || existingDados.valores?.subtotalDiarias || (prazoMerged.quantidadeDiarias * (flatData.valorDiaria || existingDados.valores?.valorDiaria || 0)) || 0),
-      taxaLimpeza: Number(flatData.taxaLimpeza || existingDados.valores?.taxaLimpeza || docObj.taxaLimpeza || 0),
-      taxaCaucao: Number(flatData.taxaCaucao || existingDados.valores?.taxaCaucao || docObj.taxaCaucao || 0),
-      taxasAdicionais: Number(flatData.taxasAdicionais || existingDados.valores?.taxasAdicionais || existingDados.valores?.outrasTaxas || docObj.taxasAdicionais || 0),
-      outrasTaxas: Number(flatData.outrasTaxas || existingDados.valores?.outrasTaxas || existingDados.valores?.taxasAdicionais || docObj.outrasTaxas || 0),
-      desconto: Number(flatData.desconto || existingDados.valores?.desconto || existingDados.valores?.descontos || docObj.desconto || 0),
-      descontos: Number(flatData.descontos || existingDados.valores?.descontos || existingDados.valores?.desconto || docObj.descontos || 0),
-      valorTotalLocacao: Number(flatData.valorTotalLocacao || existingDados.valores?.valorTotalLocacao || existingDados.valores?.valorFinal || docObj.valor || 0),
-      valorFinal: Number(flatData.valorFinal || existingDados.valores?.valorFinal || existingDados.valores?.valorTotalLocacao || docObj.valor || 0),
-      percentualComissaoImobiliaria: existingDados.valores?.percentualComissaoImobiliaria ?? 20,
-      valorComissaoImobiliaria: existingDados.valores?.valorComissaoImobiliaria ?? 0,
-      valorRepassadoProprietario: existingDados.valores?.valorRepassadoProprietario ?? 0
-    };
-
     if (proponenteMerged.compradorConjugeNome) setTemConjugeComprador(true);
     if (vendedorMerged.vendedorConjugeNome) setTemConjugeVendedor(true);
     if (locadorMerged.locadorConjugeNome) setTemConjugeLocador(true);
@@ -1360,9 +1284,7 @@ export default function AdminContractForm() {
         locatario: locatarioMerged,
         imovel: imovelMerged,
         pagamento: pagamentoMerged,
-        termos: termosMerged,
-        prazo: prazoMerged,
-        valores: valoresMerged
+        termos: termosMerged
       }
     };
   };
@@ -1813,110 +1735,6 @@ export default function AdminContractForm() {
           setLoading(false);
         }
       }
-
-      // Check for temporary rental reservation loading
-      const reservaId = searchParams.get('reservaId') || searchParams.get('reserva');
-      if (reservaId && !id) {
-        setLoading(true);
-        try {
-          const resSnap = await getDoc(doc(db, 'reservasTemporada', reservaId));
-          if (resSnap.exists()) {
-            const reserva = resSnap.data() as any;
-            
-            const start = reserva.dataEntrada || '';
-            const end = reserva.dataSaida || '';
-            const days = diffInDays(start, end) || Number(reserva.quantidadeDiarias || 1);
-            const daily = Number(reserva.valorDiaria || 0);
-            const subtotal = Number(reserva.subtotalDiarias) || (days * daily);
-            const cleaning = Number(reserva.taxaLimpeza || 0);
-            const additional = Number(reserva.outrasTaxas || 0);
-            const discount = Number(reserva.valorDesconto || 0);
-            const total = subtotal + cleaning + additional - discount;
-
-            let propData: any = null;
-            const lookupPropId = reserva.imovelId || reserva.imovelCodigo;
-            if (lookupPropId) {
-              try {
-                propData = await buscarImovelPorCodigoOuId(lookupPropId);
-              } catch (e) {
-                console.warn("Imóvel da reserva não encontrado via busca:", lookupPropId);
-              }
-            }
-
-            if (propData) {
-              applyPropertySelection(propData, true);
-            }
-
-            // Fallback to property rate and cleaning fee if zero in reservation
-            const finalDaily = daily > 0 ? daily : Number(propData?.valorDiaria || propData?.priceDiaria || 0);
-            const finalSubtotal = subtotal > 0 ? subtotal : (days * finalDaily);
-            const finalCleaning = cleaning > 0 ? cleaning : Number(propData?.taxaLimpeza || 0);
-            const finalTotal = total > 0 ? total : (finalSubtotal + finalCleaning + additional - discount);
-
-            setContract(prev => ({
-              ...prev,
-              tipoContrato: 'locacao_temporaria',
-              reservaId: reservaId,
-              reservaCodigo: reserva.codigoReserva || '',
-              nomeCliente: reserva.hospedeNome || prev.nomeCliente,
-              valor: finalTotal,
-              valorDiaria: finalDaily,
-              quantidadeDiarias: days,
-              imovelId: reserva.imovelId || prev.imovelId,
-              imovelCodigo: reserva.imovelCodigo || prev.imovelCodigo,
-              imovelTitulo: reserva.imovelTitulo || prev.imovelTitulo,
-              acompanhantes: reserva.acompanhantes || [],
-              dados: {
-                ...prev.dados,
-                locatario: {
-                  ...prev.dados?.locatario,
-                  nome: reserva.hospedeNome || '',
-                  cpf: reserva.hospedeCpf || '',
-                  rg: reserva.hospedeRg || '',
-                  telefone: reserva.hospedeTelefone || '',
-                  whatsapp: reserva.hospedeWhatsapp || reserva.hospedeTelefone || '',
-                  email: reserva.hospedeEmail || '',
-                  acompanhantes: reserva.acompanhantes || []
-                },
-                prazo: {
-                  ...prev.dados?.prazo,
-                  dataInicio: start,
-                  dataTermino: end,
-                  horarioEntrada: reserva.horarioCheckin || '14:00',
-                  horarioSaida: reserva.horarioCheckout || '10:00',
-                  quantidadeDias: days,
-                  quantidadeDiarias: days,
-                  totalDiarias: days,
-                  diarias: days
-                },
-                valores: {
-                  ...prev.dados?.valores,
-                  valorDiaria: daily,
-                  valorDiario: daily,
-                  quantidadeDiarias: days,
-                  subtotalDiarias: subtotal,
-                  taxaLimpeza: cleaning,
-                  taxasAdicionais: additional,
-                  outrasTaxas: additional,
-                  desconto: discount,
-                  descontos: discount,
-                  valorTotalLocacao: total,
-                  valorFinal: total
-                },
-                regras: {
-                  ...prev.dados?.regras,
-                  limiteHospedes: reserva.quantidadeHospedes || 2
-                }
-              }
-            }));
-            showToast('Dados da reserva carregados com sucesso!', 'success');
-          }
-        } catch (resErr) {
-          console.error("Erro ao carregar reserva para o contrato:", resErr);
-        } finally {
-          setLoading(false);
-        }
-      }
     };
     handleUrlParam();
   }, [searchParams, id]);
@@ -2293,37 +2111,6 @@ export default function AdminContractForm() {
         };
       }
 
-      // If Locação Temporária, auto-populate daily rate and cleaning fee from property
-      let propDaily = 0;
-      let propCleaning = 0;
-      if (prev.tipoContrato === 'locacao_temporaria') {
-        const pAny = property as any;
-        propDaily = Number(
-          pAny.valorDiaria || 
-          pAny.precoDiaria || 
-          pAny.priceDiaria || 
-          pAny.diaria || 
-          pAny.priceTemporada || 
-          pAny.valorTemporada || 
-          0
-        );
-        propCleaning = Number(
-          pAny.taxaLimpeza || 
-          pAny.cleaningFee || 
-          pAny.valorLimpeza || 
-          0
-        );
-
-        if (!updatedDados.valores) updatedDados.valores = {};
-        if (propDaily > 0) {
-          updatedDados.valores.valorDiaria = propDaily;
-          updatedDados.valores.valorDiario = propDaily;
-        }
-        if (propCleaning > 0 && !updatedDados.valores.taxaLimpeza) {
-          updatedDados.valores.taxaLimpeza = propCleaning;
-        }
-      }
-
       const clientName = isLocacao && hasTenant && linkedTenant?.nome
         ? linkedTenant.nome
         : prev.nomeCliente;
@@ -2359,8 +2146,7 @@ export default function AdminContractForm() {
         enderecoImovel: logradouroPart,
         nomeVendedor: propOwner.nome || '',
         nomeCliente: clientName,
-        valor: prev.tipoContrato === 'locacao_temporaria' && propDaily > 0 ? prev.valor || (propDaily * (prev.dados?.prazo?.quantidadeDias || 1)) : defaultVal,
-        valorDiaria: propDaily > 0 ? propDaily : prev.valorDiaria,
+        valor: defaultVal,
         dados: updatedDados
       };
     });
@@ -2577,34 +2363,9 @@ export default function AdminContractForm() {
     }
 
     if (contract.tipoContrato === 'locacao_temporaria') {
-      const p = contract.dados?.prazo || {};
-      const v = contract.dados?.valores || {};
-
-      if (!p.dataInicio) {
-        showToast('Informe a data de início (check-in) da locação temporária.', 'error');
-        return;
-      }
-      if (!p.dataTermino) {
-        showToast('Informe a data de término (check-out) da locação temporária.', 'error');
-        return;
-      }
-      if (p.dataTermino <= p.dataInicio) {
-        showToast('A data de saída (término) deve ser posterior à data de entrada (início).', 'error');
-        return;
-      }
-      const days = diffInDays(p.dataInicio, p.dataTermino);
-      if (days <= 0) {
-        showToast('A quantidade de diárias calculada deve ser de pelo menos 1 diária.', 'error');
-        return;
-      }
+      const days = contract.dados?.prazo?.quantidadeDias || 0;
       if (days > 90) {
-        showToast('A locação temporária não pode ultrapassar 90 dias (Lei do Inquilinato).', 'error');
-        return;
-      }
-
-      const daily = Number(v.valorDiaria ?? v.valorDiario ?? contract.valorDiaria ?? 0);
-      if (daily <= 0) {
-        showToast('Informe um valor de diária válido para a locação temporária (maior que R$ 0,00).', 'error');
+        showToast('A locação temporária não pode ultrapassar 90 dias.', 'error');
         return;
       }
     }
@@ -2888,70 +2649,7 @@ export default function AdminContractForm() {
       }
 
       if (contract.tipoContrato === 'locacao_temporaria') {
-        const p = contract.dados?.prazo || {};
-        const v = contract.dados?.valores || {};
-        const days = diffInDays(p.dataInicio, p.dataTermino);
-        const daily = Number(v.valorDiaria ?? v.valorDiario ?? contract.valorDiaria ?? 0);
-        const subtotal = days * daily;
-        const cleaning = Number(v.taxaLimpeza || 0);
-        const security = Number(v.taxaCaucao || 0);
-        const additional = Number(v.taxasAdicionais ?? v.outrasTaxas ?? 0);
-        const discount = Number(v.desconto ?? v.descontos ?? 0);
-        const total = subtotal + cleaning + additional - discount;
-
         dadosContrato.tipoContratoLabel = "Locação por Temporada";
-        dadosContrato.valor = total;
-        dadosContrato.valorDiaria = daily;
-        dadosContrato.valorDiario = daily;
-        dadosContrato.quantidadeDiarias = days;
-        dadosContrato.quantidadeDias = days;
-        dadosContrato.totalDiarias = days;
-        dadosContrato.dataInicio = p.dataInicio || "";
-        dadosContrato.dataTermino = p.dataTermino || "";
-        dadosContrato.horarioEntrada = p.horarioEntrada || "14:00";
-        dadosContrato.horarioSaida = p.horarioSaida || "10:00";
-        dadosContrato.subtotalDiarias = subtotal;
-        dadosContrato.taxaLimpeza = cleaning;
-        dadosContrato.taxaCaucao = security;
-        dadosContrato.taxasAdicionais = additional;
-        dadosContrato.outrasTaxas = additional;
-        dadosContrato.desconto = discount;
-        dadosContrato.descontos = discount;
-        dadosContrato.valorTotalLocacao = total;
-        dadosContrato.valorFinal = total;
-
-        if (!dadosContrato.dados) dadosContrato.dados = {};
-        dadosContrato.dados.prazo = {
-          ...dadosContrato.dados.prazo,
-          ...p,
-          dataInicio: p.dataInicio || "",
-          dataTermino: p.dataTermino || "",
-          horarioEntrada: p.horarioEntrada || "14:00",
-          horarioSaida: p.horarioSaida || "10:00",
-          quantidadeDias: days,
-          quantidadeDiarias: days,
-          totalDiarias: days,
-          diarias: days
-        };
-        dadosContrato.dados.valores = {
-          ...dadosContrato.dados.valores,
-          ...v,
-          valorDiaria: daily,
-          valorDiario: daily,
-          quantidadeDiarias: days,
-          subtotalDiarias: subtotal,
-          taxaLimpeza: cleaning,
-          taxaCaucao: security,
-          taxasAdicionais: additional,
-          outrasTaxas: additional,
-          desconto: discount,
-          descontos: discount,
-          valorTotalLocacao: total,
-          valorFinal: total,
-          percentualComissaoImobiliaria: v.percentualComissaoImobiliaria ?? 20,
-          valorComissaoImobiliaria: (subtotal * (v.percentualComissaoImobiliaria ?? 20)) / 100,
-          valorRepassadoProprietario: subtotal - ((subtotal * (v.percentualComissaoImobiliaria ?? 20)) / 100)
-        };
       }
 
       if (finalizar) {
@@ -3169,29 +2867,6 @@ export default function AdminContractForm() {
   };
 
   const downloadPDF = async () => {
-    if (contract.tipoContrato === 'locacao_temporaria') {
-      const p = contract.dados?.prazo || {};
-      const v = contract.dados?.valores || {};
-      if (!p.dataInicio || !p.dataTermino) {
-        showToast("Preencha as datas de entrada e saída antes de gerar o contrato em PDF.", "error");
-        return;
-      }
-      if (p.dataTermino <= p.dataInicio) {
-        showToast("A data de saída deve ser posterior à data de entrada para gerar o contrato.", "error");
-        return;
-      }
-      const days = diffInDays(p.dataInicio, p.dataTermino);
-      if (days <= 0) {
-        showToast("Quantidade de diárias inválida (0). Verifique as datas antes de gerar o PDF.", "error");
-        return;
-      }
-      const daily = Number(v.valorDiaria ?? v.valorDiario ?? contract.valorDiaria ?? 0);
-      if (daily <= 0) {
-        showToast("Informe o valor da diária (maior que R$ 0,00) antes de gerar o PDF.", "error");
-        return;
-      }
-    }
-
     const element = document.getElementById("contrato-pdf") || printRef.current;
     if (!element) {
       console.error("Elemento #contrato-pdf não encontrado.");
@@ -5587,22 +5262,8 @@ export default function AdminContractForm() {
                         <input 
                           type="text" 
                           className="input-field" 
-                          value={maskCurrency(contract.dados.valores?.valorDiaria || contract.dados.valores?.valorDiario || contract.valorDiaria || '')}
-                          onChange={e => {
-                            const val = parseCurrencyToNumber(e.target.value);
-                            setContract(prev => ({
-                              ...prev,
-                              valorDiaria: val,
-                              dados: {
-                                ...prev.dados,
-                                valores: {
-                                  ...prev.dados?.valores,
-                                  valorDiaria: val,
-                                  valorDiario: val
-                                }
-                              }
-                            }));
-                          }}
+                          value={maskCurrency(contract.dados.valores?.valorDiario || '')}
+                          onChange={e => updateDados('valores', 'valorDiario', parseCurrencyToNumber(e.target.value))}
                         />
                       </div>
                       <div className="space-y-2">
@@ -5628,21 +5289,8 @@ export default function AdminContractForm() {
                         <input 
                           type="text" 
                           className="input-field" 
-                          value={maskCurrency(contract.dados.valores?.taxasAdicionais || contract.dados.valores?.outrasTaxas || '')}
-                          onChange={e => {
-                            const val = parseCurrencyToNumber(e.target.value);
-                            setContract(prev => ({
-                              ...prev,
-                              dados: {
-                                ...prev.dados,
-                                valores: {
-                                  ...prev.dados?.valores,
-                                  taxasAdicionais: val,
-                                  outrasTaxas: val
-                                }
-                              }
-                            }));
-                          }}
+                          value={maskCurrency(contract.dados.valores?.taxasAdicionais || '')}
+                          onChange={e => updateDados('valores', 'taxasAdicionais', parseCurrencyToNumber(e.target.value))}
                         />
                       </div>
                     </div>
@@ -5653,27 +5301,13 @@ export default function AdminContractForm() {
                         <input 
                           type="text" 
                           className="input-field text-red-500 font-bold" 
-                          value={maskCurrency(contract.dados.valores?.desconto || contract.dados.valores?.descontos || '')}
-                          onChange={e => {
-                            const val = parseCurrencyToNumber(e.target.value);
-                            setContract(prev => ({
-                              ...prev,
-                              dados: {
-                                ...prev.dados,
-                                valores: {
-                                  ...prev.dados?.valores,
-                                  desconto: val,
-                                  descontos: val
-                                }
-                              }
-                            }));
-                          }}
+                          value={maskCurrency(contract.dados.valores?.desconto || '')}
+                          onChange={e => updateDados('valores', 'desconto', parseCurrencyToNumber(e.target.value))}
                         />
                       </div>
                       <div className="bg-primary-black p-6 rounded-2xl flex flex-col justify-center shadow-2xl">
-                         <p className="text-[10px] font-black text-gold uppercase tracking-[0.2em] mb-1">TOTAL GERAL DA LOCAÇÃO</p>
-                         <p className="text-3xl font-display font-bold text-white">{formatCurrency(contract.valor || contract.dados?.valores?.valorTotalLocacao || 0)}</p>
-                         <p className="text-[10px] text-gray-400 mt-1">Subtotal diárias + limpeza + outras taxas − descontos</p>
+                         <p className="text-[10px] font-black text-gold uppercase tracking-[0.2em] mb-1">Valor Total do Contrato</p>
+                         <p className="text-3xl font-display font-bold text-white">{formatCurrency(contract.valor || 0)}</p>
                       </div>
                     </div>
 
@@ -5697,9 +5331,9 @@ export default function AdminContractForm() {
                           <p className="text-[10px] text-emerald-600/60 mt-2 font-medium italic">* Valor bruto das diárias menos comissão.</p>
                        </div>
                        <div className="bg-gold/5 p-6 rounded-2xl border border-gold/10">
-                          <p className="text-[10px] font-black text-gold uppercase tracking-widest mb-2">Subtotal das Diárias</p>
-                          <p className="text-lg font-bold text-primary-black">{formatCurrency(contract.dados.valores?.subtotalDiarias || ((contract.dados.prazo?.quantidadeDias || 0) * (contract.dados.valores?.valorDiaria || contract.dados.valores?.valorDiario || 0)))}</p>
-                          <p className="text-[10px] text-gold/60 mt-2 font-medium italic">* {contract.dados.prazo?.quantidadeDiarias || contract.dados.prazo?.quantidadeDias || 0} diárias x {formatCurrency(contract.dados.valores?.valorDiaria || contract.dados.valores?.valorDiario || 0)}</p>
+                          <p className="text-[10px] font-black text-gold uppercase tracking-widest mb-2">Valor Total das Diárias</p>
+                          <p className="text-lg font-bold text-primary-black">{formatCurrency(contract.dados.valores?.valorTotalLocacao || 0)}</p>
+                          <p className="text-[10px] text-gold/60 mt-2 font-medium italic">* {contract.dados.prazo?.quantidadeDias || 0} dias x {formatCurrency(contract.dados.valores?.valorDiario || 0)}</p>
                        </div>
                     </div>
                   </div>
