@@ -25,7 +25,7 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
 import { 
   collection, 
   addDoc, 
@@ -744,8 +744,10 @@ type Step = 'tipo' | 'dados' | 'pagamento' | 'revisao';
 
 export default function AdminContractForm() {
   const { id } = useParams();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const isPreviewOnly = searchParams.get('preview') === 'true';
+  const isPropostaRoute = location.pathname.includes('/propostas/');
   const navigate = useNavigate();
   const { user, isAdmin } = useAuth();
   const { settings } = useSettings();
@@ -754,7 +756,7 @@ export default function AdminContractForm() {
 
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(id ? true : false);
-  const [step, setStep] = useState<Step>(isPreviewOnly ? 'revisao' : 'tipo');
+  const [step, setStep] = useState<Step>(isPreviewOnly ? 'revisao' : (isPropostaRoute ? 'dados' : 'tipo'));
   
   const [properties, setProperties] = useState<Property[]>([]);
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
@@ -1023,15 +1025,20 @@ export default function AdminContractForm() {
   }, [contract.tipoContrato, allSysClauses, contract.dados?.clausulasSelecionadas]);
 
   const diffInDays = (start: string, end: string) => {
-    if (!start || !end) return 1;
+    if (!start || !end) return 0;
     try {
-      const d1 = new Date(start);
-      const d2 = new Date(end);
-      const diffTime = d2.getTime() - d1.getTime();
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      return diffDays > 0 ? diffDays : 1;
+      const cleanStart = String(start).split('T')[0];
+      const cleanEnd = String(end).split('T')[0];
+      const [y1, m1, d1] = cleanStart.split('-').map(Number);
+      const [y2, m2, d2] = cleanEnd.split('-').map(Number);
+      if (!y1 || !m1 || !d1 || !y2 || !m2 || !d2) return 0;
+      const date1 = new Date(y1, m1 - 1, d1);
+      const date2 = new Date(y2, m2 - 1, d2);
+      const diffTime = date2.getTime() - date1.getTime();
+      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays > 0 ? diffDays : 0;
     } catch (e) {
-      return 1;
+      return 0;
     }
   };
 
@@ -1072,49 +1079,89 @@ export default function AdminContractForm() {
        const start = p.dataInicio;
        const end = p.dataTermino;
        
-       if (start && end) {
-         const days = diffInDays(start, end);
-         const daily = Number(v.valorDiario) || 0;
-         const totalLease = days * daily;
-         const cleaning = Number(v.taxaLimpeza) || 0;
-         const security = Number(v.taxaCaucao) || 0;
-         const additional = Number(v.taxasAdicionais) || 0;
-         const discount = Number(v.desconto) || 0;
-         const final = totalLease + cleaning + security + additional - discount;
-         
-         const percComissao = v.percentualComissaoImobiliaria ?? 20;
-         const comissao = totalLease * percComissao / 100;
-         const repasse = totalLease - comissao;
-         
-         if (p.quantidadeDias !== days || v.valorTotalLocacao !== totalLease || v.valorFinal !== final || contract.valor !== final || v.valorComissaoImobiliaria !== comissao) {
-           setContract(prev => ({
-             ...prev,
-             valor: final,
-             dados: {
-               ...prev.dados,
-               prazo: { ...prev.dados.prazo, quantidadeDias: days },
-               valores: { 
-                 ...prev.dados.valores, 
-                 valorTotalLocacao: totalLease, 
-                 valorFinal: final,
-                 percentualComissaoImobiliaria: percComissao,
-                 valorComissaoImobiliaria: comissao,
-                 valorRepassadoProprietario: repasse
-               }
+       const days = (start && end) ? diffInDays(start, end) : 0;
+       const daily = Number(v.valorDiaria ?? v.valorDiario ?? contract.valorDiaria ?? 0);
+       const subtotal = days * daily;
+       const cleaning = Number(v.taxaLimpeza) || 0;
+       const security = Number(v.taxaCaucao) || 0;
+       const additional = Number(v.taxasAdicionais ?? v.outrasTaxas) || 0;
+       const discount = Number(v.desconto ?? v.descontos) || 0;
+       
+       // FÓRMULA OFICIAL DA LOCAÇÃO TEMPORÁRIA:
+       // Subtotal das diárias = quantidade de diárias × valor da diária
+       // Total geral = subtotal das diárias + taxa de limpeza + outras taxas aplicáveis − descontos
+       const totalLease = subtotal + cleaning + additional - discount;
+       
+       const percComissao = v.percentualComissaoImobiliaria ?? 20;
+       const comissao = (subtotal * percComissao) / 100;
+       const repasse = subtotal - comissao;
+       
+       const needsUpdate = 
+         p.quantidadeDias !== days || 
+         p.quantidadeDiarias !== days ||
+         p.totalDiarias !== days ||
+         v.valorDiaria !== daily ||
+         v.valorDiario !== daily ||
+         v.quantidadeDiarias !== days ||
+         v.subtotalDiarias !== subtotal ||
+         v.valorTotalLocacao !== totalLease || 
+         v.valorFinal !== totalLease || 
+         contract.valor !== totalLease ||
+         contract.valorDiaria !== daily ||
+         contract.quantidadeDiarias !== days ||
+         v.valorComissaoImobiliaria !== comissao ||
+         v.valorRepassadoProprietario !== repasse;
+
+       if (needsUpdate) {
+         setContract(prev => ({
+           ...prev,
+           valor: totalLease,
+           valorDiaria: daily,
+           quantidadeDiarias: days,
+           dados: {
+             ...prev.dados,
+             prazo: { 
+               ...prev.dados?.prazo, 
+               quantidadeDias: days,
+               quantidadeDiarias: days,
+               totalDiarias: days,
+               diarias: days
+             },
+             valores: { 
+               ...prev.dados?.valores, 
+               valorDiaria: daily,
+               valorDiario: daily,
+               quantidadeDiarias: days,
+               subtotalDiarias: subtotal,
+               taxaLimpeza: cleaning,
+               taxaCaucao: security,
+               taxasAdicionais: additional,
+               outrasTaxas: additional,
+               desconto: discount,
+               descontos: discount,
+               valorTotalLocacao: totalLease, 
+               valorFinal: totalLease,
+               percentualComissaoImobiliaria: percComissao,
+               valorComissaoImobiliaria: comissao,
+               valorRepassadoProprietario: repasse
              }
-           }));
-         }
+           }
+         }));
        }
     }
   }, [
     contract.tipoContrato,
     contract.dados?.prazo?.dataInicio, 
     contract.dados?.prazo?.dataTermino, 
+    contract.dados?.valores?.valorDiaria,
     contract.dados?.valores?.valorDiario, 
     contract.dados?.valores?.taxaLimpeza, 
     contract.dados?.valores?.taxaCaucao, 
     contract.dados?.valores?.taxasAdicionais, 
-    contract.dados?.valores?.desconto
+    contract.dados?.valores?.outrasTaxas, 
+    contract.dados?.valores?.desconto,
+    contract.dados?.valores?.descontos,
+    contract.dados?.valores?.percentualComissaoImobiliaria
   ]);
 
   const sincronizarECompletarDocumento = (docObj: any) => {
@@ -1261,6 +1308,37 @@ export default function AdminContractForm() {
       observacoes: flatData.observacoes || existingDados.termos?.observacoes || ""
     };
 
+    const prazoMerged = {
+      ...existingDados.prazo,
+      dataInicio: flatData.dataInicio || existingDados.prazo?.dataInicio || docObj.dataInicio || "",
+      dataTermino: flatData.dataTermino || existingDados.prazo?.dataTermino || docObj.dataTermino || "",
+      horarioEntrada: flatData.horarioEntrada || existingDados.prazo?.horarioEntrada || docObj.horarioEntrada || "14:00",
+      horarioSaida: flatData.horarioSaida || existingDados.prazo?.horarioSaida || docObj.horarioSaida || "10:00",
+      quantidadeDias: Number(flatData.quantidadeDias || existingDados.prazo?.quantidadeDias || docObj.quantidadeDias || existingDados.prazo?.quantidadeDiarias || 0),
+      quantidadeDiarias: Number(flatData.quantidadeDiarias || existingDados.prazo?.quantidadeDiarias || docObj.quantidadeDiarias || existingDados.prazo?.quantidadeDias || 0),
+      totalDiarias: Number(flatData.totalDiarias || existingDados.prazo?.totalDiarias || docObj.totalDiarias || existingDados.prazo?.quantidadeDiarias || 0),
+      diarias: Number(flatData.diarias || existingDados.prazo?.diarias || docObj.diarias || existingDados.prazo?.quantidadeDiarias || 0)
+    };
+
+    const valoresMerged = {
+      ...existingDados.valores,
+      valorDiaria: Number(flatData.valorDiaria || existingDados.valores?.valorDiaria || docObj.valorDiaria || existingDados.valores?.valorDiario || 0),
+      valorDiario: Number(flatData.valorDiario || existingDados.valores?.valorDiario || docObj.valorDiario || existingDados.valores?.valorDiaria || 0),
+      quantidadeDiarias: Number(prazoMerged.quantidadeDiarias || 0),
+      subtotalDiarias: Number(flatData.subtotalDiarias || existingDados.valores?.subtotalDiarias || (prazoMerged.quantidadeDiarias * (flatData.valorDiaria || existingDados.valores?.valorDiaria || 0)) || 0),
+      taxaLimpeza: Number(flatData.taxaLimpeza || existingDados.valores?.taxaLimpeza || docObj.taxaLimpeza || 0),
+      taxaCaucao: Number(flatData.taxaCaucao || existingDados.valores?.taxaCaucao || docObj.taxaCaucao || 0),
+      taxasAdicionais: Number(flatData.taxasAdicionais || existingDados.valores?.taxasAdicionais || existingDados.valores?.outrasTaxas || docObj.taxasAdicionais || 0),
+      outrasTaxas: Number(flatData.outrasTaxas || existingDados.valores?.outrasTaxas || existingDados.valores?.taxasAdicionais || docObj.outrasTaxas || 0),
+      desconto: Number(flatData.desconto || existingDados.valores?.desconto || existingDados.valores?.descontos || docObj.desconto || 0),
+      descontos: Number(flatData.descontos || existingDados.valores?.descontos || existingDados.valores?.desconto || docObj.descontos || 0),
+      valorTotalLocacao: Number(flatData.valorTotalLocacao || existingDados.valores?.valorTotalLocacao || existingDados.valores?.valorFinal || docObj.valor || 0),
+      valorFinal: Number(flatData.valorFinal || existingDados.valores?.valorFinal || existingDados.valores?.valorTotalLocacao || docObj.valor || 0),
+      percentualComissaoImobiliaria: existingDados.valores?.percentualComissaoImobiliaria ?? 20,
+      valorComissaoImobiliaria: existingDados.valores?.valorComissaoImobiliaria ?? 0,
+      valorRepassadoProprietario: existingDados.valores?.valorRepassadoProprietario ?? 0
+    };
+
     if (proponenteMerged.compradorConjugeNome) setTemConjugeComprador(true);
     if (vendedorMerged.vendedorConjugeNome) setTemConjugeVendedor(true);
     if (locadorMerged.locadorConjugeNome) setTemConjugeLocador(true);
@@ -1284,7 +1362,9 @@ export default function AdminContractForm() {
         locatario: locatarioMerged,
         imovel: imovelMerged,
         pagamento: pagamentoMerged,
-        termos: termosMerged
+        termos: termosMerged,
+        prazo: prazoMerged,
+        valores: valoresMerged
       }
     };
   };
@@ -1308,10 +1388,23 @@ export default function AdminContractForm() {
     const fetchContract = async () => {
       if (!id) return;
       try {
-        const docRef = doc(db, 'contratos', id);
-        const docSnap = await getDoc(docRef);
+        let docSnap = await getDoc(doc(db, 'contratos', id));
+        if (!docSnap.exists()) {
+          const propSnap = await getDoc(doc(db, 'propostas', id));
+          if (propSnap.exists()) {
+            docSnap = propSnap;
+          } else {
+            const contraSnap = await getDoc(doc(db, 'contrapropostas', id));
+            if (contraSnap.exists()) {
+              docSnap = contraSnap;
+            }
+          }
+        }
         if (docSnap.exists()) {
           let data = docSnap.data() as any;
+          if (isPropostaRoute || data.tipoContrato === 'proposta') {
+            setStep(prev => prev === 'tipo' ? 'dados' : prev);
+          }
 
           // If we are editing an existing document, the saved contract is the absolute source of truth.
           // We bypass merging fields from proposalId to prevent overwriting user edits with old proposal options/details.
@@ -1735,6 +1828,110 @@ export default function AdminContractForm() {
           setLoading(false);
         }
       }
+
+      // Check for temporary rental reservation loading
+      const reservaId = searchParams.get('reservaId') || searchParams.get('reserva');
+      if (reservaId && !id) {
+        setLoading(true);
+        try {
+          const resSnap = await getDoc(doc(db, 'reservasTemporada', reservaId));
+          if (resSnap.exists()) {
+            const reserva = resSnap.data() as any;
+            
+            const start = reserva.dataEntrada || '';
+            const end = reserva.dataSaida || '';
+            const days = diffInDays(start, end) || Number(reserva.quantidadeDiarias || 1);
+            const daily = Number(reserva.valorDiaria || 0);
+            const subtotal = Number(reserva.subtotalDiarias) || (days * daily);
+            const cleaning = Number(reserva.taxaLimpeza || 0);
+            const additional = Number(reserva.outrasTaxas || 0);
+            const discount = Number(reserva.valorDesconto || 0);
+            const total = subtotal + cleaning + additional - discount;
+
+            let propData: any = null;
+            const lookupPropId = reserva.imovelId || reserva.imovelCodigo;
+            if (lookupPropId) {
+              try {
+                propData = await buscarImovelPorCodigoOuId(lookupPropId);
+              } catch (e) {
+                console.warn("Imóvel da reserva não encontrado via busca:", lookupPropId);
+              }
+            }
+
+            if (propData) {
+              applyPropertySelection(propData, true);
+            }
+
+            // Fallback to property rate and cleaning fee if zero in reservation
+            const finalDaily = daily > 0 ? daily : Number(propData?.valorDiaria || propData?.priceDiaria || 0);
+            const finalSubtotal = subtotal > 0 ? subtotal : (days * finalDaily);
+            const finalCleaning = cleaning > 0 ? cleaning : Number(propData?.taxaLimpeza || 0);
+            const finalTotal = total > 0 ? total : (finalSubtotal + finalCleaning + additional - discount);
+
+            setContract(prev => ({
+              ...prev,
+              tipoContrato: 'locacao_temporaria',
+              reservaId: reservaId,
+              reservaCodigo: reserva.codigoReserva || '',
+              nomeCliente: reserva.hospedeNome || prev.nomeCliente,
+              valor: finalTotal,
+              valorDiaria: finalDaily,
+              quantidadeDiarias: days,
+              imovelId: reserva.imovelId || prev.imovelId,
+              imovelCodigo: reserva.imovelCodigo || prev.imovelCodigo,
+              imovelTitulo: reserva.imovelTitulo || prev.imovelTitulo,
+              acompanhantes: reserva.acompanhantes || [],
+              dados: {
+                ...prev.dados,
+                locatario: {
+                  ...prev.dados?.locatario,
+                  nome: reserva.hospedeNome || '',
+                  cpf: reserva.hospedeCpf || '',
+                  rg: reserva.hospedeRg || '',
+                  telefone: reserva.hospedeTelefone || '',
+                  whatsapp: reserva.hospedeWhatsapp || reserva.hospedeTelefone || '',
+                  email: reserva.hospedeEmail || '',
+                  acompanhantes: reserva.acompanhantes || []
+                },
+                prazo: {
+                  ...prev.dados?.prazo,
+                  dataInicio: start,
+                  dataTermino: end,
+                  horarioEntrada: reserva.horarioCheckin || '14:00',
+                  horarioSaida: reserva.horarioCheckout || '10:00',
+                  quantidadeDias: days,
+                  quantidadeDiarias: days,
+                  totalDiarias: days,
+                  diarias: days
+                },
+                valores: {
+                  ...prev.dados?.valores,
+                  valorDiaria: daily,
+                  valorDiario: daily,
+                  quantidadeDiarias: days,
+                  subtotalDiarias: subtotal,
+                  taxaLimpeza: cleaning,
+                  taxasAdicionais: additional,
+                  outrasTaxas: additional,
+                  desconto: discount,
+                  descontos: discount,
+                  valorTotalLocacao: total,
+                  valorFinal: total
+                },
+                regras: {
+                  ...prev.dados?.regras,
+                  limiteHospedes: reserva.quantidadeHospedes || 2
+                }
+              }
+            }));
+            showToast('Dados da reserva carregados com sucesso!', 'success');
+          }
+        } catch (resErr) {
+          console.error("Erro ao carregar reserva para o contrato:", resErr);
+        } finally {
+          setLoading(false);
+        }
+      }
     };
     handleUrlParam();
   }, [searchParams, id]);
@@ -1902,9 +2099,17 @@ export default function AdminContractForm() {
         : montarEnderecoCompletoImovel(property);
 
       const updatedDados = {
-        ...prev.dados,
+        ...(prev.dados || {}),
+        pagamento: {
+          metodos: [],
+          ...(prev.dados?.pagamento || {})
+        },
+        termos: {
+          metodos: [],
+          ...(prev.dados?.termos || {})
+        },
         imovel: {
-          ...prev.dados?.imovel,
+          ...(prev.dados?.imovel || {}),
           matricula: getMatriculaImovel(property),
           cri: getCriImovel(property),
           tipo: property.propertyType || (property as any).tipoImovel || 'Apartamento',
@@ -2111,6 +2316,37 @@ export default function AdminContractForm() {
         };
       }
 
+      // If Locação Temporária, auto-populate daily rate and cleaning fee from property
+      let propDaily = 0;
+      let propCleaning = 0;
+      if (prev.tipoContrato === 'locacao_temporaria') {
+        const pAny = property as any;
+        propDaily = Number(
+          pAny.valorDiaria || 
+          pAny.precoDiaria || 
+          pAny.priceDiaria || 
+          pAny.diaria || 
+          pAny.priceTemporada || 
+          pAny.valorTemporada || 
+          0
+        );
+        propCleaning = Number(
+          pAny.taxaLimpeza || 
+          pAny.cleaningFee || 
+          pAny.valorLimpeza || 
+          0
+        );
+
+        if (!updatedDados.valores) updatedDados.valores = {};
+        if (propDaily > 0) {
+          updatedDados.valores.valorDiaria = propDaily;
+          updatedDados.valores.valorDiario = propDaily;
+        }
+        if (propCleaning > 0 && !updatedDados.valores.taxaLimpeza) {
+          updatedDados.valores.taxaLimpeza = propCleaning;
+        }
+      }
+
       const clientName = isLocacao && hasTenant && linkedTenant?.nome
         ? linkedTenant.nome
         : prev.nomeCliente;
@@ -2146,7 +2382,8 @@ export default function AdminContractForm() {
         enderecoImovel: logradouroPart,
         nomeVendedor: propOwner.nome || '',
         nomeCliente: clientName,
-        valor: defaultVal,
+        valor: prev.tipoContrato === 'locacao_temporaria' && propDaily > 0 ? prev.valor || (propDaily * (prev.dados?.prazo?.quantidadeDias || 1)) : defaultVal,
+        valorDiaria: propDaily > 0 ? propDaily : prev.valorDiaria,
         dados: updatedDados
       };
     });
@@ -2337,19 +2574,19 @@ export default function AdminContractForm() {
       const val_proposta = Number((contract as any).valorProposta || contract.valor || 0);
 
       if (!im_id) {
-        alert("Selecione um imóvel para criar a proposta.");
+        showToast("Selecione um imóvel para criar a proposta.", 'error');
         return;
       }
-      if (!im_matricula) {
-        alert("Informe o número da matrícula do imóvel.");
+      if (finalizar && !im_matricula) {
+        showToast("Informe o número da matrícula do imóvel antes de finalizar.", 'error');
         return;
       }
-      if (!im_cri) {
-        alert("Informe o CRI do imóvel.");
+      if (finalizar && !im_cri) {
+        showToast("Informe o CRI do imóvel antes de finalizar.", 'error');
         return;
       }
       if (!val_proposta || val_proposta <= 0) {
-        alert("Informe o valor da proposta.");
+        showToast("Informe o valor da proposta.", 'error');
         return;
       }
     }
@@ -2358,14 +2595,39 @@ export default function AdminContractForm() {
     const isCaucao = propertyWarranty === 'Caução' || propertyWarranty === 'Depósito Caução' || propertyWarranty === 'Depósito antecipado';
     const caucaoValue = Number(contract.dados?.valores?.taxaCaucao || 0);
     if (isCaucao && caucaoValue <= 0) {
-      alert("Atenção: A modalidade de garantia do imóvel selecionado é Caução, mas o valor correspondente (Valor Caução) não foi preenchido!");
+      showToast("Atenção: A modalidade de garantia do imóvel selecionado é Caução, mas o valor correspondente (Valor Caução) não foi preenchido!", 'error');
       return;
     }
 
     if (contract.tipoContrato === 'locacao_temporaria') {
-      const days = contract.dados?.prazo?.quantidadeDias || 0;
+      const p = contract.dados?.prazo || {};
+      const v = contract.dados?.valores || {};
+
+      if (!p.dataInicio) {
+        showToast('Informe a data de início (check-in) da locação temporária.', 'error');
+        return;
+      }
+      if (!p.dataTermino) {
+        showToast('Informe a data de término (check-out) da locação temporária.', 'error');
+        return;
+      }
+      if (p.dataTermino <= p.dataInicio) {
+        showToast('A data de saída (término) deve ser posterior à data de entrada (início).', 'error');
+        return;
+      }
+      const days = diffInDays(p.dataInicio, p.dataTermino);
+      if (days <= 0) {
+        showToast('A quantidade de diárias calculada deve ser de pelo menos 1 diária.', 'error');
+        return;
+      }
       if (days > 90) {
-        showToast('A locação temporária não pode ultrapassar 90 dias.', 'error');
+        showToast('A locação temporária não pode ultrapassar 90 dias (Lei do Inquilinato).', 'error');
+        return;
+      }
+
+      const daily = Number(v.valorDiaria ?? v.valorDiario ?? contract.valorDiaria ?? 0);
+      if (daily <= 0) {
+        showToast('Informe um valor de diária válido para a locação temporária (maior que R$ 0,00).', 'error');
         return;
       }
     }
@@ -2649,7 +2911,70 @@ export default function AdminContractForm() {
       }
 
       if (contract.tipoContrato === 'locacao_temporaria') {
+        const p = contract.dados?.prazo || {};
+        const v = contract.dados?.valores || {};
+        const days = diffInDays(p.dataInicio, p.dataTermino);
+        const daily = Number(v.valorDiaria ?? v.valorDiario ?? contract.valorDiaria ?? 0);
+        const subtotal = days * daily;
+        const cleaning = Number(v.taxaLimpeza || 0);
+        const security = Number(v.taxaCaucao || 0);
+        const additional = Number(v.taxasAdicionais ?? v.outrasTaxas ?? 0);
+        const discount = Number(v.desconto ?? v.descontos ?? 0);
+        const total = subtotal + cleaning + additional - discount;
+
         dadosContrato.tipoContratoLabel = "Locação por Temporada";
+        dadosContrato.valor = total;
+        dadosContrato.valorDiaria = daily;
+        dadosContrato.valorDiario = daily;
+        dadosContrato.quantidadeDiarias = days;
+        dadosContrato.quantidadeDias = days;
+        dadosContrato.totalDiarias = days;
+        dadosContrato.dataInicio = p.dataInicio || "";
+        dadosContrato.dataTermino = p.dataTermino || "";
+        dadosContrato.horarioEntrada = p.horarioEntrada || "14:00";
+        dadosContrato.horarioSaida = p.horarioSaida || "10:00";
+        dadosContrato.subtotalDiarias = subtotal;
+        dadosContrato.taxaLimpeza = cleaning;
+        dadosContrato.taxaCaucao = security;
+        dadosContrato.taxasAdicionais = additional;
+        dadosContrato.outrasTaxas = additional;
+        dadosContrato.desconto = discount;
+        dadosContrato.descontos = discount;
+        dadosContrato.valorTotalLocacao = total;
+        dadosContrato.valorFinal = total;
+
+        if (!dadosContrato.dados) dadosContrato.dados = {};
+        dadosContrato.dados.prazo = {
+          ...dadosContrato.dados.prazo,
+          ...p,
+          dataInicio: p.dataInicio || "",
+          dataTermino: p.dataTermino || "",
+          horarioEntrada: p.horarioEntrada || "14:00",
+          horarioSaida: p.horarioSaida || "10:00",
+          quantidadeDias: days,
+          quantidadeDiarias: days,
+          totalDiarias: days,
+          diarias: days
+        };
+        dadosContrato.dados.valores = {
+          ...dadosContrato.dados.valores,
+          ...v,
+          valorDiaria: daily,
+          valorDiario: daily,
+          quantidadeDiarias: days,
+          subtotalDiarias: subtotal,
+          taxaLimpeza: cleaning,
+          taxaCaucao: security,
+          taxasAdicionais: additional,
+          outrasTaxas: additional,
+          desconto: discount,
+          descontos: discount,
+          valorTotalLocacao: total,
+          valorFinal: total,
+          percentualComissaoImobiliaria: v.percentualComissaoImobiliaria ?? 20,
+          valorComissaoImobiliaria: (subtotal * (v.percentualComissaoImobiliaria ?? 20)) / 100,
+          valorRepassadoProprietario: subtotal - ((subtotal * (v.percentualComissaoImobiliaria ?? 20)) / 100)
+        };
       }
 
       if (finalizar) {
@@ -2867,6 +3192,29 @@ export default function AdminContractForm() {
   };
 
   const downloadPDF = async () => {
+    if (contract.tipoContrato === 'locacao_temporaria') {
+      const p = contract.dados?.prazo || {};
+      const v = contract.dados?.valores || {};
+      if (!p.dataInicio || !p.dataTermino) {
+        showToast("Preencha as datas de entrada e saída antes de gerar o contrato em PDF.", "error");
+        return;
+      }
+      if (p.dataTermino <= p.dataInicio) {
+        showToast("A data de saída deve ser posterior à data de entrada para gerar o contrato.", "error");
+        return;
+      }
+      const days = diffInDays(p.dataInicio, p.dataTermino);
+      if (days <= 0) {
+        showToast("Quantidade de diárias inválida (0). Verifique as datas antes de gerar o PDF.", "error");
+        return;
+      }
+      const daily = Number(v.valorDiaria ?? v.valorDiario ?? contract.valorDiaria ?? 0);
+      if (daily <= 0) {
+        showToast("Informe o valor da diária (maior que R$ 0,00) antes de gerar o PDF.", "error");
+        return;
+      }
+    }
+
     const element = document.getElementById("contrato-pdf") || printRef.current;
     if (!element) {
       console.error("Elemento #contrato-pdf não encontrado.");
@@ -3091,9 +3439,9 @@ export default function AdminContractForm() {
     setContract(prev => ({
       ...prev,
       dados: {
-        ...prev.dados,
+        ...(prev.dados || {}),
         [section]: {
-          ...prev.dados[section],
+          ...((prev.dados as any)?.[section] || {}),
           [field]: value
         }
       }
@@ -3101,7 +3449,7 @@ export default function AdminContractForm() {
   };
 
   const toggleMetodo = (section: 'pagamento' | 'termos', metodo: string) => {
-    const currentMetodos = [...(contract.dados[section].metodos || [])];
+    const currentMetodos = [...((contract?.dados as any)?.[section]?.metodos || [])];
     const index = currentMetodos.indexOf(metodo);
     if (index > -1) {
       currentMetodos.splice(index, 1);
@@ -3113,9 +3461,9 @@ export default function AdminContractForm() {
       formasPagamento: currentMetodos,
       formaPagamento: currentMetodos.join(', '),
       dados: {
-        ...prev.dados,
+        ...(prev.dados || {}),
         [section]: {
-          ...prev.dados[section],
+          ...((prev.dados as any)?.[section] || {}),
           metodos: currentMetodos
         }
       }
@@ -3463,11 +3811,11 @@ export default function AdminContractForm() {
                       </div>
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Tipo</label>
-                        <input type="text" className="input-field" value={contract.dados.imovel?.tipo || ''} onChange={e => updateDados('imovel', 'tipo', e.target.value)} />
+                        <input type="text" className="input-field" value={contract.dados?.imovel?.tipo || ''} onChange={e => updateDados('imovel', 'tipo', e.target.value)} />
                       </div>
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Mobiliado</label>
-                        <select className="input-field" value={contract.dados.imovel?.mobiliado || 'Sim'} onChange={e => updateDados('imovel', 'mobiliado', e.target.value)}>
+                        <select className="input-field" value={contract.dados?.imovel?.mobiliado || 'Sim'} onChange={e => updateDados('imovel', 'mobiliado', e.target.value)}>
                           <option value="Sim">Sim</option>
                           <option value="Não">Não</option>
                           <option value="Parcialmente">Parcialmente</option>
@@ -3475,7 +3823,7 @@ export default function AdminContractForm() {
                       </div>
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Código</label>
-                        <input type="text" className="input-field" value={contract.dados.imovel?.codigo || ''} onChange={e => updateDados('imovel', 'codigo', e.target.value)} />
+                        <input type="text" className="input-field" value={contract.dados?.imovel?.codigo || ''} onChange={e => updateDados('imovel', 'codigo', e.target.value)} />
                       </div>
                     </div>
                   </div>
@@ -3503,36 +3851,36 @@ export default function AdminContractForm() {
                           )}
                         </div>
                         <div className="space-y-4">
-                          <input type="text" className="input-field" placeholder="Nome Completo / Razão Social" value={contract.dados.locador?.nome || ''} onChange={e => {
+                          <input type="text" className="input-field" placeholder="Nome Completo / Razão Social" value={contract.dados?.locador?.nome || ''} onChange={e => {
                             updateDados('locador', 'nome', e.target.value);
                             setContract(prev => ({ ...prev, nomeVendedor: e.target.value }));
                           }} />
                           <div className="grid grid-cols-2 gap-4">
-                            <input type="text" className="input-field" placeholder="CPF / CNPJ" value={contract.dados.locador?.cpfCnpj || ''} onChange={e => updateDados('locador', 'cpfCnpj', e.target.value)} />
-                            <input type="text" className="input-field" placeholder="RG / IE" value={contract.dados.locador?.rgIe || ''} onChange={e => updateDados('locador', 'rgIe', e.target.value)} />
+                            <input type="text" className="input-field" placeholder="CPF / CNPJ" value={contract.dados?.locador?.cpfCnpj || ''} onChange={e => updateDados('locador', 'cpfCnpj', e.target.value)} />
+                            <input type="text" className="input-field" placeholder="RG / IE" value={contract.dados?.locador?.rgIe || ''} onChange={e => updateDados('locador', 'rgIe', e.target.value)} />
                           </div>
                           <div className="grid grid-cols-2 gap-4">
-                            <select className="input-field" value={contract.dados.locador?.estadoCivil || 'Solteiro(a)'} onChange={e => updateDados('locador', 'estadoCivil', e.target.value)}>
+                            <select className="input-field" value={contract.dados?.locador?.estadoCivil || 'Solteiro(a)'} onChange={e => updateDados('locador', 'estadoCivil', e.target.value)}>
                               <option value="Solteiro(a)">Solteiro(a)</option>
                               <option value="Casado(a)">Casado(a)</option>
                               <option value="Divorciado(a)">Divorciado(a)</option>
                             </select>
-                            <input type="text" className="input-field" placeholder="Profissão" value={contract.dados.locador?.profissao || ''} onChange={e => updateDados('locador', 'profissao', e.target.value)} />
+                            <input type="text" className="input-field" placeholder="Profissão" value={contract.dados?.locador?.profissao || ''} onChange={e => updateDados('locador', 'profissao', e.target.value)} />
                           </div>
                           <div className="grid grid-cols-2 gap-4">
-                            <input type="text" className="input-field" placeholder="Telefone" value={contract.dados.locador?.telefone || ''} onChange={e => updateDados('locador', 'telefone', e.target.value)} />
-                            <input type="text" className="input-field" placeholder="WhatsApp" value={contract.dados.locador?.whatsapp || ''} onChange={e => updateDados('locador', 'whatsapp', e.target.value)} />
+                            <input type="text" className="input-field" placeholder="Telefone" value={contract.dados?.locador?.telefone || ''} onChange={e => updateDados('locador', 'telefone', e.target.value)} />
+                            <input type="text" className="input-field" placeholder="WhatsApp" value={contract.dados?.locador?.whatsapp || ''} onChange={e => updateDados('locador', 'whatsapp', e.target.value)} />
                           </div>
-                          <input type="email" className="input-field" placeholder="E-mail" value={contract.dados.locador?.email || ''} onChange={e => updateDados('locador', 'email', e.target.value)} />
+                          <input type="email" className="input-field" placeholder="E-mail" value={contract.dados?.locador?.email || ''} onChange={e => updateDados('locador', 'email', e.target.value)} />
                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                             <input type="text" className="input-field" placeholder="Endereço Residencial *" value={contract.dados.locador?.endereco || ''} onChange={e => updateDados('locador', 'endereco', e.target.value)} required />
-                             <input type="text" className="input-field" placeholder="Número *" value={contract.dados.locador?.numero || ''} onChange={e => updateDados('locador', 'numero', e.target.value)} required />
-                             <input type="text" className="input-field" placeholder="Complemento" value={contract.dados.locador?.complemento || ''} onChange={e => updateDados('locador', 'complemento', e.target.value)} />
+                             <input type="text" className="input-field" placeholder="Endereço Residencial *" value={contract.dados?.locador?.endereco || ''} onChange={e => updateDados('locador', 'endereco', e.target.value)} required />
+                             <input type="text" className="input-field" placeholder="Número *" value={contract.dados?.locador?.numero || ''} onChange={e => updateDados('locador', 'numero', e.target.value)} required />
+                             <input type="text" className="input-field" placeholder="Complemento" value={contract.dados?.locador?.complemento || ''} onChange={e => updateDados('locador', 'complemento', e.target.value)} />
                            </div>
                           <div className="grid grid-cols-3 gap-4">
-                            <input type="text" className="col-span-1 input-field" placeholder="CEP" value={contract.dados.locador?.cep || ''} onChange={e => updateDados('locador', 'cep', e.target.value)} />
-                            <input type="text" className="col-span-1 input-field" placeholder="Cidade" value={contract.dados.locador?.cidade || ''} onChange={e => updateDados('locador', 'cidade', e.target.value)} />
-                            <input type="text" className="col-span-1 input-field" placeholder="Estado" value={contract.dados.locador?.estado || ''} onChange={e => updateDados('locador', 'estado', e.target.value)} />
+                            <input type="text" className="col-span-1 input-field" placeholder="CEP" value={contract.dados?.locador?.cep || ''} onChange={e => updateDados('locador', 'cep', e.target.value)} />
+                            <input type="text" className="col-span-1 input-field" placeholder="Cidade" value={contract.dados?.locador?.cidade || ''} onChange={e => updateDados('locador', 'cidade', e.target.value)} />
+                            <input type="text" className="col-span-1 input-field" placeholder="Estado" value={contract.dados?.locador?.estado || ''} onChange={e => updateDados('locador', 'estado', e.target.value)} />
                           </div>
 
                           <div className="flex items-center gap-2 mt-4">
@@ -3553,7 +3901,7 @@ export default function AdminContractForm() {
                                 type="text"
                                 className="input-field"
                                 placeholder="Nome Completo do Cônjuge"
-                                value={contract.dados.locador?.locadorConjugeNome || contract.dados.locador?.conjugeNome || ''}
+                                value={contract.dados?.locador?.locadorConjugeNome || contract.dados?.locador?.conjugeNome || ''}
                                 onChange={e => {
                                   updateDados('locador', 'locadorConjugeNome', e.target.value);
                                   updateDados('locador', 'conjugeNome', e.target.value);
@@ -3564,7 +3912,7 @@ export default function AdminContractForm() {
                                   type="text"
                                   className="input-field"
                                   placeholder="CPF do Cônjuge"
-                                  value={contract.dados.locador?.locadorConjugeCpf || contract.dados.locador?.conjugeCpf || ''}
+                                  value={contract.dados?.locador?.locadorConjugeCpf || contract.dados?.locador?.conjugeCpf || ''}
                                   onChange={e => {
                                     updateDados('locador', 'locadorConjugeCpf', e.target.value);
                                     updateDados('locador', 'conjugeCpf', e.target.value);
@@ -3574,7 +3922,7 @@ export default function AdminContractForm() {
                                   type="text"
                                   className="input-field"
                                   placeholder="RG do Cônjuge"
-                                  value={contract.dados.locador?.locadorConjugeRg || contract.dados.locador?.conjugeRg || ''}
+                                  value={contract.dados?.locador?.locadorConjugeRg || contract.dados?.locador?.conjugeRg || ''}
                                   onChange={e => {
                                     updateDados('locador', 'locadorConjugeRg', e.target.value);
                                     updateDados('locador', 'conjugeRg', e.target.value);
@@ -3584,7 +3932,7 @@ export default function AdminContractForm() {
                               <div className="grid grid-cols-2 gap-4">
                                 <select
                                   className="input-field"
-                                  value={contract.dados.locador?.locadorConjugeEstadoCivil || contract.dados.locador?.conjugeEstadoCivil || 'Casado(a)'}
+                                  value={contract.dados?.locador?.locadorConjugeEstadoCivil || contract.dados?.locador?.conjugeEstadoCivil || 'Casado(a)'}
                                   onChange={e => {
                                     updateDados('locador', 'locadorConjugeEstadoCivil', e.target.value);
                                     updateDados('locador', 'conjugeEstadoCivil', e.target.value);
@@ -3598,7 +3946,7 @@ export default function AdminContractForm() {
                                   type="text"
                                   className="input-field"
                                   placeholder="Profissão do Cônjuge"
-                                  value={contract.dados.locador?.locadorConjugeProfissao || contract.dados.locador?.conjugeProfissao || ''}
+                                  value={contract.dados?.locador?.locadorConjugeProfissao || contract.dados?.locador?.conjugeProfissao || ''}
                                   onChange={e => {
                                     updateDados('locador', 'locadorConjugeProfissao', e.target.value);
                                     updateDados('locador', 'conjugeProfissao', e.target.value);
@@ -3610,7 +3958,7 @@ export default function AdminContractForm() {
                                   type="text"
                                   className="input-field"
                                   placeholder="Telefone do Cônjuge"
-                                  value={contract.dados.locador?.locadorConjugeTelefone || contract.dados.locador?.conjugeTelefone || ''}
+                                  value={contract.dados?.locador?.locadorConjugeTelefone || contract.dados?.locador?.conjugeTelefone || ''}
                                   onChange={e => {
                                     updateDados('locador', 'locadorConjugeTelefone', e.target.value);
                                     updateDados('locador', 'conjugeTelefone', e.target.value);
@@ -3620,7 +3968,7 @@ export default function AdminContractForm() {
                                   type="email"
                                   className="input-field"
                                   placeholder="E-mail do Cônjuge"
-                                  value={contract.dados.locador?.locadorConjugeEmail || contract.dados.locador?.conjugeEmail || ''}
+                                  value={contract.dados?.locador?.locadorConjugeEmail || contract.dados?.locador?.conjugeEmail || ''}
                                   onChange={e => {
                                     updateDados('locador', 'locadorConjugeEmail', e.target.value);
                                     updateDados('locador', 'conjugeEmail', e.target.value);
@@ -3632,7 +3980,7 @@ export default function AdminContractForm() {
                                   type="text"
                                   className="input-field"
                                   placeholder="Endereço Residencial do Cônjuge"
-                                  value={contract.dados.locador?.locadorConjugeEndereco || contract.dados.locador?.conjugeEndereco || ''}
+                                  value={contract.dados?.locador?.locadorConjugeEndereco || contract.dados?.locador?.conjugeEndereco || ''}
                                   onChange={e => {
                                     updateDados('locador', 'locadorConjugeEndereco', e.target.value);
                                     updateDados('locador', 'conjugeEndereco', e.target.value);
@@ -3642,7 +3990,7 @@ export default function AdminContractForm() {
                                   type="text"
                                   className="input-field"
                                   placeholder="Número do Cônjuge"
-                                  value={contract.dados.locador?.locadorConjugeNumero || contract.dados.locador?.conjugeNumero || ''}
+                                  value={contract.dados?.locador?.locadorConjugeNumero || contract.dados?.locador?.conjugeNumero || ''}
                                   onChange={e => {
                                     updateDados('locador', 'locadorConjugeNumero', e.target.value);
                                     updateDados('locador', 'conjugeNumero', e.target.value);
@@ -3652,7 +4000,7 @@ export default function AdminContractForm() {
                                   type="text"
                                   className="input-field"
                                   placeholder="Complemento do Cônjuge"
-                                  value={contract.dados.locador?.locadorConjugeComplemento || contract.dados.locador?.conjugeComplemento || ''}
+                                  value={contract.dados?.locador?.locadorConjugeComplemento || contract.dados?.locador?.conjugeComplemento || ''}
                                   onChange={e => {
                                     updateDados('locador', 'locadorConjugeComplemento', e.target.value);
                                     updateDados('locador', 'conjugeComplemento', e.target.value);
@@ -3678,43 +4026,43 @@ export default function AdminContractForm() {
                           )}
                         </div>
                         <div className="space-y-4">
-                          <input type="text" className="input-field" placeholder="Nome Completo" value={contract.dados.locatario?.nome || ''} onChange={e => {
+                          <input type="text" className="input-field" placeholder="Nome Completo" value={contract.dados?.locatario?.nome || ''} onChange={e => {
                             updateDados('locatario', 'nome', e.target.value);
                             setContract(prev => ({ ...prev, nomeCliente: e.target.value }));
                           }} />
                           <div className="grid grid-cols-2 gap-4">
-                            <input type="text" className="input-field" placeholder="CPF" value={contract.dados.locatario?.cpf || ''} onChange={e => updateDados('locatario', 'cpf', e.target.value)} />
-                            <input type="text" className="input-field" placeholder="RG" value={contract.dados.locatario?.rg || ''} onChange={e => updateDados('locatario', 'rg', e.target.value)} />
+                            <input type="text" className="input-field" placeholder="CPF" value={contract.dados?.locatario?.cpf || ''} onChange={e => updateDados('locatario', 'cpf', e.target.value)} />
+                            <input type="text" className="input-field" placeholder="RG" value={contract.dados?.locatario?.rg || ''} onChange={e => updateDados('locatario', 'rg', e.target.value)} />
                           </div>
                           <div className="grid grid-cols-2 gap-4">
-                            <input type="text" className="input-field" placeholder="Nacionalidade" value={contract.dados.locatario?.nacionalidade || 'Brasileiro(a)'} onChange={e => updateDados('locatario', 'nacionalidade', e.target.value)} />
+                            <input type="text" className="input-field" placeholder="Nacionalidade" value={contract.dados?.locatario?.nacionalidade || 'Brasileiro(a)'} onChange={e => updateDados('locatario', 'nacionalidade', e.target.value)} />
                             <div className="space-y-1">
                               <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest pl-1">Data de Nascimento</span>
-                              <input type="date" className="input-field !py-2" value={contract.dados.locatario?.dataNascimento || ''} onChange={e => updateDados('locatario', 'dataNascimento', e.target.value)} />
+                              <input type="date" className="input-field !py-2" value={contract.dados?.locatario?.dataNascimento || ''} onChange={e => updateDados('locatario', 'dataNascimento', e.target.value)} />
                             </div>
                           </div>
                           <div className="grid grid-cols-2 gap-4">
-                            <select className="input-field" value={contract.dados.locatario?.estadoCivil || 'Solteiro(a)'} onChange={e => updateDados('locatario', 'estadoCivil', e.target.value)}>
+                            <select className="input-field" value={contract.dados?.locatario?.estadoCivil || 'Solteiro(a)'} onChange={e => updateDados('locatario', 'estadoCivil', e.target.value)}>
                               <option value="Solteiro(a)">Solteiro(a)</option>
                               <option value="Casado(a)">Casado(a)</option>
                               <option value="Divorciado(a)">Divorciado(a)</option>
                             </select>
-                            <input type="text" className="input-field" placeholder="Profissão" value={contract.dados.locatario?.profissao || ''} onChange={e => updateDados('locatario', 'profissao', e.target.value)} />
+                            <input type="text" className="input-field" placeholder="Profissão" value={contract.dados?.locatario?.profissao || ''} onChange={e => updateDados('locatario', 'profissao', e.target.value)} />
                           </div>
                           <div className="grid grid-cols-2 gap-4">
-                            <input type="text" className="input-field" placeholder="Telefone" value={contract.dados.locatario?.telefone || ''} onChange={e => updateDados('locatario', 'telefone', e.target.value)} />
-                            <input type="text" className="input-field" placeholder="WhatsApp" value={contract.dados.locatario?.whatsapp || ''} onChange={e => updateDados('locatario', 'whatsapp', e.target.value)} />
+                            <input type="text" className="input-field" placeholder="Telefone" value={contract.dados?.locatario?.telefone || ''} onChange={e => updateDados('locatario', 'telefone', e.target.value)} />
+                            <input type="text" className="input-field" placeholder="WhatsApp" value={contract.dados?.locatario?.whatsapp || ''} onChange={e => updateDados('locatario', 'whatsapp', e.target.value)} />
                           </div>
-                          <input type="email" className="input-field" placeholder="E-mail" value={contract.dados.locatario?.email || ''} onChange={e => updateDados('locatario', 'email', e.target.value)} />
+                          <input type="email" className="input-field" placeholder="E-mail" value={contract.dados?.locatario?.email || ''} onChange={e => updateDados('locatario', 'email', e.target.value)} />
                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                             <input type="text" className="input-field" placeholder="Endereço Residencial *" value={contract.dados.locatario?.endereco || ''} onChange={e => updateDados('locatario', 'endereco', e.target.value)} required />
-                             <input type="text" className="input-field" placeholder="Número *" value={contract.dados.locatario?.numero || ''} onChange={e => updateDados('locatario', 'numero', e.target.value)} required />
-                             <input type="text" className="input-field" placeholder="Complemento" value={contract.dados.locatario?.complemento || ''} onChange={e => updateDados('locatario', 'complemento', e.target.value)} />
+                             <input type="text" className="input-field" placeholder="Endereço Residencial *" value={contract.dados?.locatario?.endereco || ''} onChange={e => updateDados('locatario', 'endereco', e.target.value)} required />
+                             <input type="text" className="input-field" placeholder="Número *" value={contract.dados?.locatario?.numero || ''} onChange={e => updateDados('locatario', 'numero', e.target.value)} required />
+                             <input type="text" className="input-field" placeholder="Complemento" value={contract.dados?.locatario?.complemento || ''} onChange={e => updateDados('locatario', 'complemento', e.target.value)} />
                            </div>
                           <div className="grid grid-cols-3 gap-4">
-                            <input type="text" className="col-span-1 input-field" placeholder="CEP" value={contract.dados.locatario?.cep || ''} onChange={e => updateDados('locatario', 'cep', e.target.value)} />
-                            <input type="text" className="col-span-1 input-field" placeholder="Cidade" value={contract.dados.locatario?.cidade || ''} onChange={e => updateDados('locatario', 'cidade', e.target.value)} />
-                            <input type="text" className="col-span-1 input-field" placeholder="Estado" value={contract.dados.locatario?.estado || ''} onChange={e => updateDados('locatario', 'estado', e.target.value)} />
+                            <input type="text" className="col-span-1 input-field" placeholder="CEP" value={contract.dados?.locatario?.cep || ''} onChange={e => updateDados('locatario', 'cep', e.target.value)} />
+                            <input type="text" className="col-span-1 input-field" placeholder="Cidade" value={contract.dados?.locatario?.cidade || ''} onChange={e => updateDados('locatario', 'cidade', e.target.value)} />
+                            <input type="text" className="col-span-1 input-field" placeholder="Estado" value={contract.dados?.locatario?.estado || ''} onChange={e => updateDados('locatario', 'estado', e.target.value)} />
                           </div>
 
                           <div className="flex items-center gap-2 mt-4">
@@ -3735,7 +4083,7 @@ export default function AdminContractForm() {
                                 type="text"
                                 className="input-field"
                                 placeholder="Nome Completo do Cônjuge"
-                                value={contract.dados.locatario?.locatarioConjugeNome || contract.dados.locatario?.conjugeNome || ''}
+                                value={contract.dados?.locatario?.locatarioConjugeNome || contract.dados?.locatario?.conjugeNome || ''}
                                 onChange={e => {
                                   updateDados('locatario', 'locatarioConjugeNome', e.target.value);
                                   updateDados('locatario', 'conjugeNome', e.target.value);
@@ -3746,7 +4094,7 @@ export default function AdminContractForm() {
                                   type="text"
                                   className="input-field"
                                   placeholder="CPF do Cônjuge"
-                                  value={contract.dados.locatario?.locatarioConjugeCpf || contract.dados.locatario?.conjugeCpf || ''}
+                                  value={contract.dados?.locatario?.locatarioConjugeCpf || contract.dados?.locatario?.conjugeCpf || ''}
                                   onChange={e => {
                                     updateDados('locatario', 'locatarioConjugeCpf', e.target.value);
                                     updateDados('locatario', 'conjugeCpf', e.target.value);
@@ -3756,7 +4104,7 @@ export default function AdminContractForm() {
                                   type="text"
                                   className="input-field"
                                   placeholder="RG do Cônjuge"
-                                  value={contract.dados.locatario?.locatarioConjugeRg || contract.dados.locatario?.conjugeRg || ''}
+                                  value={contract.dados?.locatario?.locatarioConjugeRg || contract.dados?.locatario?.conjugeRg || ''}
                                   onChange={e => {
                                     updateDados('locatario', 'locatarioConjugeRg', e.target.value);
                                     updateDados('locatario', 'conjugeRg', e.target.value);
@@ -3766,7 +4114,7 @@ export default function AdminContractForm() {
                               <div className="grid grid-cols-2 gap-4">
                                 <select
                                   className="input-field"
-                                  value={contract.dados.locatario?.locatarioConjugeEstadoCivil || contract.dados.locatario?.conjugeEstadoCivil || 'Casado(a)'}
+                                  value={contract.dados?.locatario?.locatarioConjugeEstadoCivil || contract.dados?.locatario?.conjugeEstadoCivil || 'Casado(a)'}
                                   onChange={e => {
                                     updateDados('locatario', 'locatarioConjugeEstadoCivil', e.target.value);
                                     updateDados('locatario', 'conjugeEstadoCivil', e.target.value);
@@ -3780,7 +4128,7 @@ export default function AdminContractForm() {
                                   type="text"
                                   className="input-field"
                                   placeholder="Profissão do Cônjuge"
-                                  value={contract.dados.locatario?.locatarioConjugeProfissao || contract.dados.locatario?.conjugeProfissao || ''}
+                                  value={contract.dados?.locatario?.locatarioConjugeProfissao || contract.dados?.locatario?.conjugeProfissao || ''}
                                   onChange={e => {
                                     updateDados('locatario', 'locatarioConjugeProfissao', e.target.value);
                                     updateDados('locatario', 'conjugeProfissao', e.target.value);
@@ -3792,7 +4140,7 @@ export default function AdminContractForm() {
                                   type="text"
                                   className="input-field"
                                   placeholder="Telefone do Cônjuge"
-                                  value={contract.dados.locatario?.locatarioConjugeTelefone || contract.dados.locatario?.conjugeTelefone || ''}
+                                  value={contract.dados?.locatario?.locatarioConjugeTelefone || contract.dados?.locatario?.conjugeTelefone || ''}
                                   onChange={e => {
                                     updateDados('locatario', 'locatarioConjugeTelefone', e.target.value);
                                     updateDados('locatario', 'conjugeTelefone', e.target.value);
@@ -3802,7 +4150,7 @@ export default function AdminContractForm() {
                                   type="email"
                                   className="input-field"
                                   placeholder="E-mail do Cônjuge"
-                                  value={contract.dados.locatario?.locatarioConjugeEmail || contract.dados.locatario?.conjugeEmail || ''}
+                                  value={contract.dados?.locatario?.locatarioConjugeEmail || contract.dados?.locatario?.conjugeEmail || ''}
                                   onChange={e => {
                                     updateDados('locatario', 'locatarioConjugeEmail', e.target.value);
                                     updateDados('locatario', 'conjugeEmail', e.target.value);
@@ -3814,7 +4162,7 @@ export default function AdminContractForm() {
                                   type="text"
                                   className="input-field"
                                   placeholder="Endereço Residencial do Cônjuge"
-                                  value={contract.dados.locatario?.locatarioConjugeEndereco || contract.dados.locatario?.conjugeEndereco || ''}
+                                  value={contract.dados?.locatario?.locatarioConjugeEndereco || contract.dados?.locatario?.conjugeEndereco || ''}
                                   onChange={e => {
                                     updateDados('locatario', 'locatarioConjugeEndereco', e.target.value);
                                     updateDados('locatario', 'conjugeEndereco', e.target.value);
@@ -3824,7 +4172,7 @@ export default function AdminContractForm() {
                                   type="text"
                                   className="input-field"
                                   placeholder="Número do Cônjuge"
-                                  value={contract.dados.locatario?.locatarioConjugeNumero || contract.dados.locatario?.conjugeNumero || ''}
+                                  value={contract.dados?.locatario?.locatarioConjugeNumero || contract.dados?.locatario?.conjugeNumero || ''}
                                   onChange={e => {
                                     updateDados('locatario', 'locatarioConjugeNumero', e.target.value);
                                     updateDados('locatario', 'conjugeNumero', e.target.value);
@@ -3834,7 +4182,7 @@ export default function AdminContractForm() {
                                   type="text"
                                   className="input-field"
                                   placeholder="Complemento do Cônjuge"
-                                  value={contract.dados.locatario?.locatarioConjugeComplemento || contract.dados.locatario?.conjugeComplemento || ''}
+                                  value={contract.dados?.locatario?.locatarioConjugeComplemento || contract.dados?.locatario?.conjugeComplemento || ''}
                                   onChange={e => {
                                     updateDados('locatario', 'locatarioConjugeComplemento', e.target.value);
                                     updateDados('locatario', 'conjugeComplemento', e.target.value);
@@ -3854,36 +4202,36 @@ export default function AdminContractForm() {
                         <div className="space-y-4">
                           <div className="space-y-2">
                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Nome Completo do Fiador</label>
-                            <input type="text" className="input-field" placeholder="Nome Completo" value={contract.dados.fiador?.nome || ''} onChange={e => updateDados('fiador', 'nome', e.target.value)} />
+                            <input type="text" className="input-field" placeholder="Nome Completo" value={contract.dados?.fiador?.nome || ''} onChange={e => updateDados('fiador', 'nome', e.target.value)} />
                           </div>
                           <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">CPF / CNPJ</label>
-                              <input type="text" className="input-field" placeholder="Documento" value={contract.dados.fiador?.cpfCnpj || ''} onChange={e => updateDados('fiador', 'cpfCnpj', e.target.value)} />
+                              <input type="text" className="input-field" placeholder="Documento" value={contract.dados?.fiador?.cpfCnpj || ''} onChange={e => updateDados('fiador', 'cpfCnpj', e.target.value)} />
                             </div>
                             <div className="space-y-2">
                               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Telefone</label>
-                              <input type="text" className="input-field" placeholder="Telefone" value={contract.dados.fiador?.telefone || ''} onChange={e => updateDados('fiador', 'telefone', e.target.value)} />
+                              <input type="text" className="input-field" placeholder="Telefone" value={contract.dados?.fiador?.telefone || ''} onChange={e => updateDados('fiador', 'telefone', e.target.value)} />
                             </div>
                           </div>
                         </div>
                         <div className="space-y-4">
                           <div className="space-y-2">
                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">E-mail</label>
-                            <input type="email" className="input-field" placeholder="E-mail" value={contract.dados.fiador?.email || ''} onChange={e => updateDados('fiador', 'email', e.target.value)} />
+                            <input type="email" className="input-field" placeholder="E-mail" value={contract.dados?.fiador?.email || ''} onChange={e => updateDados('fiador', 'email', e.target.value)} />
                           </div>
                            <div className="space-y-2">
                              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Endereço Residencial do Fiador <span className="text-red-500">*</span></label>
-                             <input type="text" className="input-field" placeholder="Endereço Completo" value={contract.dados.fiador?.endereco || ''} onChange={e => updateDados('fiador', 'endereco', e.target.value)} required />
+                             <input type="text" className="input-field" placeholder="Endereço Completo" value={contract.dados?.fiador?.endereco || ''} onChange={e => updateDados('fiador', 'endereco', e.target.value)} required />
                            </div>
                            <div className="grid grid-cols-2 gap-4">
                              <div className="space-y-2">
                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Número <span className="text-red-500">*</span></label>
-                               <input type="text" className="input-field" placeholder="Número" value={contract.dados.fiador?.numero || ''} onChange={e => updateDados('fiador', 'numero', e.target.value)} required />
+                               <input type="text" className="input-field" placeholder="Número" value={contract.dados?.fiador?.numero || ''} onChange={e => updateDados('fiador', 'numero', e.target.value)} required />
                              </div>
                              <div className="space-y-2">
                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Complemento</label>
-                               <input type="text" className="input-field" placeholder="Complemento" value={contract.dados.fiador?.complemento || ''} onChange={e => updateDados('fiador', 'complemento', e.target.value)} />
+                               <input type="text" className="input-field" placeholder="Complemento" value={contract.dados?.fiador?.complemento || ''} onChange={e => updateDados('fiador', 'complemento', e.target.value)} />
                              </div>
                            </div>
                         </div>
@@ -3905,23 +4253,23 @@ export default function AdminContractForm() {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1 text-gold">Data de Início</label>
-                        <input type="date" className="input-field" value={contract.dados.prazo?.dataInicio || ''} onChange={e => updateDados('prazo', 'dataInicio', e.target.value)} />
+                        <input type="date" className="input-field" value={contract.dados?.prazo?.dataInicio || ''} onChange={e => updateDados('prazo', 'dataInicio', e.target.value)} />
                       </div>
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1 text-gold">Data de Término</label>
-                        <input type="date" className="input-field" value={contract.dados.prazo?.dataTermino || ''} onChange={e => updateDados('prazo', 'dataTermino', e.target.value)} />
+                        <input type="date" className="input-field" value={contract.dados?.prazo?.dataTermino || ''} onChange={e => updateDados('prazo', 'dataTermino', e.target.value)} />
                       </div>
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Horário Check-in</label>
-                        <input type="time" className="input-field" value={contract.dados.prazo?.horarioEntrada || '14:00'} onChange={e => updateDados('prazo', 'horarioEntrada', e.target.value)} />
+                        <input type="time" className="input-field" value={contract.dados?.prazo?.horarioEntrada || '14:00'} onChange={e => updateDados('prazo', 'horarioEntrada', e.target.value)} />
                       </div>
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Horário Check-out</label>
-                        <input type="time" className="input-field" value={contract.dados.prazo?.horarioSaida || '10:00'} onChange={e => updateDados('prazo', 'horarioSaida', e.target.value)} />
+                        <input type="time" className="input-field" value={contract.dados?.prazo?.horarioSaida || '10:00'} onChange={e => updateDados('prazo', 'horarioSaida', e.target.value)} />
                       </div>
                     </div>
                     <div className="mt-8 p-6 bg-gold/5 rounded-2xl border border-gold/10">
-                       <p className="text-lg font-display font-bold text-primary-black">Duração: <span className="text-gold">{contract.dados.prazo?.quantidadeDias || 0} dias</span></p>
+                       <p className="text-lg font-display font-bold text-primary-black">Duração: <span className="text-gold">{contract.dados?.prazo?.quantidadeDias || 0} dias</span></p>
                     </div>
                   </div>
                 </>
@@ -3971,7 +4319,7 @@ export default function AdminContractForm() {
                         <input 
                           type="text" 
                           className="input-field" 
-                          value={contract.imovelCodigo || contract.dados.imovel?.codigo || ''} 
+                          value={contract.imovelCodigo || contract.dados?.imovel?.codigo || ''} 
                           onChange={e => {
                             setContract(prev => ({ ...prev, imovelCodigo: e.target.value }));
                             updateDados('imovel', 'codigo', e.target.value);
@@ -3984,7 +4332,7 @@ export default function AdminContractForm() {
                         <input 
                           type="text" 
                           className="input-field" 
-                          value={contract.imovelTitulo || contract.imovelNomeEdificio || contract.dados.imovel?.titulo || ''} 
+                          value={contract.imovelTitulo || contract.imovelNomeEdificio || contract.dados?.imovel?.titulo || ''} 
                           onChange={e => {
                             setContract(prev => ({ ...prev, imovelTitulo: e.target.value, imovelNomeEdificio: e.target.value }));
                             updateDados('imovel', 'titulo', e.target.value);
@@ -3998,7 +4346,7 @@ export default function AdminContractForm() {
                           type="text" 
                           className="input-field" 
                           placeholder="Ex: Apartamento, Cobertura, Casa"
-                          value={contract.dados.imovel?.tipo || contract.imovelTipo || 'Apartamento'} 
+                          value={contract.dados?.imovel?.tipo || contract.imovelTipo || 'Apartamento'} 
                           onChange={e => {
                             updateDados('imovel', 'tipo', e.target.value);
                             setContract(prev => ({ ...prev, imovelTipo: e.target.value }));
@@ -4011,7 +4359,7 @@ export default function AdminContractForm() {
                         <input 
                           type="text" 
                           className="input-field" 
-                          value={contract.enderecoImovel || contract.dados.imovel?.endereco || ''} 
+                          value={contract.enderecoImovel || contract.dados?.imovel?.endereco || ''} 
                           onChange={e => {
                             setContract(prev => ({ ...prev, enderecoImovel: e.target.value }));
                             updateDados('imovel', 'endereco', e.target.value);
@@ -4025,7 +4373,7 @@ export default function AdminContractForm() {
                           <input 
                             type="text" 
                             className="input-field" 
-                            value={contract.dados.imovel?.numero || ''} 
+                            value={contract.dados?.imovel?.numero || ''} 
                             onChange={e => updateDados('imovel', 'numero', e.target.value)} 
                           />
                         </div>
@@ -4034,7 +4382,7 @@ export default function AdminContractForm() {
                           <input 
                             type="text" 
                             className="input-field" 
-                            value={contract.dados.imovel?.complemento || ''} 
+                            value={contract.dados?.imovel?.complemento || ''} 
                             onChange={e => updateDados('imovel', 'complemento', e.target.value)} 
                           />
                         </div>
@@ -4045,7 +4393,7 @@ export default function AdminContractForm() {
                         <input 
                           type="text" 
                           className="input-field" 
-                          value={contract.dados.imovel?.bairro || contract.imovelBairro || ''} 
+                          value={contract.dados?.imovel?.bairro || contract.imovelBairro || ''} 
                           onChange={e => {
                             updateDados('imovel', 'bairro', e.target.value);
                             setContract(prev => ({ ...prev, imovelBairro: e.target.value }));
@@ -4058,7 +4406,7 @@ export default function AdminContractForm() {
                         <input 
                           type="text" 
                           className="input-field" 
-                          value={contract.dados.imovel?.cidade || contract.imovelCidade || 'Balneário Camboriú'} 
+                          value={contract.dados?.imovel?.cidade || contract.imovelCidade || 'Balneário Camboriú'} 
                           onChange={e => {
                             updateDados('imovel', 'cidade', e.target.value);
                             setContract(prev => ({ ...prev, imovelCidade: e.target.value }));
@@ -4072,7 +4420,7 @@ export default function AdminContractForm() {
                           <input 
                             type="text" 
                             className="input-field" 
-                            value={contract.dados.imovel?.estado || contract.imovelEstado || 'SC'} 
+                            value={contract.dados?.imovel?.estado || contract.imovelEstado || 'SC'} 
                             onChange={e => {
                               updateDados('imovel', 'estado', e.target.value);
                               setContract(prev => ({ ...prev, imovelEstado: e.target.value }));
@@ -4084,7 +4432,7 @@ export default function AdminContractForm() {
                           <input 
                             type="text" 
                             className="input-field" 
-                            value={contract.dados.imovel?.cep || contract.imovelCep || ''} 
+                            value={contract.dados?.imovel?.cep || contract.imovelCep || ''} 
                             onChange={e => {
                               updateDados('imovel', 'cep', e.target.value);
                               setContract(prev => ({ ...prev, imovelCep: e.target.value }));
@@ -4099,7 +4447,7 @@ export default function AdminContractForm() {
                           type="text" 
                           className="input-field" 
                           placeholder="Nº da Matrícula"
-                          value={contract.dados.imovel?.matricula || (contract as any).imovelMatricula || ''} 
+                          value={contract.dados?.imovel?.matricula || (contract as any).imovelMatricula || ''} 
                           onChange={e => {
                             updateDados('imovel', 'matricula', e.target.value);
                             setContract(prev => ({ ...prev, imovelMatricula: e.target.value }));
@@ -4113,7 +4461,7 @@ export default function AdminContractForm() {
                           type="text" 
                           className="input-field" 
                           placeholder="Ex: 1º Ofício de Registro de Imóveis"
-                          value={contract.dados.imovel?.cri || (contract as any).imovelCri || ''} 
+                          value={contract.dados?.imovel?.cri || (contract as any).imovelCri || ''} 
                           onChange={e => {
                             updateDados('imovel', 'cri', e.target.value);
                             setContract(prev => ({ ...prev, imovelCri: e.target.value }));
@@ -4125,7 +4473,7 @@ export default function AdminContractForm() {
                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Status de Mobília</label>
                         <select 
                           className="input-field" 
-                          value={contract.dados.imovel?.mobiliado || 'Sim'} 
+                          value={contract.dados?.imovel?.mobiliado || 'Sim'} 
                           onChange={e => updateDados('imovel', 'mobiliado', e.target.value)}
                         >
                           <option value="Sim">Mobiliado e Equipado</option>
@@ -4140,7 +4488,7 @@ export default function AdminContractForm() {
                           rows={2}
                           className="input-field py-3 min-h-[60px]" 
                           placeholder="Vagas de garagem, itens de lazer, aparelhos de ar-condicionado, utensílios..."
-                          value={contract.dados.imovel?.caracteristicas || ''} 
+                          value={contract.dados?.imovel?.caracteristicas || ''} 
                           onChange={e => updateDados('imovel', 'caracteristicas', e.target.value)} 
                         />
                       </div>
@@ -4178,7 +4526,7 @@ export default function AdminContractForm() {
                               type="text" 
                               className="input-field" 
                               placeholder="Nome Completo" 
-                              value={contract.nomeVendedor || contract.dados.vendedor?.nome || ''} 
+                              value={contract.nomeVendedor || contract.dados?.vendedor?.nome || ''} 
                               onChange={e => {
                                 updateDados('vendedor', 'nome', e.target.value);
                                 updateDados('proprietario', 'nome', e.target.value);
@@ -4194,7 +4542,7 @@ export default function AdminContractForm() {
                                 type="text" 
                                 className="input-field" 
                                 placeholder="CPF ou CNPJ" 
-                                value={contract.dados.vendedor?.cpf || contract.dados.vendedor?.cpfCnpj || ''} 
+                                value={contract.dados?.vendedor?.cpf || contract.dados?.vendedor?.cpfCnpj || ''} 
                                 onChange={e => {
                                   updateDados('vendedor', 'cpf', e.target.value);
                                   updateDados('vendedor', 'cpfCnpj', e.target.value);
@@ -4208,7 +4556,7 @@ export default function AdminContractForm() {
                                 type="text" 
                                 className="input-field" 
                                 placeholder="RG" 
-                                value={contract.dados.vendedor?.rg || contract.dados.vendedor?.rgIe || ''} 
+                                value={contract.dados?.vendedor?.rg || contract.dados?.vendedor?.rgIe || ''} 
                                 onChange={e => {
                                   updateDados('vendedor', 'rg', e.target.value);
                                   updateDados('proprietario', 'rg', e.target.value);
@@ -4224,7 +4572,7 @@ export default function AdminContractForm() {
                                 type="text" 
                                 className="input-field" 
                                 placeholder="Nacionalidade" 
-                                value={contract.dados.vendedor?.nacionalidade || 'Brasileiro(a)'} 
+                                value={contract.dados?.vendedor?.nacionalidade || 'Brasileiro(a)'} 
                                 onChange={e => {
                                   updateDados('vendedor', 'nacionalidade', e.target.value);
                                   updateDados('proprietario', 'nacionalidade', e.target.value);
@@ -4235,7 +4583,7 @@ export default function AdminContractForm() {
                               <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest pl-1">Estado Civil</label>
                               <select 
                                 className="input-field" 
-                                value={contract.dados.vendedor?.estadoCivil || 'Solteiro(a)'} 
+                                value={contract.dados?.vendedor?.estadoCivil || 'Solteiro(a)'} 
                                 onChange={e => {
                                   updateDados('vendedor', 'estadoCivil', e.target.value);
                                   updateDados('proprietario', 'estadoCivil', e.target.value);
@@ -4257,7 +4605,7 @@ export default function AdminContractForm() {
                                 type="text" 
                                 className="input-field" 
                                 placeholder="Profissão" 
-                                value={contract.dados.vendedor?.profissao || ''} 
+                                value={contract.dados?.vendedor?.profissao || ''} 
                                 onChange={e => {
                                   updateDados('vendedor', 'profissao', e.target.value);
                                   updateDados('proprietario', 'profissao', e.target.value);
@@ -4270,7 +4618,7 @@ export default function AdminContractForm() {
                                 type="text" 
                                 className="input-field" 
                                 placeholder="(XX) XXXXX-XXXX" 
-                                value={contract.dados.vendedor?.whatsapp || contract.dados.vendedor?.telefone || ''} 
+                                value={contract.dados?.vendedor?.whatsapp || contract.dados?.vendedor?.telefone || ''} 
                                 onChange={e => {
                                   updateDados('vendedor', 'telefone', e.target.value);
                                   updateDados('vendedor', 'whatsapp', e.target.value);
@@ -4286,7 +4634,7 @@ export default function AdminContractForm() {
                               type="email" 
                               className="input-field" 
                               placeholder="E-mail do Proprietário" 
-                              value={contract.dados.vendedor?.email || ''} 
+                              value={contract.dados?.vendedor?.email || ''} 
                               onChange={e => {
                                 updateDados('vendedor', 'email', e.target.value);
                                 updateDados('proprietario', 'email', e.target.value);
@@ -4301,7 +4649,7 @@ export default function AdminContractForm() {
                                 type="text" 
                                 className="input-field" 
                                 placeholder="Rua / Logradouro" 
-                                value={contract.dados.vendedor?.endereco || ''} 
+                                value={contract.dados?.vendedor?.endereco || ''} 
                                 onChange={e => {
                                   updateDados('vendedor', 'endereco', e.target.value);
                                   updateDados('proprietario', 'endereco', e.target.value);
@@ -4314,7 +4662,7 @@ export default function AdminContractForm() {
                                 type="text" 
                                 className="input-field" 
                                 placeholder="Nº" 
-                                value={contract.dados.vendedor?.numero || ''} 
+                                value={contract.dados?.vendedor?.numero || ''} 
                                 onChange={e => {
                                   updateDados('vendedor', 'numero', e.target.value);
                                   updateDados('proprietario', 'numero', e.target.value);
@@ -4330,7 +4678,7 @@ export default function AdminContractForm() {
                                 type="text" 
                                 className="input-field" 
                                 placeholder="CEP" 
-                                value={contract.dados.vendedor?.cep || ''} 
+                                value={contract.dados?.vendedor?.cep || ''} 
                                 onChange={e => {
                                   updateDados('vendedor', 'cep', e.target.value);
                                   updateDados('proprietario', 'cep', e.target.value);
@@ -4343,7 +4691,7 @@ export default function AdminContractForm() {
                                 type="text" 
                                 className="input-field" 
                                 placeholder="Cidade" 
-                                value={contract.dados.vendedor?.cidade || ''} 
+                                value={contract.dados?.vendedor?.cidade || ''} 
                                 onChange={e => {
                                   updateDados('vendedor', 'cidade', e.target.value);
                                   updateDados('proprietario', 'cidade', e.target.value);
@@ -4356,7 +4704,7 @@ export default function AdminContractForm() {
                                 type="text" 
                                 className="input-field" 
                                 placeholder="UF" 
-                                value={contract.dados.vendedor?.estado || 'SC'} 
+                                value={contract.dados?.vendedor?.estado || 'SC'} 
                                 onChange={e => {
                                   updateDados('vendedor', 'estado', e.target.value);
                                   updateDados('proprietario', 'estado', e.target.value);
@@ -4386,7 +4734,7 @@ export default function AdminContractForm() {
                                 type="text"
                                 className="input-field"
                                 placeholder="Nome Completo do Cônjuge"
-                                value={contract.dados.vendedor?.vendedorConjugeNome || contract.dados.vendedor?.conjugeNome || ''}
+                                value={contract.dados?.vendedor?.vendedorConjugeNome || contract.dados?.vendedor?.conjugeNome || ''}
                                 onChange={e => {
                                   updateDados('vendedor', 'vendedorConjugeNome', e.target.value);
                                   updateDados('vendedor', 'conjugeNome', e.target.value);
@@ -4397,7 +4745,7 @@ export default function AdminContractForm() {
                                   type="text"
                                   className="input-field"
                                   placeholder="CPF do Cônjuge"
-                                  value={contract.dados.vendedor?.vendedorConjugeCpf || contract.dados.vendedor?.conjugeCpf || ''}
+                                  value={contract.dados?.vendedor?.vendedorConjugeCpf || contract.dados?.vendedor?.conjugeCpf || ''}
                                   onChange={e => {
                                     updateDados('vendedor', 'vendedorConjugeCpf', e.target.value);
                                     updateDados('vendedor', 'conjugeCpf', e.target.value);
@@ -4407,7 +4755,7 @@ export default function AdminContractForm() {
                                   type="text"
                                   className="input-field"
                                   placeholder="RG do Cônjuge"
-                                  value={contract.dados.vendedor?.vendedorConjugeRg || contract.dados.vendedor?.conjugeRg || ''}
+                                  value={contract.dados?.vendedor?.vendedorConjugeRg || contract.dados?.vendedor?.conjugeRg || ''}
                                   onChange={e => {
                                     updateDados('vendedor', 'vendedorConjugeRg', e.target.value);
                                     updateDados('vendedor', 'conjugeRg', e.target.value);
@@ -4419,7 +4767,7 @@ export default function AdminContractForm() {
                                   type="text"
                                   className="input-field"
                                   placeholder="Profissão do Cônjuge"
-                                  value={contract.dados.vendedor?.vendedorConjugeProfissao || contract.dados.vendedor?.conjugeProfissao || ''}
+                                  value={contract.dados?.vendedor?.vendedorConjugeProfissao || contract.dados?.vendedor?.conjugeProfissao || ''}
                                   onChange={e => {
                                     updateDados('vendedor', 'vendedorConjugeProfissao', e.target.value);
                                     updateDados('vendedor', 'conjugeProfissao', e.target.value);
@@ -4429,7 +4777,7 @@ export default function AdminContractForm() {
                                   type="text"
                                   className="input-field"
                                   placeholder="Telefone do Cônjuge"
-                                  value={contract.dados.vendedor?.vendedorConjugeTelefone || contract.dados.vendedor?.conjugeTelefone || ''}
+                                  value={contract.dados?.vendedor?.vendedorConjugeTelefone || contract.dados?.vendedor?.conjugeTelefone || ''}
                                   onChange={e => {
                                     updateDados('vendedor', 'vendedorConjugeTelefone', e.target.value);
                                     updateDados('vendedor', 'conjugeTelefone', e.target.value);
@@ -4603,62 +4951,50 @@ export default function AdminContractForm() {
                             </span>
                           </div>
                           <div>
-                            <span className="font-bold text-gray-400 uppercase block">Matrícula do Imóvel:</span>
-                            {getMatriculaImovel(contract) ? (
-                              <span className="text-gray-900 font-semibold">{getMatriculaImovel(contract)}</span>
-                            ) : (
-                              <div className="mt-1">
-                                <input
-                                  type="text"
-                                  className="input-field py-1 text-xs"
-                                  placeholder="Preencher matrícula obrigatoriamente *"
-                                  value={(contract as any).imovelMatricula || ""}
-                                  onChange={(e) => {
-                                    setContract(prev => ({
-                                      ...prev,
-                                      imovelMatricula: e.target.value,
-                                      dados: {
-                                        ...prev.dados,
-                                        imovel: {
-                                          ...prev.dados?.imovel,
-                                          matricula: e.target.value
-                                        }
-                                      }
-                                    }));
-                                  }}
-                                />
-                                <p className="text-[10px] text-red-500 mt-0.5">A matrícula é obrigatória para gerar esta proposta.</p>
-                              </div>
-                            )}
+                            <span className="font-bold text-gray-400 uppercase block mb-1">Matrícula do Imóvel:</span>
+                            <input
+                              type="text"
+                              className="input-field py-2 text-xs font-semibold"
+                              placeholder="Número da matrícula..."
+                              value={(contract as any).imovelMatricula || contract.dados?.imovel?.matricula || ""}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setContract(prev => ({
+                                  ...prev,
+                                  imovelMatricula: val,
+                                  dados: {
+                                    ...(prev.dados || {}),
+                                    imovel: {
+                                      ...((prev.dados as any)?.imovel || {}),
+                                      matricula: val
+                                    }
+                                  }
+                                }));
+                              }}
+                            />
                           </div>
                           <div>
-                            <span className="font-bold text-gray-400 uppercase block">CRI do Imóvel:</span>
-                            {getCriImovel(contract) ? (
-                              <span className="text-gray-900 font-semibold">{getCriImovel(contract)}</span>
-                            ) : (
-                              <div className="mt-1">
-                                <input
-                                  type="text"
-                                  className="input-field py-1 text-xs"
-                                  placeholder="Preencher CRI obrigatoriamente *"
-                                  value={(contract as any).imovelCri || ""}
-                                  onChange={(e) => {
-                                    setContract(prev => ({
-                                      ...prev,
-                                      imovelCri: e.target.value,
-                                      dados: {
-                                        ...prev.dados,
-                                        imovel: {
-                                          ...prev.dados?.imovel,
-                                          cri: e.target.value
-                                        }
-                                      }
-                                    }));
-                                  }}
-                                />
-                                <p className="text-[10px] text-red-500 mt-0.5">O CRI é obrigatório para gerar esta proposta.</p>
-                              </div>
-                            )}
+                            <span className="font-bold text-gray-400 uppercase block mb-1">CRI do Imóvel:</span>
+                            <input
+                              type="text"
+                              className="input-field py-2 text-xs font-semibold"
+                              placeholder="Cartório de Registro de Imóveis..."
+                              value={(contract as any).imovelCri || contract.dados?.imovel?.cri || ""}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setContract(prev => ({
+                                  ...prev,
+                                  imovelCri: val,
+                                  dados: {
+                                    ...(prev.dados || {}),
+                                    imovel: {
+                                      ...((prev.dados as any)?.imovel || {}),
+                                      cri: val
+                                    }
+                                  }
+                                }));
+                              }}
+                            />
                           </div>
                         </div>
                       </div>
@@ -4694,17 +5030,17 @@ export default function AdminContractForm() {
                           <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">CPF</label>
-                              <input type="text" className="input-field" value={contract.dados.proponente?.cpf || ''} onChange={e => updateDados('proponente', 'cpf', e.target.value)} />
+                              <input type="text" className="input-field" value={contract.dados?.proponente?.cpf || ''} onChange={e => updateDados('proponente', 'cpf', e.target.value)} />
                             </div>
                             <div className="space-y-2">
                               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">RG</label>
-                              <input type="text" className="input-field" value={contract.dados.proponente?.rg || ''} onChange={e => updateDados('proponente', 'rg', e.target.value)} />
+                              <input type="text" className="input-field" value={contract.dados?.proponente?.rg || ''} onChange={e => updateDados('proponente', 'rg', e.target.value)} />
                             </div>
                           </div>
                           <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Estado Civil</label>
-                              <select className="input-field" value={contract.dados.proponente?.estadoCivil || 'Solteiro(a)'} onChange={e => updateDados('proponente', 'estadoCivil', e.target.value)}>
+                              <select className="input-field" value={contract.dados?.proponente?.estadoCivil || 'Solteiro(a)'} onChange={e => updateDados('proponente', 'estadoCivil', e.target.value)}>
                                 <option value="Solteiro(a)">Solteiro(a)</option>
                                 <option value="Casado(a)">Casado(a)</option>
                                 <option value="Divorciado(a)">Divorciado(a)</option>
@@ -4714,49 +5050,49 @@ export default function AdminContractForm() {
                             </div>
                             <div className="space-y-2">
                               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Profissão</label>
-                              <input type="text" className="input-field" value={contract.dados.proponente?.profissao || ''} onChange={e => updateDados('proponente', 'profissao', e.target.value)} />
+                              <input type="text" className="input-field" value={contract.dados?.proponente?.profissao || ''} onChange={e => updateDados('proponente', 'profissao', e.target.value)} />
                             </div>
                           </div>
                           <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Telefone</label>
-                              <input type="text" className="input-field" value={contract.dados.proponente?.telefone || ''} onChange={e => updateDados('proponente', 'telefone', e.target.value)} />
+                              <input type="text" className="input-field" value={contract.dados?.proponente?.telefone || ''} onChange={e => updateDados('proponente', 'telefone', e.target.value)} />
                             </div>
                             <div className="space-y-2">
                               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">WhatsApp</label>
-                              <input type="text" className="input-field" value={contract.dados.proponente?.whatsapp || ''} onChange={e => updateDados('proponente', 'whatsapp', e.target.value)} />
+                              <input type="text" className="input-field" value={contract.dados?.proponente?.whatsapp || ''} onChange={e => updateDados('proponente', 'whatsapp', e.target.value)} />
                             </div>
                           </div>
                           <div className="space-y-2">
                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">E-mail</label>
-                            <input type="email" className="input-field" value={contract.dados.proponente?.email || ''} onChange={e => updateDados('proponente', 'email', e.target.value)} />
+                            <input type="email" className="input-field" value={contract.dados?.proponente?.email || ''} onChange={e => updateDados('proponente', 'email', e.target.value)} />
                           </div>
                            <div className="space-y-2">
                              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Endereço Residencial <span className="text-red-500">*</span></label>
-                             <input type="text" className="input-field" value={contract.dados.proponente?.endereco || ''} onChange={e => updateDados('proponente', 'endereco', e.target.value)} required />
+                             <input type="text" className="input-field" value={contract.dados?.proponente?.endereco || ''} onChange={e => updateDados('proponente', 'endereco', e.target.value)} required />
                            </div>
                            <div className="grid grid-cols-2 gap-4">
                              <div className="space-y-2">
                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Número <span className="text-red-500">*</span></label>
-                               <input type="text" className="input-field" placeholder="Número" value={contract.dados.proponente?.numero || ''} onChange={e => updateDados('proponente', 'numero', e.target.value)} required />
+                               <input type="text" className="input-field" placeholder="Número" value={contract.dados?.proponente?.numero || ''} onChange={e => updateDados('proponente', 'numero', e.target.value)} required />
                              </div>
                              <div className="space-y-2">
                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Complemento</label>
-                               <input type="text" className="input-field" placeholder="Complemento" value={contract.dados.proponente?.complemento || ''} onChange={e => updateDados('proponente', 'complemento', e.target.value)} />
+                               <input type="text" className="input-field" placeholder="Complemento" value={contract.dados?.proponente?.complemento || ''} onChange={e => updateDados('proponente', 'complemento', e.target.value)} />
                              </div>
                            </div>
                           <div className="grid grid-cols-3 gap-4">
                             <div className="space-y-2 col-span-1">
                               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">CEP</label>
-                              <input type="text" className="input-field" value={contract.dados.proponente?.cep || ''} onChange={e => updateDados('proponente', 'cep', e.target.value)} />
+                              <input type="text" className="input-field" value={contract.dados?.proponente?.cep || ''} onChange={e => updateDados('proponente', 'cep', e.target.value)} />
                             </div>
                             <div className="space-y-2 col-span-1">
                               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Cidade</label>
-                              <input type="text" className="input-field" value={contract.dados.proponente?.cidade || ''} onChange={e => updateDados('proponente', 'cidade', e.target.value)} />
+                              <input type="text" className="input-field" value={contract.dados?.proponente?.cidade || ''} onChange={e => updateDados('proponente', 'cidade', e.target.value)} />
                             </div>
                             <div className="space-y-2 col-span-1">
                               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Estado</label>
-                              <input type="text" className="input-field" value={contract.dados.proponente?.estado || ''} onChange={e => updateDados('proponente', 'estado', e.target.value)} />
+                              <input type="text" className="input-field" value={contract.dados?.proponente?.estado || ''} onChange={e => updateDados('proponente', 'estado', e.target.value)} />
                             </div>
                           </div>
 
@@ -4780,7 +5116,7 @@ export default function AdminContractForm() {
                                   type="text"
                                   className="input-field"
                                   placeholder="Nome Completo do Cônjuge"
-                                  value={contract.dados.proponente?.compradorConjugeNome || contract.dados.proponente?.conjugeNome || ''}
+                                  value={contract.dados?.proponente?.compradorConjugeNome || contract.dados?.proponente?.conjugeNome || ''}
                                   onChange={e => {
                                     updateDados('proponente', 'compradorConjugeNome', e.target.value);
                                     updateDados('proponente', 'conjugeNome', e.target.value);
@@ -4794,7 +5130,7 @@ export default function AdminContractForm() {
                                     type="text"
                                     className="input-field"
                                     placeholder="CPF"
-                                    value={contract.dados.proponente?.compradorConjugeCpf || contract.dados.proponente?.conjugeCpf || ''}
+                                    value={contract.dados?.proponente?.compradorConjugeCpf || contract.dados?.proponente?.conjugeCpf || ''}
                                     onChange={e => {
                                       updateDados('proponente', 'compradorConjugeCpf', e.target.value);
                                       updateDados('proponente', 'conjugeCpf', e.target.value);
@@ -4807,7 +5143,7 @@ export default function AdminContractForm() {
                                     type="text"
                                     className="input-field"
                                     placeholder="RG"
-                                    value={contract.dados.proponente?.compradorConjugeRg || contract.dados.proponente?.conjugeRg || ''}
+                                    value={contract.dados?.proponente?.compradorConjugeRg || contract.dados?.proponente?.conjugeRg || ''}
                                     onChange={e => {
                                       updateDados('proponente', 'compradorConjugeRg', e.target.value);
                                       updateDados('proponente', 'conjugeRg', e.target.value);
@@ -4820,7 +5156,7 @@ export default function AdminContractForm() {
                                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Estado Civil</label>
                                   <select
                                     className="input-field"
-                                    value={contract.dados.proponente?.compradorConjugeEstadoCivil || contract.dados.proponente?.conjugeEstadoCivil || 'Casado(a)'}
+                                    value={contract.dados?.proponente?.compradorConjugeEstadoCivil || contract.dados?.proponente?.conjugeEstadoCivil || 'Casado(a)'}
                                     onChange={e => {
                                       updateDados('proponente', 'compradorConjugeEstadoCivil', e.target.value);
                                       updateDados('proponente', 'conjugeEstadoCivil', e.target.value);
@@ -4837,7 +5173,7 @@ export default function AdminContractForm() {
                                     type="text"
                                     className="input-field"
                                     placeholder="Profissão"
-                                    value={contract.dados.proponente?.compradorConjugeProfissao || contract.dados.proponente?.conjugeProfissao || ''}
+                                    value={contract.dados?.proponente?.compradorConjugeProfissao || contract.dados?.proponente?.conjugeProfissao || ''}
                                     onChange={e => {
                                       updateDados('proponente', 'compradorConjugeProfissao', e.target.value);
                                       updateDados('proponente', 'conjugeProfissao', e.target.value);
@@ -4852,7 +5188,7 @@ export default function AdminContractForm() {
                                     type="text"
                                     className="input-field"
                                     placeholder="Telefone"
-                                    value={contract.dados.proponente?.compradorConjugeTelefone || contract.dados.proponente?.conjugeTelefone || ''}
+                                    value={contract.dados?.proponente?.compradorConjugeTelefone || contract.dados?.proponente?.conjugeTelefone || ''}
                                     onChange={e => {
                                       updateDados('proponente', 'compradorConjugeTelefone', e.target.value);
                                       updateDados('proponente', 'conjugeTelefone', e.target.value);
@@ -4865,7 +5201,7 @@ export default function AdminContractForm() {
                                     type="email"
                                     className="input-field"
                                     placeholder="E-mail"
-                                    value={contract.dados.proponente?.compradorConjugeEmail || contract.dados.proponente?.conjugeEmail || ''}
+                                    value={contract.dados?.proponente?.compradorConjugeEmail || contract.dados?.proponente?.conjugeEmail || ''}
                                     onChange={e => {
                                       updateDados('proponente', 'compradorConjugeEmail', e.target.value);
                                       updateDados('proponente', 'conjugeEmail', e.target.value);
@@ -4880,7 +5216,7 @@ export default function AdminContractForm() {
                                      type="text"
                                      className="input-field"
                                      placeholder="Endereço Residencial do Cônjuge"
-                                     value={contract.dados.proponente?.compradorConjugeEndereco || contract.dados.proponente?.conjugeEndereco || ''}
+                                     value={contract.dados?.proponente?.compradorConjugeEndereco || contract.dados?.proponente?.conjugeEndereco || ''}
                                      onChange={e => {
                                        updateDados('proponente', 'compradorConjugeEndereco', e.target.value);
                                        updateDados('proponente', 'conjugeEndereco', e.target.value);
@@ -4893,7 +5229,7 @@ export default function AdminContractForm() {
                                      type="text"
                                      className="input-field"
                                      placeholder="Número"
-                                     value={contract.dados.proponente?.compradorConjugeNumero || contract.dados.proponente?.conjugeNumero || ''}
+                                     value={contract.dados?.proponente?.compradorConjugeNumero || contract.dados?.proponente?.conjugeNumero || ''}
                                      onChange={e => {
                                        updateDados('proponente', 'compradorConjugeNumero', e.target.value);
                                        updateDados('proponente', 'conjugeNumero', e.target.value);
@@ -4906,7 +5242,7 @@ export default function AdminContractForm() {
                                      type="text"
                                      className="input-field"
                                      placeholder="Complemento"
-                                     value={contract.dados.proponente?.compradorConjugeComplemento || contract.dados.proponente?.conjugeComplemento || ''}
+                                     value={contract.dados?.proponente?.compradorConjugeComplemento || contract.dados?.proponente?.conjugeComplemento || ''}
                                      onChange={e => {
                                        updateDados('proponente', 'compradorConjugeComplemento', e.target.value);
                                        updateDados('proponente', 'conjugeComplemento', e.target.value);
@@ -4958,14 +5294,14 @@ export default function AdminContractForm() {
                           <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">CPF</label>
-                              <input type="text" className="input-field" placeholder="CPF" value={contract.dados.vendedor?.cpf || contract.dados.aceitante?.cpf || ''} onChange={e => {
+                              <input type="text" className="input-field" placeholder="CPF" value={contract.dados?.vendedor?.cpf || contract.dados?.aceitante?.cpf || ''} onChange={e => {
                                 updateDados('vendedor', 'cpf', e.target.value);
                                 updateDados('aceitante', 'cpf', e.target.value);
                               }} />
                             </div>
                             <div className="space-y-2">
                               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">RG</label>
-                              <input type="text" className="input-field" placeholder="RG" value={contract.dados.vendedor?.rg || contract.dados.aceitante?.rg || ''} onChange={e => {
+                              <input type="text" className="input-field" placeholder="RG" value={contract.dados?.vendedor?.rg || contract.dados?.aceitante?.rg || ''} onChange={e => {
                                 updateDados('vendedor', 'rg', e.target.value);
                                 updateDados('aceitante', 'rg', e.target.value);
                               }} />
@@ -4974,7 +5310,7 @@ export default function AdminContractForm() {
                           <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Estado Civil</label>
-                              <select className="input-field" value={contract.dados.vendedor?.estadoCivil || contract.dados.aceitante?.estadoCivil || 'Solteiro(a)'} onChange={e => {
+                              <select className="input-field" value={contract.dados?.vendedor?.estadoCivil || contract.dados?.aceitante?.estadoCivil || 'Solteiro(a)'} onChange={e => {
                                 updateDados('vendedor', 'estadoCivil', e.target.value);
                                 updateDados('aceitante', 'estadoCivil', e.target.value);
                               }}>
@@ -4985,7 +5321,7 @@ export default function AdminContractForm() {
                             </div>
                             <div className="space-y-2">
                               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Profissão</label>
-                              <input type="text" className="input-field" placeholder="Profissão" value={contract.dados.vendedor?.profissao || contract.dados.aceitante?.profissao || ''} onChange={e => {
+                              <input type="text" className="input-field" placeholder="Profissão" value={contract.dados?.vendedor?.profissao || contract.dados?.aceitante?.profissao || ''} onChange={e => {
                                 updateDados('vendedor', 'profissao', e.target.value);
                                 updateDados('aceitante', 'profissao', e.target.value);
                               }} />
@@ -4994,14 +5330,14 @@ export default function AdminContractForm() {
                           <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Telefone</label>
-                              <input type="text" className="input-field" placeholder="Telefone" value={contract.dados.vendedor?.telefone || contract.dados.aceitante?.telefone || ''} onChange={e => {
+                              <input type="text" className="input-field" placeholder="Telefone" value={contract.dados?.vendedor?.telefone || contract.dados?.aceitante?.telefone || ''} onChange={e => {
                                 updateDados('vendedor', 'telefone', e.target.value);
                                 updateDados('aceitante', 'telefone', e.target.value);
                               }} />
                             </div>
                             <div className="space-y-2">
                               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">WhatsApp</label>
-                              <input type="text" className="input-field" placeholder="WhatsApp" value={contract.dados.vendedor?.whatsapp || contract.dados.aceitante?.whatsapp || ''} onChange={e => {
+                              <input type="text" className="input-field" placeholder="WhatsApp" value={contract.dados?.vendedor?.whatsapp || contract.dados?.aceitante?.whatsapp || ''} onChange={e => {
                                 updateDados('vendedor', 'whatsapp', e.target.value);
                                 updateDados('aceitante', 'whatsapp', e.target.value);
                               }} />
@@ -5009,14 +5345,14 @@ export default function AdminContractForm() {
                           </div>
                           <div className="space-y-2">
                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">E-mail</label>
-                            <input type="email" className="input-field" placeholder="E-mail" value={contract.dados.vendedor?.email || contract.dados.aceitante?.email || ''} onChange={e => {
+                            <input type="email" className="input-field" placeholder="E-mail" value={contract.dados?.vendedor?.email || contract.dados?.aceitante?.email || ''} onChange={e => {
                               updateDados('vendedor', 'email', e.target.value);
                               updateDados('aceitante', 'email', e.target.value);
                             }} />
                           </div>
                            <div className="space-y-2">
                              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Endereço <span className="text-red-500">*</span></label>
-                             <input type="text" className="input-field" placeholder="Endereço" value={contract.dados.vendedor?.endereco || contract.dados.aceitante?.endereco || ''} onChange={e => {
+                             <input type="text" className="input-field" placeholder="Endereço" value={contract.dados?.vendedor?.endereco || contract.dados?.aceitante?.endereco || ''} onChange={e => {
                                updateDados('vendedor', 'endereco', e.target.value);
                                updateDados('aceitante', 'endereco', e.target.value);
                              }} required />
@@ -5024,14 +5360,14 @@ export default function AdminContractForm() {
                            <div className="grid grid-cols-2 gap-4">
                              <div className="space-y-2">
                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Número <span className="text-red-500">*</span></label>
-                               <input type="text" className="input-field" placeholder="Número" value={contract.dados.vendedor?.numero || contract.dados.aceitante?.numero || ''} onChange={e => {
+                               <input type="text" className="input-field" placeholder="Número" value={contract.dados?.vendedor?.numero || contract.dados?.aceitante?.numero || ''} onChange={e => {
                                  updateDados('vendedor', 'numero', e.target.value);
                                  updateDados('aceitante', 'numero', e.target.value);
                                }} required />
                              </div>
                              <div className="space-y-2">
                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Complemento</label>
-                               <input type="text" className="input-field" placeholder="Complemento" value={contract.dados.vendedor?.complemento || contract.dados.aceitante?.complemento || ''} onChange={e => {
+                               <input type="text" className="input-field" placeholder="Complemento" value={contract.dados?.vendedor?.complemento || contract.dados?.aceitante?.complemento || ''} onChange={e => {
                                  updateDados('vendedor', 'complemento', e.target.value);
                                  updateDados('aceitante', 'complemento', e.target.value);
                                }} />
@@ -5040,21 +5376,21 @@ export default function AdminContractForm() {
                           <div className="grid grid-cols-3 gap-4">
                             <div className="space-y-2 col-span-1">
                               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">CEP</label>
-                              <input type="text" className="input-field" placeholder="CEP" value={contract.dados.vendedor?.cep || contract.dados.aceitante?.cep || ''} onChange={e => {
+                              <input type="text" className="input-field" placeholder="CEP" value={contract.dados?.vendedor?.cep || contract.dados?.aceitante?.cep || ''} onChange={e => {
                                 updateDados('vendedor', 'cep', e.target.value);
                                 updateDados('aceitante', 'cep', e.target.value);
                               }} />
                             </div>
                             <div className="space-y-2 col-span-1">
                               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Cidade</label>
-                              <input type="text" className="input-field" placeholder="Cidade" value={contract.dados.vendedor?.cidade || contract.dados.aceitante?.cidade || ''} onChange={e => {
+                              <input type="text" className="input-field" placeholder="Cidade" value={contract.dados?.vendedor?.cidade || contract.dados?.aceitante?.cidade || ''} onChange={e => {
                                 updateDados('vendedor', 'cidade', e.target.value);
                                 updateDados('aceitante', 'cidade', e.target.value);
                               }} />
                             </div>
                             <div className="space-y-2 col-span-1">
                               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Estado</label>
-                              <input type="text" className="input-field" placeholder="Estado" value={contract.dados.vendedor?.estado || contract.dados.aceitante?.estado || ''} onChange={e => {
+                              <input type="text" className="input-field" placeholder="Estado" value={contract.dados?.vendedor?.estado || contract.dados?.aceitante?.estado || ''} onChange={e => {
                                 updateDados('vendedor', 'estado', e.target.value);
                                 updateDados('aceitante', 'estado', e.target.value);
                               }} />
@@ -5081,7 +5417,7 @@ export default function AdminContractForm() {
                                   type="text"
                                   className="input-field"
                                   placeholder="Nome Completo do Cônjuge"
-                                  value={contract.dados.vendedor?.vendedorConjugeNome || contract.dados.vendedor?.conjugeNome || ''}
+                                  value={contract.dados?.vendedor?.vendedorConjugeNome || contract.dados?.vendedor?.conjugeNome || ''}
                                   onChange={e => {
                                     updateDados('vendedor', 'vendedorConjugeNome', e.target.value);
                                     updateDados('vendedor', 'conjugeNome', e.target.value);
@@ -5095,7 +5431,7 @@ export default function AdminContractForm() {
                                     type="text"
                                     className="input-field"
                                     placeholder="CPF"
-                                    value={contract.dados.vendedor?.vendedorConjugeCpf || contract.dados.vendedor?.conjugeCpf || ''}
+                                    value={contract.dados?.vendedor?.vendedorConjugeCpf || contract.dados?.vendedor?.conjugeCpf || ''}
                                     onChange={e => {
                                       updateDados('vendedor', 'vendedorConjugeCpf', e.target.value);
                                       updateDados('vendedor', 'conjugeCpf', e.target.value);
@@ -5108,7 +5444,7 @@ export default function AdminContractForm() {
                                     type="text"
                                     className="input-field"
                                     placeholder="RG"
-                                    value={contract.dados.vendedor?.vendedorConjugeRg || contract.dados.vendedor?.conjugeRg || ''}
+                                    value={contract.dados?.vendedor?.vendedorConjugeRg || contract.dados?.vendedor?.conjugeRg || ''}
                                     onChange={e => {
                                       updateDados('vendedor', 'vendedorConjugeRg', e.target.value);
                                       updateDados('vendedor', 'conjugeRg', e.target.value);
@@ -5121,7 +5457,7 @@ export default function AdminContractForm() {
                                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Estado Civil</label>
                                   <select
                                     className="input-field"
-                                    value={contract.dados.vendedor?.vendedorConjugeEstadoCivil || contract.dados.vendedor?.conjugeEstadoCivil || 'Casado(a)'}
+                                    value={contract.dados?.vendedor?.vendedorConjugeEstadoCivil || contract.dados?.vendedor?.conjugeEstadoCivil || 'Casado(a)'}
                                     onChange={e => {
                                       updateDados('vendedor', 'vendedorConjugeEstadoCivil', e.target.value);
                                       updateDados('vendedor', 'conjugeEstadoCivil', e.target.value);
@@ -5138,7 +5474,7 @@ export default function AdminContractForm() {
                                     type="text"
                                     className="input-field"
                                     placeholder="Profissão"
-                                    value={contract.dados.vendedor?.vendedorConjugeProfissao || contract.dados.vendedor?.conjugeProfissao || ''}
+                                    value={contract.dados?.vendedor?.vendedorConjugeProfissao || contract.dados?.vendedor?.conjugeProfissao || ''}
                                     onChange={e => {
                                       updateDados('vendedor', 'vendedorConjugeProfissao', e.target.value);
                                       updateDados('vendedor', 'conjugeProfissao', e.target.value);
@@ -5153,7 +5489,7 @@ export default function AdminContractForm() {
                                     type="text"
                                     className="input-field"
                                     placeholder="Telefone"
-                                    value={contract.dados.vendedor?.vendedorConjugeTelefone || contract.dados.vendedor?.conjugeTelefone || ''}
+                                    value={contract.dados?.vendedor?.vendedorConjugeTelefone || contract.dados?.vendedor?.conjugeTelefone || ''}
                                     onChange={e => {
                                       updateDados('vendedor', 'vendedorConjugeTelefone', e.target.value);
                                       updateDados('vendedor', 'conjugeTelefone', e.target.value);
@@ -5166,7 +5502,7 @@ export default function AdminContractForm() {
                                     type="email"
                                     className="input-field"
                                     placeholder="E-mail"
-                                    value={contract.dados.vendedor?.vendedorConjugeEmail || contract.dados.vendedor?.conjugeEmail || ''}
+                                    value={contract.dados?.vendedor?.vendedorConjugeEmail || contract.dados?.vendedor?.conjugeEmail || ''}
                                     onChange={e => {
                                       updateDados('vendedor', 'vendedorConjugeEmail', e.target.value);
                                       updateDados('vendedor', 'conjugeEmail', e.target.value);
@@ -5181,7 +5517,7 @@ export default function AdminContractForm() {
                                      type="text"
                                      className="input-field"
                                      placeholder="Endereço Residencial do Cônjuge"
-                                     value={contract.dados.vendedor?.vendedorConjugeEndereco || contract.dados.vendedor?.conjugeEndereco || ''}
+                                     value={contract.dados?.vendedor?.vendedorConjugeEndereco || contract.dados?.vendedor?.conjugeEndereco || ''}
                                      onChange={e => {
                                        updateDados('vendedor', 'vendedorConjugeEndereco', e.target.value);
                                        updateDados('vendedor', 'conjugeEndereco', e.target.value);
@@ -5194,7 +5530,7 @@ export default function AdminContractForm() {
                                      type="text"
                                      className="input-field"
                                      placeholder="Número"
-                                     value={contract.dados.vendedor?.vendedorConjugeNumero || contract.dados.vendedor?.conjugeNumero || ''}
+                                     value={contract.dados?.vendedor?.vendedorConjugeNumero || contract.dados?.vendedor?.conjugeNumero || ''}
                                      onChange={e => {
                                        updateDados('vendedor', 'vendedorConjugeNumero', e.target.value);
                                        updateDados('vendedor', 'conjugeNumero', e.target.value);
@@ -5207,7 +5543,7 @@ export default function AdminContractForm() {
                                      type="text"
                                      className="input-field"
                                      placeholder="Complemento"
-                                     value={contract.dados.vendedor?.vendedorConjugeComplemento || contract.dados.vendedor?.conjugeComplemento || ''}
+                                     value={contract.dados?.vendedor?.vendedorConjugeComplemento || contract.dados?.vendedor?.conjugeComplemento || ''}
                                      onChange={e => {
                                        updateDados('vendedor', 'vendedorConjugeComplemento', e.target.value);
                                        updateDados('vendedor', 'conjugeComplemento', e.target.value);
@@ -5262,8 +5598,22 @@ export default function AdminContractForm() {
                         <input 
                           type="text" 
                           className="input-field" 
-                          value={maskCurrency(contract.dados.valores?.valorDiario || '')}
-                          onChange={e => updateDados('valores', 'valorDiario', parseCurrencyToNumber(e.target.value))}
+                          value={maskCurrency(contract.dados?.valores?.valorDiaria || contract.dados?.valores?.valorDiario || contract.valorDiaria || '')}
+                          onChange={e => {
+                            const val = parseCurrencyToNumber(e.target.value);
+                            setContract(prev => ({
+                              ...prev,
+                              valorDiaria: val,
+                              dados: {
+                                ...prev.dados,
+                                valores: {
+                                  ...prev.dados?.valores,
+                                  valorDiaria: val,
+                                  valorDiario: val
+                                }
+                              }
+                            }));
+                          }}
                         />
                       </div>
                       <div className="space-y-2">
@@ -5271,7 +5621,7 @@ export default function AdminContractForm() {
                         <input 
                           type="text" 
                           className="input-field" 
-                          value={maskCurrency(contract.dados.valores?.taxaLimpeza || '')}
+                          value={maskCurrency(contract.dados?.valores?.taxaLimpeza || '')}
                           onChange={e => updateDados('valores', 'taxaLimpeza', parseCurrencyToNumber(e.target.value))}
                         />
                       </div>
@@ -5280,7 +5630,7 @@ export default function AdminContractForm() {
                         <input 
                           type="text" 
                           className="input-field" 
-                          value={maskCurrency(contract.dados.valores?.taxaCaucao || '')}
+                          value={maskCurrency(contract.dados?.valores?.taxaCaucao || '')}
                           onChange={e => updateDados('valores', 'taxaCaucao', parseCurrencyToNumber(e.target.value))}
                         />
                       </div>
@@ -5289,8 +5639,21 @@ export default function AdminContractForm() {
                         <input 
                           type="text" 
                           className="input-field" 
-                          value={maskCurrency(contract.dados.valores?.taxasAdicionais || '')}
-                          onChange={e => updateDados('valores', 'taxasAdicionais', parseCurrencyToNumber(e.target.value))}
+                          value={maskCurrency(contract.dados?.valores?.taxasAdicionais || contract.dados?.valores?.outrasTaxas || '')}
+                          onChange={e => {
+                            const val = parseCurrencyToNumber(e.target.value);
+                            setContract(prev => ({
+                              ...prev,
+                              dados: {
+                                ...prev.dados,
+                                valores: {
+                                  ...prev.dados?.valores,
+                                  taxasAdicionais: val,
+                                  outrasTaxas: val
+                                }
+                              }
+                            }));
+                          }}
                         />
                       </div>
                     </div>
@@ -5301,13 +5664,27 @@ export default function AdminContractForm() {
                         <input 
                           type="text" 
                           className="input-field text-red-500 font-bold" 
-                          value={maskCurrency(contract.dados.valores?.desconto || '')}
-                          onChange={e => updateDados('valores', 'desconto', parseCurrencyToNumber(e.target.value))}
+                          value={maskCurrency(contract.dados?.valores?.desconto || contract.dados?.valores?.descontos || '')}
+                          onChange={e => {
+                            const val = parseCurrencyToNumber(e.target.value);
+                            setContract(prev => ({
+                              ...prev,
+                              dados: {
+                                ...prev.dados,
+                                valores: {
+                                  ...prev.dados?.valores,
+                                  desconto: val,
+                                  descontos: val
+                                }
+                              }
+                            }));
+                          }}
                         />
                       </div>
                       <div className="bg-primary-black p-6 rounded-2xl flex flex-col justify-center shadow-2xl">
-                         <p className="text-[10px] font-black text-gold uppercase tracking-[0.2em] mb-1">Valor Total do Contrato</p>
-                         <p className="text-3xl font-display font-bold text-white">{formatCurrency(contract.valor || 0)}</p>
+                         <p className="text-[10px] font-black text-gold uppercase tracking-[0.2em] mb-1">TOTAL GERAL DA LOCAÇÃO</p>
+                         <p className="text-3xl font-display font-bold text-white">{formatCurrency(contract.valor || contract.dados?.valores?.valorTotalLocacao || 0)}</p>
+                         <p className="text-[10px] text-gray-400 mt-1">Subtotal diárias + limpeza + outras taxas − descontos</p>
                       </div>
                     </div>
 
@@ -5318,22 +5695,22 @@ export default function AdminContractForm() {
                              <input 
                                type="number" 
                                className="w-20 bg-white border border-gray-200 rounded-lg py-1 px-2 text-xs font-bold" 
-                               value={contract.dados.valores?.percentualComissaoImobiliaria || 20}
+                               value={contract.dados?.valores?.percentualComissaoImobiliaria || 20}
                                onChange={e => updateDados('valores', 'percentualComissaoImobiliaria', parseFloat(e.target.value))}
                              />
-                             <span className="text-lg font-bold text-primary-black">{formatCurrency(contract.dados.valores?.valorComissaoImobiliaria || 0)}</span>
+                             <span className="text-lg font-bold text-primary-black">{formatCurrency(contract.dados?.valores?.valorComissaoImobiliaria || 0)}</span>
                           </div>
                           <p className="text-[10px] text-gray-400 mt-2 font-medium italic">* Calculado sobre o valor total das diárias.</p>
                        </div>
                        <div className="bg-emerald-50 p-6 rounded-2xl border border-emerald-100">
                           <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2">Repasse Proprietário</p>
-                          <p className="text-lg font-bold text-emerald-700">{formatCurrency(contract.dados.valores?.valorRepassadoProprietario || 0)}</p>
+                          <p className="text-lg font-bold text-emerald-700">{formatCurrency(contract.dados?.valores?.valorRepassadoProprietario || 0)}</p>
                           <p className="text-[10px] text-emerald-600/60 mt-2 font-medium italic">* Valor bruto das diárias menos comissão.</p>
                        </div>
                        <div className="bg-gold/5 p-6 rounded-2xl border border-gold/10">
-                          <p className="text-[10px] font-black text-gold uppercase tracking-widest mb-2">Valor Total das Diárias</p>
-                          <p className="text-lg font-bold text-primary-black">{formatCurrency(contract.dados.valores?.valorTotalLocacao || 0)}</p>
-                          <p className="text-[10px] text-gold/60 mt-2 font-medium italic">* {contract.dados.prazo?.quantidadeDias || 0} dias x {formatCurrency(contract.dados.valores?.valorDiario || 0)}</p>
+                          <p className="text-[10px] font-black text-gold uppercase tracking-widest mb-2">Subtotal das Diárias</p>
+                          <p className="text-lg font-bold text-primary-black">{formatCurrency(contract.dados?.valores?.subtotalDiarias || ((contract.dados?.prazo?.quantidadeDias || 0) * (contract.dados?.valores?.valorDiaria || contract.dados?.valores?.valorDiario || 0)))}</p>
+                          <p className="text-[10px] text-gold/60 mt-2 font-medium italic">* {contract.dados?.prazo?.quantidadeDiarias || contract.dados?.prazo?.quantidadeDias || 0} diárias x {formatCurrency(contract.dados?.valores?.valorDiaria || contract.dados?.valores?.valorDiario || 0)}</p>
                        </div>
                     </div>
                   </div>
@@ -5360,11 +5737,11 @@ export default function AdminContractForm() {
                        </div>
                        <div className="space-y-2">
                           <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Testemunha 1</label>
-                          <input type="text" className="input-field" placeholder="Nome completo" value={contract.dados.assinaturas?.testemunha1 || ''} onChange={e => updateDados('assinaturas', 'testemunha1', e.target.value)} />
+                          <input type="text" className="input-field" placeholder="Nome completo" value={contract.dados?.assinaturas?.testemunha1 || ''} onChange={e => updateDados('assinaturas', 'testemunha1', e.target.value)} />
                        </div>
                        <div className="space-y-2">
                           <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">CPF Testemunha 1</label>
-                          <input type="text" className="input-field" value={contract.dados.assinaturas?.cpfTestemunha1 || ''} onChange={e => updateDados('assinaturas', 'cpfTestemunha1', e.target.value)} />
+                          <input type="text" className="input-field" value={contract.dados?.assinaturas?.cpfTestemunha1 || ''} onChange={e => updateDados('assinaturas', 'cpfTestemunha1', e.target.value)} />
                        </div>
                     </div>
 
@@ -5835,19 +6212,24 @@ export default function AdminContractForm() {
                           <div className="space-y-4">
                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Formas de Pagamento</label>
                             <div className="grid grid-cols-2 gap-3">
-                              {['À vista', 'Financiamento', 'Consórcio', 'FGTS', 'Parcelamento Direto', 'Sinal', 'Permuta', 'Outras'].map(m => (
-                                <button
-                                  key={m}
-                                  onClick={() => toggleMetodo(contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos', m)}
-                                  className={`py-3 px-4 rounded-xl text-xs font-bold transition-all border ${
-                                    (contract.dados[contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos'].metodos || []).includes(m)
-                                      ? 'bg-gold text-primary-black border-gold shadow-lg shadow-gold/20'
-                                      : 'bg-gray-50 text-gray-400 border-transparent hover:bg-gray-100'
-                                  }`}
-                                >
-                                  {m}
-                                </button>
-                              ))}
+                              {['À vista', 'Financiamento', 'Consórcio', 'FGTS', 'Parcelamento Direto', 'Sinal', 'Permuta', 'Outras'].map(m => {
+                                const section = contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos';
+                                const isSelected = ((contract?.dados as any)?.[section]?.metodos || []).includes(m);
+                                return (
+                                  <button
+                                    key={m}
+                                    type="button"
+                                    onClick={() => toggleMetodo(section, m)}
+                                    className={`py-3 px-4 rounded-xl text-xs font-bold transition-all border ${
+                                      isSelected
+                                        ? 'bg-gold text-primary-black border-gold shadow-lg shadow-gold/20'
+                                        : 'bg-gray-50 text-gray-400 border-transparent hover:bg-gray-100'
+                                    }`}
+                                  >
+                                    {m}
+                                  </button>
+                                );
+                              })}
                             </div>
                           </div>
                         </div>
@@ -5858,7 +6240,7 @@ export default function AdminContractForm() {
                             <input 
                               type="text" 
                               className="input-field" 
-                              value={contract.dados[contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos']?.valorExtenso || ''} 
+                              value={(contract?.dados as any)?.[contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos']?.valorExtenso || ''} 
                               onChange={e => updateDados(contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos', 'valorExtenso', e.target.value)}
                               placeholder="Ex: Quinhentos mil reais"
                             />
@@ -6078,8 +6460,8 @@ export default function AdminContractForm() {
                      <textarea 
                        className="input-field min-h-[100px] py-4 text-xs font-serif" 
                        placeholder="Adicionalmente, você pode escrever observações gerais extras aqui..."
-                       value={contract.dados.clausulas || ''}
-                       onChange={e => setContract(prev => ({ ...prev, dados: { ...prev.dados, clausulas: e.target.value } }))}
+                       value={contract.dados?.clausulas || ''}
+                       onChange={e => setContract(prev => ({ ...prev, dados: { ...(prev.dados || {}), clausulas: e.target.value } }))}
                      />
                   </div>
                 </div>

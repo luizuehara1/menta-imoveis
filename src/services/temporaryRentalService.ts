@@ -4,11 +4,13 @@ import {
   getDoc, 
   getDocs, 
   addDoc, 
+  setDoc,
   updateDoc, 
   deleteDoc, 
   query, 
   where, 
   orderBy, 
+  onSnapshot,
   serverTimestamp,
   runTransaction
 } from 'firebase/firestore';
@@ -19,9 +21,25 @@ import {
   TemporaryGuest, 
   TemporaryPayment, 
   TemporaryReceipt,
+  TemporaryReservationRequest,
+  TemporaryOccupancy,
+  TemporarySeasonalPrice,
+  TemporaryDailyRateDetail,
   Property 
 } from '../types';
 import { formatarDataBR, formatCurrency, valorMonetarioPorExtenso } from '../lib/utils';
+
+/**
+ * Adds N days to a YYYY-MM-DD date string.
+ */
+export function addDays(dateStr: string, days: number): string {
+  const d = parseDateToMidnight(dateStr) || new Date();
+  d.setDate(d.getDate() + days);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
 /**
  * Checks whether two half-open date intervals [startA, endA) and [startB, endB) overlap.
@@ -33,12 +51,126 @@ export function doIntervalsOverlap(startA: string, endA: string, startB: string,
 }
 
 /**
+ * Recursively locates any properties or array elements that are strictly `undefined`.
+ * Returns an array of dot/bracket notation paths (e.g. "detalhamentoDiarias[0].descricao").
+ */
+export function findUndefinedPaths(obj: any, currentPath = ''): string[] {
+  const paths: string[] = [];
+
+  if (obj === undefined) {
+    paths.push(currentPath || '(root)');
+    return paths;
+  }
+
+  if (obj === null || typeof obj !== 'object') {
+    return paths;
+  }
+
+  // Preserve Firestore FieldValues (serverTimestamp) and dates
+  if (obj.constructor && obj.constructor.name !== 'Object' && obj.constructor.name !== 'Array') {
+    return paths;
+  }
+
+  if (Array.isArray(obj)) {
+    obj.forEach((item, index) => {
+      const itemPath = `${currentPath}[${index}]`;
+      if (item === undefined) {
+        paths.push(itemPath);
+      } else {
+        paths.push(...findUndefinedPaths(item, itemPath));
+      }
+    });
+    return paths;
+  }
+
+  for (const key of Object.keys(obj)) {
+    const val = obj[key];
+    const keyPath = currentPath ? `${currentPath}.${key}` : key;
+    if (val === undefined) {
+      paths.push(keyPath);
+    } else {
+      paths.push(...findUndefinedPaths(val, keyPath));
+    }
+  }
+
+  return paths;
+}
+
+/**
+ * Deeply removes any keys whose values are strictly `undefined`.
+ * Ensures Firestore addDoc/setDoc/updateDoc never throws "Unsupported field value: undefined".
+ * Preserves Date, serverTimestamp, booleans, numbers, arrays, and strings.
+ */
+export function sanitizeFirestorePayload<T>(value: T): T {
+  if (value === undefined) {
+    return undefined as any;
+  }
+  if (value === null || typeof value !== 'object') {
+    return value;
+  }
+
+  // Preserve Firestore FieldValues (e.g. serverTimestamp), Timestamps, Dates
+  if (value.constructor && value.constructor.name !== 'Object' && value.constructor.name !== 'Array') {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return (value as any[])
+      .map(item => sanitizeFirestorePayload(item))
+      .filter(item => item !== undefined) as any;
+  }
+
+  const cleaned: Record<string, any> = {};
+  for (const [key, val] of Object.entries(value as Record<string, any>)) {
+    if (val !== undefined) {
+      const sanitized = sanitizeFirestorePayload(val);
+      if (sanitized !== undefined) {
+        cleaned[key] = sanitized;
+      }
+    }
+  }
+  return cleaned as T;
+}
+
+/**
+ * Parses date string in YYYY-MM-DD or DD/MM/YYYY into midday Date to prevent timezone drift.
+ */
+export function parseDateToMidnight(dateStr: string): Date | null {
+  if (!dateStr) return null;
+  const str = String(dateStr).trim().split('T')[0];
+  if (str.includes('/')) {
+    const parts = str.split('/');
+    if (parts.length === 3) {
+      const d = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10) - 1;
+      const y = parseInt(parts[2], 10);
+      if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+        return new Date(y, m, d, 12, 0, 0);
+      }
+    }
+  } else if (str.includes('-')) {
+    const parts = str.split('-');
+    if (parts.length === 3) {
+      const y = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10) - 1;
+      const d = parseInt(parts[2], 10);
+      if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+        return new Date(y, m, d, 12, 0, 0);
+      }
+    }
+  }
+  const fallback = new Date(dateStr);
+  return isNaN(fallback.getTime()) ? null : fallback;
+}
+
+/**
  * Calculates number of nights between check-in and check-out.
  */
 export function calculateNights(checkIn: string, checkOut: string): number {
   if (!checkIn || !checkOut) return 0;
-  const d1 = new Date(checkIn + 'T00:00:00');
-  const d2 = new Date(checkOut + 'T00:00:00');
+  const d1 = parseDateToMidnight(checkIn);
+  const d2 = parseDateToMidnight(checkOut);
+  if (!d1 || !d2) return 0;
   const diffTime = d2.getTime() - d1.getTime();
   const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
   return Math.max(0, diffDays);
@@ -51,14 +183,33 @@ export async function fetchTemporaryProperties(): Promise<Property[]> {
   try {
     const snap = await getDocs(collection(db, 'imoveis'));
     const all = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as Property[];
-    // Filter temporary properties or allow fallback to all
+    // Filter strictly temporary properties
     const tempProps = all.filter(p => {
-      const bType = String(p.businessType || '').toLowerCase();
+      const bType = String(p.businessType || (p as any).tipoNegocio || (p as any).tipo_negocio || '').toLowerCase();
       return bType.includes('tempor');
     });
-    return tempProps.length > 0 ? tempProps : all;
+    return tempProps;
   } catch (error) {
     console.error('[temporaryRentalService] Erro ao buscar imóveis de temporada:', error);
+    return [];
+  }
+}
+
+/**
+ * Checks if a property has active or future reservations.
+ * Useful when changing property modality to warn the administrator.
+ */
+export async function checkFutureActiveReservations(imovelId: string): Promise<TemporaryReservation[]> {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const list = await fetchReservations(imovelId);
+    return list.filter(r => {
+      const isFutureOrCurrent = (r.dataSaida || '') >= today;
+      const isActive = r.status !== 'cancelada';
+      return isFutureOrCurrent && isActive;
+    });
+  } catch (error) {
+    console.error('[temporaryRentalService] Erro ao checar reservas futuras:', error);
     return [];
   }
 }
@@ -90,8 +241,12 @@ export async function fetchReservations(imovelId?: string): Promise<TemporaryRes
     // Sort by dataEntrada descending
     list.sort((a, b) => (b.dataEntrada || '').localeCompare(a.dataEntrada || ''));
     return list;
-  } catch (error) {
-    console.error('[temporaryRentalService] Erro ao buscar reservas:', error);
+  } catch (error: any) {
+    if (error?.code === 'permission-denied') {
+      console.warn('[temporaryRentalService] Permissão insuficiente para listar reservas administrativas (usuário precisa estar logado como admin).');
+    } else {
+      console.error('[temporaryRentalService] Erro ao buscar reservas:', error);
+    }
     return [];
   }
 }
@@ -109,10 +264,443 @@ export async function fetchBlocks(imovelId?: string): Promise<TemporaryBlock[]> 
     }
     list.sort((a, b) => (a.dataInicio || '').localeCompare(b.dataInicio || ''));
     return list;
-  } catch (error) {
-    console.error('[temporaryRentalService] Erro ao buscar bloqueios:', error);
+  } catch (error: any) {
+    if (error?.code === 'permission-denied') {
+      console.warn('[temporaryRentalService] Permissão insuficiente para listar bloqueios.');
+    } else {
+      console.error('[temporaryRentalService] Erro ao buscar bloqueios:', error);
+    }
     return [];
   }
+}
+
+/**
+ * Fetches seasonal / special pricing rules for a property or all properties.
+ */
+export async function fetchSeasonalPrices(imovelId?: string): Promise<TemporarySeasonalPrice[]> {
+  try {
+    const ref = collection(db, 'precosTemporada');
+    const snap = await getDocs(ref);
+    let list = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as TemporarySeasonalPrice[];
+    if (imovelId) {
+      list = list.filter(p => p.imovelId === imovelId);
+    }
+    list.sort((a, b) => (a.dataInicio || '').localeCompare(b.dataInicio || ''));
+    return list;
+  } catch (error: any) {
+    if (error?.code === 'permission-denied') {
+      console.warn('[temporaryRentalService] Permissão insuficiente para listar preços sazonais.');
+    } else {
+      console.error('[temporaryRentalService] Erro ao buscar preços sazonais:', error);
+    }
+    return [];
+  }
+}
+
+/**
+ * Saves (creates or updates) a seasonal price rule.
+ */
+export async function saveSeasonalPrice(
+  priceRule: Partial<TemporarySeasonalPrice>, 
+  userUid?: string
+): Promise<string> {
+  if (!priceRule.imovelId) throw new Error('Selecione um imóvel para definir o preço especial.');
+  if (!priceRule.dataInicio || !priceRule.dataFim) throw new Error('Informe o período (data inicial e final) do preço especial.');
+  if (priceRule.dataInicio > priceRule.dataFim) throw new Error('A data final deve ser igual ou posterior à data inicial.');
+  const val = Number(priceRule.valorDiaria || 0);
+  if (val <= 0) throw new Error('Informe um valor de diária válido e maior que zero.');
+
+  const payload: any = {
+    ...priceRule,
+    valorDiaria: val,
+    descricao: (priceRule.descricao || 'Tarifa Especial').trim(),
+    atualizadoEm: serverTimestamp()
+  };
+
+  if (!priceRule.id) {
+    payload.criadoEm = serverTimestamp();
+    payload.criadoPor = userUid || null;
+    const docRef = await addDoc(collection(db, 'precosTemporada'), payload);
+    return docRef.id;
+  } else {
+    await updateDoc(doc(db, 'precosTemporada', priceRule.id), payload);
+    return priceRule.id;
+  }
+}
+
+/**
+ * Deletes a seasonal price rule.
+ */
+export async function deleteSeasonalPrice(priceId: string): Promise<void> {
+  await deleteDoc(doc(db, 'precosTemporada', priceId));
+}
+
+/**
+ * Groups a list of unique YYYY-MM-DD date strings into contiguous ranges [{ start, end }].
+ */
+export function groupContiguousDates(dates: string[]): Array<{ start: string; end: string }> {
+  if (!dates || dates.length === 0) return [];
+  const sorted = Array.from(new Set(dates)).sort();
+  const ranges: Array<{ start: string; end: string }> = [];
+
+  let rangeStart = sorted[0];
+  let prevDate = sorted[0];
+
+  for (let i = 1; i < sorted.length; i++) {
+    const curDate = sorted[i];
+    const expectedNext = addDays(prevDate, 1);
+    if (curDate === expectedNext) {
+      prevDate = curDate;
+    } else {
+      ranges.push({ start: rangeStart, end: prevDate });
+      rangeStart = curDate;
+      prevDate = curDate;
+    }
+  }
+  ranges.push({ start: rangeStart, end: prevDate });
+  return ranges;
+}
+
+/**
+ * Saves or updates a daily rate for a single specific date.
+ */
+export async function saveSingleDatePrice(
+  propertyId: string,
+  date: string,
+  valorDiaria: number,
+  descricao?: string,
+  userUid?: string
+): Promise<string> {
+  if (!propertyId || !date) throw new Error('Imóvel e data são obrigatórios.');
+  const val = Number(valorDiaria);
+  if (val <= 0) throw new Error('Informe um valor de diária válido e maior que zero.');
+
+  const allRules = await fetchSeasonalPrices(propertyId);
+  const exactRule = allRules.find(r => r.imovelId === propertyId && r.dataInicio === date && r.dataFim === date);
+
+  if (exactRule) {
+    await updateDoc(doc(db, 'precosTemporada', exactRule.id), {
+      valorDiaria: val,
+      descricao: (descricao || 'Tarifa Personalizada').trim(),
+      atualizadoEm: serverTimestamp()
+    });
+    return exactRule.id;
+  } else {
+    const docRef = await addDoc(collection(db, 'precosTemporada'), {
+      imovelId: propertyId,
+      dataInicio: date,
+      dataFim: date,
+      valorDiaria: val,
+      descricao: (descricao || 'Tarifa Personalizada').trim(),
+      criadoEm: serverTimestamp(),
+      atualizadoEm: serverTimestamp(),
+      criadoPor: userUid || null
+    });
+    return docRef.id;
+  }
+}
+
+/**
+ * Removes custom price on a specific date, reverting to standard rate or splitting existing range.
+ */
+export async function removeSingleDatePrice(
+  propertyId: string,
+  date: string
+): Promise<void> {
+  if (!propertyId || !date) return;
+  const allRules = await fetchSeasonalPrices(propertyId);
+  
+  const matching = allRules.filter(r => r.imovelId === propertyId && r.dataInicio <= date && date <= r.dataFim);
+  for (const rule of matching) {
+    if (rule.dataInicio === date && rule.dataFim === date) {
+      await deleteDoc(doc(db, 'precosTemporada', rule.id));
+    } else {
+      await deleteDoc(doc(db, 'precosTemporada', rule.id));
+      if (rule.dataInicio < date) {
+        const leftEnd = addDays(date, -1);
+        if (rule.dataInicio <= leftEnd) {
+          await addDoc(collection(db, 'precosTemporada'), {
+            imovelId: propertyId,
+            dataInicio: rule.dataInicio,
+            dataFim: leftEnd,
+            valorDiaria: rule.valorDiaria,
+            descricao: rule.descricao,
+            criadoEm: rule.criadoEm || serverTimestamp(),
+            atualizadoEm: serverTimestamp()
+          });
+        }
+      }
+      if (date < rule.dataFim) {
+        const rightStart = addDays(date, 1);
+        if (rightStart <= rule.dataFim) {
+          await addDoc(collection(db, 'precosTemporada'), {
+            imovelId: propertyId,
+            dataInicio: rightStart,
+            dataFim: rule.dataFim,
+            valorDiaria: rule.valorDiaria,
+            descricao: rule.descricao,
+            criadoEm: rule.criadoEm || serverTimestamp(),
+            atualizadoEm: serverTimestamp()
+          });
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Saves bulk seasonal prices for arbitrary selected dates.
+ * Groups contiguous dates into ranges and preserves non-selected dates cleanly.
+ */
+export async function saveBulkSeasonalPrices(
+  propertyId: string,
+  dates: string[],
+  valorDiaria: number,
+  descricao?: string,
+  userUid?: string
+): Promise<number> {
+  if (!propertyId) throw new Error('Selecione um imóvel.');
+  if (!dates || dates.length === 0) throw new Error('Nenhuma data selecionada para alteração em massa.');
+  const val = Number(valorDiaria);
+  if (val <= 0) throw new Error('Informe um valor de diária válido e maior que zero.');
+
+  const dateSet = new Set(dates);
+
+  // Check if any date has a confirmed reservation
+  const allReservations = await fetchReservations(propertyId);
+  const activeRes = allReservations.filter(r => r.status !== 'cancelada');
+  for (const d of dates) {
+    const conflict = activeRes.find(r => r.dataEntrada <= d && d < r.dataSaida);
+    if (conflict) {
+      throw new Error(`A data ${formatarDataBR(d)} possui uma reserva confirmada (${conflict.codigoReserva}) e não pode ter o valor alterado.`);
+    }
+  }
+
+  // Clean or split overlapping rules for these dates
+  const existingRules = await fetchSeasonalPrices(propertyId);
+  for (const rule of existingRules) {
+    const ruleNights = calculateNights(rule.dataInicio, rule.dataFim) + 1;
+    let allInSet = true;
+    let anyInSet = false;
+    for (let i = 0; i < ruleNights; i++) {
+      const cur = addDays(rule.dataInicio, i);
+      if (dateSet.has(cur)) {
+        anyInSet = true;
+      } else {
+        allInSet = false;
+      }
+    }
+
+    if (allInSet) {
+      await deleteDoc(doc(db, 'precosTemporada', rule.id));
+    } else if (anyInSet) {
+      await deleteDoc(doc(db, 'precosTemporada', rule.id));
+      const preservedDays: string[] = [];
+      for (let i = 0; i < ruleNights; i++) {
+        const cur = addDays(rule.dataInicio, i);
+        if (!dateSet.has(cur)) {
+          preservedDays.push(cur);
+        }
+      }
+      const preservedRanges = groupContiguousDates(preservedDays);
+      for (const pr of preservedRanges) {
+        await addDoc(collection(db, 'precosTemporada'), {
+          imovelId: propertyId,
+          dataInicio: pr.start,
+          dataFim: pr.end,
+          valorDiaria: rule.valorDiaria,
+          descricao: rule.descricao,
+          criadoEm: rule.criadoEm || serverTimestamp(),
+          atualizadoEm: serverTimestamp()
+        });
+      }
+    }
+  }
+
+  // Persist newly grouped ranges
+  const ranges = groupContiguousDates(dates);
+  const desc = (descricao || 'Tarifa em Massa').trim();
+
+  for (const r of ranges) {
+    await addDoc(collection(db, 'precosTemporada'), {
+      imovelId: propertyId,
+      dataInicio: r.start,
+      dataFim: r.end,
+      valorDiaria: val,
+      descricao: desc,
+      criadoEm: serverTimestamp(),
+      atualizadoEm: serverTimestamp(),
+      criadoPor: userUid || null
+    });
+  }
+
+  return dates.length;
+}
+
+/**
+ * Removes custom pricing rules on specified dates, reverting them to property standard rate.
+ */
+export async function removeBulkSeasonalPrices(
+  propertyId: string,
+  dates: string[]
+): Promise<number> {
+  if (!propertyId || !dates || dates.length === 0) return 0;
+  const dateSet = new Set(dates);
+  const existingRules = await fetchSeasonalPrices(propertyId);
+
+  for (const rule of existingRules) {
+    const ruleNights = calculateNights(rule.dataInicio, rule.dataFim) + 1;
+    let allInSet = true;
+    let anyInSet = false;
+    for (let i = 0; i < ruleNights; i++) {
+      const cur = addDays(rule.dataInicio, i);
+      if (dateSet.has(cur)) {
+        anyInSet = true;
+      } else {
+        allInSet = false;
+      }
+    }
+
+    if (allInSet) {
+      await deleteDoc(doc(db, 'precosTemporada', rule.id));
+    } else if (anyInSet) {
+      await deleteDoc(doc(db, 'precosTemporada', rule.id));
+      const preservedDays: string[] = [];
+      for (let i = 0; i < ruleNights; i++) {
+        const cur = addDays(rule.dataInicio, i);
+        if (!dateSet.has(cur)) {
+          preservedDays.push(cur);
+        }
+      }
+      const preservedRanges = groupContiguousDates(preservedDays);
+      for (const pr of preservedRanges) {
+        await addDoc(collection(db, 'precosTemporada'), {
+          imovelId: propertyId,
+          dataInicio: pr.start,
+          dataFim: pr.end,
+          valorDiaria: rule.valorDiaria,
+          descricao: rule.descricao,
+          criadoEm: rule.criadoEm || serverTimestamp(),
+          atualizadoEm: serverTimestamp()
+        });
+      }
+    }
+  }
+
+  return dates.length;
+}
+
+
+
+/**
+ * Calculates day-by-day reservation breakdown applying deterministic pricing priority:
+ * 1. Matching seasonal price rule for the specific date.
+ *    If multiple rules match the same date:
+ *    a) The rule with smaller interval (most specific date range) has highest precedence.
+ *    b) Ties are broken by newest creation/update.
+ * 2. Default property daily rate if no special rule applies.
+ * 3. Cleaning fee + other fees - discount.
+ */
+export function calculateReservationBreakdown(
+  property: Property | null,
+  checkIn: string,
+  checkOut: string,
+  seasonalPrices: TemporarySeasonalPrice[] = [],
+  desconto = 0,
+  outrasTaxas = 0
+): {
+  nights: number;
+  dailyRates: TemporaryDailyRateDetail[];
+  subtotalDiarias: number;
+  taxaLimpeza: number;
+  outrasTaxas: number;
+  desconto: number;
+  valorTotal: number;
+  averageDailyRate: number;
+  hasZeroRate: boolean;
+} {
+  const nights = calculateNights(checkIn, checkOut);
+  const defaultDailyRate = Number(property?.valorDiaria || property?.priceDiaria || property?.precoDiaria || property?.diaria || 0);
+  const taxaLimpeza = Number(property?.taxaLimpeza || property?.taxaLimpezaTemporada || 0);
+
+  if (nights <= 0 || !checkIn) {
+    return {
+      nights: 0,
+      dailyRates: [],
+      subtotalDiarias: 0,
+      taxaLimpeza,
+      outrasTaxas: 0,
+      desconto: 0,
+      valorTotal: 0,
+      averageDailyRate: defaultDailyRate,
+      hasZeroRate: false
+    };
+  }
+
+  const dailyRates: TemporaryDailyRateDetail[] = [];
+  const propertyRules = (seasonalPrices || []).filter(p => !property?.id || p.imovelId === property.id);
+
+  for (let i = 0; i < nights; i++) {
+    const dayKey = addDays(checkIn, i);
+
+    // Find all matching rules
+    const matchingRules = propertyRules.filter(r => 
+      r.dataInicio <= dayKey && 
+      dayKey <= r.dataFim && 
+      Number(r.valorDiaria) > 0
+    );
+
+    let appliedRate = defaultDailyRate;
+    let isSpecial = false;
+    let desc = '';
+
+    if (matchingRules.length > 0) {
+      // Deterministic priority:
+      // 1. Smaller interval length (dataFim - dataInicio in days) -> most specific
+      // 2. Newest rule
+      matchingRules.sort((a, b) => {
+        const spanA = calculateNights(a.dataInicio, a.dataFim);
+        const spanB = calculateNights(b.dataInicio, b.dataFim);
+        if (spanA !== spanB) return spanA - spanB;
+        const timeA = a.atualizadoEm?.seconds || a.criadoEm?.seconds || 0;
+        const timeB = b.atualizadoEm?.seconds || b.criadoEm?.seconds || 0;
+        return timeB - timeA;
+      });
+
+      const bestRule = matchingRules[0];
+      appliedRate = Number(bestRule.valorDiaria);
+      isSpecial = true;
+      desc = bestRule.descricao || 'Tarifa Especial';
+    }
+
+    dailyRates.push({
+      data: dayKey,
+      dataFmt: formatarDataBR(dayKey),
+      valor: appliedRate,
+      isSpecialPrice: isSpecial,
+      descricao: desc
+    });
+  }
+
+  const subtotalDiarias = dailyRates.reduce((sum, item) => sum + item.valor, 0);
+  const cleanFee = Math.max(0, taxaLimpeza);
+  const other = Math.max(0, outrasTaxas);
+  const disc = Math.max(0, desconto);
+  const valorTotal = Math.max(0, subtotalDiarias + cleanFee + other - disc);
+  const averageDailyRate = nights > 0 ? subtotalDiarias / nights : defaultDailyRate;
+  const hasZeroRate = nights > 0 ? (dailyRates.some(d => d.valor <= 0) || (dailyRates.length === 0 && defaultDailyRate <= 0)) : false;
+
+  return {
+    nights,
+    dailyRates,
+    subtotalDiarias,
+    taxaLimpeza: cleanFee,
+    outrasTaxas: other,
+    desconto: disc,
+    valorTotal,
+    averageDailyRate,
+    hasZeroRate
+  };
 }
 
 /**
@@ -125,8 +713,12 @@ export async function fetchGuests(): Promise<TemporaryGuest[]> {
     const list = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as TemporaryGuest[];
     list.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
     return list;
-  } catch (error) {
-    console.error('[temporaryRentalService] Erro ao buscar hóspedes:', error);
+  } catch (error: any) {
+    if (error?.code === 'permission-denied') {
+      console.warn('[temporaryRentalService] Permissão insuficiente para listar hóspedes.');
+    } else {
+      console.error('[temporaryRentalService] Erro ao buscar hóspedes:', error);
+    }
     return [];
   }
 }
@@ -144,8 +736,12 @@ export async function fetchPayments(reservaId?: string): Promise<TemporaryPaymen
     }
     list.sort((a, b) => (b.dataPagamento || '').localeCompare(a.dataPagamento || ''));
     return list;
-  } catch (error) {
-    console.error('[temporaryRentalService] Erro ao buscar pagamentos:', error);
+  } catch (error: any) {
+    if (error?.code === 'permission-denied') {
+      console.warn('[temporaryRentalService] Permissão insuficiente para listar pagamentos.');
+    } else {
+      console.error('[temporaryRentalService] Erro ao buscar pagamentos:', error);
+    }
     return [];
   }
 }
@@ -163,8 +759,12 @@ export async function fetchReceipts(reservaId?: string): Promise<TemporaryReceip
     }
     list.sort((a, b) => (b.dataEmissao || '').localeCompare(a.dataEmissao || ''));
     return list;
-  } catch (error) {
-    console.error('[temporaryRentalService] Erro ao buscar recibos:', error);
+  } catch (error: any) {
+    if (error?.code === 'permission-denied') {
+      console.warn('[temporaryRentalService] Permissão insuficiente para listar recibos.');
+    } else {
+      console.error('[temporaryRentalService] Erro ao buscar recibos:', error);
+    }
     return [];
   }
 }
@@ -214,7 +814,8 @@ export async function checkAvailability(
   const activeBlocks = allBlocks.filter(b => (!excludeBlockId || b.id !== excludeBlockId));
 
   for (const b of activeBlocks) {
-    if (doIntervalsOverlap(dataEntrada, dataSaida, b.dataInicio, b.dataFim)) {
+    const blockEnd = b.dataFimEfetivo || (b.dataFim === b.dataInicio ? addDays(b.dataFim, 1) : addDays(b.dataFim, 1));
+    if (doIntervalsOverlap(dataEntrada, dataSaida, b.dataInicio, blockEnd)) {
       const motivoLabel = b.motivo === 'manutencao' ? 'Manutenção' : b.motivo === 'uso_proprietario' ? 'Uso do Proprietário' : 'Bloqueio Manual';
       return {
         available: false,
@@ -322,7 +923,7 @@ export async function saveReservation(
     statusPagamento = 'parcial';
   }
 
-  const payload: any = {
+  const payload: any = sanitizeFirestorePayload({
     ...reservation,
     codigoReserva: codigo,
     valorTotal,
@@ -330,9 +931,22 @@ export async function saveReservation(
     valorPago,
     saldoRestante,
     statusPagamento,
+    acompanhantes: (Array.isArray(reservation.acompanhantes) ? reservation.acompanhantes : []).map(a => ({
+      nomeCompleto: a.nomeCompleto || (a as any).nome || '',
+      documento: a.documento || '',
+      parentesco: a.parentesco || '',
+      faixaEtaria: a.faixaEtaria || 'adulto'
+    })),
+    detalhamentoDiarias: (Array.isArray(reservation.detalhamentoDiarias) ? reservation.detalhamentoDiarias : []).map(d => ({
+      data: d.data,
+      dataFmt: d.dataFmt || formatarDataBR(d.data),
+      valor: Number(d.valor || 0),
+      isSpecialPrice: Boolean(d.isSpecialPrice),
+      descricao: d.descricao ? String(d.descricao).trim() : ''
+    })),
     status: reservation.status || 'confirmada',
     atualizadoEm: serverTimestamp()
-  };
+  });
 
   if (!reservation.id) {
     payload.criadoEm = serverTimestamp();
@@ -364,9 +978,39 @@ export async function saveReservation(
       }
     }
 
+    // Sync anonymous public occupancy record
+    try {
+      await setDoc(doc(db, 'ocupacaoTemporada', docRef.id), {
+        imovelId: reservation.imovelId,
+        dataEntrada: reservation.dataEntrada,
+        dataSaida: reservation.dataSaida,
+        tipo: 'reserva',
+        referenciaId: docRef.id
+      });
+    } catch (occErr) {
+      console.warn('[temporaryRentalService] Aviso ao sincronizar ocupação anônima:', occErr);
+    }
+
     return docRef.id;
   } else {
     await updateDoc(doc(db, 'reservasTemporada', reservation.id), payload);
+
+    try {
+      if (payload.status === 'cancelada') {
+        await deleteDoc(doc(db, 'ocupacaoTemporada', reservation.id));
+      } else {
+        await setDoc(doc(db, 'ocupacaoTemporada', reservation.id), {
+          imovelId: reservation.imovelId,
+          dataEntrada: reservation.dataEntrada,
+          dataSaida: reservation.dataSaida,
+          tipo: 'reserva',
+          referenciaId: reservation.id
+        });
+      }
+    } catch (occErr) {
+      console.warn('[temporaryRentalService] Aviso ao atualizar ocupação anônima:', occErr);
+    }
+
     return reservation.id;
   }
 }
@@ -380,6 +1024,12 @@ export async function cancelReservation(reservaId: string, motivo?: string): Pro
     canceladoEm: serverTimestamp(),
     motivoCancelamento: motivo || 'Cancelada pelo administrador'
   });
+
+  try {
+    await deleteDoc(doc(db, 'ocupacaoTemporada', reservaId));
+  } catch (occErr) {
+    console.warn('[temporaryRentalService] Erro ao remover ocupação no cancelamento:', occErr);
+  }
 }
 
 /**
@@ -388,22 +1038,47 @@ export async function cancelReservation(reservaId: string, motivo?: string): Pro
 export async function addBlock(block: Partial<TemporaryBlock>, userUid?: string): Promise<string> {
   if (!block.imovelId) throw new Error('Selecione um imóvel para bloquear datas.');
   if (!block.dataInicio || !block.dataFim) throw new Error('Informe o início e fim do bloqueio.');
+  if (block.dataInicio > block.dataFim) throw new Error('A data final deve ser igual ou posterior à data inicial.');
+
+  // Bloqueio administrativo cobre todas as pernoites de dataInicio até dataFim (inclusive).
+  // No intervalo semi-aberto [dataEntrada, dataSaida), a data de liberação é o dia seguinte a dataFim:
+  const dataSaidaEfetiva = addDays(block.dataFim, 1);
 
   // Verify no overlap with confirmed bookings
-  const avail = await checkAvailability(block.imovelId, block.dataInicio, block.dataFim);
+  const avail = await checkAvailability(block.imovelId, block.dataInicio, dataSaidaEfetiva, undefined, block.id);
   if (!avail.available && avail.conflictingReservation) {
     throw new Error(`Não é possível bloquear: ${avail.reason}`);
   }
 
   const payload: any = {
     ...block,
+    dataFimEfetivo: dataSaidaEfetiva,
     motivo: block.motivo || 'bloqueio_manual',
     criadoEm: serverTimestamp(),
     criadoPor: userUid || null
   };
 
-  const docRef = await addDoc(collection(db, 'bloqueiosTemporada'), payload);
-  return docRef.id;
+  let docId = block.id;
+  if (!docId) {
+    const docRef = await addDoc(collection(db, 'bloqueiosTemporada'), payload);
+    docId = docRef.id;
+  } else {
+    await updateDoc(doc(db, 'bloqueiosTemporada', docId), payload);
+  }
+
+  try {
+    await setDoc(doc(db, 'ocupacaoTemporada', docId), {
+      imovelId: block.imovelId,
+      dataEntrada: block.dataInicio,
+      dataSaida: dataSaidaEfetiva,
+      tipo: block.motivo === 'manutencao' ? 'manutencao' : 'bloqueio',
+      referenciaId: docId
+    });
+  } catch (occErr) {
+    console.warn('[temporaryRentalService] Aviso ao sincronizar bloqueio na ocupação anônima:', occErr);
+  }
+
+  return docId;
 }
 
 /**
@@ -411,6 +1086,11 @@ export async function addBlock(block: Partial<TemporaryBlock>, userUid?: string)
  */
 export async function removeBlock(blockId: string): Promise<void> {
   await deleteDoc(doc(db, 'bloqueiosTemporada', blockId));
+  try {
+    await deleteDoc(doc(db, 'ocupacaoTemporada', blockId));
+  } catch (occErr) {
+    console.warn('[temporaryRentalService] Aviso ao remover ocupação de bloqueio:', occErr);
+  }
 }
 
 /**
@@ -546,12 +1226,763 @@ export function buildTemporaryRentalWhatsAppUrl(
       (data.imovelEndereco ? `📍 *Endereço:* ${data.imovelEndereco}\n` : '') +
       `📅 *Período:* ${formatarDataBR(data.dataEntrada || '')} a ${formatarDataBR(data.dataSaida || '')} (${data.quantidadeDiarias || 0} diárias)\n` +
       `👥 *Hóspedes:* ${data.quantidadeHospedes || 1} pessoa(s)\n` +
-      `💰 *Valor Total:* R$ ${formatCurrency(data.valorTotal || 0)}\n` +
-      `💵 *Valor Pago:* R$ ${formatCurrency(data.valorPago || 0)}\n` +
-      `⏳ *Saldo Pendente:* R$ ${formatCurrency(data.saldoRestante || 0)}\n\n` +
+      `💰 *Valor Total:* ${formatCurrency(data.valorTotal || 0)}\n` +
+      `💵 *Valor Pago:* ${formatCurrency(data.valorPago || 0)}\n` +
+      `⏳ *Saldo Pendente:* ${formatCurrency(data.saldoRestante || 0)}\n\n` +
       `Caso tenha dúvidas, nossa equipe está à total disposição!`;
   }
 
   const baseUrl = cleanPhone ? `https://wa.me/55${cleanPhone.replace(/^55/, '')}` : 'https://wa.me/';
   return `${baseUrl}?text=${encodeURIComponent(text)}`;
+}
+
+/**
+ * Fetches public anonymous occupied date intervals for a property (no personal data).
+ */
+export async function fetchPublicOccupiedDates(imovelId: string): Promise<Array<{
+  dataEntrada: string;
+  dataSaida: string;
+  tipo: 'reserva' | 'bloqueio' | 'manutencao';
+}>> {
+  if (!imovelId) return [];
+  try {
+    const list: Array<{ dataEntrada: string; dataSaida: string; tipo: 'reserva' | 'bloqueio' | 'manutencao' }> = [];
+
+    // 1. Fetch blocks
+    const blocksSnap = await getDocs(query(collection(db, 'bloqueiosTemporada'), where('imovelId', '==', imovelId)));
+    blocksSnap.docs.forEach(d => {
+      const b = d.data();
+      if (b.dataInicio && b.dataFim) {
+        const effectiveEnd = b.dataFimEfetivo || (b.dataFim === b.dataInicio ? addDays(b.dataFim, 1) : addDays(b.dataFim, 1));
+        list.push({
+          dataEntrada: b.dataInicio,
+          dataSaida: effectiveEnd,
+          tipo: b.motivo === 'manutencao' ? 'manutencao' : 'bloqueio'
+        });
+      }
+    });
+
+    // 2. Fetch anonymous occupancy (covers confirmed reservations)
+    const occSnap = await getDocs(query(collection(db, 'ocupacaoTemporada'), where('imovelId', '==', imovelId)));
+    occSnap.docs.forEach(d => {
+      const o = d.data();
+      if (o.dataEntrada && o.dataSaida) {
+        if (!list.some(item => item.dataEntrada === o.dataEntrada && item.dataSaida === o.dataSaida)) {
+          list.push({
+            dataEntrada: o.dataEntrada,
+            dataSaida: o.dataSaida,
+            tipo: o.tipo || 'reserva'
+          });
+        }
+      }
+    });
+
+    return list;
+  } catch (err) {
+    console.error('[temporaryRentalService] Erro ao buscar datas ocupadas públicas:', err);
+    return [];
+  }
+}
+
+/**
+ * Checks public availability for client reservation request.
+ */
+export async function checkPublicAvailability(
+  imovelId: string, 
+  dataEntrada: string, 
+  dataSaida: string
+): Promise<{ available: boolean; reason?: string }> {
+  if (!imovelId || !dataEntrada || !dataSaida) {
+    return { available: false, reason: 'Datas incompletas.' };
+  }
+  if (dataEntrada >= dataSaida) {
+    return { available: false, reason: 'A data de saída deve ser posterior à data de entrada.' };
+  }
+
+  const occupied = await fetchPublicOccupiedDates(imovelId);
+  for (const item of occupied) {
+    if (doIntervalsOverlap(dataEntrada, dataSaida, item.dataEntrada, item.dataSaida)) {
+      const motivoLabel = item.tipo === 'manutencao' ? 'manutenção' : item.tipo === 'bloqueio' ? 'bloqueio administrativo' : 'reserva existente';
+      return {
+        available: false,
+        reason: `As datas selecionadas (${formatarDataBR(dataEntrada)} a ${formatarDataBR(dataSaida)}) coincidem com um período indisponível (${motivoLabel}).`
+      };
+    }
+  }
+
+  return { available: true };
+}
+
+/**
+ * Generates unique reservation request code.
+ */
+export function generateRequestCode(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  const random = Math.floor(1000 + Math.random() * 9000);
+  return `TMP-${y}${m}${d}-${random}`;
+}
+
+/**
+ * Normalizes and deeply sanitizes a public reservation request object prior to persisting in Firestore.
+ * Ensures:
+ * - No property or array item property has value `undefined`.
+ * - String fields are trimmed strings.
+ * - Numerical fields (prices, counts) remain numbers.
+ * - Boolean fields remain booleans.
+ * - Arrays (veiculos, acompanhantes, detalhamentoDiarias) are normalized item-by-item without undefined attributes.
+ * - If possuiVeiculo is false, veiculos is an empty array.
+ * - Missing optional strings default to clean empty strings or are safely omitted.
+ */
+export function normalizeReservationRequest(
+  request: Partial<TemporaryReservationRequest>,
+  codigo: string
+): Record<string, any> {
+  const phone = String(request.whatsapp || request.telefone || '').trim();
+
+  // Normalize vehicles: only keep vehicles with some identity and ensure all props are defined strings
+  const cleanVeiculos = (request.possuiVeiculo && Array.isArray(request.veiculos))
+    ? request.veiculos
+        .filter(v => v && (String(v.placa || '').trim() || String(v.modelo || '').trim()))
+        .map(v => ({
+          tipo: String(v.tipo || 'Carro').trim(),
+          marca: String(v.marca || '').trim(),
+          modelo: String(v.modelo || '').trim(),
+          cor: String(v.cor || '').trim(),
+          placa: String(v.placa || '').trim().toUpperCase()
+        }))
+    : [];
+
+  // Normalize companions: only keep companions with a name and ensure all props are defined strings
+  const cleanAcompanhantes = Array.isArray(request.acompanhantes)
+    ? request.acompanhantes
+        .filter(a => a && String(a.nomeCompleto || (a as any).nome || '').trim())
+        .map(a => ({
+          nomeCompleto: String(a.nomeCompleto || (a as any).nome || '').trim(),
+          documento: String(a.documento || '').trim(),
+          parentesco: String(a.parentesco || '').trim(),
+          faixaEtaria: (a.faixaEtaria === 'crianca' ? 'crianca' : 'adulto') as 'adulto' | 'crianca'
+        }))
+    : [];
+
+  // Normalize daily rate breakdown: ensure numbers are numbers, boolean is boolean, string is string
+  const cleanDiarias = Array.isArray(request.detalhamentoDiarias)
+    ? request.detalhamentoDiarias.map(d => ({
+        data: String(d.data || ''),
+        dataFmt: String(d.dataFmt || (d.data ? formatarDataBR(d.data) : '')),
+        valor: Number(d.valor || 0),
+        isSpecialPrice: Boolean(d.isSpecialPrice),
+        descricao: String(d.descricao || '')
+      }))
+    : [];
+
+  const rawPayload: Record<string, any> = {
+    imovelId: String(request.imovelId || '').trim(),
+    imovelCodigo: String(request.imovelCodigo || '').trim(),
+    imovelTitulo: String(request.imovelTitulo || 'Imóvel de Temporada').trim(),
+    imovelEndereco: String(request.imovelEndereco || '').trim(),
+    imovelLink: String((request as any).imovelLink || '').trim(),
+    nomeCliente: String(request.nomeCliente || '').trim(),
+    hospedeCpf: String(request.hospedeCpf || '').trim(),
+    telefone: phone,
+    whatsapp: phone,
+    email: String(request.email || '').trim(),
+    dataEntrada: String(request.dataEntrada || '').trim(),
+    dataSaida: String(request.dataSaida || '').trim(),
+    quantidadeDiarias: Math.max(0, Number(request.quantidadeDiarias || 0)),
+    quantidadeHospedes: Math.max(1, Number(request.quantidadeHospedes || 1)),
+    valorDiaria: Math.max(0, Number(request.valorDiaria || 0)),
+    taxaLimpeza: Math.max(0, Number(request.taxaLimpeza || 0)),
+    outrasTaxas: Math.max(0, Number(request.outrasTaxas || 0)),
+    valorTotalEstimado: Math.max(0, Number(request.valorTotalEstimado || 0)),
+    possuiVeiculo: Boolean(request.possuiVeiculo && cleanVeiculos.length > 0),
+    veiculos: cleanVeiculos,
+    acompanhantes: cleanAcompanhantes,
+    detalhamentoDiarias: cleanDiarias,
+    observacoes: String(request.observacoes || '').trim(),
+    codigoSolicitacao: codigo,
+    codigo: codigo,
+    status: (request.status as any) || 'pendente',
+    origem: 'site_publico',
+    criadoEm: serverTimestamp()
+  };
+
+  return sanitizeFirestorePayload(rawPayload);
+}
+
+/**
+ * Submits a public reservation request to Firestore and checks availability.
+ */
+export async function submitReservationRequest(
+  request: Partial<TemporaryReservationRequest>
+): Promise<{ id: string; codigo: string }> {
+  if (!request.imovelId) throw new Error('Identificação do imóvel ausente.');
+  if (!request.dataEntrada || !request.dataSaida) throw new Error('Selecione as datas de entrada e saída.');
+  if (!request.nomeCliente?.trim()) throw new Error('Informe seu nome completo.');
+  const phone = (request.whatsapp || request.telefone || '').trim();
+  if (!phone) throw new Error('Informe seu telefone ou WhatsApp para contato.');
+
+  // Validate availability in real-time before saving
+  const avail = await checkPublicAvailability(request.imovelId, request.dataEntrada, request.dataSaida);
+  if (!avail.available) {
+    throw new Error(avail.reason || 'Desculpe, o período selecionado não está mais disponível.');
+  }
+
+  const codigo = generateRequestCode();
+  const normalizedPayload = normalizeReservationRequest(request, codigo);
+
+  // Diagnostic assertion: check for any remaining undefined values
+  const undefinedPaths = findUndefinedPaths(normalizedPayload);
+  if (undefinedPaths.length > 0) {
+    console.error('[temporaryRentalService] ERRO CRÍTICO: Campo(s) undefined detectado(s) no payload de reserva:', undefinedPaths);
+    throw new Error(`Dados inválidos para envio ao Firestore: campo undefined em ${undefinedPaths.join(', ')}.`);
+  }
+
+  // Safe diagnostics log (masking sensitive personal data like full CPF)
+  console.info('[temporaryRentalService] Gravando solicitação de reserva normalizada:', {
+    codigo,
+    imovelId: normalizedPayload.imovelId,
+    imovelCodigo: normalizedPayload.imovelCodigo,
+    dataEntrada: normalizedPayload.dataEntrada,
+    dataSaida: normalizedPayload.dataSaida,
+    quantidadeDiarias: normalizedPayload.quantidadeDiarias,
+    totalHospedes: normalizedPayload.quantidadeHospedes,
+    veiculosCount: normalizedPayload.veiculos.length,
+    acompanhantesCount: normalizedPayload.acompanhantes.length,
+    detalhamentoCount: normalizedPayload.detalhamentoDiarias.length,
+    possuiVeiculo: normalizedPayload.possuiVeiculo,
+    hasCpf: Boolean(normalizedPayload.hospedeCpf)
+  });
+
+  try {
+    const docRef = await addDoc(collection(db, 'solicitacoesReservaTemporada'), normalizedPayload);
+    console.info('[temporaryRentalService] Solicitação gravada com sucesso no Firestore:', {
+      id: docRef.id,
+      codigo
+    });
+    return { id: docRef.id, codigo };
+  } catch (err: any) {
+    console.error('[temporaryRentalService] Erro ao gravar solicitação de reserva no Firestore:', {
+      collection: 'solicitacoesReservaTemporada',
+      operation: 'addDoc',
+      errorCode: err?.code,
+      errorMessage: err?.message,
+      undefinedPaths: findUndefinedPaths(normalizedPayload)
+    });
+    if (err?.code === 'permission-denied') {
+      throw new Error('Não foi possível registrar sua solicitação no sistema por uma questão de permissão. Por favor, tente novamente ou contate nossa equipe.');
+    }
+    throw new Error(err?.message || 'Falha ao registrar a solicitação de reserva no sistema.');
+  }
+}
+
+/**
+ * Fetches all reservation requests (for admin panel).
+ */
+export async function fetchReservationRequests(imovelId?: string): Promise<TemporaryReservationRequest[]> {
+  try {
+    const snap = await getDocs(collection(db, 'solicitacoesReservaTemporada'));
+    let list = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as TemporaryReservationRequest[];
+    if (imovelId) {
+      list = list.filter(r => r.imovelId === imovelId);
+    }
+    list.sort((a, b) => {
+      const timeA = a.criadoEm?.seconds || 0;
+      const timeB = b.criadoEm?.seconds || 0;
+      return timeB - timeA;
+    });
+    return list;
+  } catch (error: any) {
+    if (error?.code === 'permission-denied') {
+      console.warn('[temporaryRentalService] Permissão insuficiente para listar solicitações de reserva.');
+    } else {
+      console.error('[temporaryRentalService] Erro ao buscar solicitações de reserva:', error);
+    }
+    return [];
+  }
+}
+
+/**
+ * Subscribes to real-time updates for reservation requests from Firestore.
+ * Automatically triggers callback whenever any user creates, approves, or modifies a request.
+ */
+export function subscribeReservationRequests(
+  callback: (requests: TemporaryReservationRequest[]) => void,
+  onError?: (error: any) => void,
+  imovelId?: string
+): () => void {
+  try {
+    const colRef = collection(db, 'solicitacoesReservaTemporada');
+    const unsubscribe = onSnapshot(colRef, (snap) => {
+      let list = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as TemporaryReservationRequest[];
+      if (imovelId) {
+        list = list.filter(r => r.imovelId === imovelId);
+      }
+      list.sort((a, b) => {
+        const timeA = a.criadoEm?.seconds || 0;
+        const timeB = b.criadoEm?.seconds || 0;
+        return timeB - timeA;
+      });
+      callback(list);
+    }, (err) => {
+      console.error('[temporaryRentalService] Erro no listener em tempo real de solicitações:', err);
+      if (onError) onError(err);
+    });
+    return unsubscribe;
+  } catch (err) {
+    console.error('[temporaryRentalService] Erro ao iniciar listener de solicitações:', err);
+    if (onError) onError(err);
+    return () => {};
+  }
+}
+
+/**
+ * Updates status of a reservation request with audit logging (who and when).
+ */
+export async function updateRequestStatus(
+  requestId: string,
+  newStatus: 'pendente' | 'em_analise' | 'confirmada' | 'recusada' | 'cancelada',
+  options?: {
+    motivo?: string;
+    adminUser?: string;
+  }
+): Promise<void> {
+  const adminName = options?.adminUser || 'Administrador';
+  const updateData: Record<string, any> = {
+    status: newStatus,
+    statusAlteradoEm: serverTimestamp(),
+    statusAlteradoPor: adminName,
+    atualizadoEm: serverTimestamp()
+  };
+
+  if (newStatus === 'recusada') {
+    updateData.motivoRecusa = options?.motivo || 'Recusada pelo administrador';
+    updateData.recusadoEm = serverTimestamp();
+    updateData.recusadoPor = adminName;
+  } else if (newStatus === 'em_analise') {
+    updateData.emAnaliseEm = serverTimestamp();
+    updateData.emAnalisePor = adminName;
+  } else if (newStatus === 'cancelada') {
+    updateData.canceladoEm = serverTimestamp();
+    updateData.canceladoPor = adminName;
+  }
+
+  await updateDoc(doc(db, 'solicitacoesReservaTemporada', requestId), updateData);
+}
+
+/**
+ * Approves a reservation request, creates the official confirmed reservation in Firestore,
+ * and synchronizes occupied dates in the calendar.
+ */
+export async function approveReservationRequest(
+  solicitacao: TemporaryReservationRequest, 
+  adminUser?: { uid?: string; email?: string } | string
+): Promise<{ reservaId: string; codigoReserva: string }> {
+  if (!solicitacao.id) throw new Error('ID da solicitação não informado.');
+  if (solicitacao.status === 'confirmada') {
+    throw new Error('Esta solicitação já foi aprovada e confirmada anteriormente.');
+  }
+
+  const adminName = typeof adminUser === 'string' 
+    ? adminUser 
+    : (adminUser?.email || adminUser?.uid || 'Administrador');
+
+  // 1. Re-verify availability atomically to avoid double booking
+  const avail = await checkAvailability(solicitacao.imovelId, solicitacao.dataEntrada, solicitacao.dataSaida);
+  if (!avail.available) {
+    throw new Error(`Não é possível aprovar esta solicitação: ${avail.reason}`);
+  }
+
+  // 2. Create confirmed reservation
+  const codigoReserva = generateReservationCode();
+  const subtotalDiarias = solicitacao.detalhamentoDiarias && solicitacao.detalhamentoDiarias.length > 0
+    ? solicitacao.detalhamentoDiarias.reduce((sum, d) => sum + (Number(d.valor) || 0), 0)
+    : (Number(solicitacao.valorDiaria || 0) * Number(solicitacao.quantidadeDiarias || 1));
+  const taxaLimpeza = Number(solicitacao.taxaLimpeza || 0);
+  const outrasTaxas = Number(solicitacao.outrasTaxas || 0);
+  const valorTotal = Number(solicitacao.valorTotalEstimado || (subtotalDiarias + taxaLimpeza + outrasTaxas));
+
+  const reservaPayload: Partial<TemporaryReservation> = {
+    imovelId: solicitacao.imovelId,
+    imovelCodigo: solicitacao.imovelCodigo,
+    imovelTitulo: solicitacao.imovelTitulo,
+    imovelEndereco: solicitacao.imovelEndereco,
+    hospedeNome: solicitacao.nomeCliente,
+    hospedeCpf: solicitacao.hospedeCpf || '',
+    hospedeTelefone: solicitacao.telefone || solicitacao.whatsapp,
+    hospedeWhatsapp: solicitacao.whatsapp || solicitacao.telefone,
+    hospedeEmail: solicitacao.email || '',
+    dataEntrada: solicitacao.dataEntrada,
+    dataSaida: solicitacao.dataSaida,
+    quantidadeDiarias: solicitacao.quantidadeDiarias,
+    quantidadeHospedes: solicitacao.quantidadeHospedes,
+    valorDiaria: solicitacao.valorDiaria,
+    taxaLimpeza: taxaLimpeza,
+    outrasTaxas: outrasTaxas,
+    valorTotal: valorTotal,
+    codigoReserva: codigoReserva,
+    possuiVeiculo: solicitacao.possuiVeiculo ?? (Boolean(solicitacao.veiculos && solicitacao.veiculos.length > 0)),
+    veiculos: solicitacao.veiculos || [],
+    acompanhantes: solicitacao.acompanhantes || [],
+    detalhamentoDiarias: solicitacao.detalhamentoDiarias || [],
+    status: 'confirmada',
+    statusPagamento: 'pendente',
+    observacoes: `Aprovado a partir da Solicitação pública #${solicitacao.codigoSolicitacao || solicitacao.id} por ${adminName}. Observações do cliente: ${solicitacao.observacoes || 'Nenhuma'}`
+  };
+
+  const userUid = typeof adminUser === 'object' ? adminUser?.uid : undefined;
+  const reservaId = await saveReservation(reservaPayload, userUid);
+
+  // 3. Update request document status to confirmada with audit trail
+  await updateDoc(doc(db, 'solicitacoesReservaTemporada', solicitacao.id), {
+    status: 'confirmada',
+    reservaGeradaId: reservaId,
+    codigoReservaGerada: codigoReserva,
+    aprovadoEm: serverTimestamp(),
+    aprovadoPor: adminName,
+    statusAlteradoEm: serverTimestamp(),
+    statusAlteradoPor: adminName,
+    atualizadoEm: serverTimestamp()
+  });
+
+  return { reservaId, codigoReserva };
+}
+
+/**
+ * Refuses a reservation request with reason and logs responsible admin.
+ */
+export async function refuseReservationRequest(
+  requestId: string, 
+  motivo?: string, 
+  adminUser?: string
+): Promise<void> {
+  await updateRequestStatus(requestId, 'recusada', { motivo, adminUser });
+}
+
+/**
+ * Cancels a reservation request and logs responsible admin.
+ */
+export async function cancelReservationRequest(
+  requestId: string, 
+  adminUser?: string
+): Promise<void> {
+  await updateRequestStatus(requestId, 'cancelada', { adminUser });
+}
+
+/**
+ * Normalizes phone number to Brazilian standard WhatsApp format (55 + DDD + number)
+ */
+export function normalizeWhatsAppNumber(rawPhone?: string): { cleanPhone: string; isValid: boolean } {
+  if (!rawPhone) return { cleanPhone: '', isValid: false };
+  const digits = String(rawPhone).replace(/\D/g, '');
+  if (!digits || digits.length < 10) {
+    return { cleanPhone: digits, isValid: false };
+  }
+
+  // Already has Brazil country code (55)
+  if (digits.startsWith('55')) {
+    if (digits.length >= 12 && digits.length <= 13) {
+      return { cleanPhone: digits, isValid: true };
+    }
+  }
+
+  // Standard Brazilian DDD + number (10 or 11 digits)
+  if (digits.length === 10 || digits.length === 11) {
+    return { cleanPhone: `55${digits}`, isValid: true };
+  }
+
+  if (digits.length >= 10 && digits.length <= 15) {
+    const clean = digits.startsWith('55') ? digits : `55${digits}`;
+    return { cleanPhone: clean, isValid: true };
+  }
+
+  return { cleanPhone: digits, isValid: false };
+}
+
+/**
+ * Formats official message for administrator to confirm reservation approval to client on WhatsApp.
+ * Uses exact template approved by Menta Imóveis.
+ */
+export function buildAdminConfirmationWhatsAppMessage(
+  solicitacao: TemporaryReservationRequest,
+  reservaConfirmada?: { codigoReserva?: string; valorTotal?: number } | string
+): string {
+  const nome = solicitacao.nomeCliente || 'Cliente';
+  const imovel = solicitacao.imovelTitulo || 'Imóvel de Temporada';
+  const codigo = solicitacao.imovelCodigo || solicitacao.imovelId || '';
+  const checkinTime = solicitacao.horarioCheckin || '14:00';
+  const checkoutTime = solicitacao.horarioCheckout || '11:00';
+  const entrada = `${formatarDataBR(solicitacao.dataEntrada)} às ${checkinTime}`;
+  const saida = `${formatarDataBR(solicitacao.dataSaida)} às ${checkoutTime}`;
+  const diarias = solicitacao.quantidadeDiarias;
+  const hospedes = solicitacao.quantidadeHospedes;
+  
+  const subtotalDiarias = solicitacao.detalhamentoDiarias && solicitacao.detalhamentoDiarias.length > 0
+    ? solicitacao.detalhamentoDiarias.reduce((sum, d) => sum + (Number(d.valor) || 0), 0)
+    : (Number(solicitacao.valorDiaria || 0) * diarias);
+    
+  const taxaLimpeza = Number(solicitacao.taxaLimpeza || 0);
+  const outrasTaxas = Number(solicitacao.outrasTaxas || 0);
+
+  const parsedTotal = typeof reservaConfirmada === 'object' && reservaConfirmada?.valorTotal !== undefined
+    ? reservaConfirmada.valorTotal
+    : (solicitacao.valorTotalEstimado ?? (subtotalDiarias + taxaLimpeza + outrasTaxas));
+  const total = Number(parsedTotal);
+
+  const formatMoneyVal = (n: number) => {
+    return Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  const getImovelLink = (): string => {
+    if (solicitacao.imovelLink) return solicitacao.imovelLink;
+    const origin = typeof window !== 'undefined' && window.location?.origin
+      ? window.location.origin
+      : 'https://mentaimoveis.com.br';
+    const identifier = solicitacao.imovelCodigo || solicitacao.imovelId;
+    return `${origin}/imovel/${identifier}`;
+  };
+
+  const lines = [
+    `Olá, ${nome}! Tudo bem?`,
+    '',
+    'Aqui é da equipe Menta Imóveis. 🌿',
+    '',
+    'Sua solicitação de reserva foi aprovada para seguirmos com a formalização da locação por temporada!',
+    '',
+    `🏠 Imóvel: ${imovel}`,
+    ...(codigo ? [`Código: ${codigo}`] : []),
+    `📅 Entrada: ${entrada}`,
+    `📅 Saída: ${saida}`,
+    `Quantidade de diárias: ${diarias}`,
+    `Hóspedes: ${hospedes}`,
+    '',
+    `Valor das diárias: R$ ${formatMoneyVal(subtotalDiarias)}`,
+    `Taxa de limpeza: R$ ${formatMoneyVal(taxaLimpeza)}`,
+    ...(outrasTaxas > 0 ? [`Outras taxas: R$ ${formatMoneyVal(outrasTaxas)}`] : []),
+    `Total da reserva: R$ ${formatMoneyVal(total)}`,
+    '',
+    `Link do imóvel: ${getImovelLink()}`,
+    '',
+    'Nossa equipe entrará em contato para conferir seus dados e solicitar as informações necessárias à elaboração do contrato de locação por temporada.',
+    '',
+    'Em seguida, você receberá o contrato para análise, aprovação e assinatura, junto com as orientações e o prazo para pagamento.',
+    '',
+    'A reserva será confirmada após a assinatura do contrato e a comprovação do pagamento previsto para sua confirmação.',
+    '',
+    'Agradecemos por escolher a Menta Imóveis!'
+  ];
+
+  return lines.join('\n');
+}
+
+/**
+ * Builds WhatsApp link to send confirmation directly to the client's phone number.
+ */
+export function buildAdminConfirmationWhatsAppUrl(
+  solicitacao: TemporaryReservationRequest,
+  reservaConfirmada?: { codigoReserva?: string; valorTotal?: number } | string,
+  customPhone?: string
+): { url: string; cleanPhone: string; isValid: boolean; message: string } {
+  const targetPhone = customPhone || solicitacao.whatsapp || solicitacao.telefone || '';
+  const { cleanPhone, isValid } = normalizeWhatsAppNumber(targetPhone);
+  const message = buildAdminConfirmationWhatsAppMessage(solicitacao, reservaConfirmada);
+  const url = isValid ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}` : '';
+  return { url, cleanPhone, isValid, message };
+}
+
+/**
+ * Records that the WhatsApp confirmation link was opened for a reservation request.
+ */
+export async function markRequestWhatsAppOpened(requestId: string): Promise<void> {
+  if (!requestId) return;
+  try {
+    const docRef = doc(db, 'solicitacoesReservaTemporada', requestId);
+    await updateDoc(docRef, {
+      whatsappAberto: true,
+      whatsappAbertoEm: serverTimestamp(),
+      atualizadoEm: serverTimestamp()
+    });
+  } catch (err) {
+    console.warn('[temporaryRentalService] Erro ao registrar whatsappAberto:', err);
+  }
+}
+
+/**
+ * Manually marks or unmarks whether the WhatsApp confirmation message was actually sent by the administrator.
+ */
+export async function markRequestMessageSent(requestId: string, sent: boolean): Promise<void> {
+  if (!requestId) return;
+  try {
+    const docRef = doc(db, 'solicitacoesReservaTemporada', requestId);
+    await updateDoc(docRef, {
+      mensagemEnviada: sent,
+      mensagemEnviadaEm: sent ? serverTimestamp() : null,
+      atualizadoEm: serverTimestamp()
+    });
+  } catch (err) {
+    console.error('[temporaryRentalService] Erro ao registrar mensagemEnviada:', err);
+    throw err;
+  }
+}
+
+/**
+ * Formats message for administrator to initiate contact with client via WhatsApp.
+ */
+export function buildAdminContactWhatsAppMessage(
+  solicitacao: TemporaryReservationRequest
+): string {
+  const nome = solicitacao.nomeCliente || 'Cliente';
+  const imovel = solicitacao.imovelTitulo || 'Imóvel de Temporada';
+  const codigo = solicitacao.imovelCodigo || '';
+  const entrada = formatarDataBR(solicitacao.dataEntrada);
+  const saida = formatarDataBR(solicitacao.dataSaida);
+  const diarias = solicitacao.quantidadeDiarias;
+
+  const lines = [
+    `Olá, ${nome}! Tudo bem?`,
+    '',
+    'Aqui é da equipe Menta Imóveis.',
+    '',
+    `Recebemos sua solicitação de reserva (Protocolo: ${solicitacao.codigoSolicitacao || solicitacao.id?.slice(0, 8) || ''}) para o imóvel *${imovel}*` + (codigo ? ` (Cód: ${codigo})` : '') + `, para o período de ${entrada} a ${saida} (${diarias} diárias).`,
+    '',
+    'Gostaria de confirmar alguns detalhes e tirar eventuais dúvidas antes de prosseguirmos com a sua confirmação. Como podemos te ajudar?'
+  ];
+
+  return lines.join('\n');
+}
+
+/**
+ * Builds WhatsApp link for administrator to initiate contact with client.
+ */
+export function buildAdminContactWhatsAppUrl(
+  solicitacao: TemporaryReservationRequest,
+  customPhone?: string
+): { url: string; cleanPhone: string; isValid: boolean; message: string } {
+  const rawPhone = (customPhone || solicitacao.whatsapp || solicitacao.telefone || '').replace(/\D/g, '');
+  const isValid = rawPhone.length >= 10;
+  const cleanPhone = rawPhone.startsWith('55') ? rawPhone : `55${rawPhone}`;
+  const message = buildAdminContactWhatsAppMessage(solicitacao);
+  const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+  return { url, cleanPhone, isValid, message };
+}
+
+/**
+ * Formats message for administrator when refusing a request.
+ */
+export function buildAdminRefusalWhatsAppMessage(
+  solicitacao: TemporaryReservationRequest,
+  motivo?: string
+): string {
+  const nome = solicitacao.nomeCliente || 'Cliente';
+  const imovel = solicitacao.imovelTitulo || 'Imóvel de Temporada';
+  const entrada = formatarDataBR(solicitacao.dataEntrada);
+  const saida = formatarDataBR(solicitacao.dataSaida);
+
+  const lines = [
+    `Olá, ${nome}! Tudo bem?`,
+    '',
+    'Aqui é da equipe Menta Imóveis.',
+    '',
+    `Agradecemos seu interesse na locação temporária do imóvel *${imovel}* para o período de ${entrada} a ${saida}.`,
+    '',
+    'Infelizmente não foi possível confirmar sua solicitação para este período' + (motivo ? ` pelo seguinte motivo: ${motivo}.` : '.'),
+    '',
+    'Temos outras opções de imóveis disponíveis e estamos à disposição para te apresentar alternativas que combinem com suas datas e preferências!',
+    '',
+    'Equipe Menta Imóveis'
+  ];
+
+  return lines.join('\n');
+}
+
+/**
+ * Builds WhatsApp link for administrator to communicate refusal to client.
+ */
+export function buildAdminRefusalWhatsAppUrl(
+  solicitacao: TemporaryReservationRequest,
+  motivo?: string,
+  customPhone?: string
+): { url: string; cleanPhone: string; isValid: boolean; message: string } {
+  const rawPhone = (customPhone || solicitacao.whatsapp || solicitacao.telefone || '').replace(/\D/g, '');
+  const isValid = rawPhone.length >= 10;
+  const cleanPhone = rawPhone.startsWith('55') ? rawPhone : `55${rawPhone}`;
+  const message = buildAdminRefusalWhatsAppMessage(solicitacao, motivo);
+  const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+  return { url, cleanPhone, isValid, message };
+}
+
+/**
+ * Builds the public WhatsApp URL (retained for backward compatibility).
+ */
+export function buildPublicTemporaryRentalWhatsAppUrl(
+  solicitacao: {
+    codigoSolicitacao?: string;
+    imovelTitulo?: string;
+    imovelCodigo?: string;
+    imovelEndereco?: string;
+    imovelLink?: string;
+    dataEntrada: string;
+    dataSaida: string;
+    quantidadeDiarias: number;
+    quantidadeHospedes: number;
+    valorDiaria: number;
+    taxaLimpeza?: number;
+    valorTotalEstimado: number;
+    nomeCliente: string;
+    telefone: string;
+    whatsapp?: string;
+    email?: string;
+    observacoes?: string;
+    acompanhantes?: any[];
+    possuiVeiculo?: boolean;
+    veiculos?: any[];
+  },
+  destinationPhone?: string
+): string {
+  const cleanDestination = (destinationPhone || '47999999999').replace(/\D/g, '');
+  const targetPhone = cleanDestination.startsWith('55') ? cleanDestination : `55${cleanDestination}`;
+
+  const link = solicitacao.imovelLink || `https://mentaimoveis.com/imovel/${encodeURIComponent(solicitacao.imovelCodigo || '')}`;
+
+  const subtotalDiarias = (solicitacao.quantidadeDiarias || 0) * (solicitacao.valorDiaria || 0);
+
+  const lines = [
+    'Olá! Tenho interesse em uma locação temporária pela Menta Imóveis.',
+    '',
+    ...(solicitacao.codigoSolicitacao ? [`📋 *PROTOCOLO DA SOLICITAÇÃO:* ${solicitacao.codigoSolicitacao}`, ''] : []),
+    'DADOS DO IMÓVEL',
+    `* Imóvel: ${solicitacao.imovelTitulo || 'Imóvel de Temporada'}`,
+    `* Código: ${solicitacao.imovelCodigo || '---'}`,
+    `* Endereço: ${solicitacao.imovelEndereco || 'Balneário Camboriú/SC'}`,
+    `* Link do imóvel: ${link}`,
+    '',
+    'DADOS DA SOLICITAÇÃO',
+    `* Entrada: ${formatarDataBR(solicitacao.dataEntrada)}`,
+    `* Saída: ${formatarDataBR(solicitacao.dataSaida)}`,
+    `* Quantidade de diárias: ${solicitacao.quantidadeDiarias}`,
+    `* Quantidade de hóspedes: ${solicitacao.quantidadeHospedes}`,
+    `* Valor por diária: ${formatCurrency(solicitacao.valorDiaria)}`,
+    `* Subtotal das diárias: ${formatCurrency(subtotalDiarias)}`,
+    ...(solicitacao.taxaLimpeza && solicitacao.taxaLimpeza > 0 ? [`* Taxa de limpeza: ${formatCurrency(solicitacao.taxaLimpeza)}`] : []),
+    `* Valor total estimado: ${formatCurrency(solicitacao.valorTotalEstimado)}`,
+    '',
+    'DADOS DO CLIENTE',
+    `* Titular da reserva: ${solicitacao.nomeCliente}`,
+    `* WhatsApp / Telefone: ${solicitacao.whatsapp || solicitacao.telefone}`,
+    ...(solicitacao.email ? [`* E-mail: ${solicitacao.email}`] : []),
+    ...(solicitacao.acompanhantes && solicitacao.acompanhantes.length > 0 
+      ? [`* Acompanhantes (${solicitacao.acompanhantes.length}): ${solicitacao.acompanhantes.map(a => a.nomeCompleto + (a.parentesco ? ` (${a.parentesco})` : '')).join(', ')}`] 
+      : []),
+    ...(solicitacao.possuiVeiculo && solicitacao.veiculos && solicitacao.veiculos.length > 0
+      ? [`* Veículo(s) na garagem: ${solicitacao.veiculos.map(v => `${v.tipo || 'Carro'} ${v.marca || ''} ${v.modelo || ''} (Placa ${v.placa})`).join(' | ')}`]
+      : [`* Veículo para garagem: Não possui`]),
+    `* Observações: ${solicitacao.observacoes || 'Nenhuma'}`,
+    '',
+    'Gostaria de confirmar a disponibilidade e receber informações sobre os próximos passos para concluir a reserva.'
+  ];
+
+  const text = lines.join('\n');
+  return `https://wa.me/${targetPhone}?text=${encodeURIComponent(text)}`;
 }

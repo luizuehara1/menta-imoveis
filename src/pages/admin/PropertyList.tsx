@@ -21,7 +21,8 @@ import {
   EyeOff,
   X,
   Key,
-  Wrench
+  Wrench,
+  CalendarDays
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -30,6 +31,10 @@ import { isValidPublicProperty, getLinkPublicoImovel, getCodigoPublicoImovel } f
 
 function normalizeTipoNegocio(tipo: any): string {
   const value = String(tipo || "").toLowerCase();
+
+  if (value.includes("tempor")) {
+    return "Locação Temporária";
+  }
 
   if (
     (value.includes("venda") && value.includes("loca")) ||
@@ -544,6 +549,15 @@ export default function AdminPropertyList() {
                               title="Cadastrar locação para este imóvel"
                             >
                               <Key size={18} />
+                            </Link>
+                          )}
+                          {normalizeTipoNegocio(property.businessType || property.tipoNegocio) === "Locação Temporária" && (
+                            <Link 
+                              to={`/admin/locacao-temporaria?imovelId=${property.id}&tab=calendario`}
+                              className="p-3 bg-white text-gold hover:text-black hover:bg-gold/20 hover:shadow-2xl hover:scale-110 rounded-xl border border-transparent hover:border-gold/30 transition-all cursor-pointer"
+                              title="Gerenciar Locação Temporária e Calendário"
+                            >
+                              <CalendarDays size={18} />
                             </Link>
                           )}
                           <Link 

@@ -11,8 +11,15 @@ export interface Property {
   priceLocacao?: number;
   valorDiaria?: number;
   priceDiaria?: number;
+  precoDiaria?: number;
+  diaria?: number;
   maxHospedes?: number;
+  capacidadeHospedes?: number;
+  maxGuests?: number;
   taxaLimpeza?: number;
+  taxaLimpezaTemporada?: number;
+  codigo?: string;
+  titulo?: string;
   regrasTemporada?: string[];
   condoFee?: number;
   iptu?: number;
@@ -493,6 +500,24 @@ export interface Contract {
   locatarioConjugeTelefone?: string;
   locatarioConjugeEmail?: string;
   locatarioConjugeEndereco?: string;
+
+  // Locação Temporária
+  valorDiaria?: number;
+  valorDiario?: number;
+  quantidadeDiarias?: number;
+  quantidadeDias?: number;
+  totalDiarias?: number;
+  subtotalDiarias?: number;
+  taxaLimpeza?: number;
+  taxaCaucao?: number;
+  taxasAdicionais?: number;
+  outrasTaxas?: number;
+  desconto?: number;
+  descontos?: number;
+  valorTotalLocacao?: number;
+  valorFinal?: number;
+  reservaId?: string;
+  reservaCodigo?: string;
 }
 
 export interface SiteConfig {
@@ -588,8 +613,99 @@ export interface PropertyOptions {
 // MÓDULO DE LOCAÇÃO TEMPORÁRIA (TEMPORADA)
 // ==========================================
 
-export type TemporaryReservationStatus = 'pre_reserva' | 'confirmada' | 'em_andamento' | 'concluida' | 'cancelada';
+export type TemporaryReservationStatus = 
+  | 'solicitacao_recebida' 
+  | 'pre_reserva' 
+  | 'aguardando_confirmacao' 
+  | 'confirmada' 
+  | 'em_andamento' 
+  | 'concluida' 
+  | 'recusada' 
+  | 'cancelada' 
+  | 'expirada';
+
 export type TemporaryPaymentStatus = 'pendente' | 'parcial' | 'pago' | 'reembolsado';
+
+export interface TemporaryGuestCompanion {
+  id?: string;
+  nomeCompleto?: string;
+  nome?: string;
+  documento?: string;
+  parentesco?: string;
+  faixaEtaria?: 'adulto' | 'crianca' | string;
+}
+
+export type TemporaryCompanion = TemporaryGuestCompanion;
+
+export interface TemporaryVehicle {
+  id?: string;
+  tipo: string;
+  marca: string;
+  modelo: string;
+  cor: string;
+  placa: string;
+}
+
+export interface TemporaryReservationRequest {
+  id?: string;
+  codigoSolicitacao?: string;
+  imovelId: string;
+  imovelCodigo: string;
+  imovelTitulo: string;
+  imovelEndereco?: string;
+  imovelLink?: string;
+  nomeCliente: string;
+  telefone: string;
+  whatsapp: string;
+  email?: string;
+  hospedeCpf?: string;
+  hospedeDocumento?: string;
+  dataEntrada: string; // YYYY-MM-DD
+  dataSaida: string; // YYYY-MM-DD
+  quantidadeDiarias: number;
+  quantidadeHospedes: number;
+  valorDiaria: number;
+  taxaLimpeza?: number;
+  outrasTaxas?: number;
+  valorTotalEstimado: number;
+  observacoes?: string;
+  possuiVeiculo?: boolean;
+  veiculos?: TemporaryVehicle[];
+  acompanhantes?: TemporaryGuestCompanion[];
+  detalhamentoDiarias?: TemporaryDailyRateDetail[];
+  status: 'pendente' | 'em_analise' | 'confirmada' | 'recusada' | 'cancelada' | 'solicitacao_recebida';
+  motivoRecusa?: string;
+  reservaId?: string;
+  reservaGeradaId?: string;
+  codigoReserva?: string;
+  codigoReservaGerada?: string;
+  aprovadoEm?: any;
+  aprovadoPor?: string | null;
+  recusadoEm?: any;
+  recusadoPor?: string | null;
+  emAnaliseEm?: any;
+  emAnalisePor?: string | null;
+  statusAlteradoEm?: any;
+  statusAlteradoPor?: string | null;
+  whatsappAberto?: boolean;
+  whatsappAbertoEm?: any;
+  mensagemEnviada?: boolean;
+  mensagemEnviadaEm?: any;
+  horarioCheckin?: string;
+  horarioCheckout?: string;
+  criadoEm: any;
+  atualizadoEm?: any;
+  origem?: 'site_publico' | 'whatsapp' | 'painel_admin';
+}
+
+export interface TemporaryOccupancy {
+  id?: string;
+  imovelId: string;
+  dataEntrada: string; // YYYY-MM-DD
+  dataSaida: string; // YYYY-MM-DD
+  tipo: 'reserva' | 'bloqueio' | 'manutencao';
+  referenciaId?: string;
+}
 
 export interface TemporaryReservation {
   id?: string;
@@ -615,6 +731,11 @@ export interface TemporaryReservation {
   hospedeWhatsapp: string;
   hospedeEmail: string;
 
+  // Acompanhantes e Veículos
+  possuiVeiculo?: boolean;
+  veiculos?: TemporaryVehicle[];
+  acompanhantes?: TemporaryGuestCompanion[];
+
   // Estadia
   dataEntrada: string; // YYYY-MM-DD
   dataSaida: string; // YYYY-MM-DD
@@ -634,6 +755,7 @@ export interface TemporaryReservation {
   valorPago: number;
   saldoRestante: number;
   formaPagamento: string;
+  detalhamentoDiarias?: TemporaryDailyRateDetail[];
 
   // Status & Controle
   status: TemporaryReservationStatus;
@@ -656,10 +778,33 @@ export interface TemporaryBlock {
   imovelTitulo?: string;
   dataInicio: string; // YYYY-MM-DD
   dataFim: string; // YYYY-MM-DD
+  dataFimEfetivo?: string; // YYYY-MM-DD para intervalos semiabertos de ocupação
   motivo: TemporaryBlockReason;
   observacoes?: string;
   criadoEm: any;
   criadoPor?: string;
+}
+
+export interface TemporarySeasonalPrice {
+  id?: string;
+  imovelId: string;
+  imovelCodigo?: string;
+  imovelTitulo?: string;
+  dataInicio: string; // YYYY-MM-DD
+  dataFim: string; // YYYY-MM-DD (se for 1 dia, dataInicio === dataFim)
+  valorDiaria: number;
+  descricao: string; // Ex: "Réveillon", "Carnaval", "Feriado", "Alta Temporada"
+  criadoEm?: any;
+  atualizadoEm?: any;
+  criadoPor?: string;
+}
+
+export interface TemporaryDailyRateDetail {
+  data: string; // YYYY-MM-DD
+  dataFmt: string; // DD/MM/AAAA
+  valor: number;
+  isSpecialPrice: boolean;
+  descricao?: string;
 }
 
 export interface TemporaryGuest {
@@ -703,6 +848,7 @@ export interface TemporaryPayment {
 
 export interface TemporaryReceipt {
   id?: string;
+  tipoDocumento?: 'recibo' | 'demonstrativo';
   numeroRecibo: string; // Ex: REC-TEMP-2026-0001
   reservaId: string;
   pagamentoId?: string;

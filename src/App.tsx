@@ -7,30 +7,159 @@ import app from './lib/firebase';
 import PublicLayout from './layouts/PublicLayout';
 import AdminLayout from './layouts/AdminLayout';
 
-// Lazy load pages to support code splitting
-const Home = React.lazy(() => import('./pages/public/Home'));
-const PropertyList = React.lazy(() => import('./pages/public/PropertyList'));
-const PropertyDetail = React.lazy(() => import('./pages/public/PropertyDetail'));
-const About = React.lazy(() => import('./pages/public/About'));
-const Brokers = React.lazy(() => import('./pages/public/Brokers'));
-const Contact = React.lazy(() => import('./pages/public/Contact'));
-const NotFound = React.lazy(() => import('./pages/public/NotFound'));
+// Direct imports of primary public pages prevent dynamic module fetch errors
+import Home from './pages/public/Home';
+import PropertyList from './pages/public/PropertyList';
+import PropertyDetail from './pages/public/PropertyDetail';
+import About from './pages/public/About';
+import Brokers from './pages/public/Brokers';
+import Contact from './pages/public/Contact';
+import NotFound from './pages/public/NotFound';
+import AdminLogin from './pages/admin/Login';
 
-const AdminDashboard = React.lazy(() => import('./pages/admin/Dashboard'));
-const AdminPropertyList = React.lazy(() => import('./pages/admin/PropertyList'));
-const AdminPropertyForm = React.lazy(() => import('./pages/admin/PropertyForm'));
-const AdminVisits = React.lazy(() => import('./pages/admin/Visits'));
-const AdminBrokers = React.lazy(() => import('./pages/admin/Brokers'));
-const AdminFinance = React.lazy(() => import('./pages/admin/Finance'));
-const AdminRents = React.lazy(() => import('./pages/admin/Rents'));
-const AdminTemporaryRentals = React.lazy(() => import('./pages/admin/TemporaryRentals'));
-const AdminContracts = React.lazy(() => import('./pages/admin/Contracts'));
-const AdminContractForm = React.lazy(() => import('./pages/admin/ContractForm'));
-const AdminSiteSettings = React.lazy(() => import('./pages/admin/SiteSettings'));
-const AdminLeaseSettings = React.lazy(() => import('./pages/admin/LeaseSettings'));
-const AdminNeighborhoods = React.lazy(() => import('./pages/admin/Neighborhoods'));
-const AdminContractClauses = React.lazy(() => import('./pages/admin/ContractClauses'));
-const AdminLogin = React.lazy(() => import('./pages/admin/Login'));
+// Safe sessionStorage helper that never throws in sandboxed iframes
+const safeSessionStorage = {
+  getItem: (key: string): string | null => {
+    try {
+      return typeof window !== 'undefined' && window.sessionStorage ? window.sessionStorage.getItem(key) : null;
+    } catch {
+      return null;
+    }
+  },
+  setItem: (key: string, value: string): void => {
+    try {
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        window.sessionStorage.setItem(key, value);
+      }
+    } catch {}
+  },
+  removeItem: (key: string): void => {
+    try {
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        window.sessionStorage.removeItem(key);
+      }
+    } catch {}
+  }
+};
+
+// Resilient dynamic loader with automatic retry on network hiccup or stale dev server chunks
+function lazyWithRetry<T extends React.ComponentType<any>>(
+  factory: () => Promise<{ default: T }>
+): React.LazyExoticComponent<T> {
+  return React.lazy(async () => {
+    try {
+      return await factory();
+    } catch (error: any) {
+      console.warn('[lazyWithRetry] Falha ao importar módulo dinâmico, tentando novamente...', error);
+      try {
+        await new Promise(resolve => setTimeout(resolve, 800));
+        return await factory();
+      } catch (retryError: any) {
+        const errorMsg = String(retryError);
+        const isModuleFetchError = 
+          errorMsg.includes('Failed to fetch dynamically imported module') ||
+          errorMsg.includes('Importing a module script failed');
+
+        if (isModuleFetchError) {
+          const hasReloaded = safeSessionStorage.getItem('lazy_module_retry_reloaded');
+          if (!hasReloaded && typeof window !== 'undefined') {
+            safeSessionStorage.setItem('lazy_module_retry_reloaded', 'true');
+            try {
+              window.location.reload();
+            } catch {}
+          }
+        }
+        throw retryError;
+      }
+    }
+  });
+}
+
+// Lazy load secondary admin management pages to support code splitting with auto-retry
+const AdminDashboard = lazyWithRetry(() => import('./pages/admin/Dashboard'));
+const AdminPropertyList = lazyWithRetry(() => import('./pages/admin/PropertyList'));
+const AdminPropertyForm = lazyWithRetry(() => import('./pages/admin/PropertyForm'));
+const AdminVisits = lazyWithRetry(() => import('./pages/admin/Visits'));
+const AdminBrokers = lazyWithRetry(() => import('./pages/admin/Brokers'));
+const AdminFinance = lazyWithRetry(() => import('./pages/admin/Finance'));
+const AdminRents = lazyWithRetry(() => import('./pages/admin/Rents'));
+const AdminTemporaryRentals = lazyWithRetry(() => import('./pages/admin/TemporaryRentals'));
+const AdminContracts = lazyWithRetry(() => import('./pages/admin/Contracts'));
+const AdminContractForm = lazyWithRetry(() => import('./pages/admin/ContractForm'));
+const AdminSiteSettings = lazyWithRetry(() => import('./pages/admin/SiteSettings'));
+const AdminLeaseSettings = lazyWithRetry(() => import('./pages/admin/LeaseSettings'));
+const AdminNeighborhoods = lazyWithRetry(() => import('./pages/admin/Neighborhoods'));
+const AdminContractClauses = lazyWithRetry(() => import('./pages/admin/ContractClauses'));
+
+export class AppErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error?: Error }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('[AppErrorBoundary] Erro capturado na aplicação:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-[#0b0b0b] p-6 text-center text-white">
+          <div className="max-w-md w-full bg-[#141414] rounded-3xl shadow-2xl border border-white/10 p-8 space-y-6">
+            <div className="w-16 h-16 mx-auto rounded-2xl bg-gold/10 border border-gold/20 flex items-center justify-center">
+              <img src="https://i.postimg.cc/kMZXNdCS/image.png" alt="Menta Imóveis" className="w-10 h-10 object-contain" />
+            </div>
+            <div>
+              <h2 className="text-xl font-display font-bold text-white mb-2">Portal Menta Imóveis</h2>
+              <p className="text-xs text-gray-400 leading-relaxed">
+                Ocorreu uma instabilidade na renderização ou os módulos foram atualizados. Clique abaixo para restabelecer a interface.
+              </p>
+            </div>
+            <div className="space-y-3">
+              <button
+                onClick={() => {
+                  this.setState({ hasError: false, error: undefined });
+                }}
+                className="btn-gold !py-3 w-full text-xs uppercase tracking-wider font-black shadow-md cursor-pointer"
+              >
+                Tentar Novamente
+              </button>
+              <button
+                onClick={() => {
+                  safeSessionStorage.removeItem('lazy_module_retry_reloaded');
+                  try {
+                    window.location.reload();
+                  } catch {
+                    window.location.href = '/';
+                  }
+                }}
+                className="w-full py-3 px-4 rounded-xl text-xs font-bold uppercase tracking-wider bg-white/5 border border-white/10 hover:bg-white/10 text-white transition-colors cursor-pointer"
+              >
+                Recarregar Página
+              </button>
+              <button
+                onClick={() => {
+                  window.location.href = '/';
+                }}
+                className="block w-full text-[11px] font-bold text-gold/80 hover:text-gold uppercase tracking-widest pt-2 cursor-pointer"
+              >
+                Ir para o Início
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const PageLoadingSpinner: React.FC = () => (
   <div className="h-screen w-screen flex flex-col items-center justify-center bg-gray-50/50">
@@ -157,8 +286,10 @@ export default function App() {
   }, []);
 
   return (
-    <AuthProvider>
-      <AppRoutes />
-    </AuthProvider>
+    <AppErrorBoundary>
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
+    </AppErrorBoundary>
   );
 }

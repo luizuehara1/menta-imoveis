@@ -438,6 +438,143 @@
         "centroCustoId": { "type": "string" }
       },
       "required": ["tipo", "origem", "contaOrigemId", "contaDestinoId", "valor", "dataTransferencia", "descricao", "status"]
+    },
+    "TemporaryReservation": {
+      "title": "Temporary Rental Reservation",
+      "description": "Confirmed temporary / vacation rental reservation",
+      "type": "object",
+      "properties": {
+        "codigoReserva": { "type": "string" },
+        "imovelId": { "type": "string" },
+        "imovelCodigo": { "type": "string" },
+        "imovelTitulo": { "type": "string" },
+        "hospedeNome": { "type": "string" },
+        "hospedeCpf": { "type": "string" },
+        "hospedeTelefone": { "type": "string" },
+        "hospedeEmail": { "type": "string" },
+        "dataEntrada": { "type": "string" },
+        "dataSaida": { "type": "string" },
+        "quantidadeDiarias": { "type": "number" },
+        "quantidadeHospedes": { "type": "number" },
+        "valorDiaria": { "type": "number" },
+        "taxaLimpeza": { "type": "number" },
+        "valorTotal": { "type": "number" },
+        "valorPago": { "type": "number" },
+        "saldoRestante": { "type": "number" },
+        "status": { "type": "string", "enum": ["confirmada", "em_andamento", "concluida", "cancelada"] },
+        "statusPagamento": { "type": "string", "enum": ["pendente", "parcial", "pago"] }
+      },
+      "required": ["imovelId", "dataEntrada", "dataSaida", "hospedeNome", "valorTotal"]
+    },
+    "TemporaryBlock": {
+      "title": "Temporary Rental Date Block",
+      "description": "Property calendar manual block for maintenance or owner usage",
+      "type": "object",
+      "properties": {
+        "imovelId": { "type": "string" },
+        "dataInicio": { "type": "string" },
+        "dataFim": { "type": "string" },
+        "motivo": { "type": "string", "enum": ["manutencao", "uso_proprietario", "bloqueio_manual", "outro"] },
+        "observacoes": { "type": "string" }
+      },
+      "required": ["imovelId", "dataInicio", "dataFim", "motivo"]
+    },
+    "TemporaryGuest": {
+      "title": "Temporary Rental Guest",
+      "description": "Guest directory profile",
+      "type": "object",
+      "properties": {
+        "nome": { "type": "string" },
+        "cpf": { "type": "string" },
+        "telefone": { "type": "string" },
+        "email": { "type": "string" }
+      },
+      "required": ["nome"]
+    },
+    "TemporaryPayment": {
+      "title": "Temporary Rental Payment",
+      "description": "Payment transaction for temporary rental",
+      "type": "object",
+      "properties": {
+        "reservaId": { "type": "string" },
+        "codigoReserva": { "type": "string" },
+        "valor": { "type": "number" },
+        "tipo": { "type": "string" },
+        "dataPagamento": { "type": "string" },
+        "status": { "type": "string", "enum": ["confirmado", "pendente", "estornado"] }
+      },
+      "required": ["reservaId", "valor", "dataPagamento", "status"]
+    },
+    "TemporaryReceipt": {
+      "title": "Temporary Rental Receipt",
+      "description": "Formal payment receipt issued to guest",
+      "type": "object",
+      "properties": {
+        "numeroRecibo": { "type": "string" },
+        "reservaId": { "type": "string" },
+        "valorRecebido": { "type": "number" },
+        "dataEmissao": { "type": "string" }
+      },
+      "required": ["numeroRecibo", "reservaId", "valorRecebido", "dataEmissao"]
+    },
+    "TemporaryReservationRequest": {
+      "title": "Temporary Reservation Request",
+      "description": "Public reservation inquiry submitted by client on property page",
+      "type": "object",
+      "properties": {
+        "codigoSolicitacao": { "type": "string" },
+        "imovelId": { "type": "string" },
+        "imovelCodigo": { "type": "string" },
+        "imovelTitulo": { "type": "string" },
+        "imovelEndereco": { "type": "string" },
+        "nomeCliente": { "type": "string" },
+        "hospedeCpf": { "type": "string" },
+        "telefone": { "type": "string" },
+        "whatsapp": { "type": "string" },
+        "email": { "type": "string" },
+        "dataEntrada": { "type": "string" },
+        "dataSaida": { "type": "string" },
+        "quantidadeDiarias": { "type": "number" },
+        "quantidadeHospedes": { "type": "number" },
+        "valorDiaria": { "type": "number" },
+        "taxaLimpeza": { "type": "number" },
+        "valorTotalEstimado": { "type": "number" },
+        "possuiVeiculo": { "type": "boolean" },
+        "veiculos": { "type": "array" },
+        "acompanhantes": { "type": "array" },
+        "observacoes": { "type": "string" },
+        "status": { "type": "string", "enum": ["solicitacao_recebida", "confirmada", "recusada", "cancelada"] },
+        "origem": { "type": "string" }
+      },
+      "required": ["imovelId", "dataEntrada", "dataSaida", "nomeCliente", "telefone", "status"]
+    },
+    "TemporaryOccupancy": {
+      "title": "Temporary Occupancy Interval",
+      "description": "Anonymous calendar occupancy intervals for public availability checks",
+      "type": "object",
+      "properties": {
+        "imovelId": { "type": "string" },
+        "dataEntrada": { "type": "string" },
+        "dataSaida": { "type": "string" },
+        "tipo": { "type": "string", "enum": ["reserva", "bloqueio", "manutencao"] },
+        "referenciaId": { "type": "string" }
+      },
+      "required": ["imovelId", "dataEntrada", "dataSaida", "tipo"]
+    },
+    "TemporarySeasonalPrice": {
+      "title": "Temporary Rental Seasonal Price",
+      "description": "Specific date or period daily rate pricing rule for temporary rental",
+      "type": "object",
+      "properties": {
+        "imovelId": { "type": "string" },
+        "imovelCodigo": { "type": "string" },
+        "imovelTitulo": { "type": "string" },
+        "dataInicio": { "type": "string" },
+        "dataFim": { "type": "string" },
+        "valorDiaria": { "type": "number" },
+        "descricao": { "type": "string" }
+      },
+      "required": ["imovelId", "dataInicio", "dataFim", "valorDiaria", "descricao"]
     }
   },
   "firestore": {
@@ -544,6 +681,18 @@
     "recibosTemporada": {
       "schema": "TemporaryReceipt",
       "description": "Customer payment receipts for temporary rentals"
+    },
+    "solicitacoesReservaTemporada": {
+      "schema": "TemporaryReservationRequest",
+      "description": "Customer booking inquiries submitted from public property page"
+    },
+    "ocupacaoTemporada": {
+      "schema": "TemporaryOccupancy",
+      "description": "Anonymous calendar occupancy date intervals for public availability checks"
+    },
+    "precosTemporada": {
+      "schema": "TemporarySeasonalPrice",
+      "description": "Specific date or seasonal period pricing rules for temporary rentals"
     }
   }
 }

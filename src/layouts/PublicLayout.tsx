@@ -222,14 +222,14 @@ const Footer = () => {
                 {settings.empresa.nome.split(' ')[0].toUpperCase()}
               </span>
               <span className="text-[9px] font-medium tracking-[0.2em] text-gold -mt-1 uppercase opacity-80">
-                {settings.empresa.nome.split(' ').slice(1).join(' ').toUpperCase() || 'Negócios Imobiliários'}
+                {(settings?.empresa?.nome || 'Menta Imóveis').split(' ').slice(1).join(' ').toUpperCase() || 'Negócios Imobiliários'}
               </span>
             </div>
           </Link>
           <p className="text-gray-400 text-sm leading-relaxed mb-6">
-            {settings.secoes.sobre.texto.substring(0, 150)}...
+            {(settings?.secoes?.sobre?.texto || 'A Menta é uma boutique imobiliária focada na excelência, transparência e exclusividade.').substring(0, 150)}...
           </p>
-          <p className="text-xs text-gray-500">CRECI: {settings.empresa.creci}</p>
+          <p className="text-xs text-gray-500">CRECI: {settings?.empresa?.creci || '11255PJ'}</p>
         </div>
 
         <div>

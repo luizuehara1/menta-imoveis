@@ -30,7 +30,7 @@ export const GoldenParticles: React.FC<GoldenParticlesProps> = ({
 
   useFrame((state) => {
     if (!mesh.current) return;
-    const time = state.clock?.getElapsedTime() || (performance.now() / 1000);
+    const time = state.clock?.elapsedTime ?? (performance.now() / 1000);
     
     // Parallax effect based on mouse
     const targetX = (mouse.x || 0) * 0.3;

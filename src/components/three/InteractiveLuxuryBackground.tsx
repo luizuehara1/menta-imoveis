@@ -24,7 +24,7 @@ const LuxuryGlassSphere = () => {
 
   useFrame((state) => {
     if (!meshRef.current) return;
-    const time = state.clock?.getElapsedTime() || (performance.now() / 1000);
+    const time = state.clock?.elapsedTime ?? (performance.now() / 1000);
     
     // Smoothly follow mouse with delay
     const targetX = (mouse?.x || 0) * 2;
@@ -80,14 +80,44 @@ const LightRays = () => {
   );
 };
 
+class ThreeCanvasErrorBoundary extends React.Component<{ children: React.ReactNode; fallback?: React.ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: React.ReactNode; fallback?: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error: any) {
+    console.warn("[ThreeCanvasErrorBoundary] WebGL indisponível ou erro no Three.js:", error);
+  }
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback || null;
+    }
+    return this.props.children;
+  }
+}
+
+function checkWebGLSupport(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const canvas = document.createElement('canvas');
+    return !!(window.WebGLRenderingContext && (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')));
+  } catch {
+    return false;
+  }
+}
+
 export const InteractiveLuxuryBackground: React.FC = () => {
   const [hasError, setHasError] = React.useState(false);
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
   const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const webGLSupported = React.useMemo(() => checkWebGLSupport(), []);
 
-  if (hasError) {
+  if (hasError || !webGLSupported) {
     return (
-      <div className="absolute inset-0 z-0 overflow-hidden bg-primary-black">
+      <div className="absolute inset-0 z-0 overflow-hidden bg-primary-black pointer-events-none">
         <div className="absolute inset-0 bg-gradient-to-b from-primary-black/90 via-primary-black/40 to-primary-black" />
       </div>
     );
@@ -98,15 +128,15 @@ export const InteractiveLuxuryBackground: React.FC = () => {
       {/* Background layer can stay but MUST be semi-transparent if the user wants an overlay effect */}
       <div className="absolute inset-0 bg-primary-black/10 backdrop-blur-[2px]" />
       
-      <Canvas
-        gl={{ 
-          antialias: true, 
-          alpha: true,
-          powerPreference: "high-performance",
-          failIfMajorPerformanceCaveat: true
-        }}
-        dpr={isMobile ? 1 : 1.5}
-        style={{ background: 'transparent' }}
+      <ThreeCanvasErrorBoundary fallback={<div className="absolute inset-0 bg-gradient-to-b from-primary-black/90 via-primary-black/40 to-primary-black" />}>
+        <Canvas
+          gl={{ 
+            antialias: true, 
+            alpha: true,
+            powerPreference: "default"
+          }}
+          dpr={isMobile ? 1 : 1.25}
+          style={{ background: 'transparent' }}
         onCreated={({ gl }) => {
           const handleContextLost = (event: Event) => {
             event.preventDefault();
@@ -144,6 +174,7 @@ export const InteractiveLuxuryBackground: React.FC = () => {
           </Float>
         </Suspense>
       </Canvas>
+      </ThreeCanvasErrorBoundary>
       
       <div className="absolute inset-0 bg-gradient-to-t from-primary-black via-transparent to-primary-black/30 pointer-events-none" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.5)_100%)] pointer-events-none" />

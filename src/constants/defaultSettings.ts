@@ -75,7 +75,8 @@ export const DEFAULT_OPTIONS: Record<string, OptionItem[]> = {
   tiposNegocio: [
     { id: "venda", nome: "Venda", valor: "venda", ativo: true, ordem: 1 },
     { id: "locacao", nome: "Locação", valor: "locacao", ativo: true, ordem: 2 },
-    { id: "venda_locacao", nome: "Venda e Locação", valor: "venda_locacao", ativo: true, ordem: 3 }
+    { id: "locacao_temporaria", nome: "Locação Temporária", valor: "locacao_temporaria", ativo: true, ordem: 3 },
+    { id: "venda_locacao", nome: "Venda e Locação", valor: "venda_locacao", ativo: true, ordem: 4 }
   ],
   tiposImovel: [
     { id: "todos", nome: "Todos os tipos", valor: "", ativo: true, ordem: 0 },
@@ -121,7 +122,13 @@ export const DEFAULT_OPTIONS: Record<string, OptionItem[]> = {
     { id: "loc-3k", nome: "Locação: Até R$ 3.000", valor: 3000, ativo: true, ordem: 8, tipo: 'locacao' },
     { id: "loc-5k", nome: "Locação: Até R$ 5.000", valor: 5000, ativo: true, ordem: 9, tipo: 'locacao' },
     { id: "loc-10k", nome: "Locação: Até R$ 10.000", valor: 10000, ativo: true, ordem: 10, tipo: 'locacao' },
-    { id: "loc-20k", nome: "Locação: Até R$ 20.000", valor: 20000, ativo: true, ordem: 11, tipo: 'locacao' }
+    { id: "loc-20k", nome: "Locação: Até R$ 20.000", valor: 20000, ativo: true, ordem: 11, tipo: 'locacao' },
+    // Locação Temporária (Diárias)
+    { id: "temp-300", nome: "Diária: Até R$ 300", valor: 300, ativo: true, ordem: 12, tipo: 'temporaria' },
+    { id: "temp-500", nome: "Diária: Até R$ 500", valor: 500, ativo: true, ordem: 13, tipo: 'temporaria' },
+    { id: "temp-1000", nome: "Diária: Até R$ 1.000", valor: 1000, ativo: true, ordem: 14, tipo: 'temporaria' },
+    { id: "temp-2000", nome: "Diária: Até R$ 2.000", valor: 2000, ativo: true, ordem: 15, tipo: 'temporaria' },
+    { id: "temp-5000", nome: "Diária: Até R$ 5.000", valor: 5000, ativo: true, ordem: 16, tipo: 'temporaria' }
   ],
   caracteristicas: [
     "Dormitórios", "Suítes", "Demi-suíte", "Master com closet", "Hidro", "Closet",

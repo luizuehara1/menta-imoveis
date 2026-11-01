@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { 
   Calendar, 
   CalendarDays, 
@@ -28,7 +29,12 @@ import {
   TrendingUp,
   Sparkles,
   RefreshCw,
-  Home
+  Home,
+  ExternalLink,
+  Tag,
+  Check,
+  Send,
+  MessageCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -42,7 +48,10 @@ import {
   TemporaryReceipt,
   TemporaryReservationStatus,
   TemporaryPaymentType,
-  TemporaryBlockReason
+  TemporaryBlockReason,
+  TemporaryReservationRequest,
+  TemporarySeasonalPrice,
+  TemporaryCompanion
 } from '../../types';
 import { 
   fetchTemporaryProperties, 
@@ -52,6 +61,18 @@ import {
   fetchGuests, 
   fetchPayments, 
   fetchReceipts,
+  fetchReservationRequests,
+  subscribeReservationRequests,
+  approveReservationRequest,
+  refuseReservationRequest,
+  cancelReservationRequest,
+  updateRequestStatus,
+  buildAdminConfirmationWhatsAppUrl,
+  buildAdminConfirmationWhatsAppMessage,
+  markRequestWhatsAppOpened,
+  markRequestMessageSent,
+  buildAdminContactWhatsAppUrl,
+  buildAdminRefusalWhatsAppUrl,
   checkAvailability,
   saveReservation,
   cancelReservation,
@@ -60,17 +81,25 @@ import {
   registerPayment,
   createTemporaryReceipt,
   buildTemporaryRentalWhatsAppUrl,
-  calculateNights
+  buildPublicTemporaryRentalWhatsAppUrl,
+  calculateNights,
+  doIntervalsOverlap,
+  fetchSeasonalPrices,
+  saveSeasonalPrice,
+  deleteSeasonalPrice,
+  calculateReservationBreakdown
 } from '../../services/temporaryRentalService';
 import { formatCurrency, formatarDataBR, maskCurrency, parseCurrencyToNumber } from '../../lib/utils';
 import { TemporaryCalendar } from '../../components/admin/TemporaryCalendar';
 import { TemporaryReceiptModal } from '../../components/admin/TemporaryReceiptModal';
 
-type ActiveTab = 'visao_geral' | 'calendario' | 'reservas' | 'hospedes' | 'pagamentos' | 'recibos' | 'imoveis';
+type ActiveTab = 'visao_geral' | 'calendario' | 'reservas' | 'solicitacoes' | 'precos' | 'hospedes' | 'pagamentos' | 'recibos' | 'imoveis';
 
 export default function TemporaryRentals() {
   const { user, isAdmin } = useAuth();
   const { settings } = useSettings();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('visao_geral');
   const [loading, setLoading] = useState(true);
@@ -83,6 +112,7 @@ export default function TemporaryRentals() {
   const [guests, setGuests] = useState<TemporaryGuest[]>([]);
   const [payments, setPayments] = useState<TemporaryPayment[]>([]);
   const [receipts, setReceipts] = useState<TemporaryReceipt[]>([]);
+  const [requests, setRequests] = useState<TemporaryReservationRequest[]>([]);
 
   // Selection states
   const [selectedPropertyId, setSelectedPropertyId] = useState<string>('');
@@ -92,13 +122,72 @@ export default function TemporaryRentals() {
   // Modals state
   const [isNewReservationModalOpen, setIsNewReservationModalOpen] = useState(false);
   const [isReservationDetailsModalOpen, setIsReservationDetailsModalOpen] = useState(false);
+  const [isRequestDetailsModalOpen, setIsRequestDetailsModalOpen] = useState(false);
   const [isNewBlockModalOpen, setIsNewBlockModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [selectedReservation, setSelectedReservation] = useState<TemporaryReservation | null>(null);
+  const [selectedRequest, setSelectedRequest] = useState<TemporaryReservationRequest | null>(null);
+
+  // Requests management state
+  const [requestStatusFilter, setRequestStatusFilter] = useState<string>('todos');
+  const [requestSearchTerm, setRequestSearchTerm] = useState<string>('');
+  const [confirmationSuccessData, setConfirmationSuccessData] = useState<{
+    solicitacao: TemporaryReservationRequest;
+    reservaId: string;
+    codigoReserva: string;
+    clientPhone: string;
+    mensagemEnviada?: boolean;
+  } | null>(null);
+  const [refusalModalData, setRefusalModalData] = useState<{
+    solicitacao: TemporaryReservationRequest;
+    motivo: string;
+  } | null>(null);
+
+  // Seasonal Prices State & Modal
+  const [seasonalPrices, setSeasonalPrices] = useState<TemporarySeasonalPrice[]>([]);
+  const [isSeasonalPriceModalOpen, setIsSeasonalPriceModalOpen] = useState(false);
+  const [editingSeasonalPrice, setEditingSeasonalPrice] = useState<TemporarySeasonalPrice | null>(null);
+  const [seasonalPriceForm, setSeasonalPriceForm] = useState<{
+    imovelId: string;
+    dataInicio: string;
+    dataFim: string;
+    valorDiaria: number | string;
+    descricao: string;
+  }>({
+    imovelId: '',
+    dataInicio: '',
+    dataFim: '',
+    valorDiaria: '',
+    descricao: ''
+  });
+
+  // Multiple companions state for reservation form
+  const [companions, setCompanions] = useState<TemporaryCompanion[]>([]);
 
   // Receipt Modal
   const [activeReceipt, setActiveReceipt] = useState<TemporaryReceipt | null>(null);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+
+  // Availability helper for property card
+  const getPropertyAvailability = (propId: string) => {
+    const today = new Date().toISOString().split('T')[0];
+    const isOccupied = reservations.some(r => 
+      r.imovelId === propId && 
+      r.status !== 'cancelada' && 
+      (r.dataEntrada || '') <= today && 
+      (r.dataSaida || '') > today
+    );
+    if (isOccupied) return { label: 'Ocupado Hoje', color: 'bg-blue-50 text-blue-800 border-blue-200' };
+
+    const isBlocked = blocks.some(b => 
+      b.imovelId === propId && 
+      (b.dataInicio || '') <= today && 
+      (b.dataFim || '') >= today
+    );
+    if (isBlocked) return { label: 'Bloqueado Hoje', color: 'bg-amber-50 text-amber-800 border-amber-200' };
+
+    return { label: 'Disponível Hoje', color: 'bg-emerald-50 text-emerald-800 border-emerald-200' };
+  };
 
   // Form states for New Reservation
   const [reservationForm, setReservationForm] = useState<Partial<TemporaryReservation>>({
@@ -128,20 +217,37 @@ export default function TemporaryRentals() {
 
   // Load all initial data
   const loadData = async () => {
+    if (!user || !isAdmin) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
-      const [propsData, resData, blocksData, guestsData, paysData, recsData] = await Promise.all([
+      const [propsData, resData, blocksData, guestsData, paysData, recsData, reqsData, pricesData] = await Promise.all([
         fetchTemporaryProperties(),
         fetchReservations(),
         fetchBlocks(),
         fetchGuests(),
         fetchPayments(),
-        fetchReceipts()
+        fetchReceipts(),
+        fetchReservationRequests(),
+        fetchSeasonalPrices()
       ]);
 
       setProperties(propsData);
-      if (propsData.length > 0 && !selectedPropertyId) {
+
+      const urlImovelId = searchParams.get('imovelId');
+      const urlTab = searchParams.get('tab');
+      const urlAction = searchParams.get('action');
+
+      if (urlImovelId && propsData.some(p => p.id === urlImovelId)) {
+        setSelectedPropertyId(urlImovelId);
+      } else if (propsData.length > 0 && !selectedPropertyId) {
         setSelectedPropertyId(propsData[0].id || '');
+      }
+
+      if (urlTab && ['visao_geral', 'calendario', 'reservas', 'solicitacoes', 'precos', 'hospedes', 'pagamentos', 'recibos', 'imoveis'].includes(urlTab)) {
+        setActiveTab(urlTab as ActiveTab);
       }
 
       setReservations(resData);
@@ -149,17 +255,42 @@ export default function TemporaryRentals() {
       setGuests(guestsData);
       setPayments(paysData);
       setReceipts(recsData);
+      setRequests(reqsData);
+      setSeasonalPrices(pricesData);
+
+      if (urlAction === 'nova-reserva' && urlImovelId) {
+        setTimeout(() => {
+          handleOpenNewReservation({ propertyId: urlImovelId, checkIn: '', checkOut: '' });
+        }, 150);
+      } else if (urlAction === 'bloquear' && urlImovelId) {
+        setTimeout(() => {
+          handleOpenNewBlock({ propertyId: urlImovelId, checkIn: '', checkOut: '' });
+        }, 150);
+      }
     } catch (err: any) {
-      console.error('[TemporaryRentals] Erro ao carregar dados:', err);
-      triggerToast('Erro ao carregar dados de locação temporária.', 'error');
+      console.warn('[TemporaryRentals] Aviso ao carregar dados:', err?.message || err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
-  }, []);
+    let unsubscribeRequests: (() => void) | undefined;
+    if (user && isAdmin) {
+      loadData();
+      unsubscribeRequests = subscribeReservationRequests((liveRequests) => {
+        setRequests(liveRequests);
+      }, (err) => {
+        console.warn('[TemporaryRentals] Aviso no listener de solicitações:', err);
+      });
+    } else {
+      setLoading(false);
+    }
+
+    return () => {
+      if (unsubscribeRequests) unsubscribeRequests();
+    };
+  }, [user, isAdmin, searchParams]);
 
   // Selected Property Object
   const currentProperty = useMemo(() => {
@@ -207,11 +338,24 @@ export default function TemporaryRentals() {
     tomorrow.setDate(tomorrow.getDate() + 3);
     const checkOut = dates?.checkOut || tomorrow.toISOString().split('T')[0];
 
-    const nights = calculateNights(checkIn, checkOut);
-    const daily = Number(prop?.valorDiaria || prop?.priceDiaria || 350);
-    const cleaning = Number(prop?.taxaLimpeza || 150);
-    const subtotal = nights * daily;
-    const total = subtotal + cleaning;
+    let nights = calculateNights(checkIn, checkOut);
+    let daily = Number(prop?.valorDiaria || prop?.priceDiaria || 350);
+    let cleaning = Number(prop?.taxaLimpeza || 150);
+    let subtotal = nights * daily;
+    let total = subtotal + cleaning;
+    let breakdownDetails = undefined;
+
+    if (prop && checkIn && checkOut && checkIn < checkOut) {
+      const bd = calculateReservationBreakdown(prop, checkIn, checkOut, seasonalPrices);
+      nights = bd.nights;
+      daily = bd.averageDailyRate;
+      cleaning = bd.taxaLimpeza;
+      subtotal = bd.subtotalDiarias;
+      total = bd.valorTotal;
+      breakdownDetails = bd.dailyRates;
+    }
+
+    setCompanions([]);
 
     setReservationForm({
       imovelId: propId,
@@ -223,7 +367,7 @@ export default function TemporaryRentals() {
       dataEntrada: checkIn,
       dataSaida: checkOut,
       quantidadeDiarias: nights,
-      quantidadeHospedes: prop?.maxHospedes || 2,
+      quantidadeHospedes: 1,
       valorDiaria: daily,
       subtotalDiarias: subtotal,
       taxaLimpeza: cleaning,
@@ -235,10 +379,87 @@ export default function TemporaryRentals() {
       saldoRestante: total,
       formaPagamento: 'PIX',
       status: 'confirmada',
-      statusPagamento: 'pendente'
+      statusPagamento: 'pendente',
+      detalhamentoDiarias: breakdownDetails
     });
 
     setIsNewReservationModalOpen(true);
+  };
+
+  // Companions management helpers
+  const handleAddCompanion = () => {
+    const prop = properties.find(p => p.id === reservationForm.imovelId) || currentProperty;
+    const maxGuests = Number(prop?.capacidadeHospedes || prop?.maxHospedes || 10);
+    const currentTotal = 1 + companions.length;
+    if (currentTotal >= maxGuests) {
+      triggerToast(`Capacidade máxima do imóvel atingida (${maxGuests} pessoas). Não é possível adicionar mais acompanhantes.`, 'error');
+      return;
+    }
+    setCompanions(prev => [
+      ...prev,
+      {
+        id: String(Date.now()),
+        nome: '',
+        documento: '',
+        parentesco: '',
+        faixaEtaria: 'adulto'
+      }
+    ]);
+  };
+
+  const handleRemoveCompanion = (id: string) => {
+    setCompanions(prev => prev.filter(c => c.id !== id));
+  };
+
+  const handleUpdateCompanion = (id: string, field: keyof TemporaryCompanion, value: string) => {
+    setCompanions(prev => prev.map(c => c.id === id ? { ...c, [field]: value } : c));
+  };
+
+  // Seasonal Price Handlers
+  const handleSaveSeasonalPrice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      if (!seasonalPriceForm.imovelId) throw new Error('Selecione o imóvel.');
+      if (!seasonalPriceForm.dataInicio || !seasonalPriceForm.dataFim) throw new Error('Informe o período (data inicial e final).');
+      if (seasonalPriceForm.dataInicio > seasonalPriceForm.dataFim) throw new Error('A data final deve ser igual ou posterior à data inicial.');
+      const rate = typeof seasonalPriceForm.valorDiaria === 'string' 
+        ? parseCurrencyToNumber(seasonalPriceForm.valorDiaria) 
+        : Number(seasonalPriceForm.valorDiaria || 0);
+      if (rate <= 0) throw new Error('Informe um valor de diária válido maior que zero.');
+
+      const prop = properties.find(p => p.id === seasonalPriceForm.imovelId);
+
+      await saveSeasonalPrice({
+        id: editingSeasonalPrice?.id,
+        imovelId: seasonalPriceForm.imovelId,
+        imovelCodigo: prop?.code || '',
+        imovelTitulo: prop?.title || '',
+        dataInicio: seasonalPriceForm.dataInicio,
+        dataFim: seasonalPriceForm.dataFim,
+        valorDiaria: rate,
+        descricao: seasonalPriceForm.descricao.trim() || 'Tarifa Especial'
+      }, user?.uid);
+
+      triggerToast('Preço especial por período salvo com sucesso!', 'success');
+      setIsSeasonalPriceModalOpen(false);
+      setEditingSeasonalPrice(null);
+      await loadData();
+    } catch (err: any) {
+      console.error('[TemporaryRentals] Erro ao salvar preço por período:', err);
+      triggerToast(err.message || 'Erro ao salvar preço especial.', 'error');
+    }
+  };
+
+  const handleDeleteSeasonalPrice = async (priceId: string) => {
+    if (!window.confirm('Tem certeza que deseja remover esta regra de preço por período?')) return;
+    try {
+      await deleteSeasonalPrice(priceId);
+      triggerToast('Regra de preço por período removida com sucesso!', 'success');
+      await loadData();
+    } catch (err: any) {
+      console.error('[TemporaryRentals] Erro ao remover preço:', err);
+      triggerToast(err.message || 'Erro ao remover preço especial.', 'error');
+    }
   };
 
   // Open New Block Modal
@@ -263,10 +484,28 @@ export default function TemporaryRentals() {
   const updateReservationCalculation = (updates: Partial<TemporaryReservation>) => {
     setReservationForm(prev => {
       const next = { ...prev, ...updates };
-      const nights = calculateNights(next.dataEntrada || '', next.dataSaida || '');
-      const daily = Number(next.valorDiaria || 0);
-      const subtotal = nights * daily;
-      const cleaning = Number(next.taxaLimpeza || 0);
+      const prop = properties.find(p => p.id === next.imovelId) || properties[0] || null;
+
+      let nights = calculateNights(next.dataEntrada || '', next.dataSaida || '');
+      let daily = Number(next.valorDiaria || 0);
+      let subtotal = nights * daily;
+      let cleaning = Number(next.taxaLimpeza || (prop?.taxaLimpeza || 150));
+      let breakdownDetails = next.detalhamentoDiarias;
+
+      if (prop && next.dataEntrada && next.dataSaida && next.dataEntrada < next.dataSaida) {
+        const bd = calculateReservationBreakdown(
+          prop,
+          next.dataEntrada,
+          next.dataSaida,
+          seasonalPrices,
+          Number(next.valorDesconto || 0),
+          Number(next.outrasTaxas || 0)
+        );
+        nights = bd.nights;
+        subtotal = bd.subtotalDiarias;
+        breakdownDetails = bd.dailyRates;
+      }
+
       const extra = Number(next.outrasTaxas || 0);
       const discount = Number(next.valorDesconto || 0);
       const total = Math.max(0, subtotal + cleaning + extra - discount);
@@ -278,7 +517,8 @@ export default function TemporaryRentals() {
         quantidadeDiarias: nights,
         subtotalDiarias: subtotal,
         valorTotal: total,
-        saldoRestante: balance
+        saldoRestante: balance,
+        detalhamentoDiarias: breakdownDetails
       };
     });
   };
@@ -290,8 +530,23 @@ export default function TemporaryRentals() {
       if (!reservationForm.imovelId) throw new Error('Selecione o imóvel.');
       if (!reservationForm.hospedeNome) throw new Error('Informe o nome do hóspede.');
       if (!reservationForm.dataEntrada || !reservationForm.dataSaida) throw new Error('Selecione as datas de entrada e saída.');
+      if (reservationForm.dataEntrada >= reservationForm.dataSaida) throw new Error('A data de saída deve ser posterior à data de entrada.');
 
-      await saveReservation(reservationForm, user?.uid);
+      const prop = properties.find(p => p.id === reservationForm.imovelId);
+      const maxGuests = Number(prop?.capacidadeHospedes || prop?.maxHospedes || 10);
+      const totalGuests = 1 + companions.length;
+
+      if (totalGuests > maxGuests) {
+        throw new Error(`Limite de capacidade excedido: O imóvel permite no máximo ${maxGuests} hóspedes, mas foram cadastrados ${totalGuests} (titular + ${companions.length} acompanhantes).`);
+      }
+
+      const payload: Partial<TemporaryReservation> = {
+        ...reservationForm,
+        quantidadeHospedes: totalGuests,
+        acompanhantes: companions
+      };
+
+      await saveReservation(payload, user?.uid);
       triggerToast('Locação temporária cadastrada com sucesso!', 'success');
       setIsNewReservationModalOpen(false);
       await loadData();
@@ -308,6 +563,19 @@ export default function TemporaryRentals() {
       if (!blockForm.imovelId || !blockForm.dataInicio || !blockForm.dataFim) {
         throw new Error('Preencha o imóvel e o período para bloquear.');
       }
+      if (blockForm.dataInicio > blockForm.dataFim) {
+        throw new Error('A data final deve ser igual ou posterior à data inicial.');
+      }
+      // Check if there is conflict with confirmed reservations
+      const conflictRes = reservations.find(r => 
+        r.imovelId === blockForm.imovelId && 
+        r.status !== 'cancelada' &&
+        doIntervalsOverlap(blockForm.dataInicio!, blockForm.dataFim!, r.dataEntrada, r.dataSaida)
+      );
+      if (conflictRes) {
+        throw new Error(`CONFLITO DE RESERVA: O período selecionado (${formatarDataBR(blockForm.dataInicio!)} a ${formatarDataBR(blockForm.dataFim!)}) coincide com a reserva confirmada ${conflictRes.codigoReserva} (${conflictRes.hospedeNome}). Não é permitido bloquear silenciosamente sobre reservas existentes.`);
+      }
+
       await addBlock(blockForm, user?.uid);
       triggerToast('Período bloqueado com sucesso no calendário!', 'success');
       setIsNewBlockModalOpen(false);
@@ -315,6 +583,170 @@ export default function TemporaryRentals() {
     } catch (err: any) {
       console.error('[TemporaryRentals] Erro ao bloquear datas:', err);
       triggerToast(err.message || 'Erro ao bloquear datas.', 'error');
+    }
+  };
+
+  // Request Action Handlers
+  const handleOpenWhatsAppForRequest = async (req: TemporaryReservationRequest, customPhone?: string) => {
+    const whats = buildAdminConfirmationWhatsAppUrl(
+      req,
+      req.codigoReservaGerada || req.codigoReserva,
+      customPhone || req.whatsapp || req.telefone
+    );
+    if (!whats.isValid) {
+      triggerToast('Número de WhatsApp do cliente inválido ou ausente.', 'error');
+      return;
+    }
+    window.open(whats.url, '_blank');
+    if (req.id) {
+      await markRequestWhatsAppOpened(req.id);
+      setRequests(prev => prev.map(r => r.id === req.id ? { ...r, whatsappAberto: true } : r));
+      if (selectedRequest && selectedRequest.id === req.id) {
+        setSelectedRequest(prev => prev ? { ...prev, whatsappAberto: true } : null);
+      }
+      if (confirmationSuccessData && confirmationSuccessData.solicitacao.id === req.id) {
+        setConfirmationSuccessData(prev => prev ? {
+          ...prev,
+          solicitacao: { ...prev.solicitacao, whatsappAberto: true }
+        } : null);
+      }
+    }
+  };
+
+  const handleToggleMessageSent = async (req: TemporaryReservationRequest) => {
+    if (!req.id) return;
+    try {
+      const nextVal = !req.mensagemEnviada;
+      await markRequestMessageSent(req.id, nextVal);
+      triggerToast(nextVal ? 'Marcado como: Mensagem enviada!' : 'Marcado como: Envio pendente.', 'success');
+      setRequests(prev => prev.map(r => r.id === req.id ? { ...r, mensagemEnviada: nextVal } : r));
+      if (selectedRequest && selectedRequest.id === req.id) {
+        setSelectedRequest(prev => prev ? { ...prev, mensagemEnviada: nextVal } : null);
+      }
+      if (confirmationSuccessData && confirmationSuccessData.solicitacao.id === req.id) {
+        setConfirmationSuccessData(prev => prev ? {
+          ...prev,
+          solicitacao: { ...prev.solicitacao, mensagemEnviada: nextVal },
+          mensagemEnviada: nextVal
+        } : null);
+      }
+    } catch (err: any) {
+      console.error('Erro ao atualizar status de envio:', err);
+      triggerToast('Erro ao atualizar status de envio da mensagem.', 'error');
+    }
+  };
+
+  const handleApproveRequest = async (req: TemporaryReservationRequest) => {
+    if (!window.confirm(`Deseja aprovar e confirmar a reserva de ${req.nomeCliente} para o período de ${formatarDataBR(req.dataEntrada)} a ${formatarDataBR(req.dataSaida)}? A reserva será gravada no sistema, as datas ficarão bloqueadas no calendário e o WhatsApp será aberto com a mensagem de confirmação.`)) {
+      return;
+    }
+    try {
+      const adminIdentifier = user?.email || user?.uid || 'Administrador';
+      const result = await approveReservationRequest(req, adminIdentifier);
+      triggerToast('Reserva aprovada com sucesso! O período agora está bloqueado no calendário.', 'success');
+      setIsRequestDetailsModalOpen(false);
+
+      const phoneToUse = req.whatsapp || req.telefone || '';
+      const whats = buildAdminConfirmationWhatsAppUrl(req, result.codigoReserva, phoneToUse);
+
+      // Automatically open WhatsApp Web or app directed to client number
+      if (whats.isValid) {
+        window.open(whats.url, '_blank');
+        if (req.id) {
+          await markRequestWhatsAppOpened(req.id);
+        }
+      } else {
+        triggerToast('Atenção: Número de WhatsApp do cliente inválido ou ausente.', 'error');
+      }
+
+      setConfirmationSuccessData({
+        solicitacao: {
+          ...req,
+          status: 'confirmada',
+          whatsappAberto: whats.isValid,
+          reservaGeradaId: result.reservaId,
+          codigoReservaGerada: result.codigoReserva
+        },
+        reservaId: result.reservaId,
+        codigoReserva: result.codigoReserva,
+        clientPhone: phoneToUse,
+        mensagemEnviada: false
+      });
+      await loadData();
+    } catch (err: any) {
+      console.error('Erro ao aprovar solicitação:', err);
+      triggerToast(err.message || 'Erro ao aprovar solicitação.', 'error');
+    }
+  };
+
+  const handleSetUnderAnalysis = async (req: TemporaryReservationRequest) => {
+    try {
+      const adminIdentifier = user?.email || user?.uid || 'Administrador';
+      await updateRequestStatus(req.id!, 'em_analise', { adminUser: adminIdentifier });
+      triggerToast('Solicitação colocada em análise.', 'success');
+      if (selectedRequest && selectedRequest.id === req.id) {
+        setSelectedRequest(prev => prev ? { ...prev, status: 'em_analise' } : null);
+      }
+      await loadData();
+    } catch (err: any) {
+      console.error('Erro ao alterar status:', err);
+      triggerToast(err.message || 'Erro ao atualizar status da solicitação.', 'error');
+    }
+  };
+
+  const handleOpenRefusalModal = (req: TemporaryReservationRequest) => {
+    setRefusalModalData({
+      solicitacao: req,
+      motivo: ''
+    });
+  };
+
+  const handleConfirmRefusal = async (openWhatsApp = false) => {
+    if (!refusalModalData) return;
+    const { solicitacao, motivo } = refusalModalData;
+    try {
+      const adminIdentifier = user?.email || user?.uid || 'Administrador';
+      await refuseReservationRequest(solicitacao.id!, motivo || 'Indisponibilidade nas datas solicitadas', adminIdentifier);
+      triggerToast('Solicitação recusada.', 'success');
+      
+      if (openWhatsApp) {
+        const whats = buildAdminRefusalWhatsAppUrl(solicitacao, motivo);
+        if (whats.isValid) {
+          window.open(whats.url, '_blank');
+        } else {
+          triggerToast('Telefone do cliente incompleto para abertura do WhatsApp.', 'error');
+        }
+      }
+
+      setRefusalModalData(null);
+      setIsRequestDetailsModalOpen(false);
+      await loadData();
+    } catch (err: any) {
+      console.error('Erro ao recusar solicitação:', err);
+      triggerToast(err.message || 'Erro ao recusar solicitação.', 'error');
+    }
+  };
+
+  const handleInitiateWhatsAppContact = (req: TemporaryReservationRequest) => {
+    const whats = buildAdminContactWhatsAppUrl(req);
+    if (!whats.isValid) {
+      triggerToast('O número de telefone informado na solicitação é inválido ou incompleto.', 'error');
+      return;
+    }
+    window.open(whats.url, '_blank');
+  };
+
+  const handleCancelRequest = async (requestId: string) => {
+    if (!window.confirm('Deseja cancelar esta solicitação de reserva?')) return;
+    try {
+      const adminIdentifier = user?.email || user?.uid || 'Administrador';
+      await cancelReservationRequest(requestId, adminIdentifier);
+      triggerToast('Solicitação cancelada.', 'success');
+      setIsRequestDetailsModalOpen(false);
+      await loadData();
+    } catch (err: any) {
+      console.error('Erro ao cancelar solicitação:', err);
+      triggerToast(err.message || 'Erro ao cancelar solicitação.', 'error');
     }
   };
 
@@ -414,6 +846,44 @@ export default function TemporaryRentals() {
     }
   };
 
+  // Emit Demonstrativo Helper (when reservation has no payments registered yet)
+  const handleEmitDemonstrativo = (reserva: TemporaryReservation) => {
+    const draft: TemporaryReceipt = {
+      id: `DEMO-${reserva.id || reserva.codigoReserva}`,
+      numeroRecibo: `DEMO-${reserva.codigoReserva}`,
+      tipoDocumento: 'demonstrativo',
+      reservaId: reserva.id || '',
+      codigoReserva: reserva.codigoReserva,
+      pagadorNome: reserva.hospedeNome,
+      pagadorCpf: reserva.hospedeCpf || '',
+      pagadorTelefone: reserva.hospedeTelefone || reserva.hospedeWhatsapp || '',
+      pagadorEmail: reserva.hospedeEmail || '',
+      imovelId: reserva.imovelId,
+      imovelCodigo: reserva.imovelCodigo,
+      imovelTitulo: reserva.imovelTitulo,
+      imovelEndereco: reserva.imovelEndereco || 'Balneário Camboriú/SC',
+      imovelNomeEdificio: reserva.imovelNomeEdificio || '',
+      periodoHospedagem: `${formatarDataBR(reserva.dataEntrada)} a ${formatarDataBR(reserva.dataSaida)}`,
+      dataEntrada: reserva.dataEntrada,
+      dataSaida: reserva.dataSaida,
+      quantidadeDiarias: reserva.quantidadeDiarias,
+      descricao: `Demonstrativo prévio de valores da locação temporária (${reserva.quantidadeDiarias} diárias)`,
+      valorRecebido: 0,
+      valorPorExtenso: 'Zero reais',
+      formaPagamento: 'Pendente de pagamento',
+      dataPagamento: new Date().toISOString().split('T')[0],
+      dataEmissao: new Date().toISOString().split('T')[0],
+      valorTotalReserva: reserva.valorTotal,
+      saldoRestante: reserva.valorTotal,
+      emissorNome: settings.empresa?.razaoSocial || settings.empresa?.nome || "MENTA NEGÓCIOS IMOBILIÁRIOS",
+      emissorCnpj: settings.empresa?.cnpj || "00.000.000/0001-00",
+      emissorCreci: settings.empresa?.creci || settings.empresa?.creciPj || "",
+      criadoEm: new Date()
+    };
+    setActiveReceipt(draft);
+    setIsReceiptModalOpen(true);
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
       
@@ -472,6 +942,12 @@ export default function TemporaryRentals() {
           { id: 'visao_geral', label: 'Visão Geral', icon: TrendingUp },
           { id: 'calendario', label: 'Calendário de Disponibilidade', icon: CalendarDays },
           { id: 'reservas', label: `Reservas (${reservations.length})`, icon: Clock },
+          { 
+            id: 'solicitacoes', 
+            label: `Solicitações (${requests.filter(r => r.status === 'pendente' || r.status === 'solicitacao_recebida' || !r.status).length})`, 
+            icon: MessageSquare 
+          },
+          { id: 'precos', label: `Preços por Período (${seasonalPrices.length})`, icon: Tag },
           { id: 'hospedes', label: `Hóspedes (${guests.length})`, icon: Users },
           { id: 'pagamentos', label: 'Pagamentos & Recebimentos', icon: DollarSign },
           { id: 'recibos', label: `Recibos Emitidos (${receipts.length})`, icon: FileText },
@@ -515,13 +991,13 @@ export default function TemporaryRentals() {
 
             <div className="bg-white p-6 rounded-[2rem] shadow-xl border border-gray-100 space-y-3">
               <span className="text-[10px] font-black uppercase tracking-widest text-gold block">Total Recebido Confirmado</span>
-              <p className="text-2xl font-display font-black text-primary-black">R$ {formatCurrency(kpis.totalRecebido)}</p>
+              <p className="text-2xl font-display font-black text-primary-black">{formatCurrency(kpis.totalRecebido)}</p>
               <span className="text-xs text-gray-400 font-medium">{payments.length} pagamentos processados</span>
             </div>
 
             <div className="bg-white p-6 rounded-[2rem] shadow-xl border border-gray-100 space-y-3">
               <span className="text-[10px] font-black uppercase tracking-widest text-amber-600 block">Saldo Restante a Receber</span>
-              <p className="text-2xl font-display font-black text-amber-700">R$ {formatCurrency(kpis.saldoPendente)}</p>
+              <p className="text-2xl font-display font-black text-amber-700">{formatCurrency(kpis.saldoPendente)}</p>
               <span className="text-xs text-amber-600 font-medium">Aguardando quitação</span>
             </div>
 
@@ -576,7 +1052,7 @@ export default function TemporaryRentals() {
                       </div>
 
                       <div className="text-right">
-                        <p className="font-bold text-sm text-primary-black">R$ {formatCurrency(res.valorTotal)}</p>
+                        <p className="font-bold text-sm text-primary-black">{formatCurrency(res.valorTotal)}</p>
                         <span className={`inline-block text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
                           res.status === 'confirmada' ? 'bg-emerald-50 text-emerald-700' :
                           res.status === 'pre_reserva' ? 'bg-amber-50 text-amber-700' :
@@ -634,6 +1110,30 @@ export default function TemporaryRentals() {
           onSelectPropertyId={setSelectedPropertyId}
           reservations={reservations}
           blocks={blocks}
+          seasonalPrices={seasonalPrices}
+          onOpenNewSeasonalPrice={(params) => {
+            const propId = params?.propertyId || selectedPropertyId || (properties[0]?.id || '');
+            setSeasonalPriceForm({
+              imovelId: propId,
+              dataInicio: params?.checkIn || '',
+              dataFim: params?.checkOut || '',
+              valorDiaria: '',
+              descricao: ''
+            });
+            setEditingSeasonalPrice(null);
+            setIsSeasonalPriceModalOpen(true);
+          }}
+          onSelectSeasonalPrice={(sp) => {
+            setEditingSeasonalPrice(sp);
+            setSeasonalPriceForm({
+              imovelId: sp.imovelId,
+              dataInicio: sp.dataInicio,
+              dataFim: sp.dataFim,
+              valorDiaria: sp.valorDiaria,
+              descricao: sp.descricao
+            });
+            setIsSeasonalPriceModalOpen(true);
+          }}
           onOpenNewReservation={handleOpenNewReservation}
           onOpenNewBlock={handleOpenNewBlock}
           onSelectReservation={(res) => {
@@ -641,6 +1141,7 @@ export default function TemporaryRentals() {
             setIsReservationDetailsModalOpen(true);
           }}
           onRemoveBlock={handleRemoveBlock}
+          onReloadData={loadData}
         />
       )}
 
@@ -712,11 +1213,11 @@ export default function TemporaryRentals() {
                         <span className="text-[10px] text-gray-400 font-semibold">{res.quantidadeDiarias} diárias • {res.quantidadeHospedes} hóspedes</span>
                       </td>
                       <td className="py-4 px-4 font-bold text-primary-black text-sm">
-                        R$ {formatCurrency(res.valorTotal)}
+                        {formatCurrency(res.valorTotal)}
                       </td>
                       <td className="py-4 px-4">
-                        <span className="text-emerald-700 font-bold block">Pago: R$ {formatCurrency(res.valorPago)}</span>
-                        <span className="text-amber-700 text-[11px]">Restante: R$ {formatCurrency(res.saldoRestante)}</span>
+                        <span className="text-emerald-700 font-bold block">Pago: {formatCurrency(res.valorPago)}</span>
+                        <span className="text-amber-700 text-[11px]">Restante: {formatCurrency(res.saldoRestante)}</span>
                       </td>
                       <td className="py-4 px-4">
                         <span className={`inline-block px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider ${
@@ -756,6 +1257,23 @@ export default function TemporaryRentals() {
                         >
                           Pagar
                         </button>
+                        {res.valorPago > 0 ? (
+                          <button
+                            onClick={() => handleEmitReceiptForPayment(res, res.valorPago)}
+                            className="px-3 py-1.5 rounded-lg bg-gold/15 text-primary-black hover:bg-gold/25 font-bold text-xs transition-colors"
+                            title="Gerar Recibo Oficial"
+                          >
+                            Recibo
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleEmitDemonstrativo(res)}
+                            className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs transition-colors"
+                            title="Demonstrativo de Valores (Sem quitação)"
+                          >
+                            Demonstrativo
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -763,6 +1281,548 @@ export default function TemporaryRentals() {
               </table>
             )}
           </div>
+        </div>
+      )}
+
+      {/* TAB 3.5: SOLICITAÇÕES DE RESERVA ONLINE */}
+      {activeTab === 'solicitacoes' && (
+        <div className="bg-white rounded-[2.5rem] shadow-xl border border-gray-100 p-8 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100">
+            <div>
+              <div className="flex items-center gap-2 text-gold mb-1">
+                <MessageSquare size={16} />
+                <span className="text-[10px] font-black uppercase tracking-widest">Painel Administrativo</span>
+              </div>
+              <h3 className="text-xl font-display font-bold text-primary-black">
+                Reservas Temporárias → Solicitações de Reserva
+              </h3>
+              <p className="text-xs text-gray-400">
+                Gerencie, coloque em análise, recuse ou confirme as solicitações enviadas pelos clientes pelo site
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-amber-800 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-xl">
+                {requests.filter(r => r.status === 'pendente' || r.status === 'solicitacao_recebida' || !r.status).length} pendente(s)
+              </span>
+              <span className="text-xs font-bold text-gray-500 bg-gray-100 px-3 py-1.5 rounded-xl">
+                {requests.length} no total
+              </span>
+            </div>
+          </div>
+
+          {/* Filter Bar: Status Pills & Search */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+              {[
+                { id: 'todos', label: 'Todas', count: requests.length },
+                { id: 'pendente', label: 'Pendentes', count: requests.filter(r => r.status === 'pendente' || r.status === 'solicitacao_recebida' || !r.status).length },
+                { id: 'em_analise', label: 'Em análise', count: requests.filter(r => r.status === 'em_analise').length },
+                { id: 'confirmada', label: 'Confirmadas', count: requests.filter(r => r.status === 'confirmada').length },
+                { id: 'recusada', label: 'Recusadas', count: requests.filter(r => r.status === 'recusada').length },
+                { id: 'cancelada', label: 'Canceladas', count: requests.filter(r => r.status === 'cancelada').length },
+              ].map(filter => (
+                <button
+                  key={filter.id}
+                  onClick={() => setRequestStatusFilter(filter.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                    requestStatusFilter === filter.id
+                      ? 'bg-primary-black text-gold shadow-sm'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  <span>{filter.label}</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                    requestStatusFilter === filter.id ? 'bg-gold/30 text-gold' : 'bg-white text-gray-700'
+                  }`}>
+                    {filter.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className="relative min-w-[260px]">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Buscar por cliente, imóvel, protocolo..."
+                value={requestSearchTerm}
+                onChange={e => setRequestSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-800 placeholder:text-gray-400 focus:outline-none focus:border-gold"
+              />
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            {(() => {
+              const filteredList = requests.filter(req => {
+                const reqStatus = req.status || 'pendente';
+                if (requestStatusFilter !== 'todos') {
+                  if (requestStatusFilter === 'pendente') {
+                    if (reqStatus !== 'pendente' && reqStatus !== 'solicitacao_recebida') return false;
+                  } else if (reqStatus !== requestStatusFilter) {
+                    return false;
+                  }
+                }
+                if (requestSearchTerm.trim()) {
+                  const term = requestSearchTerm.toLowerCase();
+                  const matchName = req.nomeCliente?.toLowerCase().includes(term);
+                  const matchProp = req.imovelTitulo?.toLowerCase().includes(term) || req.imovelCodigo?.toLowerCase().includes(term);
+                  const matchPhone = (req.whatsapp || req.telefone || '').replace(/\D/g, '').includes(term.replace(/\D/g, ''));
+                  const matchCode = (req.codigoSolicitacao || (req as any).codigo || '').toLowerCase().includes(term);
+                  if (!matchName && !matchProp && !matchPhone && !matchCode) return false;
+                }
+                return true;
+              });
+
+              if (filteredList.length === 0) {
+                return (
+                  <div className="p-12 text-center text-gray-400 space-y-2">
+                    <MessageSquare size={36} className="mx-auto text-gray-300 opacity-50" />
+                    <p className="font-bold text-sm">Nenhuma solicitação encontrada com os filtros selecionados.</p>
+                    <p className="text-xs">Altere os filtros acima ou aguarde novas solicitações enviadas pelos clientes pelo site.</p>
+                  </div>
+                );
+              }
+
+              return (
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-gray-100 text-[10px] font-black uppercase tracking-wider text-gray-400">
+                      <th className="py-4 px-4">Protocolo / Data</th>
+                      <th className="py-4 px-4">Imóvel</th>
+                      <th className="py-4 px-4">Cliente</th>
+                      <th className="py-4 px-4">Período Solicitado</th>
+                      <th className="py-4 px-4">Veículo / Vaga</th>
+                      <th className="py-4 px-4">Valor Estimado</th>
+                      <th className="py-4 px-4">Status</th>
+                      <th className="py-4 px-4 text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {filteredList.map(req => {
+                      const isPending = req.status === 'solicitacao_recebida' || req.status === 'pendente' || !req.status;
+                      const isAnalysis = req.status === 'em_analise';
+                      const isConfirmed = req.status === 'confirmada';
+                      const isRefused = req.status === 'recusada';
+                      const isCancelled = req.status === 'cancelada';
+
+                      let statusBadge = (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300">
+                          <Clock size={11} className="text-amber-600" /> Pendente
+                        </span>
+                      );
+                      if (isAnalysis) {
+                        statusBadge = (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-300">
+                            <Search size={11} className="text-blue-600" /> Em análise
+                          </span>
+                        );
+                      } else if (isConfirmed) {
+                        statusBadge = (
+                          <div className="flex flex-col gap-1 items-start">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-800 border border-emerald-300">
+                              <CheckCircle2 size={11} className="text-emerald-600" /> Aprovada
+                            </span>
+                            <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                              {req.whatsappAberto ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-green-50 text-green-700 border border-green-200" title="Link do WhatsApp foi aberto">
+                                  <MessageCircle size={10} className="text-green-600" /> WhatsApp aberto
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-medium bg-gray-50 text-gray-500 border border-gray-200" title="WhatsApp ainda não foi aberto">
+                                  <MessageCircle size={10} className="text-gray-400" /> WhatsApp pendente
+                                </span>
+                              )}
+                              {req.mensagemEnviada ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleMessageSent(req)}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-teal-50 text-teal-800 border border-teal-300 hover:bg-teal-100 transition-colors"
+                                  title="Mensagem confirmada como enviada (clique para alternar)"
+                                >
+                                  <Check size={10} className="text-teal-600" /> Mensagem enviada
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleMessageSent(req)}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-medium bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 transition-colors"
+                                  title="Clique para confirmar envio da mensagem ao cliente"
+                                >
+                                  <Clock size={10} className="text-amber-600" /> Envio pendente
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      } else if (isRefused) {
+                        statusBadge = (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-red-50 text-red-800 border border-red-300">
+                            <X size={11} className="text-red-600" /> Recusada
+                          </span>
+                        );
+                      } else if (isCancelled) {
+                        statusBadge = (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-gray-100 text-gray-700 border border-gray-300">
+                            Cancelada
+                          </span>
+                        );
+                      }
+
+                      return (
+                        <tr key={req.id} className="hover:bg-gray-50/80 transition-colors">
+                          <td className="py-4 px-4">
+                            <span className="font-mono font-bold text-primary-black text-xs block">
+                              {req.codigoSolicitacao || (req as any).codigo || req.id?.slice(0, 8)}
+                            </span>
+                            <span className="text-gray-400 text-[10px] block">
+                              {req.criadoEm?.seconds ? new Date(req.criadoEm.seconds * 1000).toLocaleString('pt-BR') : 'Hoje'}
+                            </span>
+                          </td>
+
+                          <td className="py-4 px-4">
+                            <span className="font-bold text-primary-black block truncate max-w-[170px]" title={req.imovelTitulo}>
+                              {req.imovelTitulo || 'Imóvel de Temporada'}
+                            </span>
+                            <span className="text-gray-400 text-[10px] font-semibold">
+                              Cód: {req.imovelCodigo || '---'}
+                            </span>
+                          </td>
+
+                          <td className="py-4 px-4">
+                            <p className="font-bold text-primary-black">{req.nomeCliente || 'Solicitante'}</p>
+                            <p className="text-gray-600 text-[11px] font-medium">{req.whatsapp || req.telefone || 'Sem telefone'}</p>
+                            {req.email && <p className="text-gray-400 text-[10px] truncate max-w-[140px]">{req.email}</p>}
+                          </td>
+
+                          <td className="py-4 px-4">
+                            <span className="font-bold text-gray-800 block">
+                              {formatarDataBR(req.dataEntrada)} a {formatarDataBR(req.dataSaida)}
+                            </span>
+                            <span className="text-[10px] text-gray-500 font-medium">
+                              {req.quantidadeDiarias ?? 0} diárias • {req.quantidadeHospedes ?? 1} hóspede(s)
+                              {req.acompanhantes && req.acompanhantes.length > 0 && ` (+${req.acompanhantes.length} acomp.)`}
+                            </span>
+                          </td>
+
+                          <td className="py-4 px-4">
+                            {req.possuiVeiculo && req.veiculos && req.veiculos.length > 0 ? (
+                              <div className="space-y-0.5">
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-900 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                  {req.veiculos.length} vaga(s)
+                                </span>
+                                <span className="text-[10px] text-gray-500 block truncate max-w-[130px]">
+                                  {req.veiculos.map(v => v.placa || v.modelo).join(', ')}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 text-[10px]">Sem garagem</span>
+                            )}
+                          </td>
+
+                          <td className="py-4 px-4">
+                            <span className="font-black text-emerald-700 block text-sm">
+                              {formatCurrency(req.valorTotalEstimado || 0)}
+                            </span>
+                            <span className="text-[10px] text-gray-400">
+                              Diária: {formatCurrency(req.valorDiaria || 0)}
+                            </span>
+                          </td>
+
+                          <td className="py-4 px-4">
+                            {statusBadge}
+                          </td>
+
+                          <td className="py-4 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              {/* VER DETALHES */}
+                              <button
+                                onClick={() => {
+                                  setSelectedRequest(req);
+                                  setIsRequestDetailsModalOpen(true);
+                                }}
+                                className="p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors"
+                                title="Ver detalhes completos"
+                              >
+                                <Eye size={14} />
+                              </button>
+
+                              {/* INICIAR ATENDIMENTO NO WHATSAPP */}
+                              <button
+                                onClick={() => handleInitiateWhatsAppContact(req)}
+                                className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 transition-colors"
+                                title="Iniciar atendimento no WhatsApp"
+                              >
+                                <MessageSquare size={14} />
+                              </button>
+
+                              {/* PENDENTE ACTIONS */}
+                              {isPending && (
+                                <>
+                                  <button
+                                    onClick={() => handleSetUnderAnalysis(req)}
+                                    className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 transition-colors"
+                                    title="Colocar em Análise"
+                                  >
+                                    <Clock size={14} />
+                                  </button>
+                                  <button
+                                    onClick={() => handleApproveRequest(req)}
+                                    className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase tracking-wider shadow-xs transition-all flex items-center gap-1"
+                                    title="Aprovar Reserva e Abrir WhatsApp"
+                                  >
+                                    <Check size={13} /> APROVAR RESERVA
+                                  </button>
+                                  <button
+                                    onClick={() => handleOpenRefusalModal(req)}
+                                    className="p-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 transition-colors"
+                                    title="Recusar Solicitação"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                </>
+                              )}
+
+                              {/* EM ANÁLISE ACTIONS */}
+                              {isAnalysis && (
+                                <>
+                                  <button
+                                    onClick={() => handleApproveRequest(req)}
+                                    className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase tracking-wider shadow-xs transition-all flex items-center gap-1"
+                                    title="Aprovar Reserva e Abrir WhatsApp"
+                                  >
+                                    <Check size={13} /> APROVAR RESERVA
+                                  </button>
+                                  <button
+                                    onClick={() => handleOpenRefusalModal(req)}
+                                    className="p-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 transition-colors"
+                                    title="Recusar Solicitação"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                </>
+                              )}
+
+                              {/* CONFIRMADA ACTIONS */}
+                              {isConfirmed && (
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => handleOpenWhatsAppForRequest(req)}
+                                    className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase tracking-wider shadow-xs transition-all flex items-center gap-1"
+                                    title="Abrir WhatsApp do cliente com mensagem de aprovação"
+                                  >
+                                    <MessageCircle size={13} />
+                                    <span>Abrir WhatsApp</span>
+                                  </button>
+                                  <button
+                                    onClick={() => setConfirmationSuccessData({
+                                      solicitacao: req,
+                                      reservaId: req.reservaGeradaId || '',
+                                      codigoReserva: req.codigoReservaGerada || req.codigoReserva || '',
+                                      clientPhone: req.whatsapp || req.telefone || '',
+                                      mensagemEnviada: req.mensagemEnviada
+                                    })}
+                                    className="p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors"
+                                    title="Ver detalhes da aprovação e prévia da mensagem"
+                                  >
+                                    <Eye size={13} />
+                                  </button>
+                                </div>
+                              )}
+
+                              {/* RECUSADA ACTIONS */}
+                              {isRefused && (
+                                <button
+                                  onClick={() => {
+                                    const whats = buildAdminRefusalWhatsAppUrl(req, req.motivoRecusa);
+                                    if (whats.isValid) window.open(whats.url, '_blank');
+                                    else triggerToast('Telefone do cliente incompleto.', 'error');
+                                  }}
+                                  className="p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors"
+                                  title="Explicar motivo no WhatsApp"
+                                >
+                                  <MessageSquare size={13} />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* TAB: PREÇOS POR PERÍODO */}
+      {activeTab === 'precos' && (
+        <div className="bg-white rounded-[2.5rem] shadow-xl border border-gray-100 p-8 space-y-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-gray-100">
+            <div>
+              <div className="flex items-center gap-2 text-gold font-bold text-xs uppercase tracking-wider mb-1">
+                <Tag size={16} />
+                <span>Tarifação Dinâmica & Sazonal</span>
+              </div>
+              <h3 className="text-xl font-display font-bold text-primary-black">Preços Especiais por Período</h3>
+              <p className="text-xs text-gray-400">
+                Defina valores de diária diferenciados para feriados, fins de semana, alta temporada ou datas comemorativas.
+              </p>
+            </div>
+            
+            <div className="flex flex-wrap items-center gap-3">
+              <select
+                value={selectedPropertyId}
+                onChange={(e) => setSelectedPropertyId(e.target.value)}
+                className="text-xs font-bold px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-gray-700"
+              >
+                <option value="">Todos os Imóveis</option>
+                {properties.map(p => (
+                  <option key={p.id} value={p.id}>{p.code} - {p.title}</option>
+                ))}
+              </select>
+
+              <button
+                onClick={() => {
+                  setSeasonalPriceForm({
+                    imovelId: selectedPropertyId || (properties[0]?.id || ''),
+                    dataInicio: '',
+                    dataFim: '',
+                    valorDiaria: '',
+                    descricao: ''
+                  });
+                  setEditingSeasonalPrice(null);
+                  setIsSeasonalPriceModalOpen(true);
+                }}
+                className="btn-gold !py-3 !px-5 flex items-center gap-2 text-xs font-black uppercase tracking-wider shadow-md"
+              >
+                <Plus size={16} />
+                <span>Novo Preço Especial</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Pricing Rules Content */}
+          {seasonalPrices.length === 0 ? (
+            <div className="text-center py-16 space-y-4">
+              <div className="w-16 h-16 rounded-3xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto shadow-inner">
+                <Tag size={28} />
+              </div>
+              <div className="space-y-1">
+                <h4 className="font-bold text-base text-primary-black">Nenhum preço especial cadastrado</h4>
+                <p className="text-xs text-gray-400 max-w-md mx-auto">
+                  Todos os imóveis estão utilizando suas diárias padrão cadastradas. Clique no botão abaixo para adicionar tarifas especiais para feriados ou temporadas.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setSeasonalPriceForm({
+                    imovelId: selectedPropertyId || (properties[0]?.id || ''),
+                    dataInicio: '',
+                    dataFim: '',
+                    valorDiaria: '',
+                    descricao: ''
+                  });
+                  setEditingSeasonalPrice(null);
+                  setIsSeasonalPriceModalOpen(true);
+                }}
+                className="btn-gold !py-2.5 !px-6 text-xs font-bold inline-flex items-center gap-2 shadow-md"
+              >
+                <Plus size={16} />
+                <span>Cadastrar Primeiro Preço Especial</span>
+              </button>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-gray-50/80 border-b border-gray-100 text-[10px] font-black uppercase tracking-wider text-gray-400">
+                  <tr>
+                    <th className="py-4 px-4">Imóvel</th>
+                    <th className="py-4 px-4">Período de Aplicação</th>
+                    <th className="py-4 px-4">Valor da Diária</th>
+                    <th className="py-4 px-4">Motivo / Descrição</th>
+                    <th className="py-4 px-4 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {seasonalPrices
+                    .filter(sp => !selectedPropertyId || sp.imovelId === selectedPropertyId)
+                    .map(sp => {
+                      const prop = properties.find(p => p.id === sp.imovelId);
+                      return (
+                        <tr key={sp.id} className="hover:bg-gray-50/50 transition-colors">
+                          <td className="py-4 px-4">
+                            <span className="font-bold text-primary-black block">
+                              {sp.imovelTitulo || prop?.title || 'Imóvel'}
+                            </span>
+                            <span className="text-[10px] text-gray-400">
+                              Código: <strong>{sp.imovelCodigo || prop?.code || '-'}</strong>
+                            </span>
+                          </td>
+
+                          <td className="py-4 px-4">
+                            <div className="flex items-center gap-1.5 font-bold text-gray-800">
+                              <Calendar size={14} className="text-gold shrink-0" />
+                              <span>{formatarDataBR(sp.dataInicio)}</span>
+                              <span className="text-gray-400 font-normal">até</span>
+                              <span>{formatarDataBR(sp.dataFim)}</span>
+                            </div>
+                          </td>
+
+                          <td className="py-4 px-4">
+                            <span className="font-display font-black text-emerald-700 text-sm block">
+                              {formatCurrency(sp.valorDiaria)}
+                            </span>
+                            {prop && (
+                              <span className="text-[10px] text-gray-400">
+                                Padrão: {formatCurrency(prop.valorDiaria || prop.priceDiaria || 0)}
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="py-4 px-4">
+                            <span className="inline-block px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 font-bold border border-amber-200 text-[11px]">
+                              {sp.descricao}
+                            </span>
+                          </td>
+
+                          <td className="py-4 px-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => {
+                                  setEditingSeasonalPrice(sp);
+                                  setSeasonalPriceForm({
+                                    imovelId: sp.imovelId,
+                                    dataInicio: sp.dataInicio,
+                                    dataFim: sp.dataFim,
+                                    valorDiaria: sp.valorDiaria,
+                                    descricao: sp.descricao
+                                  });
+                                  setIsSeasonalPriceModalOpen(true);
+                                }}
+                                className="p-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+                                title="Editar Preço por Período"
+                              >
+                                <Edit size={14} />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteSeasonalPrice(sp.id)}
+                                className="p-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                                title="Excluir Regra"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -822,7 +1882,7 @@ export default function TemporaryRentals() {
               <p className="text-xs text-gray-400">Histórico de sinais, pagamentos parciais e quitações</p>
             </div>
             <span className="text-sm font-black text-emerald-700 bg-emerald-50 px-4 py-2 rounded-xl border border-emerald-200">
-              Total Confirmado: R$ {formatCurrency(kpis.totalRecebido)}
+              Total Confirmado: {formatCurrency(kpis.totalRecebido)}
             </span>
           </div>
 
@@ -855,7 +1915,7 @@ export default function TemporaryRentals() {
                     </td>
                     <td className="py-4 px-4 font-semibold">{pay.formaPagamento}</td>
                     <td className="py-4 px-4 font-black text-emerald-700 text-sm">
-                      R$ {formatCurrency(pay.valor)}
+                      {formatCurrency(pay.valor)}
                     </td>
                     <td className="py-4 px-4 text-right">
                       {pay.reciboEmitido ? (
@@ -915,7 +1975,7 @@ export default function TemporaryRentals() {
 
                 <div className="pt-2 border-t border-gray-200 flex items-center justify-between">
                   <span className="font-black text-emerald-700 text-base">
-                    R$ {formatCurrency(rec.valorRecebido)}
+                    {formatCurrency(rec.valorRecebido)}
                   </span>
                   <button
                     onClick={() => {
@@ -945,63 +2005,128 @@ export default function TemporaryRentals() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {properties.map(p => (
-              <div key={p.id} className="rounded-2xl border border-gray-200 overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow">
-                <div className="h-44 bg-gray-100 relative">
-                  {p.mainImage || (p.images && p.images[0]) ? (
-                    <img src={p.mainImage || p.images[0]} alt={p.title} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-300">
-                      <Building2 size={40} />
-                    </div>
-                  )}
-                  <span className="absolute top-3 left-3 bg-primary-black/80 backdrop-blur-md text-gold px-3 py-1 rounded-xl text-xs font-black font-mono">
-                    {p.code}
-                  </span>
-                </div>
+            {properties.map(p => {
+              const avail = getPropertyAvailability(p.id || '');
+              const isPublished = p.publicado === true || p.publicadoNoSite === true;
+              const displayAddress = p.address ? `${p.address}${p.number ? ', ' + p.number : ''}${p.neighborhood ? ' - ' + p.neighborhood : ''}` : (p.neighborhood && p.city ? `${p.neighborhood}, ${p.city}` : 'Balneário Camboriú/SC');
 
-                <div className="p-6 space-y-4">
+              return (
+                <div key={p.id} className="rounded-3xl border border-gray-200 overflow-hidden bg-white shadow-sm hover:shadow-xl transition-all flex flex-col justify-between">
                   <div>
-                    <h4 className="font-bold text-primary-black text-sm line-clamp-1">{p.title}</h4>
-                    <p className="text-xs text-gray-400">{p.neighborhood || p.city || 'Balneário Camboriú'}</p>
+                    {/* Foto Principal + Código + Status */}
+                    <div className="h-48 bg-gray-100 relative overflow-hidden">
+                      {p.mainImage || (p.images && p.images[0]) ? (
+                        <img 
+                          src={p.mainImage || (typeof p.images[0] === 'string' ? p.images[0] : (p.images[0] as any)?.url)} 
+                          alt={p.title} 
+                          className="w-full h-full object-cover transform hover:scale-105 transition-transform duration-500" 
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-300">
+                          <Building2 size={44} />
+                        </div>
+                      )}
+                      
+                      {/* Código do Imóvel */}
+                      <span className="absolute top-3 left-3 bg-primary-black/90 backdrop-blur-md text-gold px-3 py-1 rounded-xl text-xs font-black font-mono shadow-md">
+                        {p.code || 'S/CÓD'}
+                      </span>
+
+                      {/* Situação de Publicação */}
+                      <span className={`absolute top-3 right-3 px-2.5 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider backdrop-blur-md shadow-md border ${
+                        isPublished 
+                          ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40' 
+                          : 'bg-black/70 text-gray-300 border-white/20'
+                      }`}>
+                        {isPublished ? 'Publicado no Site' : 'Rascunho / Privado'}
+                      </span>
+
+                      {/* Situação de Disponibilidade */}
+                      <div className="absolute bottom-3 left-3">
+                        <span className={`px-2.5 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider shadow-md border ${avail.color}`}>
+                          {avail.label}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Dados do Imóvel */}
+                    <div className="p-6 space-y-3">
+                      <div>
+                        <h4 className="font-display font-bold text-primary-black text-base line-clamp-1" title={p.title}>
+                          {p.title}
+                        </h4>
+                        <p className="text-xs text-gray-500 line-clamp-1 mt-0.5">
+                          {displayAddress}
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 p-3.5 rounded-2xl bg-gray-50 border border-gray-100 text-xs">
+                        <div>
+                          <span className="text-[10px] text-gray-400 font-black uppercase block tracking-wider">Valor Diária</span>
+                          <span className="font-black text-emerald-700 text-sm">
+                            {formatCurrency(p.valorDiaria || p.priceDiaria || 0)}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-gray-400 font-black uppercase block tracking-wider">Capacidade</span>
+                          <span className="font-bold text-primary-black text-sm">
+                            {p.maxHospedes || 2} hóspedes
+                          </span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-gray-100">
-                    <div>
-                      <span className="text-[10px] text-gray-400 font-bold uppercase block">Diária</span>
-                      <span className="font-black text-emerald-700 text-sm">
-                        R$ {formatCurrency(p.valorDiaria || p.priceDiaria || 0)}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-gray-400 font-bold uppercase block">Capacidade</span>
-                      <span className="font-bold text-primary-black text-sm">
-                        {p.maxHospedes || 4} hóspedes
-                      </span>
-                    </div>
-                  </div>
+                  {/* 4 Botões Obrigatórios: Abrir calendário, Nova reserva, Bloquear datas, Ver imóvel no site */}
+                  <div className="p-6 pt-0 space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedPropertyId(p.id || '');
+                          setActiveTab('calendario');
+                        }}
+                        className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-primary-black text-gold hover:bg-black font-bold text-xs transition-colors shadow-sm"
+                      >
+                        <CalendarDays size={14} />
+                        <span>Abrir Calendário</span>
+                      </button>
 
-                  <div className="pt-2 flex items-center gap-2">
-                    <button
-                      onClick={() => {
-                        setSelectedPropertyId(p.id || '');
-                        setActiveTab('calendario');
-                      }}
-                      className="flex-1 py-2 rounded-xl bg-gray-100 hover:bg-gold/20 text-gray-800 font-bold text-xs transition-colors text-center"
-                    >
-                      Ver Calendário
-                    </button>
-                    <button
-                      onClick={() => handleOpenNewReservation({ checkIn: '', checkOut: '', propertyId: p.id || '' })}
-                      className="px-3 py-2 rounded-xl bg-primary-black text-gold font-bold text-xs"
-                      title="Nova Reserva"
-                    >
-                      <Plus size={16} />
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenNewReservation({ checkIn: '', checkOut: '', propertyId: p.id || '' })}
+                        className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl btn-gold font-black text-xs transition-colors shadow-sm"
+                      >
+                        <Plus size={14} />
+                        <span>Nova Reserva</span>
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenNewBlock({ checkIn: '', checkOut: '', propertyId: p.id || '' })}
+                        className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 font-bold text-[11px] transition-colors"
+                      >
+                        <Lock size={13} />
+                        <span>Bloquear Datas</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          window.open(`/imovel/${encodeURIComponent(p.code || p.id)}`, '_blank');
+                        }}
+                        className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-gray-200 text-gray-700 hover:text-gold hover:border-gold font-bold text-[11px] transition-colors"
+                      >
+                        <ExternalLink size={13} />
+                        <span>Ver no Site</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -1199,20 +2324,137 @@ export default function TemporaryRentals() {
                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-1">Qtd Hóspedes</label>
                     <input
                       type="number"
-                      min="1"
-                      className="input-field"
-                      value={reservationForm.quantidadeHospedes || 2}
-                      onChange={e => setReservationForm(prev => ({ ...prev, quantidadeHospedes: parseInt(e.target.value) || 1 }))}
+                      className="input-field bg-gray-50 font-bold"
+                      value={1 + companions.length}
+                      readOnly
                     />
                   </div>
+                </div>
+
+                {/* Sub-section: Companions management */}
+                <div className="pt-4 border-t border-gray-100 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-gold block">
+                        Acompanhantes do Hóspede
+                      </span>
+                      <p className="text-xs text-gray-500">
+                        Total: <strong>{1 + companions.length}</strong> de <strong>{properties.find(p => p.id === reservationForm.imovelId)?.capacidadeHospedes || properties.find(p => p.id === reservationForm.imovelId)?.maxHospedes || 10}</strong> pessoas permitidas no imóvel (1 titular + {companions.length} adicionais)
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAddCompanion}
+                      className="px-3.5 py-2 rounded-xl bg-gold/15 text-gold-dark hover:bg-gold/25 font-bold text-xs flex items-center gap-1.5 transition-colors self-start sm:self-auto border border-gold/30"
+                    >
+                      <Plus size={14} />
+                      <span>+ Adicionar acompanhante</span>
+                    </button>
+                  </div>
+
+                  {companions.length === 0 ? (
+                    <div className="p-4 rounded-xl bg-gray-50 border border-gray-200 text-xs text-gray-500 text-center">
+                      Nenhum acompanhante cadastrado. A reserva será gerada apenas para o titular.
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {companions.map((comp, idx) => (
+                        <div key={comp.id || idx} className="p-3 rounded-xl bg-gray-50 border border-gray-200 grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+                          <div className="sm:col-span-4">
+                            <label className="text-[9px] font-bold text-gray-400 block mb-0.5">Nome do Acompanhante</label>
+                            <input
+                              type="text"
+                              placeholder="Nome completo"
+                              value={comp.nome}
+                              onChange={(e) => handleUpdateCompanion(comp.id, 'nome', e.target.value)}
+                              className="input-field !py-1.5 text-xs bg-white"
+                              required
+                            />
+                          </div>
+                          <div className="sm:col-span-3">
+                            <label className="text-[9px] font-bold text-gray-400 block mb-0.5">Documento (CPF / RG)</label>
+                            <input
+                              type="text"
+                              placeholder="Documento"
+                              value={comp.documento || ''}
+                              onChange={(e) => handleUpdateCompanion(comp.id, 'documento', e.target.value)}
+                              className="input-field !py-1.5 text-xs bg-white"
+                            />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="text-[9px] font-bold text-gray-400 block mb-0.5">Parentesco</label>
+                            <input
+                              type="text"
+                              placeholder="Ex: Esposa, Filho"
+                              value={comp.parentesco || ''}
+                              onChange={(e) => handleUpdateCompanion(comp.id, 'parentesco', e.target.value)}
+                              className="input-field !py-1.5 text-xs bg-white"
+                            />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="text-[9px] font-bold text-gray-400 block mb-0.5">Faixa Etária</label>
+                            <select
+                              value={comp.faixaEtaria || 'adulto'}
+                              onChange={(e) => handleUpdateCompanion(comp.id, 'faixaEtaria', e.target.value as any)}
+                              className="input-field !py-1.5 text-xs bg-white"
+                            >
+                              <option value="adulto">Adulto</option>
+                              <option value="crianca">Criança</option>
+                            </select>
+                          </div>
+                          <div className="sm:col-span-1 text-right pt-4 sm:pt-0">
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveCompanion(comp.id)}
+                              className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Remover acompanhante"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* 4. Valores & Financeiro */}
               <div className="space-y-4 p-6 rounded-2xl bg-gold/5 border border-gold/20">
-                <h4 className="text-xs font-black uppercase tracking-widest text-gold flex items-center gap-2">
-                  <DollarSign size={16} /> 4. Condições Financeiras
-                </h4>
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-black uppercase tracking-widest text-gold flex items-center gap-2">
+                    <DollarSign size={16} /> 4. Condições Financeiras
+                  </h4>
+                  {reservationForm.detalhamentoDiarias && reservationForm.detalhamentoDiarias.length > 0 && (
+                    <span className="text-[10px] font-bold text-gray-500">
+                      Calculado dia a dia com base nas regras sazonais
+                    </span>
+                  )}
+                </div>
+
+                {/* Day-by-Day Rates Breakdown */}
+                {reservationForm.detalhamentoDiarias && reservationForm.detalhamentoDiarias.length > 0 && (
+                  <div className="p-4 bg-white rounded-2xl border border-gold/20 space-y-2">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-gold flex items-center gap-1.5">
+                      <Tag size={12} /> Discriminação de cada Diária ({reservationForm.detalhamentoDiarias.length} noites)
+                    </span>
+                    <div className="max-h-36 overflow-y-auto space-y-1 text-xs">
+                      {reservationForm.detalhamentoDiarias.map((d, dIdx) => (
+                        <div key={dIdx} className="flex items-center justify-between py-1 px-2.5 rounded-lg bg-gray-50 border border-gray-100 text-[11px]">
+                          <span className="font-semibold text-gray-700">Noite {dIdx + 1} ({d.dataFmt || d.data})</span>
+                          <div className="flex items-center gap-2">
+                            {d.isSpecialPrice && (
+                              <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[9px] font-bold">
+                                {d.descricao || 'Tarifa Especial'}
+                              </span>
+                            )}
+                            <span className="font-bold text-emerald-700">{formatCurrency(d.valor)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div className="space-y-1">
@@ -1404,13 +2646,78 @@ export default function TemporaryRentals() {
                   </div>
                   <div>
                     <span className="text-gray-400 text-[10px] uppercase font-bold block">Valor Total</span>
-                    <span className="font-black text-primary-black text-sm">R$ {formatCurrency(selectedReservation.valorTotal)}</span>
+                    <span className="font-black text-primary-black text-sm">{formatCurrency(selectedReservation.valorTotal)}</span>
                   </div>
                 </div>
 
-                <div className="pt-2 border-t border-gold/20 flex items-center justify-between">
-                  <span className="text-emerald-700 font-bold">Total Pago: R$ {formatCurrency(selectedReservation.valorPago)}</span>
-                  <span className="text-amber-800 font-bold">Saldo Restante: R$ {formatCurrency(selectedReservation.saldoRestante)}</span>
+                <div className="pt-2 border-t border-gold/20 flex items-center justify-between text-xs">
+                  <span className="text-emerald-700 font-bold">Total Pago: {formatCurrency(selectedReservation.valorPago)}</span>
+                  <span className="text-amber-800 font-bold">Saldo Restante: {formatCurrency(selectedReservation.saldoRestante)}</span>
+                </div>
+
+                {/* Day-by-day detail breakdown if present */}
+                {selectedReservation.detalhamentoDiarias && selectedReservation.detalhamentoDiarias.length > 0 && (
+                  <div className="pt-3 border-t border-gold/20 space-y-1.5">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-gold block">
+                      Discriminação das Diárias ({selectedReservation.detalhamentoDiarias.length} noites)
+                    </span>
+                    <div className="max-h-32 overflow-y-auto space-y-1 text-xs">
+                      {selectedReservation.detalhamentoDiarias.map((d, dIdx) => (
+                        <div key={dIdx} className="flex items-center justify-between py-1 px-2.5 rounded-lg bg-white/60 border border-gold/15 text-[11px]">
+                          <span className="text-gray-700">Noite {dIdx + 1} ({d.dataFmt || d.data})</span>
+                          <div className="flex items-center gap-2">
+                            {d.isSpecialPrice && (
+                              <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 text-[9px] font-bold">
+                                {d.descricao || 'Especial'}
+                              </span>
+                            )}
+                            <span className="font-bold text-emerald-800">{formatCurrency(d.valor)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Companions & Vehicles Cards if available */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 space-y-2">
+                  <h5 className="font-black text-gray-400 uppercase tracking-widest text-[10px]">
+                    Acompanhantes Cadastrados ({selectedReservation.acompanhantes?.length || 0})
+                  </h5>
+                  {selectedReservation.acompanhantes && selectedReservation.acompanhantes.length > 0 ? (
+                    <div className="space-y-1.5 text-xs text-gray-700">
+                      {selectedReservation.acompanhantes.map((acomp, aIdx) => (
+                        <div key={aIdx} className="p-2 bg-white rounded-lg border border-gray-200 flex justify-between items-center">
+                          <span className="font-semibold text-gray-800">{acomp.nomeCompleto || acomp.nome}</span>
+                          <span className="text-[11px] text-gray-500">
+                            {acomp.parentesco || 'Acompanhante'} {acomp.faixaEtaria ? `(${acomp.faixaEtaria})` : ''} {acomp.documento ? `• Doc: ${acomp.documento}` : ''}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-400 italic">Nenhum acompanhante adicional registrado.</p>
+                  )}
+                </div>
+
+                <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 space-y-2">
+                  <h5 className="font-black text-gray-400 uppercase tracking-widest text-[10px]">
+                    Veículos na Garagem
+                  </h5>
+                  {selectedReservation.possuiVeiculo && selectedReservation.veiculos && selectedReservation.veiculos.length > 0 ? (
+                    <div className="space-y-1.5 text-xs text-gray-700">
+                      {selectedReservation.veiculos.map((veh, vIdx) => (
+                        <div key={vIdx} className="p-2 bg-white rounded-lg border border-gray-200 flex justify-between">
+                          <span className="font-semibold">{veh.tipo}: {veh.marca} {veh.modelo}</span>
+                          <span className="font-mono font-bold text-primary-black uppercase bg-gray-100 px-2 py-0.5 rounded">{veh.placa}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-400 italic">Sem veículo registrado para garagem.</p>
+                  )}
                 </div>
               </div>
 
@@ -1471,17 +2778,39 @@ export default function TemporaryRentals() {
                     <span>Registrar Pagamento</span>
                   </button>
 
-                  {selectedReservation.valorPago > 0 && (
+                  {selectedReservation.valorPago > 0 ? (
                     <button
                       onClick={() => {
                         handleEmitReceiptForPayment(selectedReservation, selectedReservation.valorPago);
                       }}
                       className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl btn-gold font-black text-xs shadow-md"
+                      title="Emitir Recibo Oficial com comprovante de pagamento"
                     >
                       <Printer size={16} />
-                      <span>Gerar Recibo</span>
+                      <span>Gerar Recibo Oficial</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        handleEmitDemonstrativo(selectedReservation);
+                      }}
+                      className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50 font-bold text-xs shadow-sm"
+                      title="Gerar demonstrativo de valores antes do pagamento"
+                    >
+                      <FileText size={16} />
+                      <span>Demonstrativo de Valores</span>
                     </button>
                   )}
+
+                  <button
+                    onClick={() => {
+                      navigate(`/admin/contratos/novo?tipo=locacao_temporaria&reservaId=${selectedReservation.id}`);
+                    }}
+                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gold hover:bg-gold/90 text-primary-black font-extrabold text-xs shadow-md transition-colors"
+                  >
+                    <FileText size={16} />
+                    <span>Emitir Contrato</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -1508,8 +2837,8 @@ export default function TemporaryRentals() {
             <form onSubmit={handleRegisterPaymentSubmit} className="p-8 space-y-4 text-xs">
               <div className="p-4 rounded-xl bg-gray-50 border border-gray-200">
                 <p className="text-gray-500">Hóspede: <strong>{selectedReservation.hospedeNome}</strong></p>
-                <p className="text-gray-500">Valor Total da Reserva: <strong>R$ {formatCurrency(selectedReservation.valorTotal)}</strong></p>
-                <p className="text-amber-700 font-bold mt-1">Saldo Pendente: R$ {formatCurrency(selectedReservation.saldoRestante)}</p>
+                <p className="text-gray-500">Valor Total da Reserva: <strong>{formatCurrency(selectedReservation.valorTotal)}</strong></p>
+                <p className="text-amber-700 font-bold mt-1">Saldo Pendente: {formatCurrency(selectedReservation.saldoRestante)}</p>
               </div>
 
               <div className="space-y-1">
@@ -1692,6 +3021,707 @@ export default function TemporaryRentals() {
                   className="px-6 py-2.5 rounded-xl bg-primary-black text-gold hover:bg-black font-black uppercase tracking-wider shadow-lg"
                 >
                   Confirmar Bloqueio
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: DETALHES DA SOLICITAÇÃO DE RESERVA */}
+      {/* ======================================================== */}
+      {isRequestDetailsModalOpen && selectedRequest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/70 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-xl w-full overflow-hidden border border-gray-100 my-8">
+            <div className="px-8 py-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gold/10 text-gold flex items-center justify-center font-bold">
+                  <MessageSquare size={18} />
+                </div>
+                <div>
+                  <h3 className="text-base font-display font-bold text-primary-black">
+                    Solicitação #{selectedRequest.codigoSolicitacao || (selectedRequest as any).codigo || selectedRequest.id.slice(0, 8)}
+                  </h3>
+                  <p className="text-xs text-gray-400">
+                    Recebida em {selectedRequest.criadoEm?.seconds ? new Date(selectedRequest.criadoEm.seconds * 1000).toLocaleString('pt-BR') : 'Hoje'}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsRequestDetailsModalOpen(false)} 
+                className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:text-black hover:bg-gray-100 transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="p-8 space-y-6 text-xs">
+              {/* Status Banner */}
+              <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 flex items-center justify-between">
+                <span className="font-bold text-gray-500 uppercase tracking-wider text-[10px]">Situação:</span>
+                <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                  selectedRequest.status === 'confirmada' ? 'bg-emerald-100 text-emerald-800' :
+                  selectedRequest.status === 'recusada' ? 'bg-red-100 text-red-800' :
+                  selectedRequest.status === 'cancelada' ? 'bg-gray-100 text-gray-700' :
+                  'bg-amber-100 text-amber-800'
+                }`}>
+                  {selectedRequest.status === 'confirmada' ? 'Confirmada / Reserva Criada' :
+                   selectedRequest.status === 'recusada' ? 'Recusada' :
+                   selectedRequest.status === 'cancelada' ? 'Cancelada' :
+                   'Pendente de Avaliação'}
+                </span>
+              </div>
+
+              {/* Property Info */}
+              <div className="space-y-1">
+                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block">Imóvel Solicitado</span>
+                <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <p className="font-bold text-sm text-primary-black">{selectedRequest.imovelTitulo}</p>
+                    <p className="text-xs text-gray-500">Código: {selectedRequest.imovelCodigo} • {selectedRequest.imovelEndereco || 'Balneário Camboriú/SC'}</p>
+                  </div>
+                  {((selectedRequest as any).imovelLink || selectedRequest.imovelId) && (
+                    <a
+                      href={(selectedRequest as any).imovelLink || `/imovel/${selectedRequest.imovelId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-gray-200 text-gold-750 hover:bg-amber-50 font-bold text-xs transition-colors shrink-0 shadow-xs"
+                    >
+                      <ExternalLink size={13} /> Ver página pública
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              {/* Client Info */}
+              <div className="space-y-1">
+                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block">Dados do Solicitante</span>
+                <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 space-y-2">
+                  <p className="font-bold text-sm text-primary-black">{selectedRequest.nomeCliente}</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-gray-600">
+                    <p>WhatsApp: <strong>{selectedRequest.whatsapp || selectedRequest.telefone}</strong></p>
+                    <p>CPF: <strong>{selectedRequest.hospedeCpf || 'Não informado'}</strong></p>
+                    <p>E-mail: <strong>{selectedRequest.email || 'Não informado'}</strong></p>
+                  </div>
+                  {selectedRequest.observacoes && (
+                    <div className="pt-2 border-t border-gray-200">
+                      <span className="text-gray-400 text-[10px] block">Observações do Cliente:</span>
+                      <p className="text-gray-700 italic mt-0.5">{selectedRequest.observacoes}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Booking Finances & Dates */}
+              <div className="space-y-1">
+                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block">Reserva Solicitada</span>
+                <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200/80 space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Período:</span>
+                    <span className="font-bold text-gray-800">
+                      {formatarDataBR(selectedRequest.dataEntrada)} a {formatarDataBR(selectedRequest.dataSaida)} ({selectedRequest.quantidadeDiarias} diárias)
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Hóspedes:</span>
+                    <span className="font-bold text-gray-800">{selectedRequest.quantidadeHospedes} pessoa(s)</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Valor da Diária:</span>
+                    <span className="font-bold text-gray-800">{formatCurrency(selectedRequest.valorDiaria)}</span>
+                  </div>
+                  {(selectedRequest.taxaLimpeza || 0) > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Taxa de Limpeza:</span>
+                      <span className="font-bold text-gray-800">{formatCurrency(selectedRequest.taxaLimpeza || 0)}</span>
+                    </div>
+                  )}
+                  <div className="border-t border-amber-200 pt-2 flex justify-between items-baseline font-bold">
+                    <span className="text-primary-black uppercase tracking-wide text-xs">Total Estimado:</span>
+                    <span className="text-base font-display font-black text-emerald-800">
+                      {formatCurrency(selectedRequest.valorTotalEstimado)}
+                    </span>
+                  </div>
+
+                  {/* Day-by-day detail breakdown if present */}
+                  {selectedRequest.detalhamentoDiarias && selectedRequest.detalhamentoDiarias.length > 0 && (
+                    <div className="pt-2 border-t border-amber-200/80 space-y-1">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-amber-900 block">
+                        Detalhamento das Diárias
+                      </span>
+                      <div className="max-h-28 overflow-y-auto space-y-1 text-[11px]">
+                        {selectedRequest.detalhamentoDiarias.map((d, dIdx) => (
+                          <div key={dIdx} className="flex items-center justify-between py-0.5 px-2 rounded bg-white/70">
+                            <span className="text-gray-700">Noite {dIdx + 1} ({d.dataFmt || d.data})</span>
+                            <div className="flex items-center gap-1.5">
+                              {d.isSpecialPrice && (
+                                <span className="px-1 py-0.2 rounded bg-amber-200 text-amber-900 text-[9px] font-bold">
+                                  {d.descricao || 'Tarifa Especial'}
+                                </span>
+                              )}
+                              <span className="font-bold text-emerald-800">{formatCurrency(d.valor)}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Companions and Vehicles info for request */}
+              {((selectedRequest.acompanhantes && selectedRequest.acompanhantes.length > 0) || selectedRequest.possuiVeiculo) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {selectedRequest.acompanhantes && selectedRequest.acompanhantes.length > 0 && (
+                    <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 space-y-1.5 text-xs">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block">
+                        Acompanhantes ({selectedRequest.acompanhantes.length})
+                      </span>
+                      {selectedRequest.acompanhantes.map((a, i) => (
+                        <div key={i} className="p-2 bg-white rounded-lg border border-gray-200 flex justify-between items-center">
+                          <span className="font-semibold text-gray-800">{a.nomeCompleto || (a as any).nome}</span>
+                          <span className="text-[11px] text-gray-500">
+                            {a.parentesco || 'Acompanhante'} {a.faixaEtaria ? `(${a.faixaEtaria})` : ''} {a.documento ? `• Doc: ${a.documento}` : ''}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {selectedRequest.possuiVeiculo && selectedRequest.veiculos && selectedRequest.veiculos.length > 0 && (
+                    <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 space-y-1.5 text-xs">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block">
+                        Veículo para Garagem
+                      </span>
+                      {selectedRequest.veiculos.map((v, i) => (
+                        <div key={i} className="p-2 bg-white rounded-lg border border-gray-200 flex justify-between items-center">
+                          <span className="font-semibold text-gray-800">{v.tipo}: {v.marca} {v.modelo}</span>
+                          <span className="font-mono font-bold uppercase bg-gray-100 px-2 py-0.5 rounded text-[11px]">{v.placa}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Audit trail and info */}
+              {(selectedRequest.emAnaliseEm || selectedRequest.aprovadoEm || selectedRequest.recusadoEm || selectedRequest.motivoRecusa) && (
+                <div className="p-3.5 bg-gray-50 rounded-2xl border border-gray-200 space-y-1 text-[11px]">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block">Histórico de Atendimento</span>
+                  {selectedRequest.emAnaliseEm && (
+                    <p className="text-blue-800">
+                      <strong>Colocado em análise:</strong> {new Date(selectedRequest.emAnaliseEm.seconds * 1000).toLocaleString('pt-BR')} {selectedRequest.emAnalisePor ? `por ${selectedRequest.emAnalisePor}` : ''}
+                    </p>
+                  )}
+                  {selectedRequest.aprovadoEm && (
+                    <p className="text-emerald-800">
+                      <strong>Confirmado em:</strong> {new Date(selectedRequest.aprovadoEm.seconds * 1000).toLocaleString('pt-BR')} {selectedRequest.aprovadoPor ? `por ${selectedRequest.aprovadoPor}` : ''}
+                      {selectedRequest.reservaId && ` • Reserva ID: ${selectedRequest.reservaId}`}
+                    </p>
+                  )}
+                  {selectedRequest.recusadoEm && (
+                    <div className="text-red-800">
+                      <p><strong>Recusado em:</strong> {new Date(selectedRequest.recusadoEm.seconds * 1000).toLocaleString('pt-BR')} {selectedRequest.recusadoPor ? `por ${selectedRequest.recusadoPor}` : ''}</p>
+                      {selectedRequest.motivoRecusa && <p className="italic">Motivo: {selectedRequest.motivoRecusa}</p>}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Actions Footer */}
+              <div className="pt-4 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleInitiateWhatsAppContact(selectedRequest)}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-colors shadow-sm text-xs"
+                >
+                  <MessageSquare size={16} />
+                  <span>Falar no WhatsApp</span>
+                </button>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {(selectedRequest.status === 'pendente' || selectedRequest.status === 'solicitacao_recebida' || !selectedRequest.status) && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleSetUnderAnalysis(selectedRequest)}
+                        className="px-3.5 py-2 rounded-xl border border-blue-200 text-blue-700 hover:bg-blue-50 font-bold transition-colors text-xs"
+                      >
+                        Colocar em Análise
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenRefusalModal(selectedRequest)}
+                        className="px-3.5 py-2 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 font-bold transition-colors text-xs"
+                      >
+                        Recusar Solicitação
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleApproveRequest(selectedRequest)}
+                        className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase tracking-wider shadow-lg text-xs flex items-center gap-1.5"
+                      >
+                        <Check size={14} />
+                        <span>APROVAR RESERVA</span>
+                      </button>
+                    </>
+                  )}
+
+                  {selectedRequest.status === 'em_analise' && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenRefusalModal(selectedRequest)}
+                        className="px-3.5 py-2 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 font-bold transition-colors text-xs"
+                      >
+                        Recusar Solicitação
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleApproveRequest(selectedRequest)}
+                        className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase tracking-wider shadow-lg text-xs flex items-center gap-1.5"
+                      >
+                        <Check size={14} />
+                        <span>APROVAR RESERVA</span>
+                      </button>
+                    </>
+                  )}
+
+                  {selectedRequest.status === 'confirmada' && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenWhatsAppForRequest(selectedRequest)}
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs"
+                      >
+                        <MessageCircle size={15} />
+                        <span>ABRIR WHATSAPP DO CLIENTE</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleMessageSent(selectedRequest)}
+                        className={`px-3 py-2 rounded-xl text-xs font-bold border transition-colors ${
+                          selectedRequest.mensagemEnviada
+                            ? 'bg-teal-50 border-teal-300 text-teal-800'
+                            : 'bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100'
+                        }`}
+                      >
+                        {selectedRequest.mensagemEnviada ? 'Mensagem Enviada ✓' : 'Marcar como Enviada'}
+                      </button>
+                    </div>
+                  )}
+
+                  {selectedRequest.status === 'recusada' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const whats = buildAdminRefusalWhatsAppUrl(selectedRequest, selectedRequest.motivoRecusa);
+                        if (whats.isValid) window.open(whats.url, '_blank');
+                      }}
+                      className="px-3.5 py-2 rounded-xl border border-red-200 text-red-700 hover:bg-red-50 font-bold text-xs"
+                    >
+                      Conversar no WhatsApp
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: CONFIRMAÇÃO DE RESERVA COM SUCESSO & WHATSAPP */}
+      {/* ======================================================== */}
+      {confirmationSuccessData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in overflow-y-auto">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-2xl w-full overflow-hidden border border-gray-100 my-8">
+            <div className="p-6 sm:p-8 bg-gradient-to-br from-emerald-600 to-teal-800 text-white relative">
+              <button 
+                onClick={() => setConfirmationSuccessData(null)}
+                className="absolute top-6 right-6 w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-colors"
+              >
+                <X size={18} />
+              </button>
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-white shadow-inner">
+                  <CheckCircle2 size={32} />
+                </div>
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-emerald-100 bg-white/10 px-2.5 py-0.5 rounded-full inline-block mb-1">
+                    Operação Concluída
+                  </span>
+                  <h3 className="text-xl font-display font-black">Reserva Aprovada com Sucesso!</h3>
+                  <p className="text-xs text-emerald-100 mt-0.5">
+                    A reserva foi aprovada no sistema e as datas foram imediatamente bloqueadas no calendário.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 sm:p-8 space-y-6 text-xs">
+              {/* Resumo da Reserva */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-3 bg-gray-50 rounded-xl border border-gray-200">
+                  <span className="text-[10px] uppercase font-black tracking-wider text-gray-400 block">Código Reserva</span>
+                  <span className="font-mono font-black text-primary-black text-sm">{confirmationSuccessData.codigoReserva}</span>
+                </div>
+                <div className="p-3 bg-gray-50 rounded-xl border border-gray-200">
+                  <span className="text-[10px] uppercase font-black tracking-wider text-gray-400 block">Protocolo</span>
+                  <span className="font-mono font-bold text-gray-700 text-xs">#{confirmationSuccessData.solicitacao.codigoSolicitacao || confirmationSuccessData.solicitacao.id?.slice(0, 8)}</span>
+                </div>
+                <div className="p-3 bg-gray-50 rounded-xl border border-gray-200">
+                  <span className="text-[10px] uppercase font-black tracking-wider text-gray-400 block">Hóspede</span>
+                  <span className="font-bold text-gray-800 truncate block">{confirmationSuccessData.solicitacao.nomeCliente}</span>
+                </div>
+                <div className="p-3 bg-gray-50 rounded-xl border border-gray-200">
+                  <span className="text-[10px] uppercase font-black tracking-wider text-gray-400 block">Total</span>
+                  <span className="font-black text-emerald-700 text-sm">{formatCurrency(confirmationSuccessData.solicitacao.valorTotalEstimado)}</span>
+                </div>
+              </div>
+
+              {/* Informações de Período e Imóvel */}
+              <div className="p-4 rounded-2xl bg-amber-50/50 border border-amber-200/60 space-y-1">
+                <p className="font-bold text-gray-900 text-sm">{confirmationSuccessData.solicitacao.imovelTitulo}</p>
+                <p className="text-gray-600 text-[11px]">
+                  <strong>Período:</strong> {formatarDataBR(confirmationSuccessData.solicitacao.dataEntrada)} a {formatarDataBR(confirmationSuccessData.solicitacao.dataSaida)} ({confirmationSuccessData.solicitacao.quantidadeDiarias} diárias) • {confirmationSuccessData.solicitacao.quantidadeHospedes} hóspede(s)
+                </p>
+              </div>
+
+              {/* Seção WhatsApp */}
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-black uppercase tracking-wider text-gray-700 flex items-center gap-1.5">
+                    <MessageSquare size={14} className="text-emerald-600" />
+                    Enviar Notificação ao Hóspede via WhatsApp
+                  </label>
+                  <span className="text-[10px] text-gray-400">Verifique o número abaixo</span>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider pl-1">
+                    Número de WhatsApp do Hóspede:
+                  </label>
+                  <input
+                    type="text"
+                    value={confirmationSuccessData.clientPhone}
+                    onChange={(e) => setConfirmationSuccessData(prev => prev ? ({ ...prev, clientPhone: e.target.value }) : null)}
+                    className="input-field text-xs font-bold"
+                    placeholder="Ex: (47) 99999-9999"
+                  />
+                  <p className="text-[10px] text-gray-400 pl-1">
+                    A mensagem será aberta diretamente para o número do hóspede com todos os detalhes da aprovação.
+                  </p>
+                </div>
+
+                {/* Status e Confirmação de Envio */}
+                <div className="flex flex-wrap items-center justify-between p-3.5 bg-gray-50 rounded-xl border border-gray-200 gap-2">
+                  <div className="flex items-center gap-2">
+                    <MessageCircle size={18} className={confirmationSuccessData.solicitacao.whatsappAberto ? "text-emerald-600" : "text-gray-400"} />
+                    <div>
+                      <p className="text-xs font-bold text-gray-800">Status do Envio no WhatsApp</p>
+                      <p className="text-[10px] text-gray-500">
+                        {confirmationSuccessData.solicitacao.whatsappAberto ? 'Link do WhatsApp já foi aberto' : 'Link ainda não foi aberto'}
+                        {confirmationSuccessData.mensagemEnviada || confirmationSuccessData.solicitacao.mensagemEnviada ? ' • Mensagem confirmada como enviada' : ' • Confirmação de envio pendente'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleMessageSent(confirmationSuccessData.solicitacao)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-1.5 ${
+                      confirmationSuccessData.mensagemEnviada || confirmationSuccessData.solicitacao.mensagemEnviada
+                        ? 'bg-teal-600 text-white border-teal-700 shadow-xs'
+                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
+                    }`}
+                  >
+                    {confirmationSuccessData.mensagemEnviada || confirmationSuccessData.solicitacao.mensagemEnviada ? (
+                      <>
+                        <Check size={13} />
+                        <span>Mensagem Enviada ✓</span>
+                      </>
+                    ) : (
+                      <>
+                        <Clock size={13} />
+                        <span>Marcar como Enviada</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Prévia da Mensagem */}
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider pl-1">
+                    Prévia da Mensagem Formatada:
+                  </span>
+                  <div className="p-4 rounded-xl bg-gray-900 text-gray-200 font-mono text-[11px] whitespace-pre-wrap max-h-48 overflow-y-auto leading-relaxed border border-gray-800">
+                    {buildAdminConfirmationWhatsAppMessage(confirmationSuccessData.solicitacao, confirmationSuccessData.codigoReserva)}
+                  </div>
+                </div>
+              </div>
+
+              {/* Botões do Rodapé */}
+              <div className="pt-4 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => setConfirmationSuccessData(null)}
+                  className="px-5 py-2.5 rounded-xl border border-gray-200 text-gray-600 font-bold hover:bg-gray-50 transition-colors"
+                >
+                  Concluir e Fechar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const whats = buildAdminConfirmationWhatsAppUrl(
+                      confirmationSuccessData.solicitacao,
+                      confirmationSuccessData.codigoReserva,
+                      confirmationSuccessData.clientPhone
+                    );
+                    if (!whats.isValid) {
+                      triggerToast('Número de WhatsApp do cliente inválido ou ausente.', 'error');
+                      return;
+                    }
+                    window.open(whats.url, '_blank');
+                    if (confirmationSuccessData.solicitacao.id) {
+                      await markRequestWhatsAppOpened(confirmationSuccessData.solicitacao.id);
+                      setConfirmationSuccessData(prev => prev ? {
+                        ...prev,
+                        solicitacao: { ...prev.solicitacao, whatsappAberto: true }
+                      } : null);
+                      await loadData();
+                    }
+                  }}
+                  className="flex items-center gap-2 px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-600/20 transition-all hover:scale-[1.02]"
+                >
+                  <Send size={15} />
+                  <span>ABRIR WHATSAPP DO CLIENTE</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: RECUSAR SOLICITAÇÃO DE RESERVA */}
+      {/* ======================================================== */}
+      {refusalModalData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in overflow-y-auto">
+          <div className="bg-white rounded-[2rem] shadow-2xl max-w-lg w-full overflow-hidden border border-gray-100 my-8">
+            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between bg-red-50/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-red-100 text-red-700 flex items-center justify-center font-bold">
+                  <AlertCircle size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-display font-bold text-gray-900">Recusar Solicitação de Reserva</h3>
+                  <p className="text-xs text-gray-500">#{refusalModalData.solicitacao.codigoSolicitacao || refusalModalData.solicitacao.id?.slice(0, 8)} • {refusalModalData.solicitacao.nomeCliente}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setRefusalModalData(null)}
+                className="w-8 h-8 rounded-lg bg-white border border-gray-200 text-gray-500 hover:text-black flex items-center justify-center"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 text-xs">
+              <div className="p-3 bg-gray-50 rounded-xl border border-gray-200">
+                <p className="text-gray-700"><strong>Imóvel:</strong> {refusalModalData.solicitacao.imovelTitulo}</p>
+                <p className="text-gray-600 text-[11px] mt-0.5">
+                  <strong>Período:</strong> {formatarDataBR(refusalModalData.solicitacao.dataEntrada)} a {formatarDataBR(refusalModalData.solicitacao.dataSaida)} ({refusalModalData.solicitacao.quantidadeDiarias} diárias)
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-wider text-gray-500 block">
+                  Motivo da Recusa (ficará registrado no histórico)
+                </label>
+                <textarea
+                  rows={3}
+                  value={refusalModalData.motivo}
+                  onChange={(e) => setRefusalModalData(prev => prev ? ({ ...prev, motivo: e.target.value }) : null)}
+                  className="input-field text-xs resize-none"
+                  placeholder="Ex: Datas indisponíveis / Imóvel em manutenção / Não atende regras do condomínio"
+                />
+              </div>
+
+              {/* Sugestões rápidas de motivos */}
+              <div className="space-y-1">
+                <span className="text-[10px] text-gray-400 font-semibold block">Sugestões rápidas:</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    'Datas já reservadas por outro canal',
+                    'Imóvel em manutenção no período',
+                    'Capacidade de hóspedes excedida',
+                    'Mínimo de diárias não atendido'
+                  ].map((motivoPreset, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setRefusalModalData(prev => prev ? ({ ...prev, motivo: motivoPreset }) : null)}
+                      className="px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-[10px] font-medium transition-colors"
+                    >
+                      {motivoPreset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-gray-100 flex flex-wrap items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setRefusalModalData(null)}
+                  className="px-4 py-2 rounded-xl border border-gray-200 text-gray-600 font-bold hover:bg-gray-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleConfirmRefusal(false)}
+                  className="px-4 py-2 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 font-bold"
+                >
+                  Apenas Recusar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleConfirmRefusal(true)}
+                  className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold flex items-center gap-1.5 shadow-md"
+                >
+                  <MessageSquare size={14} />
+                  <span>Recusar e Abrir WhatsApp</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: PREÇO ESPECIAL POR PERÍODO */}
+      {/* ======================================================== */}
+      {isSeasonalPriceModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-[2rem] shadow-2xl max-w-lg w-full overflow-hidden border border-gray-100 space-y-6 p-8">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
+                  <Tag size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-display font-bold text-primary-black">
+                    {editingSeasonalPrice ? 'Editar Preço por Período' : 'Novo Preço por Período'}
+                  </h3>
+                  <p className="text-xs text-gray-400">Tarifa diferenciada para feriados ou temporadas</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => {
+                  setIsSeasonalPriceModalOpen(false);
+                  setEditingSeasonalPrice(null);
+                }}
+                className="w-8 h-8 rounded-lg bg-gray-100 text-gray-500 hover:text-black flex items-center justify-center"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveSeasonalPrice} className="space-y-4 text-xs">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 pl-1">
+                  Imóvel de Temporada
+                </label>
+                <select
+                  value={seasonalPriceForm.imovelId}
+                  onChange={(e) => setSeasonalPriceForm(prev => ({ ...prev, imovelId: e.target.value }))}
+                  className="input-field font-bold text-xs"
+                  required
+                >
+                  <option value="">Selecione o imóvel...</option>
+                  {properties.map(p => (
+                    <option key={p.id} value={p.id}>{p.code} • {p.title}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 pl-1">
+                    Data de Início
+                  </label>
+                  <input
+                    type="date"
+                    value={seasonalPriceForm.dataInicio}
+                    onChange={(e) => setSeasonalPriceForm(prev => ({ ...prev, dataInicio: e.target.value }))}
+                    className="input-field text-xs font-medium"
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 pl-1">
+                    Data de Término
+                  </label>
+                  <input
+                    type="date"
+                    value={seasonalPriceForm.dataFim}
+                    onChange={(e) => setSeasonalPriceForm(prev => ({ ...prev, dataFim: e.target.value }))}
+                    className="input-field text-xs font-medium"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 pl-1">
+                  Valor da Diária neste Período (R$)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: 850,00"
+                  value={maskCurrency(seasonalPriceForm.valorDiaria)}
+                  onChange={(e) => setSeasonalPriceForm(prev => ({ ...prev, valorDiaria: parseCurrencyToNumber(e.target.value) }))}
+                  className="input-field text-xs font-bold bg-amber-50/50 text-amber-900 border-amber-200"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 pl-1">
+                  Motivo / Descrição do Período
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: Réveillon, Feriado de Finados, Alta Temporada..."
+                  value={seasonalPriceForm.descricao}
+                  onChange={(e) => setSeasonalPriceForm(prev => ({ ...prev, descricao: e.target.value }))}
+                  className="input-field text-xs"
+                  required
+                />
+              </div>
+
+              <div className="p-3 rounded-xl bg-gray-50 border border-gray-200 text-gray-500 text-[11px] leading-relaxed">
+                <span className="font-bold text-gray-700">Regra de Aplicação:</span> Todas as diárias compreendidas entre a data de início e término serão calculadas com este valor diferenciado. Se houver mais de uma regra para a mesma data, o período mais específico terá prioridade.
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSeasonalPriceModalOpen(false);
+                    setEditingSeasonalPrice(null);
+                  }}
+                  className="px-4 py-2.5 rounded-xl border border-gray-200 font-bold text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 rounded-xl btn-gold font-black uppercase tracking-wider shadow-md"
+                >
+                  Salvar Preço Especial
                 </button>
               </div>
             </form>

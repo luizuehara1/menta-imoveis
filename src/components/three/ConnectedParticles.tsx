@@ -48,7 +48,7 @@ export const ConnectedParticles: React.FC<ConnectedParticlesProps> = ({
   useFrame((state) => {
     if (!pointsRef.current || !linesRef.current) return;
     
-    const time = state.clock?.getElapsedTime() || (performance.now() / 1000);
+    const time = state.clock?.elapsedTime ?? (performance.now() / 1000);
     
     // Smooth movement based on mouse
     const targetX = (mouse?.x || 0) * 0.4;

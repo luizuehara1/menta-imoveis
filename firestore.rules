@@ -10,6 +10,9 @@ service cloud.firestore {
       return isSignedIn() && (
         request.auth.uid == 'T6XcUvoTBDh353qYJJEGTmghSsF3' ||
         (request.auth.token.email != null && (
+          request.auth.token.email.lower() == 'luiz.uehara1@gmail.com' ||
+          request.auth.token.email.lower() == 'edson.menta@hotmail.com' ||
+          request.auth.token.email.lower() == 'anamariamenta@hotmail.com' ||
           request.auth.token.email == 'luiz.uehara1@gmail.com' ||
           request.auth.token.email == 'edson.menta@hotmail.com' ||
           request.auth.token.email == 'anamariamenta@hotmail.com' ||
@@ -31,11 +34,19 @@ service cloud.firestore {
 
     function isAdminAtivo() {
       return isMasterAdmin() || (
-        isSignedIn() && request.auth.token.email != null && (
-          (exists(/databases/$(database)/documents/admins/$(request.auth.token.email)) &&
-           get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.ativo == true) ||
-          (exists(/databases/$(database)/documents/administradores/$(request.auth.token.email)) &&
-           get(/databases/$(database)/documents/administradores/$(request.auth.token.email)).data.ativo == true)
+        isSignedIn() && (
+          (request.auth.token.email != null && (
+            (exists(/databases/$(database)/documents/admins/$(request.auth.token.email.lower())) &&
+             get(/databases/$(database)/documents/admins/$(request.auth.token.email.lower())).data.ativo != false) ||
+            (exists(/databases/$(database)/documents/admins/$(request.auth.token.email)) &&
+             get(/databases/$(database)/documents/admins/$(request.auth.token.email)).data.ativo != false) ||
+            (exists(/databases/$(database)/documents/administradores/$(request.auth.token.email.lower())) &&
+             get(/databases/$(database)/documents/administradores/$(request.auth.token.email.lower())).data.ativo != false) ||
+            (exists(/databases/$(database)/documents/administradores/$(request.auth.token.email)) &&
+             get(/databases/$(database)/documents/administradores/$(request.auth.token.email)).data.ativo != false)
+          )) ||
+          (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.ativo != false)
         )
       );
     }
@@ -89,7 +100,27 @@ service cloud.firestore {
     }
 
     match /bloqueiosTemporada/{docId} {
-      allow read, create, update, delete: if isAdminAtivo();
+      allow read: if true;
+      allow create, update, delete: if isAdminAtivo();
+    }
+
+    match /ocupacaoTemporada/{docId} {
+      allow read: if true;
+      allow create, update, delete: if isAdminAtivo();
+    }
+
+    match /precosTemporada/{docId} {
+      allow read: if true;
+      allow create, update, delete: if isAdminAtivo();
+    }
+
+    match /solicitacoesReservaTemporada/{docId} {
+      allow create: if request.resource.data.status in ['pendente', 'solicitacao_recebida'] &&
+                       request.resource.data.nomeCliente is string &&
+                       request.resource.data.imovelId is string &&
+                       request.resource.data.dataEntrada is string &&
+                       request.resource.data.dataSaida is string;
+      allow read, update, delete: if isAdminAtivo();
     }
 
     match /hospedesTemporada/{docId} {
@@ -106,6 +137,23 @@ service cloud.firestore {
 
     match /contratos/{docId} {
       allow read, create, update, delete: if isAdminAtivo();
+    }
+
+    match /propostas/{docId} {
+      allow read, create, update, delete: if isAdminAtivo();
+    }
+
+    match /contrapropostas/{docId} {
+      allow read, create, update, delete: if isAdminAtivo();
+    }
+
+    match /aceitesProposta/{docId} {
+      allow read, create, update, delete: if isAdminAtivo();
+    }
+
+    match /clausulasContratos/{docId} {
+      allow read: if true;
+      allow write: if isAdminAtivo();
     }
 
     match /templatesContrato/{docId} {
@@ -134,6 +182,26 @@ service cloud.firestore {
       allow write: if isAdminAtivo();
     }
 
+    match /siteSettings/{docId} {
+      allow read: if true;
+      allow write: if isAdminAtivo();
+    }
+
+    match /bairros/{docId} {
+      allow read: if true;
+      allow write: if isAdminAtivo();
+    }
+
+    match /corretores/{docId} {
+      allow read: if true;
+      allow write: if isAdminAtivo();
+    }
+
+    match /opcoes_imoveis/{docId} {
+      allow read: if true;
+      allow write: if isAdminAtivo();
+    }
+
     match /configuracoes/{docId} {
       allow read: if isSignedIn();
       allow write: if isAdminAtivo();
@@ -145,7 +213,7 @@ service cloud.firestore {
       allow update, delete: if isAdminAtivo();
     }
 
-    // Fallback permissivo para qualquer outra coleção
+    // Fallback restritivo para administradores ativos
     match /{document=**} {
       allow read, write: if isAdminAtivo();
     }
