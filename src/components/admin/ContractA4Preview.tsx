@@ -1011,26 +1011,45 @@ export const PdfSignatures: React.FC<PdfSignaturesProps> = ({
 
   const compName = contract.nomeCliente || dados.comprador?.nome || dados.proponente?.nome || 'COMPRADOR';
   const vendName = contract.nomeVendedor || dados.vendedor?.nome || dados.proprietario?.nome || (parteAceitante?.nome) || 'VENDEDOR';
+  const compSpouse = getSpouseDataPDF(dados.proponente || dados.comprador, 'comprador', dados);
+  const vendSpouse = getSpouseDataPDF(dados.vendedor || dados.proprietario, 'vendedor', dados);
+  const isCompraVenda = tipoContrato === 'compra_venda';
 
   return (
     <div className="pdf-signatures mt-4 pb-2 avoid-break signature-block text-[11.5px]">
       <div className="flex flex-col justify-end pt-12">
         <div className="pdf-signature-line text-black font-bold max-w-full truncate">
-          {safeText(compName)}
-        </div>
-        <div className="pdf-signature-role">Comprador / Proponente</div>
-      </div>
-      <div className="flex flex-col justify-end pt-12">
-        <div className="pdf-signature-line text-black font-bold max-w-full truncate">
           {safeText(vendName)}
         </div>
-        <div className="pdf-signature-role">Vendedor / Proprietário</div>
+        <div className="pdf-signature-role">{isCompraVenda ? 'Promitente Vendedor(a)' : 'Vendedor / Proprietário'}</div>
       </div>
+      {vendSpouse.nome && (
+        <div className="flex flex-col justify-end pt-12">
+          <div className="pdf-signature-line text-black font-bold max-w-full truncate">
+            {safeText(vendSpouse.nome)}
+          </div>
+          <div className="pdf-signature-role">Cônjuge do Vendedor</div>
+        </div>
+      )}
+      <div className="flex flex-col justify-end pt-12">
+        <div className="pdf-signature-line text-black font-bold max-w-full truncate">
+          {safeText(compName)}
+        </div>
+        <div className="pdf-signature-role">{isCompraVenda ? 'Promitente Comprador(a)' : 'Comprador / Proponente'}</div>
+      </div>
+      {compSpouse.nome && (
+        <div className="flex flex-col justify-end pt-12">
+          <div className="pdf-signature-line text-black font-bold max-w-full truncate">
+            {safeText(compSpouse.nome)}
+          </div>
+          <div className="pdf-signature-role">Cônjuge do Comprador</div>
+        </div>
+      )}
       <div className="flex flex-col justify-end col-span-2 max-w-[200px] mx-auto w-full mt-4 pt-12">
         <div className="pdf-signature-line text-gray-800 font-bold max-w-full truncate">
           {safeText(empresa.nome)}
         </div>
-        <div className="pdf-signature-role">Intermediadora / Testemunha</div>
+        <div className="pdf-signature-role">Intermediadora Imobiliária</div>
       </div>
     </div>
   );
@@ -2253,6 +2272,210 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
             {safeText(mergedDados.local || 'Balneário Camboriú')}, {safeText(mergedDados.data || (mergedDados.dataProposta ? formatarDataBR(mergedDados.dataProposta) : "") || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }))}
           </div>
           <PdfSignatures dados={dados} tipoContrato={tipoContrato} contract={contract} empresa={empresa} parteAceitante={parte} />
+        </div>,
+        sigHeight,
+        true
+      );
+    } else if (tipoContrato === 'compra_venda') {
+      const p = dados.proponente || dados.comprador || {};
+      const vend = dados.vendedor || dados.proprietario || {};
+      const imov = dados.imovel || {};
+      const compradorSpouse = getSpouseDataPDF(p, 'comprador', dados);
+      const vendedorSpouse = getSpouseDataPDF(vend, 'vendedor', dados);
+
+      // 1. Title Block
+      addBlock(
+        <div className="pdf-document-title font-display font-black text-black">
+          INSTRUMENTO PARTICULAR DE COMPROMISSO DE COMPRA E VENDA DE IMÓVEL
+        </div>,
+        10
+      );
+
+      // 2. Preâmbulo
+      addBlock(
+        <p className="text-justify indent-6 text-[11px] text-gray-800 mt-2 mb-2 leading-relaxed">
+          Pelo presente Instrumento Particular de Compromisso de Compra e Venda de Imóvel, as partes contratantes, devidamente qualificadas, têm entre si, justo e acertado, em caráter irrevogável e irretratável, a transação imobiliária regida pelas cláusulas e condições seguintes:
+        </p>,
+        10
+      );
+
+      // 3. Vendedor Block
+      addBlock(
+        <PdfSection title="I - Promitente(s) Vendedor(es)">
+          <PdfFieldGrid>
+            <p><strong>Nome Completo:</strong> {safeText(contract.nomeVendedor || vend.nome || "Não informado")}</p>
+            <p><strong>CPF/CNPJ:</strong> {safeText(vend.cpf || vend.cpfCnpj || (contract as any).vendedor?.documento || "Não informado")}</p>
+            <p><strong>RG:</strong> {safeText(vend.rg || (contract as any).vendedor?.rg || "Não informado")}</p>
+            <p><strong>Estado Civil:</strong> {safeText(vend.estadoCivil || (contract as any).vendedor?.estadoCivil || "Solteiro(a)")}</p>
+            <p><strong>Profissão:</strong> {safeText(vend.profissao || (contract as any).vendedor?.profissao || "Não informado")}</p>
+            <p><strong>Telefone/WhatsApp:</strong> {safeText(vend.whatsapp || vend.telefone || (contract as any).vendedor?.telefone || "Não informado")}</p>
+            <p className="col-span-2"><strong>E-mail:</strong> {safeText(vend.email || (contract as any).vendedor?.email || "Não informado")}</p>
+            <p className="col-span-2"><strong>Endereço Residencial:</strong> {formatFullAddress(vend || (contract as any).vendedor)}</p>
+            
+            {vendedorSpouse.nome && (
+              <>
+                <p><strong>Cônjuge:</strong> {vendedorSpouse.nome}</p>
+                <p><strong>CPF Cônjuge:</strong> {vendedorSpouse.cpf || "Não informado"}</p>
+                {vendedorSpouse.rg && <p><strong>RG Cônjuge:</strong> {vendedorSpouse.rg}</p>}
+                {vendedorSpouse.profissao && <p><strong>Profissão Cônjuge:</strong> {vendedorSpouse.profissao}</p>}
+                {vendedorSpouse.telefone && <p><strong>Telefone Cônjuge:</strong> {vendedorSpouse.telefone}</p>}
+                {vendedorSpouse.email && <p><strong>E-mail Cônjuge:</strong> {vendedorSpouse.email}</p>}
+                {vendedorSpouse.estadoCivil && <p><strong>Estado Civil Cônjuge:</strong> {vendedorSpouse.estadoCivil}</p>}
+                {vendedorSpouse.endereco && <p className="col-span-2"><strong>Endereço Cônjuge:</strong> {vendedorSpouse.endereco}</p>}
+              </>
+            )}
+          </PdfFieldGrid>
+        </PdfSection>,
+        vendedorSpouse.nome ? 52 : 32
+      );
+
+      // 4. Comprador Block
+      addBlock(
+        <PdfSection title="II - Promitente(s) Comprador(es)">
+          <PdfFieldGrid>
+            <p><strong>Nome Completo:</strong> {safeText(contract.nomeCliente || p.nome || (contract as any).comprador?.nome || "Não informado")}</p>
+            <p><strong>CPF/CNPJ:</strong> {safeText(p.cpf || p.cpfCnpj || (contract as any).comprador?.documento || "Não informado")}</p>
+            <p><strong>RG:</strong> {safeText(p.rg || (contract as any).comprador?.rg || "Não informado")}</p>
+            <p><strong>Estado Civil:</strong> {safeText(p.estadoCivil || (contract as any).comprador?.estadoCivil || "Solteiro(a)")}</p>
+            <p><strong>Profissão:</strong> {safeText(p.profissao || (contract as any).comprador?.profissao || "Não informado")}</p>
+            <p><strong>Telefone/WhatsApp:</strong> {safeText(p.whatsapp || p.telefone || (contract as any).comprador?.telefone || "Não informado")}</p>
+            <p className="col-span-2"><strong>E-mail:</strong> {safeText(p.email || (contract as any).comprador?.email || "Não informado")}</p>
+            <p className="col-span-2"><strong>Endereço Residencial:</strong> {formatFullAddress(p || (contract as any).comprador)}</p>
+            
+            {compradorSpouse.nome && (
+              <>
+                <p><strong>Cônjuge:</strong> {compradorSpouse.nome}</p>
+                <p><strong>CPF Cônjuge:</strong> {compradorSpouse.cpf || "Não informado"}</p>
+                {compradorSpouse.rg && <p><strong>RG Cônjuge:</strong> {compradorSpouse.rg}</p>}
+                {compradorSpouse.profissao && <p><strong>Profissão Cônjuge:</strong> {compradorSpouse.profissao}</p>}
+                {compradorSpouse.telefone && <p><strong>Telefone Cônjuge:</strong> {compradorSpouse.telefone}</p>}
+                {compradorSpouse.email && <p><strong>E-mail Cônjuge:</strong> {compradorSpouse.email}</p>}
+                {compradorSpouse.estadoCivil && <p><strong>Estado Civil Cônjuge:</strong> {compradorSpouse.estadoCivil}</p>}
+                {compradorSpouse.endereco && <p className="col-span-2"><strong>Endereço Cônjuge:</strong> {compradorSpouse.endereco}</p>}
+              </>
+            )}
+          </PdfFieldGrid>
+        </PdfSection>,
+        compradorSpouse.nome ? 52 : 32
+      );
+
+      // 5. Imovel Block
+      addBlock(
+        <PdfSection title="III - Do Objeto e Identificação do Imóvel">
+          <PdfPropertyBlock imovel={imov} tipoContrato={tipoContrato} contract={contract} />
+        </PdfSection>,
+        28
+      );
+
+      // 6. Preco e Condicoes de Pagamento
+      const valorTotalCompraVenda = parseValorNum(contract.valor) || parseValorNum(contract.valorTotalNegociado) || parseValorNum(dados.valorTotalNegociado) || 0;
+      addBlock(
+        <PdfPaymentBlock dados={dados} tipoContrato={tipoContrato} totalValor={valorTotalCompraVenda} contract={contract} />,
+        28 + (showDetalhes ? estimateHeight(rawDetalhes) + 8 : 0) + (showOutras ? estimateHeight(rawOutras) + 8 : 0)
+      );
+
+      // Sinal do Negócio se houver
+      const vSinalCV = parseValorNum(dados.valorSinal || contract.valorSinal || dados.pagamento?.valorSinal || dados.termos?.valorSinal || 0);
+      if (vSinalCV > 0) {
+        const vSinalExtenso = valorMonetarioPorExtenso(vSinalCV).toLowerCase();
+        const formattedSinal = vSinalCV.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const clauseText = `O(A) PROMITENTE COMPRADOR(A) pagará o valor de R$ ${formattedSinal} (${vSinalExtenso}), a título de sinal e princípio de pagamento (arras confirmatórias), servindo este como garantia de cumprimento das obrigações pactuadas pelas partes.`;
+        addBlock(
+          <PdfSection title="CLÁUSULA – DO SINAL E PRINCÍPIO DE PAGAMENTO">
+            <p className="text-justify text-[11.5px] text-gray-800 leading-relaxed">
+              O(A) PROMITENTE COMPRADOR(A) pagará o valor de <strong>R$ {formattedSinal} ({vSinalExtenso})</strong>, a título de <strong>sinal e princípio de pagamento (arras confirmatórias)</strong>, servindo este como garantia de cumprimento das obrigações pactuadas pelas partes.
+            </p>
+          </PdfSection>,
+          14 + estimateHeight(clauseText)
+        );
+      }
+
+      // Cláusulas Selecionadas / Padrão
+      const listClausesCV = (dados.clausulasSelecionadas || []).filter(
+        (c: any) => c && c.texto && c.texto.trim() !== ""
+      );
+      if (listClausesCV.length > 0) {
+        listClausesCV.forEach((c: any, idx: number) => {
+          addBlock(
+            <PdfClausesBlock clausulas={[c]} sectionTitle={idx === 0 ? "Cláusulas Contratuais" : ""} startIndex={idx + 1} />,
+            estimateHeight(c.texto || '') + 8
+          );
+        });
+      }
+
+      // Cláusulas Adicionais Personalizadas
+      const customClausulasTextCV = getCleanVal(dados.clausulas || dados.clausulasPersonalizadas || '');
+      const isDuplicateCustomClauseCV = 
+        textosIguaisPDF(customClausulasTextCV, rawDetalhes) || 
+        textosIguaisPDF(customClausulasTextCV, rawOutras);
+      if (customClausulasTextCV && !isDuplicateCustomClauseCV) {
+        addBlock(
+          <PdfSection title="Cláusulas Adicionais">
+            <p className="text-justify text-[11.5px] text-gray-800 whitespace-pre-wrap leading-relaxed">{customClausulasTextCV}</p>
+          </PdfSection>,
+          14 + estimateHeight(customClausulasTextCV)
+        );
+      }
+
+      // Date & Signatures Block
+      const sigHeight = estimateSignatureHeight(dados, tipoContrato, contract, empresa);
+      addBlock(
+        <div className="pdf-date-signatures mt-4 avoid-break signature-block text-[11.5px]">
+          <div className="text-right font-bold text-[12.5px] text-black mb-3">
+            {safeText(dados.local || 'Balneário Camboriú')}, {safeText(dados.data || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }))}
+          </div>
+          <PdfSignatures dados={dados} tipoContrato={tipoContrato} contract={contract} empresa={empresa} />
+        </div>,
+        sigHeight,
+        true
+      );
+    } else {
+      // Fallback para qualquer outro tipo de documento
+      const p = dados.proponente || dados.comprador || {};
+      const vend = dados.vendedor || dados.proprietario || {};
+      const imov = dados.imovel || {};
+
+      addBlock(
+        <div className="pdf-document-title font-display font-black text-black">
+          {safeText(contract.tipoContratoLabel || (tipoContrato === 'proposta' ? 'PROPOSTA DE COMPRA' : tipoContrato === 'contraproposta' ? 'CONTRAPROPOSTA' : tipoContrato === 'aceite' ? 'ACEITE DE TERMOS' : tipoContrato === 'compra_venda' ? 'COMPROMISSO DE COMPRA E VENDA' : tipoContrato === 'locacao_temporaria' ? 'LOCAÇÃO POR TEMPORADA' : tipoContrato === 'administracao_temporaria' ? 'ADMINISTRAÇÃO TEMPORÁRIA' : 'DOCUMENTO CONTRATUAL'))}
+        </div>,
+        10
+      );
+
+      addBlock(
+        <PdfSection title="I - Identificação das Partes">
+          <PdfFieldGrid>
+            <p><strong>Parte 1 (Vendedor/Locador):</strong> {safeText(contract.nomeVendedor || vend.nome || "Não informado")}</p>
+            <p><strong>Documento:</strong> {safeText(vend.cpf || vend.cpfCnpj || "Não informado")}</p>
+            <p className="col-span-2"><strong>Endereço:</strong> {formatFullAddress(vend)}</p>
+            <p><strong>Parte 2 (Comprador/Locatário):</strong> {safeText(contract.nomeCliente || p.nome || "Não informado")}</p>
+            <p><strong>Documento:</strong> {safeText(p.cpf || p.cpfCnpj || "Não informado")}</p>
+            <p className="col-span-2"><strong>Endereço:</strong> {formatFullAddress(p)}</p>
+          </PdfFieldGrid>
+        </PdfSection>,
+        36
+      );
+
+      addBlock(
+        <PdfSection title="II - Objeto e Imóvel">
+          <PdfPropertyBlock imovel={imov} tipoContrato={tipoContrato} contract={contract} />
+        </PdfSection>,
+        28
+      );
+
+      const valorTotalGenerico = parseValorNum(contract.valor) || parseValorNum(contract.valorTotalNegociado) || 0;
+      addBlock(
+        <PdfPaymentBlock dados={dados} tipoContrato={tipoContrato} totalValor={valorTotalGenerico} contract={contract} />,
+        28
+      );
+
+      const sigHeight = estimateSignatureHeight(dados, tipoContrato, contract, empresa);
+      addBlock(
+        <div className="pdf-date-signatures mt-4 avoid-break signature-block text-[11.5px]">
+          <div className="text-right font-bold text-[12.5px] text-black mb-3">
+            {safeText(dados.local || 'Balneário Camboriú')}, {safeText(dados.data || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }))}
+          </div>
+          <PdfSignatures dados={dados} tipoContrato={tipoContrato} contract={contract} empresa={empresa} />
         </div>,
         sigHeight,
         true

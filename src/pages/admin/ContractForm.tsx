@@ -36,6 +36,7 @@ import {
   getDocs,
   query,
   where,
+  limit,
   orderBy,
   serverTimestamp 
 } from 'firebase/firestore';
@@ -763,6 +764,8 @@ export default function AdminContractForm() {
   const [propostas, setPropostas] = useState<any[]>([]);
   const [propertyPendingSelect, setPropertyPendingSelect] = useState<Property | null>(null);
   const [showPropertyConfirmModal, setShowPropertyConfirmModal] = useState(false);
+  const [registeredClients, setRegisteredClients] = useState<any[]>([]);
+  const [selectedClientBadge, setSelectedClientBadge] = useState<boolean>(false);
   const [temConjugeComprador, setTemConjugeComprador] = useState(false);
   const [temConjugeVendedor, setTemConjugeVendedor] = useState(false);
   const [temConjugeLocador, setTemConjugeLocador] = useState(false);
@@ -821,6 +824,32 @@ export default function AdminContractForm() {
         titulo: "Da Validade da Proposta",
         texto: "Esta proposta é válida por 5 (cinco) dias úteis a contar de sua assinatura, findo os quais decairá sem ônus adicionais se não aceita expressamente.",
         ordem: 2
+      }
+    ],
+    compra_venda: [
+      {
+        id: "fallback-cv-1",
+        titulo: "Do Objeto e Caráter Irretratável",
+        texto: "O presente compromisso tem por objeto a compra e venda do imóvel descrito neste instrumento, sendo firmado em caráter estritamente irrevogável e irretratável, obrigando as partes contratantes, seus herdeiros e sucessores a qualquer título.",
+        ordem: 1
+      },
+      {
+        id: "fallback-cv-2",
+        titulo: "Do Preço e Condições de Pagamento",
+        texto: "O preço certo e ajustado da transação imobiliária dar-se-á nos estritos termos pactuados, com quitação formal descrita nos métodos de pagamento aprovados.",
+        ordem: 2
+      },
+      {
+        id: "fallback-cv-3",
+        titulo: "Da Imissão na Posse",
+        texto: "A posse direta e precária do imóvel será transmitida ao promitente comprador na data convencionada ou na quitação integral das obrigações assumidas.",
+        ordem: 3
+      },
+      {
+        id: "fallback-cv-4",
+        titulo: "Da Outorga da Escritura Definitiva",
+        texto: "A escritura definitiva de compra e venda será outorgada em favor do comprador após a quitação integral do preço ora estabelecido, correndo por conta do comprador as custas de transferência.",
+        ordem: 4
       }
     ],
     temporada: [
@@ -1005,7 +1034,12 @@ export default function AdminContractForm() {
 
     // Auto-select mandatory clauses for the current contract type
     const mandatory = allSysClauses
-      .filter(c => c.ativo && c.obrigatorio && (c.tipo === 'todos' || c.tipo === contract.tipoContrato))
+      .filter(c => c.ativo && c.obrigatorio && (
+        c.tipo === 'todos' || 
+        c.tipo === contract.tipoContrato ||
+        (contract.tipoContrato === 'compra_venda' && (c.tipo === 'venda' || c.tipo === 'compra_venda')) ||
+        (contract.tipoContrato === 'arras_confirmatorios' && (c.tipo === 'arras' || c.tipo === 'arras_confirmatorios'))
+      ))
       .map(c => ({
         id: c.id,
         titulo: c.titulo,
@@ -1619,10 +1653,218 @@ export default function AdminContractForm() {
       }
     };
 
+    const fetchRegisteredClients = async () => {
+      try {
+        const clientsMap = new Map<string, any>();
+
+        const addClient = (c: any) => {
+          const nome = String(c.nome || c.nomeCliente || '').trim();
+          if (!nome || nome.length < 3) return;
+          const key = c.cpf ? String(c.cpf).replace(/\D/g, '') : nome.toLowerCase();
+          if (!clientsMap.has(key)) {
+            clientsMap.set(key, {
+              nome,
+              cpf: c.cpf || c.documento || '',
+              rg: c.rg || '',
+              estadoCivil: c.estadoCivil || 'Solteiro(a)',
+              profissao: c.profissao || '',
+              nacionalidade: c.nacionalidade || 'Brasileiro(a)',
+              telefone: c.telefone || '',
+              whatsapp: c.whatsapp || c.telefone || '',
+              email: c.email || '',
+              endereco: c.endereco || '',
+              numero: c.numero || '',
+              complemento: c.complemento || '',
+              bairro: c.bairro || '',
+              cidade: c.cidade || '',
+              estado: c.estado || 'SC',
+              cep: c.cep || '',
+              conjugeNome: c.conjugeNome || c.compradorConjugeNome || c.locatarioConjugeNome || '',
+              conjugeCpf: c.conjugeCpf || c.compradorConjugeCpf || c.locatarioConjugeCpf || '',
+              conjugeRg: c.conjugeRg || c.compradorConjugeRg || c.locatarioConjugeRg || '',
+              conjugeProfissao: c.conjugeProfissao || c.compradorConjugeProfissao || c.locatarioConjugeProfissao || '',
+              conjugeEstadoCivil: c.conjugeEstadoCivil || 'Casado(a)',
+              conjugeTelefone: c.conjugeTelefone || c.compradorConjugeTelefone || c.locatarioConjugeTelefone || '',
+              conjugeEmail: c.conjugeEmail || c.compradorConjugeEmail || c.locatarioConjugeEmail || '',
+              conjugeEndereco: c.conjugeEndereco || c.compradorConjugeEndereco || c.locatarioConjugeEndereco || '',
+            });
+          }
+        };
+
+        // 1. Contratos
+        try {
+          const contratosSnap = await getDocs(query(collection(db, 'contratos'), limit(50)));
+          contratosSnap.forEach(d => {
+            const data = d.data() as any;
+            const prop = data.dados?.proponente || data.comprador || {};
+            if (prop.nome || data.nomeCliente) {
+              addClient({
+                nome: prop.nome || data.nomeCliente,
+                cpf: prop.cpf || prop.cpfCnpj || data.compradorCpf,
+                rg: prop.rg,
+                estadoCivil: prop.estadoCivil,
+                profissao: prop.profissao,
+                telefone: prop.telefone,
+                whatsapp: prop.whatsapp,
+                email: prop.email || data.dados?.email,
+                endereco: prop.endereco,
+                numero: prop.numero,
+                complemento: prop.complemento,
+                bairro: prop.bairro,
+                cidade: prop.cidade,
+                estado: prop.estado,
+                cep: prop.cep,
+                conjugeNome: prop.compradorConjugeNome || prop.conjugeNome,
+                conjugeCpf: prop.compradorConjugeCpf || prop.conjugeCpf,
+                conjugeRg: prop.compradorConjugeRg || prop.conjugeRg,
+                conjugeProfissao: prop.compradorConjugeProfissao || prop.conjugeProfissao,
+                conjugeTelefone: prop.compradorConjugeTelefone || prop.conjugeTelefone,
+                conjugeEmail: prop.compradorConjugeEmail || prop.conjugeEmail,
+              });
+            }
+          });
+        } catch {}
+
+        // 2. Visitas
+        try {
+          const visitasSnap = await getDocs(query(collection(db, 'visitas'), limit(50)));
+          visitasSnap.forEach(d => {
+            const v = d.data() as any;
+            if (v.nomeCliente) {
+              addClient({
+                nome: v.nomeCliente,
+                cpf: v.clientCpf || '',
+                telefone: v.telefone || '',
+                whatsapp: v.telefone || '',
+                email: v.email || ''
+              });
+            }
+          });
+        } catch {}
+
+        // 3. Hóspedes
+        try {
+          const hospedesSnap = await getDocs(query(collection(db, 'hospedesTemporada'), limit(50)));
+          hospedesSnap.forEach(d => {
+            const h = d.data() as any;
+            if (h.nome) {
+              addClient({
+                nome: h.nome,
+                cpf: h.cpf || '',
+                rg: h.rg || '',
+                telefone: h.telefone || '',
+                whatsapp: h.whatsapp || h.telefone || '',
+                email: h.email || '',
+                endereco: h.endereco || '',
+                cidade: h.cidade || '',
+                estado: h.estado || 'SC'
+              });
+            }
+          });
+        } catch {}
+
+        setRegisteredClients(Array.from(clientsMap.values()));
+      } catch (err) {
+        console.warn("Erro ao buscar clientes cadastrados:", err);
+      }
+    };
+
     fetchProperties();
     fetchPropostas();
+    fetchRegisteredClients();
     fetchContract();
   }, [id]);
+
+  const handleClientSelect = (client: any, target: 'proponente' | 'locatario' = 'proponente') => {
+    if (!client || !client.nome) return;
+
+    const hasSpouse = !!(client.conjugeNome && String(client.conjugeNome).trim() !== '');
+
+    setContract(prev => {
+      const updatedDados = { ...(prev.dados || {}) };
+      
+      if (target === 'locatario') {
+        updatedDados.locatario = {
+          ...(updatedDados.locatario || {}),
+          nome: client.nome,
+          cpf: client.cpf || '',
+          rg: client.rg || '',
+          estadoCivil: client.estadoCivil || 'Solteiro(a)',
+          profissao: client.profissao || '',
+          nacionalidade: client.nacionalidade || 'Brasileiro(a)',
+          telefone: client.telefone || '',
+          whatsapp: client.whatsapp || client.telefone || '',
+          email: client.email || '',
+          endereco: client.endereco || '',
+          numero: client.numero || '',
+          complemento: client.complemento || '',
+          bairro: client.bairro || '',
+          cidade: client.cidade || '',
+          estado: client.estado || 'SC',
+          cep: client.cep || '',
+          locatarioConjugeNome: client.conjugeNome || '',
+          conjugeNome: client.conjugeNome || '',
+          locatarioConjugeCpf: client.conjugeCpf || '',
+          conjugeCpf: client.conjugeCpf || '',
+          locatarioConjugeRg: client.conjugeRg || '',
+          conjugeRg: client.conjugeRg || '',
+          locatarioConjugeProfissao: client.conjugeProfissao || '',
+          conjugeProfissao: client.conjugeProfissao || '',
+          locatarioConjugeTelefone: client.conjugeTelefone || '',
+          conjugeTelefone: client.conjugeTelefone || '',
+          locatarioConjugeEmail: client.conjugeEmail || '',
+          conjugeEmail: client.conjugeEmail || '',
+          locatarioConjugeEstadoCivil: client.conjugeEstadoCivil || 'Casado(a)',
+          conjugeEstadoCivil: client.conjugeEstadoCivil || 'Casado(a)',
+        };
+        if (hasSpouse) setTemConjugeLocatario(true);
+      } else {
+        updatedDados.proponente = {
+          ...(updatedDados.proponente || {}),
+          nome: client.nome,
+          cpf: client.cpf || '',
+          rg: client.rg || '',
+          estadoCivil: client.estadoCivil || 'Solteiro(a)',
+          profissao: client.profissao || '',
+          nacionalidade: client.nacionalidade || 'Brasileiro(a)',
+          telefone: client.telefone || '',
+          whatsapp: client.whatsapp || client.telefone || '',
+          email: client.email || '',
+          endereco: client.endereco || '',
+          numero: client.numero || '',
+          complemento: client.complemento || '',
+          bairro: client.bairro || '',
+          cidade: client.cidade || '',
+          estado: client.estado || 'SC',
+          cep: client.cep || '',
+          compradorConjugeNome: client.conjugeNome || '',
+          conjugeNome: client.conjugeNome || '',
+          compradorConjugeCpf: client.conjugeCpf || '',
+          conjugeCpf: client.conjugeCpf || '',
+          compradorConjugeRg: client.conjugeRg || '',
+          conjugeRg: client.conjugeRg || '',
+          compradorConjugeProfissao: client.conjugeProfissao || '',
+          conjugeProfissao: client.conjugeProfissao || '',
+          compradorConjugeTelefone: client.conjugeTelefone || '',
+          conjugeTelefone: client.conjugeTelefone || '',
+          compradorConjugeEmail: client.conjugeEmail || '',
+          conjugeEmail: client.conjugeEmail || '',
+          compradorConjugeEstadoCivil: client.conjugeEstadoCivil || 'Casado(a)',
+          conjugeEstadoCivil: client.conjugeEstadoCivil || 'Casado(a)',
+        };
+        if (hasSpouse) setTemConjugeComprador(true);
+      }
+
+      return {
+        ...prev,
+        nomeCliente: client.nome,
+        dados: updatedDados
+      };
+    });
+
+    setSelectedClientBadge(true);
+    showToast(`Cliente "${client.nome}" preenchido com sucesso! Você pode editar qualquer campo.`, 'success');
+  };
 
   useEffect(() => {
     const handleUrlParam = async () => {
@@ -2558,13 +2800,31 @@ export default function AdminContractForm() {
   };
 
   const saveContract = async (finalizar = false) => {
+    if (loading) return;
+
     if (!isAdmin) {
       showToast('Usuário sem permissão administrativa.', 'error');
       return;
     }
-    if (!contract.nomeCliente || !contract.valor) {
-      showToast('Por favor, preencha o nome do cliente e o valor.', 'error');
-      return;
+
+    const clientName = (contract.nomeCliente || contract.dados?.proponente?.nome || contract.dados?.locatario?.nome || '').trim();
+    const contractValue = Number(contract.valor || (contract as any).valorProposta || (contract as any).valorTotalNegociado || 0);
+
+    if (finalizar) {
+      if (!clientName) {
+        showToast('Por favor, preencha o nome do cliente antes de finalizar.', 'error');
+        return;
+      }
+      if (contractValue <= 0 && contract.tipoContrato !== 'administracao_temporaria') {
+        showToast('Por favor, informe o valor da negociação antes de finalizar.', 'error');
+        return;
+      }
+    } else {
+      // Draft mode: allow saving with partial data
+      if (!clientName && !contract.imovelId) {
+        showToast('Informe ao menos o nome do cliente ou selecione um imóvel para salvar o rascunho.', 'error');
+        return;
+      }
     }
 
     if (contract.tipoContrato === 'proposta') {
@@ -2573,7 +2833,7 @@ export default function AdminContractForm() {
       const im_cri = (contract as any).imovelCri || contract.dados?.imovel?.cri || '';
       const val_proposta = Number((contract as any).valorProposta || contract.valor || 0);
 
-      if (!im_id) {
+      if (finalizar && !im_id) {
         showToast("Selecione um imóvel para criar a proposta.", 'error');
         return;
       }
@@ -2585,7 +2845,7 @@ export default function AdminContractForm() {
         showToast("Informe o CRI do imóvel antes de finalizar.", 'error');
         return;
       }
-      if (!val_proposta || val_proposta <= 0) {
+      if (finalizar && (!val_proposta || val_proposta <= 0)) {
         showToast("Informe o valor da proposta.", 'error');
         return;
       }
@@ -3436,16 +3696,25 @@ export default function AdminContractForm() {
   };
 
   const updateDados = (section: string, field: string, value: any) => {
-    setContract(prev => ({
-      ...prev,
-      dados: {
-        ...(prev.dados || {}),
-        [section]: {
-          ...((prev.dados as any)?.[section] || {}),
-          [field]: value
+    setContract(prev => {
+      const next: any = {
+        ...prev,
+        dados: {
+          ...(prev.dados || {}),
+          [section]: {
+            ...((prev.dados as any)?.[section] || {}),
+            [field]: value
+          }
         }
+      };
+      if ((section === 'proponente' || section === 'locatario') && field === 'nome') {
+        next.nomeCliente = value;
       }
-    }));
+      if ((section === 'vendedor' || section === 'proprietario' || section === 'locador') && field === 'nome') {
+        next.nomeVendedor = value;
+      }
+      return next;
+    });
   };
 
   const toggleMetodo = (section: 'pagamento' | 'termos', metodo: string) => {
@@ -3737,6 +4006,8 @@ export default function AdminContractForm() {
                 { id: 'proposta', title: 'Proposta de Compra', icon: FileText, desc: 'Primeiro contato com oferta de valor e condições.' },
                 { id: 'contraproposta', title: 'Contraproposta', icon: AlertCircle, desc: 'Resposta do vendedor com novos termos.' },
                 { id: 'aceite', title: 'Aceite de Termos', icon: Check, desc: 'Formalização final do acordo entre as partes.' },
+                { id: 'compra_venda', title: 'Compra e Venda', icon: FileCheck, desc: 'Instrumento particular definitivo de promessa de compra e venda imobiliária.' },
+                { id: 'arras_confirmatorios', title: 'Arras e Sinal', icon: CreditCard, desc: 'Instrumento preliminar com pagamento de sinal e princípio de pagamento.' },
                 { id: 'locacao_temporaria', title: 'Locação Temporária', icon: Calendar, desc: 'Contrato para aluguéis de temporada e curtos períodos.' },
                 { id: 'administracao_temporaria', title: 'Contrato de Administração Temporária', icon: Building2, desc: 'Gestão e administração de locação temporária entre Proprietário e Imobiliária.' }
               ].map((t) => (
@@ -3850,6 +4121,7 @@ export default function AdminContractForm() {
                             </span>
                           )}
                         </div>
+
                         <div className="space-y-4">
                           <input type="text" className="input-field" placeholder="Nome Completo / Razão Social" value={contract.dados?.locador?.nome || ''} onChange={e => {
                             updateDados('locador', 'nome', e.target.value);
@@ -4025,6 +4297,30 @@ export default function AdminContractForm() {
                             </span>
                           )}
                         </div>
+
+                        {registeredClients.length > 0 && (
+                          <div className="space-y-1 mb-2 bg-amber-50/50 p-3 rounded-xl border border-amber-200/50">
+                            <label className="text-[9px] font-black text-gold uppercase tracking-widest flex items-center gap-1">
+                              <User size={12} className="text-gold" /> Importar Dados de Cliente Cadastrado (Opcional)
+                            </label>
+                            <select
+                              className="input-field text-xs bg-white cursor-pointer !py-1.5"
+                              onChange={(e) => {
+                                const found = registeredClients.find((_, i) => String(i) === e.target.value);
+                                if (found) handleClientSelect(found, 'locatario');
+                              }}
+                              defaultValue=""
+                            >
+                              <option value="">-- Buscar hóspede/cliente existente no sistema --</option>
+                              {registeredClients.map((cl, idx) => (
+                                <option key={idx} value={String(idx)}>
+                                  {cl.nome} {cl.cpf ? `(CPF: ${cl.cpf})` : ''} {cl.telefone ? `• ${cl.telefone}` : ''}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+
                         <div className="space-y-4">
                           <input type="text" className="input-field" placeholder="Nome Completo" value={contract.dados?.locatario?.nome || ''} onChange={e => {
                             updateDados('locatario', 'nome', e.target.value);
@@ -5016,7 +5312,38 @@ export default function AdminContractForm() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
                       {/* Comprador/Proponente */}
                       <div className="space-y-6">
-                        <h4 className="text-sm font-black text-gold uppercase tracking-[0.2em] mb-4">Comprador / Proponente</h4>
+                        <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                          <h4 className="text-sm font-black text-gold uppercase tracking-[0.2em]">Comprador / Proponente</h4>
+                          {selectedClientBadge && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              ✓ Cliente Selecionado
+                            </span>
+                          )}
+                        </div>
+
+                        {registeredClients.length > 0 && (
+                          <div className="space-y-1 bg-amber-50/50 p-3 rounded-xl border border-amber-200/50">
+                            <label className="text-[9px] font-black text-gold uppercase tracking-widest flex items-center gap-1">
+                              <User size={12} className="text-gold" /> Importar Dados de Cliente Cadastrado (Opcional)
+                            </label>
+                            <select
+                              className="input-field text-xs bg-white cursor-pointer !py-1.5"
+                              onChange={(e) => {
+                                const found = registeredClients.find((_, i) => String(i) === e.target.value);
+                                if (found) handleClientSelect(found, 'proponente');
+                              }}
+                              defaultValue=""
+                            >
+                              <option value="">-- Buscar cliente existente no sistema ou preencher manualmente --</option>
+                              {registeredClients.map((cl, idx) => (
+                                <option key={idx} value={String(idx)}>
+                                  {cl.nome} {cl.cpf ? `(CPF: ${cl.cpf})` : ''} {cl.telefone ? `• ${cl.telefone}` : ''}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+
                         <div className="space-y-4">
                           <div className="space-y-2">
                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Nome Completo</label>

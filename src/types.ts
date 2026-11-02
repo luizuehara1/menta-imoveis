@@ -357,7 +357,15 @@ export interface Admin {
 }
 
 export type ContractType = 'proposta' | 'contraproposta' | 'aceite' | 'locacao_temporaria' | 'administracao_temporaria' | 'arras_confirmatorios' | 'compra_venda';
-export type ContractStatus = 'rascunho' | 'finalizado' | 'assinado' | 'cancelado';
+export type ContractStatus = 
+  | 'rascunho' 
+  | 'aguardando_aprovacao' 
+  | 'aprovado' 
+  | 'reprovado' 
+  | 'enviado_assinatura' 
+  | 'assinado' 
+  | 'finalizado' 
+  | 'cancelado';
 
 export interface Contract {
   id?: string;

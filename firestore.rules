@@ -160,6 +160,10 @@ service cloud.firestore {
       allow read, create, update, delete: if isAdminAtivo();
     }
 
+    match /arrasConfirmatorios/{docId} {
+      allow read, create, update, delete: if isAdminAtivo();
+    }
+
     // 4. Imóveis
     match /imoveis/{docId} {
       allow read: if true;
