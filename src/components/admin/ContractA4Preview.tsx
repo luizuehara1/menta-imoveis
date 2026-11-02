@@ -1,4 +1,4 @@
-import React, { useState, useRef, useLayoutEffect } from 'react';
+import React, { useState, useRef, useLayoutEffect, useEffect } from 'react';
 import { Contract } from '../../types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -1104,7 +1104,7 @@ interface ContractA4PreviewProps {
   printRef?: React.RefObject<HTMLDivElement>;
 }
 
-export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: originalContract, printRef }) => {
+const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: originalContract, printRef }) => {
   const contract = originalContract as any;
   const { tipoContrato, dados = {} } = contract;
   const { settings } = useSettings();
@@ -2577,10 +2577,15 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
     setMeasuredHeights(heights);
   }, [totalEstimated, blocks.length, shouldUseCompactMode, isCompact]);
 
+  // Reset measured heights whenever block count or contract type changes
+  useEffect(() => {
+    setMeasuredHeights(null);
+  }, [blocks.length, tipoContrato]);
+
   // Build the final pages from measured heights (falls back to a single page
   // with everything before measurement completes, then re-renders).
   const buildPagesFromMeasured = (): number[][] => {
-    if (!measuredHeights) {
+    if (!measuredHeights || measuredHeights.length !== blocks.length) {
       // Pre-measure pass: put everything on one page so it can be measured.
       return [blocks.map((_, i) => i)];
     }
@@ -2589,9 +2594,10 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
     const pages: number[][] = [[]];
     let h = 0;
     measuredHeights.forEach((rawH, i) => {
+      if (!blocks[i]) return;
       const isFirst = pages.length === 1;
       const limit = isFirst ? usableFirst : usableSub;
-      const isSig = !!blocks[i].isSignature;
+      const isSig = !!blocks[i]?.isSignature;
       const breakHere =
         (isSig && limit - h < rawH + 10) || (h + rawH > limit);
       if (breakHere && pages[pages.length - 1].length > 0) {
@@ -2602,11 +2608,15 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
         h += rawH;
       }
     });
-    return pages;
+    return pages.filter(p => p.length > 0);
   };
 
   const pageIndexGroups = buildPagesFromMeasured();
-  const pages = pageIndexGroups.map((group) => group.map((i) => blocks[i]));
+  const pages = pageIndexGroups.map((group) =>
+    group
+      .map((i) => blocks[i])
+      .filter((b): b is { render: () => React.JSX.Element; estimatedHeight: number; isSignature?: boolean } => !!b && typeof (b as any).render === 'function')
+  );
 
   return (
     <div 
@@ -2638,9 +2648,11 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
         }}
       >
         {blocks.map((block, i) => (
-          <div data-measure-block key={i}>
-            {block.render()}
-          </div>
+          block && typeof block.render === 'function' ? (
+            <div data-measure-block key={i}>
+              {block.render()}
+            </div>
+          ) : null
         ))}
       </div>
 
@@ -2685,9 +2697,11 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
               silently clipped; correct page breaks come from measurement. */}
           <div className="flex-grow flex flex-col justify-start overflow-visible relative z-10">
             {pageBlocks.map((block, bIndex) => (
-              <React.Fragment key={bIndex}>
-                {block.render()}
-              </React.Fragment>
+              block && typeof block.render === 'function' ? (
+                <React.Fragment key={bIndex}>
+                  {block.render()}
+                </React.Fragment>
+              ) : null
             ))}
           </div>
 
@@ -2939,5 +2953,55 @@ export const ContractA4Preview: React.FC<ContractA4PreviewProps> = ({ contract: 
         }
       `}</style>
     </div>
+  );
+};
+
+export class ContractPreviewErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error?: Error }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('[ContractPreviewErrorBoundary] Erro capturado na prévia do contrato:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-8 bg-amber-50 border border-amber-200 rounded-3xl text-amber-950 text-center max-w-lg mx-auto my-8 space-y-4">
+          <div className="w-12 h-12 bg-amber-100 rounded-2xl flex items-center justify-center mx-auto text-amber-700 font-bold text-lg">
+            ⚠️
+          </div>
+          <h4 className="font-bold text-base">Visualização do Documento Temporariamente Indisponível</h4>
+          <p className="text-xs text-amber-800 leading-relaxed">
+            Houve uma variação na formatação deste documento. Seus dados estão preservados no formulário.
+          </p>
+          <button
+            type="button"
+            onClick={() => this.setState({ hasError: false, error: undefined })}
+            className="px-6 py-2.5 bg-gold hover:bg-amber-500 text-black font-bold rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer shadow-sm"
+          >
+            Tentar Renderizar Novamente
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export const ContractA4Preview: React.FC<ContractA4PreviewProps> = (props) => {
+  return (
+    <ContractPreviewErrorBoundary>
+      <ContractA4PreviewInner {...props} />
+    </ContractPreviewErrorBoundary>
   );
 };

@@ -743,7 +743,36 @@ function mesclarDadosPropostaEContra(dados: any, proposta: any) {
 
 type Step = 'tipo' | 'dados' | 'pagamento' | 'revisao';
 
-export default function AdminContractForm() {
+export const getInitialContractState = (tipo: ContractType = 'proposta'): Partial<Contract> => ({
+  tipoContrato: tipo,
+  status: 'rascunho',
+  nomeCliente: '',
+  nomeVendedor: '',
+  enderecoImovel: '',
+  valor: 0,
+  local: 'Balneário Camboriú - SC',
+  data: format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }),
+  dados: {
+    proponente: { estadoCivil: 'Solteiro(a)', nacionalidade: 'Brasileiro(a)' },
+    vendedor: { estadoCivil: 'Solteiro(a)', nacionalidade: 'Brasileiro(a)' },
+    aceitante: { estadoCivil: 'Solteiro(a)', nacionalidade: 'Brasileiro(a)' },
+    locador: { estadoCivil: 'Solteiro(a)', nacionalidade: 'Brasileiro(a)' },
+    locatario: { estadoCivil: 'Solteiro(a)', nacionalidade: 'Brasileiro(a)' },
+    proprietario: { estadoCivil: 'Solteiro(a)', nacionalidade: 'Brasileiro(a)' },
+    administracao: { taxaAdministracaoPercentual: 20, prazoRepasseDias: 5, vigenciaMeses: 12, prestacaoContasPeriodo: 'Mensal, até o 10º dia do mês subsequente ao término de cada locação' },
+    prazo: { finalidade: 'Temporada' },
+    valores: { valorDiario: 0, taxaLimpeza: 0, taxaCaucao: 0, taxasAdicionais: 0, desconto: 0 },
+    regras: {},
+    assinaturas: {},
+    imovel: {},
+    pagamento: { metodos: [] },
+    termos: { metodos: [] },
+    objeto: { tipoAceite: 'proposta' },
+    clausulasSelecionadas: []
+  }
+});
+
+function AdminContractFormInner() {
   const { id } = useParams();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -754,6 +783,10 @@ export default function AdminContractForm() {
   const { settings } = useSettings();
   const printRef = useRef<HTMLDivElement>(null);
   const lastConvertedValueRef = useRef<number | null>(null);
+
+  const downloadTimeoutRef = useRef<any>(null);
+  const navigateTimeoutRef = useRef<any>(null);
+  const isMountedRef = useRef<boolean>(true);
 
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(id ? true : false);
@@ -776,40 +809,44 @@ export default function AdminContractForm() {
     locatario?: boolean;
   }>({});
 
-  const [contract, setContract] = useState<Partial<Contract>>({
-    tipoContrato: 'proposta',
-    status: 'rascunho',
-    nomeCliente: '',
-    nomeVendedor: '',
-    enderecoImovel: '',
-    valor: 0,
-    local: 'Balneário Camboriú - SC',
-    data: format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }),
-    dados: {
-      proponente: { estadoCivil: 'Solteiro(a)', nacionalidade: 'Brasileiro(a)' },
-      vendedor: { estadoCivil: 'Solteiro(a)', nacionalidade: 'Brasileiro(a)' },
-      aceitante: { estadoCivil: 'Solteiro(a)', nacionalidade: 'Brasileiro(a)' },
-      locador: { estadoCivil: 'Solteiro(a)', nacionalidade: 'Brasileiro(a)' },
-      locatario: { estadoCivil: 'Solteiro(a)', nacionalidade: 'Brasileiro(a)' },
-      proprietario: { estadoCivil: 'Solteiro(a)', nacionalidade: 'Brasileiro(a)' },
-      administracao: { taxaAdministracaoPercentual: 20, prazoRepasseDias: 5, vigenciaMeses: 12, prestacaoContasPeriodo: 'Mensal, até o 10º dia do mês subsequente ao término de cada locação' },
-      prazo: { finalidade: 'Temporada' },
-      valores: { valorDiario: 0, taxaLimpeza: 0, taxaCaucao: 0, taxasAdicionais: 0, desconto: 0 },
-      regras: {},
-      assinaturas: {},
-      imovel: {},
-      pagamento: { metodos: [] },
-      termos: { metodos: [] },
-      objeto: { tipoAceite: 'proposta' }
-    }
-  });
+  const [contract, setContract] = useState<Partial<Contract>>(() => 
+    getInitialContractState(isPropostaRoute ? 'proposta' : 'proposta')
+  );
 
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setNotification({ message, type });
-    setTimeout(() => setNotification(null), 5000);
+    setTimeout(() => {
+      if (isMountedRef.current) {
+        setNotification(null);
+      }
+    }, 5000);
   };
+
+  const resetFormToNew = () => {
+    const initialType: ContractType = isPropostaRoute ? 'proposta' : 'proposta';
+    setContract(getInitialContractState(initialType));
+    setSelectedProperty(null);
+    setSelectedClientBadge(false);
+    setTemConjugeComprador(false);
+    setTemConjugeVendedor(false);
+    setTemConjugeLocador(false);
+    setTemConjugeLocatario(false);
+    setAutoFilledBadges({});
+    setStep(isPreviewOnly ? 'revisao' : (isPropostaRoute ? 'dados' : 'tipo'));
+    setFetching(false);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (downloadTimeoutRef.current) clearTimeout(downloadTimeoutRef.current);
+      if (navigateTimeoutRef.current) clearTimeout(navigateTimeoutRef.current);
+    };
+  }, []);
 
   const clausulasPadrao: Record<string, Array<{id: string, titulo: string, texto: string, ordem: number}>> = {
     proposta: [
@@ -1772,8 +1809,13 @@ export default function AdminContractForm() {
     fetchProperties();
     fetchPropostas();
     fetchRegisteredClients();
-    fetchContract();
-  }, [id]);
+
+    if (id) {
+      fetchContract();
+    } else {
+      resetFormToNew();
+    }
+  }, [id, location.pathname]);
 
   const handleClientSelect = (client: any, target: 'proponente' | 'locatario' = 'proponente') => {
     if (!client || !client.nome) return;
@@ -3287,6 +3329,8 @@ export default function AdminContractForm() {
 
       let savedId = id;
       if (!id) {
+        delete cleanedData.id;
+        delete (finalDadosContrato as any).id;
         cleanedData.criadoEm = serverTimestamp();
         const docRef = await addDoc(collection(db, 'contratos'), cleanedData);
         savedId = docRef.id;
@@ -3359,12 +3403,16 @@ export default function AdminContractForm() {
          if (!id && savedId) {
            navigate(`/admin/contratos/editar/${savedId}?preview=true`);
          }
-         setTimeout(() => {
-           downloadPDF();
+         downloadTimeoutRef.current = setTimeout(() => {
+           if (isMountedRef.current) {
+             downloadPDF();
+           }
          }, 1000);
       } else {
-        setTimeout(() => {
-          navigate('/admin/contratos');
+        navigateTimeoutRef.current = setTimeout(() => {
+          if (isMountedRef.current) {
+            navigate('/admin/contratos');
+          }
         }, 1500);
       }
     } catch (error: any) {
@@ -4014,7 +4062,14 @@ export default function AdminContractForm() {
                 <button
                   key={t.id}
                   onClick={() => {
-                    setContract(prev => ({ ...prev, tipoContrato: t.id as ContractType }));
+                    setContract(prev => ({ 
+                      ...prev, 
+                      tipoContrato: t.id as ContractType,
+                      dados: {
+                        ...(prev.dados || {}),
+                        clausulasSelecionadas: []
+                      }
+                    }));
                     setStep('dados');
                   }}
                   className={`p-10 rounded-[2.5rem] border-2 text-left transition-all ${
@@ -7090,5 +7145,81 @@ export default function AdminContractForm() {
         </AnimatePresence>
       </div>
     </div>
+  );
+}
+
+interface ContractFormErrorBoundaryProps {
+  children: React.ReactNode;
+}
+
+interface ContractFormErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class ContractFormErrorBoundary extends React.Component<ContractFormErrorBoundaryProps, ContractFormErrorBoundaryState> {
+  constructor(props: ContractFormErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ContractFormErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("[ContractFormErrorBoundary] Erro capturado:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-[500px] flex items-center justify-center p-8 bg-gray-50/50">
+          <div className="max-w-xl w-full bg-white rounded-3xl shadow-xl border border-gray-100 p-8 text-center animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertCircle size={32} />
+            </div>
+            <h2 className="text-xl font-display font-bold text-primary-black mb-2">Formulário Protegido com Segurança</h2>
+            <p className="text-sm text-gray-500 mb-6 leading-relaxed">
+              Identificamos uma transição de dados entre formulários de contratos. Todos os seus dados salvos no banco de dados estão 100% seguros e intactos.
+            </p>
+            <div className="flex flex-wrap gap-4 justify-center">
+              <button
+                onClick={() => {
+                  this.setState({ hasError: false, error: null });
+                  window.location.href = '/admin/contratos';
+                }}
+                className="btn-gold !py-3 px-6 text-sm shadow-md"
+              >
+                Voltar para Lista de Contratos
+              </button>
+              <button
+                onClick={() => {
+                  this.setState({ hasError: false, error: null });
+                  window.location.reload();
+                }}
+                className="border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-xl px-6 py-3 text-sm font-semibold transition"
+              >
+                Recarregar Formulário
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export default function AdminContractForm() {
+  const { id } = useParams();
+  const location = useLocation();
+  // Using location.pathname and id ensures a pristine component lifecycle when switching between new and editing or between documents
+  const key = id ? `edit-${id}` : `new-${location.pathname}`;
+
+  return (
+    <ContractFormErrorBoundary key={key}>
+      <AdminContractFormInner />
+    </ContractFormErrorBoundary>
   );
 }
