@@ -71,6 +71,98 @@ const estimateHeight = (text: string, divisor: number = 56, mmPerLine: number = 
   return totalLines * mmPerLine;
 };
 
+/**
+ * Parses markdown bold (**bold** or __bold__) into JSX strong elements,
+ * ensuring no literal asterisks remain.
+ */
+export function parseInlineBold(text: string): React.ReactNode[] {
+  if (!text) return [];
+
+  const parts: React.ReactNode[] = [];
+  const regex = /(\*\*|__)(.*?)\1/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.substring(lastIndex, match.index).replace(/\*\*/g, ''));
+    }
+    const boldText = match[2];
+    if (boldText) {
+      parts.push(
+        <strong key={match.index} className="font-bold text-black">
+          {boldText.replace(/\*\*/g, '')}
+        </strong>
+      );
+    }
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex).replace(/\*\*/g, ''));
+  }
+
+  return parts.length > 0 ? parts : [text.replace(/\*\*/g, '')];
+}
+
+/**
+ * Formats multi-paragraph or listed text:
+ * - Parses **bold** without showing literal asterisks
+ * - Formats bullet lists (*, -, •) and numbered lists (1., 2.)
+ * - Preserves line breaks and paragraph spacing
+ */
+export function renderFormattedText(text: any, className: string = ""): React.ReactNode {
+  if (text === null || text === undefined) return null;
+  const rawStr = String(text).trim();
+  if (!rawStr) return null;
+
+  const lines = rawStr.split(/\r?\n/);
+  
+  return (
+    <div className={`space-y-1 ${className}`}>
+      {lines.map((line, lineIdx) => {
+        const trimmed = line.trim();
+        if (!trimmed) {
+          return <div key={lineIdx} className="h-1" />;
+        }
+
+        const isBullet = /^[*-•]\s+/.test(trimmed);
+        const isNumbered = /^(\d+)[.)-]\s+/.test(trimmed);
+
+        let content = trimmed;
+        let prefix: React.ReactNode = null;
+
+        if (isBullet) {
+          content = trimmed.replace(/^[*-•]\s+/, '');
+          prefix = <span className="inline-block w-3 text-gold shrink-0 font-black select-none">•</span>;
+        } else if (isNumbered) {
+          const match = trimmed.match(/^(\d+[.)-])\s+/);
+          const numPrefix = match ? match[1] : '';
+          content = trimmed.replace(/^(\d+[.)-])\s+/, '');
+          prefix = <span className="inline-block min-w-4 text-black font-bold shrink-0 mr-1 select-none">{numPrefix}</span>;
+        }
+
+        const parsedContent = parseInlineBold(content);
+
+        if (isBullet || isNumbered) {
+          return (
+            <div key={lineIdx} className="flex items-start pl-1.5 leading-relaxed text-justify break-words">
+              {prefix}
+              <div className="flex-1">{parsedContent}</div>
+            </div>
+          );
+        }
+
+        return (
+          <p key={lineIdx} className="leading-relaxed text-justify break-words">
+            {parsedContent}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
 export function limparParteEndereco(valor: any): string {
   return String(valor || "")
     .trim()
@@ -686,21 +778,30 @@ interface PdfPaymentBlockProps {
 }
 
 export const PdfPaymentBlock: React.FC<PdfPaymentBlockProps> = ({
-  dados,
-  tipoContrato,
-  totalValor,
+  dados = {},
+  tipoContrato = 'proposta',
+  totalValor = 0,
   metodosDePagamento = [],
   formaPagamentoSimple = "",
   contract = {}
 }) => {
-  const rawDetalhes = getTextoPagamentoPDF(dados, contract);
-  const rawOutras = getOutrasCondicoesPDF(dados, contract);
+  const d = dados || {};
+  const c = contract || {};
+  const rawDetalhes = getTextoPagamentoPDF(d, c);
+  const rawOutras = getOutrasCondicoesPDF(d, c);
 
   const showDetalhes = rawDetalhes.trim() !== "";
   const showOutras = rawOutras.trim() !== "" && !textosIguaisPDF(rawOutras, rawDetalhes);
 
-  const valorExtenso = totalValor ? valorMonetarioPorExtenso(totalValor) : '';
+  const safeTotal = typeof totalValor === 'number' && !isNaN(totalValor) ? totalValor : parseValorNum(totalValor);
+  const valorExtenso = safeTotal > 0 ? valorMonetarioPorExtenso(safeTotal) : '';
   
+  const safeMetodos: any[] = Array.isArray(metodosDePagamento)
+    ? metodosDePagamento
+    : (typeof metodosDePagamento === 'string' && (metodosDePagamento as string).trim()
+        ? (metodosDePagamento as string).split(',').map((s: string) => s.trim()).filter(Boolean)
+        : []);
+
   let sectionTitle = "III - Valor e Forma de Pagamento";
   if (tipoContrato === 'aceite') {
     sectionTitle = "III - Termos e Condições da Proposta Aceita";
@@ -716,20 +817,24 @@ export const PdfPaymentBlock: React.FC<PdfPaymentBlockProps> = ({
     <PdfSection title={sectionTitle}>
       {tipoContrato === 'aceite' ? (
         <div className="text-[12px] text-gray-800 leading-normal space-y-1.5">
-          <p><strong>Valor do Aceite:</strong> <span className="font-bold">{safeMoney(totalValor)}</span> {valorExtenso ? `(${valorExtenso})` : ''}</p>
+          <p><strong>Valor do Aceite:</strong> <span className="font-bold">{safeMoney(safeTotal)}</span> {valorExtenso ? `(${valorExtenso})` : ''}</p>
           {formaPagamentoSimple && (
             <p><strong>Forma de Pagamento:</strong> {safeText(formaPagamentoSimple)}</p>
           )}
           {showDetalhes && (
             <div className="mt-1 leading-normal text-[11.5px] text-gray-800 text-justify">
               <p className="font-bold text-[11px] uppercase tracking-wider text-gray-700 mb-0.5">Detalhes / Condições de Pagamento:</p>
-              <p className="text-justify whitespace-pre-wrap tracking-tight break-words text-gray-700">{rawDetalhes}</p>
+              <div className="text-justify tracking-tight break-words text-gray-700">
+                {renderFormattedText(rawDetalhes)}
+              </div>
             </div>
           )}
           {showOutras && (
             <div className="mt-1 leading-normal text-[11.5px] text-gray-800 text-justify">
               <p className="font-bold text-[11px] uppercase tracking-wider text-gray-700 mb-0.5">Outras Condições:</p>
-              <p className="text-justify whitespace-pre-wrap tracking-tight break-words text-gray-700">{rawOutras}</p>
+              <div className="text-justify tracking-tight break-words text-gray-700">
+                {renderFormattedText(rawOutras)}
+              </div>
             </div>
           )}
         </div>
@@ -737,50 +842,50 @@ export const PdfPaymentBlock: React.FC<PdfPaymentBlockProps> = ({
         <>
           {tipoContrato !== 'locacao_temporaria' && tipoContrato !== 'arras_confirmatorios' && (
             <p className="text-justify text-[12px] leading-normal mb-1.5 text-gray-800">
-              O valor total da transação é de <strong>{safeMoney(totalValor)}</strong> ({valorExtenso ? `${valorExtenso}` : 'Não informado'}).
+              O valor total da transação é de <strong>{safeMoney(safeTotal)}</strong> ({valorExtenso ? `${valorExtenso}` : 'Não informado'}).
             </p>
           )}
 
           {tipoContrato === 'arras_confirmatorios' && (
             <div className="grid grid-cols-2 gap-y-1.5 gap-x-6 text-[12px] text-gray-800 leading-normal mb-1.5">
-              <p><strong>Valor Total do Negócio:</strong> {safeMoney(totalValor)}</p>
-              <p><strong>Valor do Sinal/Arras:</strong> {safeMoney(Number(dados.arras?.valorArras || 0))}</p>
-              <p><strong>Forma do Sinal:</strong> {safeText(dados.arras?.formaPagamentoArras || "Não informado")}</p>
-              <p><strong>Vencimento do Sinal:</strong> {safeDate(dados.arras?.dataPagamentoArras)}</p>
-              {dados.arras?.condicoesDevolucao && (
+              <p><strong>Valor Total do Negócio:</strong> {safeMoney(safeTotal)}</p>
+              <p><strong>Valor do Sinal/Arras:</strong> {safeMoney(Number(d.arras?.valorArras || 0))}</p>
+              <p><strong>Forma do Sinal:</strong> {safeText(d.arras?.formaPagamentoArras || "Não informado")}</p>
+              <p><strong>Vencimento do Sinal:</strong> {safeDate(d.arras?.dataPagamentoArras)}</p>
+              {d.arras?.condicoesDevolucao && (
                 <p className="col-span-2 text-[11px] text-gray-700 mt-1">
-                  <strong>Condições de devolução do sinal:</strong> {safeText(dados.arras.condicoesDevolucao)}
+                  <strong>Condições de devolução do sinal:</strong> {safeText(d.arras.condicoesDevolucao)}
                 </p>
               )}
-              {dados.arras?.observacoes && (
+              {d.arras?.observacoes && (
                 <p className="col-span-2 text-[11px] text-gray-700 mt-1">
-                  <strong>Observações Gerais:</strong> {safeText(dados.arras.observacoes)}
+                  <strong>Observações Gerais:</strong> {safeText(d.arras.observacoes)}
                 </p>
               )}
             </div>
           )}
 
           {tipoContrato === 'locacao_temporaria' && (() => {
-            let qtdDiarias = Number(dados?.prazo?.quantidadeDiarias ?? dados?.prazo?.quantidadeDias ?? dados?.prazo?.totalDiarias ?? contract?.quantidadeDiarias ?? 0);
-            if (qtdDiarias <= 0 && dados?.prazo?.dataInicio && dados?.prazo?.dataTermino) {
-              qtdDiarias = calculateNights(dados.prazo.dataInicio, dados.prazo.dataTermino);
+            let qtdDiarias = Number(d?.prazo?.quantidadeDiarias ?? d?.prazo?.quantidadeDias ?? d?.prazo?.totalDiarias ?? c?.quantidadeDiarias ?? 0);
+            if (qtdDiarias <= 0 && d?.prazo?.dataInicio && d?.prazo?.dataTermino) {
+              qtdDiarias = calculateNights(d.prazo.dataInicio, d.prazo.dataTermino);
             }
             const valDiaria = Number(
-              dados?.valores?.valorDiaria ?? 
-              dados?.valores?.valorDiario ?? 
-              dados?.valorDiaria ?? 
-              dados?.imovel?.valorDiaria ?? 
-              contract?.valorDiaria ?? 
-              contract?.imovel?.valorDiaria ?? 
+              d?.valores?.valorDiaria ?? 
+              d?.valores?.valorDiario ?? 
+              d?.valorDiaria ?? 
+              d?.imovel?.valorDiaria ?? 
+              c?.valorDiaria ?? 
+              c?.imovel?.valorDiaria ?? 
               0
             );
-            const subtotal = Number(dados?.valores?.subtotalDiarias) || (valDiaria * qtdDiarias);
-            const txLimpeza = Number(dados?.valores?.taxaLimpeza ?? dados?.taxaLimpeza ?? dados?.imovel?.taxaLimpeza ?? 0);
-            const txAdicionais = Number(dados?.valores?.taxasAdicionais ?? dados?.valores?.outrasTaxas ?? dados?.outrasTaxas ?? 0);
-            const desc = Number(dados?.valores?.desconto ?? dados?.valores?.descontos ?? dados?.valorDesconto ?? 0);
-            const txCaucao = Number(dados?.valores?.taxaCaucao ?? dados?.taxaCaucao ?? 0);
+            const subtotal = Number(d?.valores?.subtotalDiarias) || (valDiaria * qtdDiarias);
+            const txLimpeza = Number(d?.valores?.taxaLimpeza ?? d?.taxaLimpeza ?? d?.imovel?.taxaLimpeza ?? 0);
+            const txAdicionais = Number(d?.valores?.taxasAdicionais ?? d?.valores?.outrasTaxas ?? d?.outrasTaxas ?? 0);
+            const desc = Number(d?.valores?.desconto ?? d?.valores?.descontos ?? d?.valorDesconto ?? 0);
+            const txCaucao = Number(d?.valores?.taxaCaucao ?? d?.taxaCaucao ?? 0);
             const computedTotal = subtotal + txLimpeza + txAdicionais - desc;
-            const totalGeral = Number(dados?.valores?.valorTotalLocacao ?? dados?.valores?.valorFinal ?? contract?.valor ?? (computedTotal > 0 ? computedTotal : 0));
+            const totalGeral = Number(d?.valores?.valorTotalLocacao ?? d?.valores?.valorFinal ?? c?.valor ?? (computedTotal > 0 ? computedTotal : 0));
             const totalExtenso = totalGeral > 0 ? valorMonetarioPorExtenso(totalGeral) : '';
 
             return (
@@ -815,10 +920,10 @@ export const PdfPaymentBlock: React.FC<PdfPaymentBlockProps> = ({
             </p>
           )}
 
-          {metodosDePagamento && metodosDePagamento.length > 0 && (
+          {safeMetodos && safeMetodos.length > 0 && (
             <div className="mb-2 pl-2">
               <p className="font-bold text-[11px] uppercase tracking-wider text-gray-700 mb-0.5">Condições de Pagamento de Preferência:</p>
-              {metodosDePagamento.map((item: any, index: number) => {
+              {safeMetodos.map((item: any, index: number) => {
                 if (typeof item === 'string') {
                   return (
                     <div key={index} className="text-[11.5px] text-gray-800 leading-normal pl-2 my-0.5 relative border-l border-gold/30">
@@ -841,14 +946,18 @@ export const PdfPaymentBlock: React.FC<PdfPaymentBlockProps> = ({
           {showDetalhes && (
             <div className="mt-1 leading-normal text-[11.5px] text-gray-800 text-justify">
               <p className="font-bold text-[11px] uppercase tracking-wider text-gray-700 mb-0.5">Detalhes / Condições de Pagamento:</p>
-              <p className="text-justify whitespace-pre-wrap tracking-tight break-words text-gray-700">{rawDetalhes}</p>
+              <div className="text-justify tracking-tight break-words text-gray-700">
+                {renderFormattedText(rawDetalhes)}
+              </div>
             </div>
           )}
 
           {showOutras && (
             <div className="mt-1 leading-normal text-[11.5px] text-gray-800 text-justify">
               <p className="font-bold text-[11px] uppercase tracking-wider text-gray-700 mb-0.5">Outras Condições:</p>
-              <p className="text-justify whitespace-pre-wrap tracking-tight break-words text-gray-700">{rawOutras}</p>
+              <div className="text-justify tracking-tight break-words text-gray-700">
+                {renderFormattedText(rawOutras)}
+              </div>
             </div>
           )}
         </>
@@ -868,7 +977,8 @@ export const PdfClausesBlock: React.FC<PdfClausesBlockProps> = ({
   sectionTitle = "Cláusulas e Condições Gerais",
   startIndex = 1
 }) => {
-  const filteredClauses = clausulas.filter(c => c && c.texto && c.texto.trim() !== "");
+  const safeClauses = Array.isArray(clausulas) ? clausulas : [clausulas].filter(Boolean);
+  const filteredClauses = safeClauses.filter(c => c && typeof c === 'object' && c.texto && String(c.texto).trim() !== "");
 
   if (filteredClauses.length === 0) return null;
 
@@ -876,6 +986,7 @@ export const PdfClausesBlock: React.FC<PdfClausesBlockProps> = ({
     <>
       {filteredClauses.map((c, idx) => {
         const numClausula = startIndex + idx;
+        const tituloClausula = c.titulo ? String(c.titulo).trim() : 'Cláusula Adicional';
         return (
           <section key={c.id || idx} className="section mt-1 mb-1.5 avoid-break leading-relaxed text-[11.5px] text-gray-800 clause-block">
             {idx === 0 && sectionTitle && sectionTitle.trim() !== "" && (
@@ -885,11 +996,11 @@ export const PdfClausesBlock: React.FC<PdfClausesBlockProps> = ({
             )}
             <div className="text-justify leading-relaxed text-[11.5px] text-gray-800">
               <p className="font-bold mb-0.5 text-[12px] text-black">
-                Cláusula {numClausula}ª - {c.titulo || 'Cláusula Adicional'}:
+                Cláusula {numClausula}ª - {tituloClausula}:
               </p>
-              <p className="whitespace-pre-wrap text-gray-700 leading-relaxed text-justify break-words">
-                {safeText(c.texto)}
-              </p>
+              <div className="text-gray-700 leading-relaxed text-justify break-words">
+                {renderFormattedText(c.texto)}
+              </div>
             </div>
           </section>
         );
@@ -907,12 +1018,16 @@ interface PdfSignaturesProps {
 }
 
 export const PdfSignatures: React.FC<PdfSignaturesProps> = ({
-  dados,
-  tipoContrato,
-  contract,
-  empresa,
+  dados = {},
+  tipoContrato = 'proposta',
+  contract = {},
+  empresa = {},
   parteAceitante
 }) => {
+  const d = dados || {};
+  const c = contract || {};
+  const emp = empresa || {};
+
   if (tipoContrato === 'aceite') {
     const nomeAceitante = parteAceitante?.nome || 'ACEITANTE / INTERESSADO';
     return (
@@ -925,7 +1040,7 @@ export const PdfSignatures: React.FC<PdfSignaturesProps> = ({
         </div>
         <div className="flex flex-col justify-end pt-12">
           <div className="pdf-signature-line text-black font-bold">
-            {safeText(empresa.nome)}
+            {safeText(emp.nome || 'Menta Imóveis')}
           </div>
           <div className="pdf-signature-role">Imobiliária Intermediadora</div>
         </div>
@@ -934,8 +1049,8 @@ export const PdfSignatures: React.FC<PdfSignaturesProps> = ({
   }
 
   if (tipoContrato === 'locacao_temporaria') {
-    const nomeLocador = dados.locador?.nome || 'LOCADOR';
-    const nomeLocatario = dados.locatario?.nome || 'LOCATÁRIO';
+    const nomeLocador = d.locador?.nome || d.proprietario?.nome || 'LOCADOR';
+    const nomeLocatario = d.locatario?.nome || 'LOCATÁRIO';
     return (
       <div className="pdf-signatures mt-4 pb-2 avoid-break signature-block text-[11.5px]">
         <div className="flex flex-col justify-end pt-12">
@@ -950,17 +1065,17 @@ export const PdfSignatures: React.FC<PdfSignaturesProps> = ({
           </div>
           <div className="pdf-signature-role">LOCATÁRIO (Hóspede/Inquilino)</div>
         </div>
-        {dados.fiador?.nome && (
+        {d.fiador?.nome && (
           <div className="flex flex-col justify-end pt-12">
             <div className="pdf-signature-line text-black font-bold max-w-full truncate">
-              {safeText(dados.fiador.nome)}
+              {safeText(d.fiador.nome)}
             </div>
             <div className="pdf-signature-role">Fiador</div>
           </div>
         )}
         <div className="flex flex-col justify-end col-span-2 max-w-[200px] mx-auto w-full mt-4 pt-12">
           <div className="pdf-signature-line text-gray-700 font-bold max-w-full truncate">
-            {safeText(empresa.nome)}
+            {safeText(emp.nome || 'Menta Imóveis')}
           </div>
           <div className="pdf-signature-role">INTERMEDIADORA</div>
         </div>
@@ -969,8 +1084,8 @@ export const PdfSignatures: React.FC<PdfSignaturesProps> = ({
   }
 
   if (tipoContrato === 'administracao_temporaria') {
-    const nomeProprietario = dados.proprietario?.nome || dados.vendedor?.nome || contract.nomeVendedor || 'PROPRIETÁRIO CONTRATANTE';
-    const proprietarioSpouse = getSpouseDataPDF(dados.proprietario || dados.vendedor, 'vendedor', dados);
+    const nomeProprietario = d.proprietario?.nome || d.vendedor?.nome || c.nomeVendedor || 'PROPRIETÁRIO CONTRATANTE';
+    const proprietarioSpouse = getSpouseDataPDF(d.proprietario || d.vendedor, 'vendedor', d);
     return (
       <div className="pdf-signatures mt-4 pb-2 avoid-break signature-block text-[11.5px]">
         <div className="flex flex-col justify-end pt-12">
@@ -989,30 +1104,30 @@ export const PdfSignatures: React.FC<PdfSignaturesProps> = ({
         )}
         <div className="flex flex-col justify-end pt-12">
           <div className="pdf-signature-line text-black font-bold max-w-full truncate">
-            {safeText(empresa.razaoSocial || empresa.nome || 'MENTA NEGÓCIOS IMOBILIÁRIOS')}
+            {safeText(emp.razaoSocial || emp.nome || 'MENTA NEGÓCIOS IMOBILIÁRIOS')}
           </div>
           <div className="pdf-signature-role">CONTRATADA (Administradora)</div>
         </div>
         <div className="flex flex-col justify-end pt-12">
           <div className="pdf-signature-line text-gray-700 font-bold max-w-full truncate">
-            {safeText(dados.assinaturas?.testemunha1 || 'TESTEMUNHA 1')}
+            {safeText(d.assinaturas?.testemunha1 || 'TESTEMUNHA 1')}
           </div>
-          <div className="pdf-signature-role">Testemunha 1 {dados.assinaturas?.cpfTestemunha1 ? `(CPF: ${dados.assinaturas.cpfTestemunha1})` : ''}</div>
+          <div className="pdf-signature-role">Testemunha 1 {d.assinaturas?.cpfTestemunha1 ? `(CPF: ${d.assinaturas.cpfTestemunha1})` : ''}</div>
         </div>
         <div className="flex flex-col justify-end pt-12">
           <div className="pdf-signature-line text-gray-700 font-bold max-w-full truncate">
-            {safeText(dados.assinaturas?.testemunha2 || 'TESTEMUNHA 2')}
+            {safeText(d.assinaturas?.testemunha2 || 'TESTEMUNHA 2')}
           </div>
-          <div className="pdf-signature-role">Testemunha 2 {dados.assinaturas?.cpfTestemunha2 ? `(CPF: ${dados.assinaturas.cpfTestemunha2})` : ''}</div>
+          <div className="pdf-signature-role">Testemunha 2 {d.assinaturas?.cpfTestemunha2 ? `(CPF: ${d.assinaturas.cpfTestemunha2})` : ''}</div>
         </div>
       </div>
     );
   }
 
-  const compName = contract.nomeCliente || dados.comprador?.nome || dados.proponente?.nome || 'COMPRADOR';
-  const vendName = contract.nomeVendedor || dados.vendedor?.nome || dados.proprietario?.nome || (parteAceitante?.nome) || 'VENDEDOR';
-  const compSpouse = getSpouseDataPDF(dados.proponente || dados.comprador, 'comprador', dados);
-  const vendSpouse = getSpouseDataPDF(dados.vendedor || dados.proprietario, 'vendedor', dados);
+  const compName = c.nomeCliente || d.comprador?.nome || d.proponente?.nome || 'COMPRADOR';
+  const vendName = c.nomeVendedor || d.vendedor?.nome || d.proprietario?.nome || (parteAceitante?.nome) || 'VENDEDOR';
+  const compSpouse = getSpouseDataPDF(d.proponente || d.comprador, 'comprador', d);
+  const vendSpouse = getSpouseDataPDF(d.vendedor || d.proprietario, 'vendedor', d);
   const isCompraVenda = tipoContrato === 'compra_venda';
 
   return (
@@ -1047,7 +1162,7 @@ export const PdfSignatures: React.FC<PdfSignaturesProps> = ({
       )}
       <div className="flex flex-col justify-end col-span-2 max-w-[200px] mx-auto w-full mt-4 pt-12">
         <div className="pdf-signature-line text-gray-800 font-bold max-w-full truncate">
-          {safeText(empresa.nome)}
+          {safeText(emp.nome || 'Menta Imóveis')}
         </div>
         <div className="pdf-signature-role">Intermediadora Imobiliária</div>
       </div>
@@ -1103,6 +1218,15 @@ interface ContractA4PreviewProps {
   contract: Contract;
   printRef?: React.RefObject<HTMLDivElement>;
 }
+
+const SafeBlockRenderer: React.FC<{ block: { render: () => React.JSX.Element }; index: number }> = ({ block, index }) => {
+  try {
+    return block.render();
+  } catch (err) {
+    console.warn(`[ContractA4Preview] Erro capturado ao renderizar bloco ${index}:`, err);
+    return null;
+  }
+};
 
 const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: originalContract, printRef }) => {
   const contract = originalContract as any;
@@ -1360,7 +1484,10 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       const compradorSpouse = getSpouseDataPDF(p, 'comprador', dados);
       const vendedorSpouse = getSpouseDataPDF(contraParteAceitante, 'vendedor', dados);
 
-      const metodosDePagamento = dados.pagamento?.metodos || dados.termos?.metodos || (contract as any).formasPagamento || [];
+      const rawMetodos = dados.pagamento?.metodos || dados.termos?.metodos || (contract as any).formasPagamento || [];
+      const metodosDePagamento = Array.isArray(rawMetodos)
+        ? rawMetodos
+        : (typeof rawMetodos === 'string' && rawMetodos.trim() ? rawMetodos.split(',').map((s: string) => s.trim()).filter(Boolean) : []);
 
       // 1. Title Block
       addBlock(
@@ -1492,7 +1619,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
         0;
       addBlock(
         <PdfPaymentBlock dados={dados} tipoContrato={tipoContrato} totalValor={totalValor} metodosDePagamento={metodosDePagamento} contract={contract} />,
-        25 + (metodosDePagamento.length * 3.8) + (showDetalhes ? estimateHeight(rawDetalhes) + 8 : 0) + (showOutras ? estimateHeight(rawOutras) + 8 : 0)
+        25 + ((Array.isArray(metodosDePagamento) ? metodosDePagamento.length : 1) * 3.8) + (showDetalhes ? estimateHeight(rawDetalhes) + 8 : 0) + (showOutras ? estimateHeight(rawOutras) + 8 : 0)
       );
 
       // Sinal do Negócio Clause
@@ -1512,7 +1639,10 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       }
 
       // 6. Selected Clauses
-      const listClauses = (dados.clausulasSelecionadas || []).filter(
+      const rawListClauses = Array.isArray(dados?.clausulasSelecionadas) 
+        ? dados.clausulasSelecionadas 
+        : (Array.isArray((contract as any)?.clausulasSelecionadas) ? (contract as any).clausulasSelecionadas : []);
+      const listClauses = rawListClauses.filter(
         (c: any) => c && c.texto && c.texto.trim() !== ""
       );
       if (listClauses.length > 0) {
@@ -1534,7 +1664,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       if (customClausulasText && !isDuplicateCustomClause) {
         addBlock(
           <PdfSection title={isContra ? "VI - Cláusulas Adicionais" : "Cláusulas Adicionais"}>
-            <p className="text-justify text-[11.5px] text-gray-800 whitespace-pre-wrap leading-relaxed">{customClausulasText}</p>
+            <div className="text-justify text-[11.5px] text-gray-800 whitespace-pre-wrap leading-relaxed">{renderFormattedText(customClausulasText)}</div>
           </PdfSection>,
           14 + estimateHeight(customClausulasText)
         );
@@ -1657,7 +1787,10 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       );
 
       // 7. Cláusulas Contratuais Selecionadas
-      const listClausesAdmin = (dados.clausulasSelecionadas || []).filter(
+      const rawListClausesAdmin = Array.isArray(dados?.clausulasSelecionadas) 
+        ? dados.clausulasSelecionadas 
+        : (Array.isArray((contract as any)?.clausulasSelecionadas) ? (contract as any).clausulasSelecionadas : []);
+      const listClausesAdmin = rawListClausesAdmin.filter(
         (c: any) => c && c.texto && c.texto.trim() !== ""
       );
       if (listClausesAdmin.length > 0) {
@@ -1674,7 +1807,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       if (customClausulasTextAdmin) {
         addBlock(
           <PdfSection title="Cláusulas Adicionais">
-            <p className="text-justify text-[11.5px] text-gray-800 whitespace-pre-wrap leading-relaxed">{customClausulasTextAdmin}</p>
+            <div className="text-justify text-[11.5px] text-gray-800 whitespace-pre-wrap leading-relaxed">{renderFormattedText(customClausulasTextAdmin)}</div>
           </PdfSection>,
           14 + estimateHeight(customClausulasTextAdmin)
         );
@@ -1812,7 +1945,10 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       }
 
       // 6. Selected Clauses (Individualized Blocks)
-      const listClausesArras = (dados.clausulasSelecionadas || []).filter(
+      const rawListClausesArras = Array.isArray(dados?.clausulasSelecionadas) 
+        ? dados.clausulasSelecionadas 
+        : (Array.isArray((contract as any)?.clausulasSelecionadas) ? (contract as any).clausulasSelecionadas : []);
+      const listClausesArras = rawListClausesArras.filter(
         (c: any) => c && c.texto && c.texto.trim() !== ""
       );
       if (listClausesArras.length > 0) {
@@ -1832,7 +1968,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       if (customClausulasTextArras && !isDuplicateCustomClauseArras) {
         addBlock(
           <PdfSection title="Cláusulas Adicionais">
-            <p className="text-justify text-[11.5px] text-gray-800 whitespace-pre-wrap leading-relaxed">{customClausulasTextArras}</p>
+            <div className="text-justify text-[11.5px] text-gray-800 whitespace-pre-wrap leading-relaxed">{renderFormattedText(customClausulasTextArras)}</div>
           </PdfSection>,
           14 + estimateHeight(customClausulasTextArras)
         );
@@ -2080,7 +2216,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
         if (!isDuplicateCustomClauseLoc) {
           addBlock(
             <PdfSection title="Cláusulas Adicionais do Contrato">
-              <p className="text-justify text-[11.5px] text-gray-800 whitespace-pre-wrap leading-relaxed">{customClausesTextLoc}</p>
+              <div className="text-justify text-[11.5px] text-gray-800 whitespace-pre-wrap leading-relaxed">{renderFormattedText(customClausesTextLoc)}</div>
             </PdfSection>,
             16 + estimateHeight(customClausesTextLoc)
           );
@@ -2088,7 +2224,10 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       }
 
       // 11. Selected database Clauses (Individualized Blocks)
-      const listSelection = (dados.clausulasSelecionadas || []).filter(
+      const rawListSelection = Array.isArray(dados?.clausulasSelecionadas) 
+        ? dados.clausulasSelecionadas 
+        : (Array.isArray((contract as any)?.clausulasSelecionadas) ? (contract as any).clausulasSelecionadas : []);
+      const listSelection = rawListSelection.filter(
         (c: any) => c && c.texto && c.texto.trim() !== ""
       );
       if (listSelection.length > 0) {
@@ -2238,7 +2377,10 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       }
 
       // 4. database Clauses
-      const listSelectionAceite = (dados.clausulasSelecionadas || []).filter(
+      const rawListSelectionAceite = Array.isArray(dados?.clausulasSelecionadas) 
+        ? dados.clausulasSelecionadas 
+        : (Array.isArray((contract as any)?.clausulasSelecionadas) ? (contract as any).clausulasSelecionadas : []);
+      const listSelectionAceite = rawListSelectionAceite.filter(
         (c: any) => c && c.texto && c.texto.trim() !== ""
       );
       if (listSelectionAceite.length > 0) {
@@ -2258,7 +2400,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       if (customClausulasTextAceite && !isDuplicateCustomClauseAceite) {
         addBlock(
           <PdfSection title="Cláusulas Adicionais">
-            <p className="text-justify text-[11.5px] text-gray-800 whitespace-pre-wrap leading-relaxed">{customClausulasTextAceite}</p>
+            <div className="text-justify text-[11.5px] text-gray-800 whitespace-pre-wrap leading-relaxed">{renderFormattedText(customClausulasTextAceite)}</div>
           </PdfSection>,
           14 + estimateHeight(customClausulasTextAceite)
         );
@@ -2391,7 +2533,10 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       }
 
       // Cláusulas Selecionadas / Padrão
-      const listClausesCV = (dados.clausulasSelecionadas || []).filter(
+      const rawListClausesCV = Array.isArray(dados?.clausulasSelecionadas) 
+        ? dados.clausulasSelecionadas 
+        : (Array.isArray((contract as any)?.clausulasSelecionadas) ? (contract as any).clausulasSelecionadas : []);
+      const listClausesCV = rawListClausesCV.filter(
         (c: any) => c && c.texto && c.texto.trim() !== ""
       );
       if (listClausesCV.length > 0) {
@@ -2411,7 +2556,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       if (customClausulasTextCV && !isDuplicateCustomClauseCV) {
         addBlock(
           <PdfSection title="Cláusulas Adicionais">
-            <p className="text-justify text-[11.5px] text-gray-800 whitespace-pre-wrap leading-relaxed">{customClausulasTextCV}</p>
+            <div className="text-justify text-[11.5px] text-gray-800 whitespace-pre-wrap leading-relaxed">{renderFormattedText(customClausulasTextCV)}</div>
           </PdfSection>,
           14 + estimateHeight(customClausulasTextCV)
         );
@@ -2468,6 +2613,33 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
         <PdfPaymentBlock dados={dados} tipoContrato={tipoContrato} totalValor={valorTotalGenerico} contract={contract} />,
         28
       );
+
+      // Selected Clauses fallback
+      const rawListClausesGen = Array.isArray(dados?.clausulasSelecionadas) 
+        ? dados.clausulasSelecionadas 
+        : (Array.isArray((contract as any)?.clausulasSelecionadas) ? (contract as any).clausulasSelecionadas : []);
+      const listClausesGen = rawListClausesGen.filter(
+        (c: any) => c && c.texto && c.texto.trim() !== ""
+      );
+      if (listClausesGen.length > 0) {
+        listClausesGen.forEach((c: any, idx: number) => {
+          addBlock(
+            <PdfClausesBlock clausulas={[c]} sectionTitle={idx === 0 ? "Cláusulas Contratuais" : ""} startIndex={idx + 1} />,
+            estimateHeight(c.texto || '') + 8
+          );
+        });
+      }
+
+      // Custom Clauses fallback
+      const customClausulasTextGen = getCleanVal(dados?.clausulas || dados?.clausulasPersonalizadas || '');
+      if (customClausulasTextGen) {
+        addBlock(
+          <PdfSection title="Cláusulas Adicionais">
+            <div className="text-justify text-[11.5px] text-gray-800 whitespace-pre-wrap leading-relaxed">{renderFormattedText(customClausulasTextGen)}</div>
+          </PdfSection>,
+          14 + estimateHeight(customClausulasTextGen)
+        );
+      }
 
       const sigHeight = estimateSignatureHeight(dados, tipoContrato, contract, empresa);
       addBlock(
@@ -2550,9 +2722,10 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       const pages: number[][] = [[]];
       let h = 0;
       heights.forEach((rawH, i) => {
+        if (!blocks[i]) return;
         const isFirst = pages.length === 1;
         const limit = isFirst ? first : sub;
-        const isSig = !!blocks[i].isSignature;
+        const isSig = !!blocks[i]?.isSignature;
         const breakHere =
           (isSig && limit - h < rawH + 10) || (h + rawH > limit);
         if (breakHere && pages[pages.length - 1].length > 0) {
@@ -2573,13 +2746,23 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
     const lastIsThin = normal.lastH < usableSub * 0.35;
     const useCompact = normal.pages.length >= 2 && lastIsThin;
 
-    setShouldUseCompactMode(useCompact);
-    setMeasuredHeights(heights);
-  }, [totalEstimated, blocks.length, shouldUseCompactMode, isCompact]);
+    setShouldUseCompactMode((prev) => (prev !== useCompact ? useCompact : prev));
+    setMeasuredHeights((prev) => {
+      if (
+        prev &&
+        prev.length === heights.length &&
+        prev.every((v, i) => Math.abs(v - heights[i]) < 1)
+      ) {
+        return prev;
+      }
+      return heights;
+    });
+  }, [totalEstimated, blocks.length, isCompact]);
 
   // Reset measured heights whenever block count or contract type changes
   useEffect(() => {
     setMeasuredHeights(null);
+    setShouldUseCompactMode(false);
   }, [blocks.length, tipoContrato]);
 
   // Build the final pages from measured heights (falls back to a single page
@@ -2633,14 +2816,12 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       <div
         ref={measureRef}
         aria-hidden="true"
-        className={`no-print font-sans ${isCompact ? 'pdf-compact' : ''} ${shouldUseCompactMode ? 'pdf-compact-mode' : ''}`}
+        className={`no-print font-sans ${isCompact ? 'pdf-compact' : ''}`}
         style={{
           position: 'absolute',
           left: '-99999px',
           top: 0,
-          width: shouldUseCompactMode 
-            ? 'calc(210mm - 20mm)' 
-            : (isCompact ? 'calc(210mm - 84px)' : 'calc(210mm - 28mm)'),
+          width: isCompact ? 'calc(210mm - 84px)' : 'calc(210mm - 28mm)',
           visibility: 'hidden',
           pointerEvents: 'none',
           zIndex: -1,
@@ -2650,7 +2831,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
         {blocks.map((block, i) => (
           block && typeof block.render === 'function' ? (
             <div data-measure-block key={i}>
-              {block.render()}
+              <SafeBlockRenderer block={block} index={i} />
             </div>
           ) : null
         ))}
@@ -2699,7 +2880,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
             {pageBlocks.map((block, bIndex) => (
               block && typeof block.render === 'function' ? (
                 <React.Fragment key={bIndex}>
-                  {block.render()}
+                  <SafeBlockRenderer block={block} index={bIndex} />
                 </React.Fragment>
               ) : null
             ))}
@@ -2956,11 +3137,21 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
   );
 };
 
+interface ContractPreviewErrorBoundaryProps {
+  children: React.ReactNode;
+  contract?: any;
+}
+
+interface ContractPreviewErrorBoundaryState {
+  hasError: boolean;
+  error?: Error;
+}
+
 export class ContractPreviewErrorBoundary extends React.Component<
-  { children: React.ReactNode },
-  { hasError: boolean; error?: Error }
+  ContractPreviewErrorBoundaryProps,
+  ContractPreviewErrorBoundaryState
 > {
-  constructor(props: { children: React.ReactNode }) {
+  constructor(props: ContractPreviewErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false };
   }
@@ -2975,22 +3166,89 @@ export class ContractPreviewErrorBoundary extends React.Component<
 
   render() {
     if (this.state.hasError) {
+      const c = this.props.contract || {};
+      const dados = c.dados || {};
+      const comp = dados.proponente || dados.comprador || c.comprador || {};
+      const vend = dados.vendedor || dados.proprietario || dados.locador || c.vendedor || {};
+      const imov = dados.imovel || {};
+      const valorExibicao = c.valor || c.valorTotalNegociado || dados.valorTotalNegociado || dados.pagamento?.valorTotal || 0;
+
       return (
-        <div className="p-8 bg-amber-50 border border-amber-200 rounded-3xl text-amber-950 text-center max-w-lg mx-auto my-8 space-y-4">
-          <div className="w-12 h-12 bg-amber-100 rounded-2xl flex items-center justify-center mx-auto text-amber-700 font-bold text-lg">
-            ⚠️
+        <div id="contrato-pdf" className="w-full max-w-4xl mx-auto my-6 space-y-6">
+          <div className="p-6 bg-amber-50 border border-amber-200 rounded-3xl text-amber-950 space-y-4 shadow-sm">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 bg-amber-100 rounded-2xl flex items-center justify-center text-amber-700 font-bold text-xl shrink-0">
+                ⚠️
+              </div>
+              <div className="space-y-1">
+                <h4 className="font-bold text-base text-amber-950">
+                  Modo de Segurança — Dados do Documento Preservados
+                </h4>
+                <p className="text-xs text-amber-800 leading-relaxed">
+                  Todos os dados que você preencheu (comprador, vendedor, imóvel, valores e condições) estão totalmente preservados e salvos no formulário. Você pode continuar editando, avançar ou clicar para atualizar a visualização.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => this.setState({ hasError: false, error: undefined })}
+                className="px-6 py-2.5 bg-gold hover:bg-amber-500 text-black font-bold rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer shadow-sm active:scale-95"
+              >
+                Atualizar Visualização
+              </button>
+            </div>
           </div>
-          <h4 className="font-bold text-base">Visualização do Documento Temporariamente Indisponível</h4>
-          <p className="text-xs text-amber-800 leading-relaxed">
-            Houve uma variação na formatação deste documento. Seus dados estão preservados no formulário.
-          </p>
-          <button
-            type="button"
-            onClick={() => this.setState({ hasError: false, error: undefined })}
-            className="px-6 py-2.5 bg-gold hover:bg-amber-500 text-black font-bold rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer shadow-sm"
-          >
-            Tentar Renderizar Novamente
-          </button>
+
+          {/* Structured Safe Summary Sheet */}
+          <div className="bg-white border border-gray-200 rounded-3xl p-8 shadow-md text-gray-800 space-y-6">
+            <div className="border-b border-gray-100 pb-4 text-center">
+              <h3 className="text-lg font-bold uppercase tracking-wider text-black">
+                {c.tipoContratoLabel || 'Documento Contratual'}
+              </h3>
+              <p className="text-xs text-gray-500 mt-1">Resumo Estruturado de Conferência</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
+              <div className="p-4 bg-gray-50 rounded-2xl space-y-2">
+                <h5 className="font-bold text-gray-900 uppercase text-[11px] tracking-wide border-b border-gray-200 pb-1">
+                  Parte 1 (Proponente / Comprador / Locatário)
+                </h5>
+                <p><strong>Nome:</strong> {comp.nome || c.nomeCliente || 'Não informado'}</p>
+                <p><strong>Documento:</strong> {comp.cpf || comp.cpfCnpj || comp.documento || 'Não informado'}</p>
+                <p><strong>Telefone:</strong> {comp.telefone || comp.whatsapp || 'Não informado'}</p>
+                <p><strong>E-mail:</strong> {comp.email || 'Não informado'}</p>
+              </div>
+
+              <div className="p-4 bg-gray-50 rounded-2xl space-y-2">
+                <h5 className="font-bold text-gray-900 uppercase text-[11px] tracking-wide border-b border-gray-200 pb-1">
+                  Parte 2 (Vendedor / Proprietário / Locador)
+                </h5>
+                <p><strong>Nome:</strong> {vend.nome || c.nomeVendedor || 'Não informado'}</p>
+                <p><strong>Documento:</strong> {vend.cpf || vend.cpfCnpj || vend.documento || 'Não informado'}</p>
+                <p><strong>Telefone:</strong> {vend.telefone || vend.whatsapp || 'Não informado'}</p>
+                <p><strong>E-mail:</strong> {vend.email || 'Não informado'}</p>
+              </div>
+            </div>
+
+            <div className="p-4 bg-gray-50 rounded-2xl space-y-2 text-xs">
+              <h5 className="font-bold text-gray-900 uppercase text-[11px] tracking-wide border-b border-gray-200 pb-1">
+                Imóvel Objeto
+              </h5>
+              <p><strong>Empreendimento / Imóvel:</strong> {imov.titulo || imov.nomeEdificio || c.imovelTitulo || 'Não informado'}</p>
+              <p><strong>Endereço:</strong> {imov.endereco || c.imovelEndereco || 'Não informado'}</p>
+              <p><strong>Matrícula / CRI:</strong> {imov.matricula || c.imovelMatricula || '---'} {imov.cri ? `(CRI: ${imov.cri})` : ''}</p>
+            </div>
+
+            <div className="p-4 bg-amber-50/60 border border-amber-100 rounded-2xl space-y-2 text-xs">
+              <h5 className="font-bold text-gray-900 uppercase text-[11px] tracking-wide border-b border-amber-200/50 pb-1">
+                Valores e Condições de Pagamento
+              </h5>
+              <p><strong>Valor Total:</strong> {valorExibicao ? Number(valorExibicao).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00'}</p>
+              {dados.valorSinal && <p><strong>Sinal de Negócio:</strong> {Number(dados.valorSinal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>}
+              <p><strong>Forma de Pagamento:</strong> {c.formaPagamento || (Array.isArray(c.formasPagamento) ? c.formasPagamento.join(', ') : 'Conforme proposta')}</p>
+            </div>
+          </div>
         </div>
       );
     }
@@ -3000,7 +3258,7 @@ export class ContractPreviewErrorBoundary extends React.Component<
 
 export const ContractA4Preview: React.FC<ContractA4PreviewProps> = (props) => {
   return (
-    <ContractPreviewErrorBoundary>
+    <ContractPreviewErrorBoundary contract={props.contract}>
       <ContractA4PreviewInner {...props} />
     </ContractPreviewErrorBoundary>
   );

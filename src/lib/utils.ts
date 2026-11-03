@@ -762,23 +762,16 @@ export function safeMoney(value: any, fallback = 'R$ 0,00'): string {
 
 export function safeDate(value: any, fallback = '---'): string {
   if (value === null || value === undefined || value === '') return fallback;
-  const str = String(value).trim();
-  if (str === 'undefined' || str === 'null' || str === 'NaN' || str === '[object Object]') return fallback;
   try {
-    // If it's already structured as dd/mm/yyyy or equivalent, return as is
-    if (str.includes('/') && str.split('/').length === 3) {
-      return str;
+    const formatted = formatarDataBR(value);
+    if (formatted && formatted !== 'Não informado' && formatted !== 'Invalid Date') {
+      return formatted;
     }
-    if (str.match(/^\d{4}-\d{2}-\d{2}$/)) {
-      const [year, month, day] = str.split('-');
-      return `${day}/${month}/${year}`;
-    }
-    // Check if we can parse it
-    const d = new Date(str);
-    if (isNaN(d.getTime())) return str;
-    return d.toLocaleDateString('pt-BR');
-  } catch {
+    const str = String(value).trim();
+    if (str === 'undefined' || str === 'null' || str === 'NaN' || str === '[object Object]') return fallback;
     return str;
+  } catch {
+    return fallback;
   }
 }
 
