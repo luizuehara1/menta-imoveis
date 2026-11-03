@@ -609,12 +609,13 @@ export const PdfHeader: React.FC<PdfHeaderProps> = ({ empresa, isCompact = true 
 interface PdfSectionProps {
   title: string;
   children: React.ReactNode;
+  isDense?: boolean;
 }
 
-export const PdfSection: React.FC<PdfSectionProps> = ({ title, children }) => {
+export const PdfSection: React.FC<PdfSectionProps> = ({ title, children, isDense = false }) => {
   return (
-    <section className="section avoid-break mb-2.5">
-      <h3 className="section-title text-[12.5px] uppercase font-black text-black mb-1 px-1 py-0.5 bg-gray-50/50 border-l border-gold/40 tracking-wider">
+    <section className={`section avoid-break ${isDense ? 'mb-1.5' : 'mb-2'}`}>
+      <h3 className="section-title text-[11px] font-black uppercase text-black tracking-wider bg-gray-50 border-l-2 border-gold py-0.5 px-1.5 mb-1">
         {title}
       </h3>
       {children}
@@ -625,12 +626,13 @@ export const PdfSection: React.FC<PdfSectionProps> = ({ title, children }) => {
 interface PdfFieldGridProps {
   children: React.ReactNode;
   cols?: number;
+  isDense?: boolean;
 }
 
-export const PdfFieldGrid: React.FC<PdfFieldGridProps> = ({ children, cols = 2 }) => {
+export const PdfFieldGrid: React.FC<PdfFieldGridProps> = ({ children, cols = 2, isDense = false }) => {
   const gridClass = cols === 3 ? 'grid grid-cols-3' : 'grid grid-cols-2';
   return (
-    <div className={`${gridClass} gap-y-1 gap-x-6 text-[12px] leading-normal pt-0.5 text-gray-800`}>
+    <div className={`${gridClass} ${isDense ? 'gap-y-0.5 gap-x-4' : 'gap-y-0.5 gap-x-5'} text-[10.5px] sm:text-[11px] leading-snug text-gray-800`}>
       {children}
     </div>
   );
@@ -642,6 +644,7 @@ interface PdfPropertyBlockProps {
   valorAlternativo?: number;
   dataAlternativa?: string;
   contract?: any;
+  isDense?: boolean;
 }
 
 export const PdfPropertyBlock: React.FC<PdfPropertyBlockProps> = ({ 
@@ -649,7 +652,8 @@ export const PdfPropertyBlock: React.FC<PdfPropertyBlockProps> = ({
   tipoContrato, 
   valorAlternativo, 
   dataAlternativa,
-  contract = {}
+  contract = {},
+  isDense = false
 }) => {
   // Combine all sources into a single object for robust parsing
   const combined = { 
@@ -735,7 +739,7 @@ export const PdfPropertyBlock: React.FC<PdfPropertyBlockProps> = ({
   else if (tipoContrato === 'locacao_temporaria') labelValor = "Valor Total da Locação:";
 
   return (
-    <div className="bg-gray-50/55 border border-gray-150 rounded-xl p-2.5 grid grid-cols-2 gap-y-1 gap-x-6 text-[12px] leading-normal property-block avoid-break">
+    <div className={`bg-gray-50/50 border border-gray-150 rounded-lg ${isDense ? 'p-1.5 gap-y-0.5 gap-x-4 text-[10px] sm:text-[10.5px]' : 'p-2 gap-y-0.5 gap-x-5 text-[10.5px] sm:text-[11px]'} grid grid-cols-2 leading-snug property-block avoid-break`}>
       <p><strong>Edifício / Imóvel:</strong> {safeText(titulo)}</p>
       <p><strong>Código do Imóvel:</strong> {safeText(codigo)}</p>
       
@@ -775,6 +779,7 @@ interface PdfPaymentBlockProps {
   metodosDePagamento?: any[];
   formaPagamentoSimple?: string;
   contract?: any;
+  isDense?: boolean;
 }
 
 export const PdfPaymentBlock: React.FC<PdfPaymentBlockProps> = ({
@@ -783,7 +788,8 @@ export const PdfPaymentBlock: React.FC<PdfPaymentBlockProps> = ({
   totalValor = 0,
   metodosDePagamento = [],
   formaPagamentoSimple = "",
-  contract = {}
+  contract = {},
+  isDense = false
 }) => {
   const d = dados || {};
   const c = contract || {};
@@ -814,25 +820,25 @@ export const PdfPaymentBlock: React.FC<PdfPaymentBlockProps> = ({
   }
 
   return (
-    <PdfSection title={sectionTitle}>
+    <PdfSection title={sectionTitle} isDense={isDense}>
       {tipoContrato === 'aceite' ? (
-        <div className="text-[12px] text-gray-800 leading-normal space-y-1.5">
-          <p><strong>Valor do Aceite:</strong> <span className="font-bold">{safeMoney(safeTotal)}</span> {valorExtenso ? `(${valorExtenso})` : ''}</p>
+        <div className="text-[10.5px] sm:text-[11px] text-gray-800 leading-snug space-y-1">
+          <p><strong>Valor do Aceite:</strong> <span className="font-bold text-black">{safeMoney(safeTotal)}</span> {valorExtenso ? `(${valorExtenso})` : ''}</p>
           {formaPagamentoSimple && (
             <p><strong>Forma de Pagamento:</strong> {safeText(formaPagamentoSimple)}</p>
           )}
           {showDetalhes && (
-            <div className="mt-1 leading-normal text-[11.5px] text-gray-800 text-justify">
-              <p className="font-bold text-[11px] uppercase tracking-wider text-gray-700 mb-0.5">Detalhes / Condições de Pagamento:</p>
-              <div className="text-justify tracking-tight break-words text-gray-700">
+            <div className="mt-0.5 leading-normal text-[10px] sm:text-[10.5px] text-gray-800 text-justify">
+              <p className="font-bold text-[10px] uppercase tracking-wider text-gray-700 mb-0.5">Detalhes / Condições de Pagamento:</p>
+              <div className="text-justify tracking-tight break-words text-gray-800">
                 {renderFormattedText(rawDetalhes)}
               </div>
             </div>
           )}
           {showOutras && (
-            <div className="mt-1 leading-normal text-[11.5px] text-gray-800 text-justify">
-              <p className="font-bold text-[11px] uppercase tracking-wider text-gray-700 mb-0.5">Outras Condições:</p>
-              <div className="text-justify tracking-tight break-words text-gray-700">
+            <div className="mt-0.5 leading-normal text-[10px] sm:text-[10.5px] text-gray-800 text-justify">
+              <p className="font-bold text-[10px] uppercase tracking-wider text-gray-700 mb-0.5">Outras Condições:</p>
+              <div className="text-justify tracking-tight break-words text-gray-800">
                 {renderFormattedText(rawOutras)}
               </div>
             </div>
@@ -841,24 +847,24 @@ export const PdfPaymentBlock: React.FC<PdfPaymentBlockProps> = ({
       ) : (
         <>
           {tipoContrato !== 'locacao_temporaria' && tipoContrato !== 'arras_confirmatorios' && (
-            <p className="text-justify text-[12px] leading-normal mb-1.5 text-gray-800">
+            <p className="text-justify text-[10.5px] sm:text-[11px] leading-snug mb-1 text-gray-800">
               O valor total da transação é de <strong>{safeMoney(safeTotal)}</strong> ({valorExtenso ? `${valorExtenso}` : 'Não informado'}).
             </p>
           )}
 
           {tipoContrato === 'arras_confirmatorios' && (
-            <div className="grid grid-cols-2 gap-y-1.5 gap-x-6 text-[12px] text-gray-800 leading-normal mb-1.5">
+            <div className={`grid grid-cols-2 ${isDense ? 'gap-y-0.5 gap-x-4' : 'gap-y-0.5 gap-x-5'} text-[10.5px] sm:text-[11px] text-gray-800 leading-snug mb-1`}>
               <p><strong>Valor Total do Negócio:</strong> {safeMoney(safeTotal)}</p>
               <p><strong>Valor do Sinal/Arras:</strong> {safeMoney(Number(d.arras?.valorArras || 0))}</p>
               <p><strong>Forma do Sinal:</strong> {safeText(d.arras?.formaPagamentoArras || "Não informado")}</p>
               <p><strong>Vencimento do Sinal:</strong> {safeDate(d.arras?.dataPagamentoArras)}</p>
               {d.arras?.condicoesDevolucao && (
-                <p className="col-span-2 text-[11px] text-gray-700 mt-1">
+                <p className="col-span-2 text-[10px] text-gray-700 mt-0.5">
                   <strong>Condições de devolução do sinal:</strong> {safeText(d.arras.condicoesDevolucao)}
                 </p>
               )}
               {d.arras?.observacoes && (
-                <p className="col-span-2 text-[11px] text-gray-700 mt-1">
+                <p className="col-span-2 text-[10px] text-gray-700 mt-0.5">
                   <strong>Observações Gerais:</strong> {safeText(d.arras.observacoes)}
                 </p>
               )}
@@ -889,8 +895,8 @@ export const PdfPaymentBlock: React.FC<PdfPaymentBlockProps> = ({
             const totalExtenso = totalGeral > 0 ? valorMonetarioPorExtenso(totalGeral) : '';
 
             return (
-              <div className="space-y-2 mb-2">
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-1.5 gap-x-4 text-[12px] text-gray-800 leading-normal">
+              <div className="space-y-1 mb-1">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-0.5 gap-x-4 text-[10.5px] sm:text-[11px] text-gray-800 leading-snug">
                   <p><strong>Valor da Diária:</strong> {safeMoney(valDiaria)}</p>
                   <p><strong>Quantidade de Diárias:</strong> {qtdDiarias} diária(s)</p>
                   <p><strong>Subtotal das Diárias:</strong> {safeMoney(subtotal)}</p>
@@ -905,8 +911,8 @@ export const PdfPaymentBlock: React.FC<PdfPaymentBlockProps> = ({
                     <p><strong>Taxa Caução/Garantia:</strong> {safeMoney(txCaucao)}</p>
                   )}
                 </div>
-                <div className="border-t border-gray-200 pt-1.5 mt-1">
-                  <p className="text-primary-black font-extrabold text-[12.5px]">
+                <div className="border-t border-gray-200 pt-1 mt-0.5">
+                  <p className="text-primary-black font-extrabold text-[11px] sm:text-[11.5px]">
                     TOTAL GERAL DA LOCAÇÃO: {safeMoney(totalGeral)} {totalExtenso ? `(${totalExtenso})` : ''}
                   </p>
                 </div>
@@ -915,25 +921,25 @@ export const PdfPaymentBlock: React.FC<PdfPaymentBlockProps> = ({
           })()}
 
           {formaPagamentoSimple && (
-            <p className="text-[12px] text-gray-800 mb-1.5">
+            <p className="text-[10.5px] sm:text-[11px] text-gray-800 mb-1">
               <strong>Forma de Pagamento Principal:</strong> {safeText(formaPagamentoSimple)}
             </p>
           )}
 
           {safeMetodos && safeMetodos.length > 0 && (
-            <div className="mb-2 pl-2">
-              <p className="font-bold text-[11px] uppercase tracking-wider text-gray-700 mb-0.5">Condições de Pagamento de Preferência:</p>
+            <div className="mb-1 pl-1">
+              <p className="font-bold text-[10px] uppercase tracking-wider text-gray-700 mb-0.5">Condições de Pagamento de Preferência:</p>
               {safeMetodos.map((item: any, index: number) => {
                 if (typeof item === 'string') {
                   return (
-                    <div key={index} className="text-[11.5px] text-gray-800 leading-normal pl-2 my-0.5 relative border-l border-gold/30">
+                    <div key={index} className="text-[10px] sm:text-[10.5px] text-gray-800 leading-snug pl-2 my-0.5 relative border-l-2 border-gold/40">
                       • <strong>{safeText(item)}</strong>
                     </div>
                   );
                 }
                 const subValue = Number(item?.valor) || 0;
                 return (
-                  <div key={index} className="text-[11.5px] text-gray-800 leading-normal pl-2 my-0.5 relative border-l border-gold/30">
+                  <div key={index} className="text-[10px] sm:text-[10.5px] text-gray-800 leading-snug pl-2 my-0.5 relative border-l-2 border-gold/40">
                     • <strong>{safeText(item?.tipo || 'Parcela')}</strong>{subValue > 0 ? `: ${safeMoney(subValue)}` : ''}
                     {item?.vencimento && ` com vencimento em ${safeDate(item.vencimento)}`}
                     {item?.observacao && ` (${safeText(item.observacao)})`}
@@ -944,18 +950,18 @@ export const PdfPaymentBlock: React.FC<PdfPaymentBlockProps> = ({
           )}
 
           {showDetalhes && (
-            <div className="mt-1 leading-normal text-[11.5px] text-gray-800 text-justify">
-              <p className="font-bold text-[11px] uppercase tracking-wider text-gray-700 mb-0.5">Detalhes / Condições de Pagamento:</p>
-              <div className="text-justify tracking-tight break-words text-gray-700">
+            <div className="mt-0.5 leading-normal text-[10px] sm:text-[10.5px] text-gray-800 text-justify">
+              <p className="font-bold text-[10px] uppercase tracking-wider text-gray-700 mb-0.5">Detalhes / Condições de Pagamento:</p>
+              <div className="text-justify tracking-tight break-words text-gray-800">
                 {renderFormattedText(rawDetalhes)}
               </div>
             </div>
           )}
 
           {showOutras && (
-            <div className="mt-1 leading-normal text-[11.5px] text-gray-800 text-justify">
-              <p className="font-bold text-[11px] uppercase tracking-wider text-gray-700 mb-0.5">Outras Condições:</p>
-              <div className="text-justify tracking-tight break-words text-gray-700">
+            <div className="mt-0.5 leading-normal text-[10px] sm:text-[10.5px] text-gray-800 text-justify">
+              <p className="font-bold text-[10px] uppercase tracking-wider text-gray-700 mb-0.5">Outras Condições:</p>
+              <div className="text-justify tracking-tight break-words text-gray-800">
                 {renderFormattedText(rawOutras)}
               </div>
             </div>
@@ -966,16 +972,88 @@ export const PdfPaymentBlock: React.FC<PdfPaymentBlockProps> = ({
   );
 };
 
+export function formatarTituloClausula(titulo: string, numero: number): string {
+  if (!titulo) return `CLÁUSULA ${numero}ª`;
+  
+  let cleanTitle = String(titulo).trim();
+  cleanTitle = cleanTitle
+    .replace(/^(cl[aá]usula\s*\d+[ªºa-z]?\s*[-–:.]*)/i, '')
+    .replace(/^(\d+[ªº.]\s*[-–:]*)/i, '')
+    .trim();
+    
+  if (!cleanTitle) {
+    return `CLÁUSULA ${numero}ª`;
+  }
+  
+  return `CLÁUSULA ${numero}ª — ${cleanTitle.toUpperCase()}`;
+}
+
+export function substituirVariaveisDinamicas(texto: string, contract: any = {}): string {
+  if (!texto) return '';
+  const d = contract?.dados || {};
+  const p = d.proponente || d.locatario || d.comprador || contract.comprador || {};
+  const v = d.vendedor || d.proprietario || d.locador || contract.vendedor || {};
+  const imov = d.imovel || {};
+  
+  const nomeCliente = contract.nomeCliente || p.nome || '';
+  const cpfCliente = p.cpf || p.cpfCnpj || '';
+  const rgCliente = p.rg || '';
+  const telefoneCliente = p.telefone || p.whatsapp || '';
+  const emailCliente = p.email || '';
+  
+  const nomeVendedor = contract.nomeVendedor || v.nome || '';
+  const cpfVendedor = v.cpf || v.cpfCnpj || '';
+  
+  const imovelTitulo = imov.titulo || imov.nomeEdificio || contract.imovelTitulo || contract.enderecoImovel || '';
+  const imovelCodigo = imov.codigo || contract.imovelCodigo || '';
+  const imovelEndereco = imov.endereco || contract.imovelEndereco || contract.enderecoImovel || '';
+  const imovelMatricula = imov.matricula || contract.imovelMatricula || '';
+  const imovelCri = imov.cri || contract.imovelCri || '';
+  
+  const valorTotalNum = Number(contract.valor || 0);
+  const valorTotalStr = valorTotalNum > 0 ? valorTotalNum.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '';
+  const valorExtensoStr = valorTotalNum > 0 ? valorMonetarioPorExtenso(valorTotalNum) : '';
+  
+  const valorSinalNum = Number(contract.valorSinal || d.arras?.valorArras || 0);
+  const valorSinalStr = valorSinalNum > 0 ? valorSinalNum.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '';
+  
+  const dataAtual = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+  const cidade = contract.local || 'Balneário Camboriú - SC';
+
+  return texto
+    .replace(/{nome_cliente}/gi, nomeCliente)
+    .replace(/{cpf_cliente}/gi, cpfCliente)
+    .replace(/{rg_cliente}/gi, rgCliente)
+    .replace(/{telefone_cliente}/gi, telefoneCliente)
+    .replace(/{email_cliente}/gi, emailCliente)
+    .replace(/{nome_vendedor}/gi, nomeVendedor)
+    .replace(/{cpf_vendedor}/gi, cpfVendedor)
+    .replace(/{imovel_titulo}/gi, imovelTitulo)
+    .replace(/{imovel_codigo}/gi, imovelCodigo)
+    .replace(/{imovel_endereco}/gi, imovelEndereco)
+    .replace(/{imovel_matricula}/gi, imovelMatricula)
+    .replace(/{imovel_cri}/gi, imovelCri)
+    .replace(/{valor_total}/gi, valorTotalStr)
+    .replace(/{valor_extenso}/gi, valorExtensoStr)
+    .replace(/{valor_sinal}/gi, valorSinalStr)
+    .replace(/{data_atual}/gi, dataAtual)
+    .replace(/{cidade}/gi, cidade);
+}
+
 interface PdfClausesBlockProps {
   clausulas: Array<{ id?: string; titulo: string; texto: string }>;
   sectionTitle?: string;
   startIndex?: number;
+  contract?: any;
+  isDense?: boolean;
 }
 
 export const PdfClausesBlock: React.FC<PdfClausesBlockProps> = ({
   clausulas = [],
-  sectionTitle = "Cláusulas e Condições Gerais",
-  startIndex = 1
+  sectionTitle,
+  startIndex = 1,
+  contract = {},
+  isDense = false
 }) => {
   const safeClauses = Array.isArray(clausulas) ? clausulas : [clausulas].filter(Boolean);
   const filteredClauses = safeClauses.filter(c => c && typeof c === 'object' && c.texto && String(c.texto).trim() !== "");
@@ -983,29 +1061,29 @@ export const PdfClausesBlock: React.FC<PdfClausesBlockProps> = ({
   if (filteredClauses.length === 0) return null;
 
   return (
-    <>
+    <div className={`clause-wrapper ${isDense ? 'space-y-1' : 'space-y-1.5'}`}>
+      {sectionTitle && sectionTitle.trim() !== "" && (
+        <h3 className="section-title text-[11px] font-black uppercase text-black tracking-wider bg-gray-50 border-l-2 border-gold py-0.5 px-1.5 mb-1">
+          {sectionTitle}
+        </h3>
+      )}
       {filteredClauses.map((c, idx) => {
         const numClausula = startIndex + idx;
-        const tituloClausula = c.titulo ? String(c.titulo).trim() : 'Cláusula Adicional';
+        const tituloFormatado = formatarTituloClausula(c.titulo, numClausula);
+        const textoProcessado = substituirVariaveisDinamicas(c.texto, contract);
+
         return (
-          <section key={c.id || idx} className="section mt-1 mb-1.5 avoid-break leading-relaxed text-[11.5px] text-gray-800 clause-block">
-            {idx === 0 && sectionTitle && sectionTitle.trim() !== "" && (
-              <h3 className="section-title text-[12.5px] uppercase font-black text-black mb-1 px-1 py-0.5 bg-gray-50/50 border-l border-gold/40 tracking-wider">
-                {sectionTitle}
-              </h3>
-            )}
-            <div className="text-justify leading-relaxed text-[11.5px] text-gray-800">
-              <p className="font-bold mb-0.5 text-[12px] text-black">
-                Cláusula {numClausula}ª - {tituloClausula}:
-              </p>
-              <div className="text-gray-700 leading-relaxed text-justify break-words">
-                {renderFormattedText(c.texto)}
-              </div>
+          <div key={c.id || idx} className="clause-item text-justify avoid-break mb-1.5">
+            <p className="font-bold text-[10.5px] sm:text-[11px] text-black tracking-tight mb-0.5 uppercase">
+              {tituloFormatado}
+            </p>
+            <div className="text-gray-800 leading-normal text-justify break-words text-[10px] sm:text-[10.5px]">
+              {renderFormattedText(textoProcessado)}
             </div>
-          </section>
+          </div>
         );
       })}
-    </>
+    </div>
   );
 };
 
@@ -1015,6 +1093,7 @@ interface PdfSignaturesProps {
   contract: any;
   empresa: any;
   parteAceitante?: any;
+  isDense?: boolean;
 }
 
 export const PdfSignatures: React.FC<PdfSignaturesProps> = ({
@@ -1022,23 +1101,25 @@ export const PdfSignatures: React.FC<PdfSignaturesProps> = ({
   tipoContrato = 'proposta',
   contract = {},
   empresa = {},
-  parteAceitante
+  parteAceitante,
+  isDense = false
 }) => {
   const d = dados || {};
   const c = contract || {};
   const emp = empresa || {};
+  const ptGap = isDense ? 'pt-5' : 'pt-6';
 
   if (tipoContrato === 'aceite') {
     const nomeAceitante = parteAceitante?.nome || 'ACEITANTE / INTERESSADO';
     return (
-      <div className="pdf-signatures mt-4 pb-2 avoid-break signature-block text-[11.5px]">
-        <div className="flex flex-col justify-end pt-12">
+      <div className={`pdf-signatures ${isDense ? 'mt-2 gap-y-3' : 'mt-3 gap-y-4'} pb-1 avoid-break signature-block text-[10.5px] sm:text-[11px]`}>
+        <div className={`flex flex-col justify-end text-center ${ptGap}`}>
           <div className="pdf-signature-line text-black font-bold">
             {safeText(nomeAceitante)}
           </div>
           <div className="pdf-signature-role">Parte Aceitante</div>
         </div>
-        <div className="flex flex-col justify-end pt-12">
+        <div className={`flex flex-col justify-end text-center ${ptGap}`}>
           <div className="pdf-signature-line text-black font-bold">
             {safeText(emp.nome || 'Menta Imóveis')}
           </div>
@@ -1052,29 +1133,29 @@ export const PdfSignatures: React.FC<PdfSignaturesProps> = ({
     const nomeLocador = d.locador?.nome || d.proprietario?.nome || 'LOCADOR';
     const nomeLocatario = d.locatario?.nome || 'LOCATÁRIO';
     return (
-      <div className="pdf-signatures mt-4 pb-2 avoid-break signature-block text-[11.5px]">
-        <div className="flex flex-col justify-end pt-12">
+      <div className={`pdf-signatures ${isDense ? 'mt-2 gap-y-3' : 'mt-3 gap-y-4'} pb-1 avoid-break signature-block text-[10.5px] sm:text-[11px]`}>
+        <div className={`flex flex-col justify-end text-center ${ptGap}`}>
           <div className="pdf-signature-line text-black font-bold max-w-full truncate">
             {safeText(nomeLocador)}
           </div>
           <div className="pdf-signature-role">LOCADOR (Proprietário)</div>
         </div>
-        <div className="flex flex-col justify-end pt-12">
+        <div className={`flex flex-col justify-end text-center ${ptGap}`}>
           <div className="pdf-signature-line text-black font-bold max-w-full truncate">
             {safeText(nomeLocatario)}
           </div>
           <div className="pdf-signature-role">LOCATÁRIO (Hóspede/Inquilino)</div>
         </div>
         {d.fiador?.nome && (
-          <div className="flex flex-col justify-end pt-12">
+          <div className={`flex flex-col justify-end text-center ${ptGap}`}>
             <div className="pdf-signature-line text-black font-bold max-w-full truncate">
               {safeText(d.fiador.nome)}
             </div>
             <div className="pdf-signature-role">Fiador</div>
           </div>
         )}
-        <div className="flex flex-col justify-end col-span-2 max-w-[200px] mx-auto w-full mt-4 pt-12">
-          <div className="pdf-signature-line text-gray-700 font-bold max-w-full truncate">
+        <div className={`flex flex-col justify-end text-center col-span-2 max-w-[220px] mx-auto w-full mt-2 ${ptGap}`}>
+          <div className="pdf-signature-line text-gray-800 font-bold max-w-full truncate">
             {safeText(emp.nome || 'Menta Imóveis')}
           </div>
           <div className="pdf-signature-role">INTERMEDIADORA</div>
@@ -1087,34 +1168,34 @@ export const PdfSignatures: React.FC<PdfSignaturesProps> = ({
     const nomeProprietario = d.proprietario?.nome || d.vendedor?.nome || c.nomeVendedor || 'PROPRIETÁRIO CONTRATANTE';
     const proprietarioSpouse = getSpouseDataPDF(d.proprietario || d.vendedor, 'vendedor', d);
     return (
-      <div className="pdf-signatures mt-4 pb-2 avoid-break signature-block text-[11.5px]">
-        <div className="flex flex-col justify-end pt-12">
+      <div className={`pdf-signatures ${isDense ? 'mt-2 gap-y-3' : 'mt-3 gap-y-4'} pb-1 avoid-break signature-block text-[10.5px] sm:text-[11px]`}>
+        <div className={`flex flex-col justify-end text-center ${ptGap}`}>
           <div className="pdf-signature-line text-black font-bold max-w-full truncate">
             {safeText(nomeProprietario)}
           </div>
           <div className="pdf-signature-role">CONTRATANTE (Proprietário)</div>
         </div>
         {proprietarioSpouse.nome && (
-          <div className="flex flex-col justify-end pt-12">
+          <div className={`flex flex-col justify-end text-center ${ptGap}`}>
             <div className="pdf-signature-line text-black font-bold max-w-full truncate">
               {safeText(proprietarioSpouse.nome)}
             </div>
             <div className="pdf-signature-role">CÔNJUGE DO CONTRATANTE</div>
           </div>
         )}
-        <div className="flex flex-col justify-end pt-12">
+        <div className={`flex flex-col justify-end text-center ${ptGap}`}>
           <div className="pdf-signature-line text-black font-bold max-w-full truncate">
             {safeText(emp.razaoSocial || emp.nome || 'MENTA NEGÓCIOS IMOBILIÁRIOS')}
           </div>
           <div className="pdf-signature-role">CONTRATADA (Administradora)</div>
         </div>
-        <div className="flex flex-col justify-end pt-12">
+        <div className={`flex flex-col justify-end text-center ${ptGap}`}>
           <div className="pdf-signature-line text-gray-700 font-bold max-w-full truncate">
             {safeText(d.assinaturas?.testemunha1 || 'TESTEMUNHA 1')}
           </div>
           <div className="pdf-signature-role">Testemunha 1 {d.assinaturas?.cpfTestemunha1 ? `(CPF: ${d.assinaturas.cpfTestemunha1})` : ''}</div>
         </div>
-        <div className="flex flex-col justify-end pt-12">
+        <div className={`flex flex-col justify-end text-center ${ptGap}`}>
           <div className="pdf-signature-line text-gray-700 font-bold max-w-full truncate">
             {safeText(d.assinaturas?.testemunha2 || 'TESTEMUNHA 2')}
           </div>
@@ -1131,36 +1212,36 @@ export const PdfSignatures: React.FC<PdfSignaturesProps> = ({
   const isCompraVenda = tipoContrato === 'compra_venda';
 
   return (
-    <div className="pdf-signatures mt-4 pb-2 avoid-break signature-block text-[11.5px]">
-      <div className="flex flex-col justify-end pt-12">
+    <div className={`pdf-signatures ${isDense ? 'mt-2 gap-y-3' : 'mt-3 gap-y-4'} pb-1 avoid-break signature-block text-[10.5px] sm:text-[11px]`}>
+      <div className={`flex flex-col justify-end text-center ${ptGap}`}>
         <div className="pdf-signature-line text-black font-bold max-w-full truncate">
           {safeText(vendName)}
         </div>
         <div className="pdf-signature-role">{isCompraVenda ? 'Promitente Vendedor(a)' : 'Vendedor / Proprietário'}</div>
       </div>
       {vendSpouse.nome && (
-        <div className="flex flex-col justify-end pt-12">
+        <div className={`flex flex-col justify-end text-center ${ptGap}`}>
           <div className="pdf-signature-line text-black font-bold max-w-full truncate">
             {safeText(vendSpouse.nome)}
           </div>
           <div className="pdf-signature-role">Cônjuge do Vendedor</div>
         </div>
       )}
-      <div className="flex flex-col justify-end pt-12">
+      <div className={`flex flex-col justify-end text-center ${ptGap}`}>
         <div className="pdf-signature-line text-black font-bold max-w-full truncate">
           {safeText(compName)}
         </div>
         <div className="pdf-signature-role">{isCompraVenda ? 'Promitente Comprador(a)' : 'Comprador / Proponente'}</div>
       </div>
       {compSpouse.nome && (
-        <div className="flex flex-col justify-end pt-12">
+        <div className={`flex flex-col justify-end text-center ${ptGap}`}>
           <div className="pdf-signature-line text-black font-bold max-w-full truncate">
             {safeText(compSpouse.nome)}
           </div>
           <div className="pdf-signature-role">Cônjuge do Comprador</div>
         </div>
       )}
-      <div className="flex flex-col justify-end col-span-2 max-w-[200px] mx-auto w-full mt-4 pt-12">
+      <div className={`flex flex-col justify-end text-center col-span-2 max-w-[220px] mx-auto w-full mt-2 ${ptGap}`}>
         <div className="pdf-signature-line text-gray-800 font-bold max-w-full truncate">
           {safeText(emp.nome || 'Menta Imóveis')}
         </div>
@@ -1235,6 +1316,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
   const empresa = (settings.empresa || {}) as any;
 
   const isCompact = tipoContrato !== 'locacao_temporaria';
+  const [isDense, setIsDense] = useState(false);
 
   // HELPER Functions
   const getCleanVal = (val: any): string => (typeof val === 'string' ? val.trim() : '');
@@ -1297,85 +1379,52 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
     ].filter(Boolean).join(' - ');
 
     return (
-      <div className="flex items-center justify-between border-b-2 border-primary-black pb-2 mb-4 gap-4 w-full">
+      <div className="flex items-center justify-between border-b-2 border-black pb-1.5 mb-2 gap-3 w-full shrink-0">
         {logoUrl && isValidImageUrl(logoUrl) && (
           <img 
             src={logoUrl} 
             alt={safeText(empresa.nome)} 
-            className="h-16 w-auto object-contain shrink-0" 
+            className="h-12 w-auto object-contain shrink-0" 
             crossOrigin="anonymous"
             referrerPolicy="no-referrer"
             onError={(e) => { e.currentTarget.style.display = 'none'; }}
           />
         )}
-        <div className="flex-grow text-right text-[11.5px] text-gray-700 font-bold uppercase tracking-widest leading-normal">
-          <h2 className="text-[15px] font-display font-black text-primary-black uppercase tracking-[0.1em] mb-0.5">
+        <div className="flex-grow text-right text-[10px] text-gray-600 font-semibold uppercase tracking-wider leading-snug">
+          <h2 className="text-[14px] font-display font-black text-black uppercase tracking-[0.08em] mb-0.5">
             {safeText(empresa.nome || 'MENTA NEGÓCIOS IMOBILIÁRIOS')}
           </h2>
-          {empresa.razaoSocial && <p className="mb-0.5">{safeText(empresa.razaoSocial)}</p>}
-          {addressLine && <p className="mb-0.5">{addressLine}</p>}
-          <p className="mb-0.5">
+          {empresa.razaoSocial && <p className="mb-0.5 text-gray-700 font-bold">{safeText(empresa.razaoSocial)}</p>}
+          <p className="mb-0.5 text-gray-500">
             {empresa.cnpj ? `CNPJ: ${safeText(empresa.cnpj)}` : ''}
             {empresa.creciPj ? ` | CRECI PJ: ${safeText(empresa.creciPj)}` : ''}
+            {addressLine ? ` | ${addressLine}` : ''}
           </p>
-          <p>
-            {empresa.telefone ? `Tel: ${safeText(empresa.telefone)}` : ''}
-            {empresa.email ? ` | ${safeText(empresa.email)}` : ''}
-          </p>
-        </div>
-      </div>
-    );
-  };
-
-  const renderCompactHeader = () => {
-    const logoUrl = empresa.logoCabecalhoUrl || '/logo.png';
-    const addressLine = [
-      empresa.endereco,
-      empresa.bairro,
-      empresa.cidade && empresa.estado ? `${empresa.cidade}/${empresa.estado}` : (empresa.cidade || empresa.estado),
-      empresa.cep ? `CEP: ${empresa.cep}` : ''
-    ].filter(Boolean).join(' - ');
-
-    return (
-      <div className="pdf-compact-header">
-        {logoUrl && isValidImageUrl(logoUrl) && (
-          <img 
-            src={logoUrl} 
-            alt={safeText(empresa.nome)} 
-            crossOrigin="anonymous"
-            referrerPolicy="no-referrer"
-            onError={(e) => { e.currentTarget.style.display = 'none'; }}
-          />
-        )}
-        <div className="flex-grow text-right">
-          <h2 className="company-name text-primary-black uppercase leading-none mb-1">
-            {safeText(empresa.nome || 'MENTA NEGÓCIOS IMOBILIÁRIOS')}
-          </h2>
-          <div className="company-info">
-            {empresa.razaoSocial && <span className="block mb-0.5 font-bold uppercase">{safeText(empresa.razaoSocial)}</span>}
-            <p className="m-0 text-gray-500 text-[11px]">
-              {empresa.cnpj ? `CNPJ: ${safeText(empresa.cnpj)}` : ''}
-              {empresa.creciPj ? ` | CRECI PJ: ${safeText(empresa.creciPj)}` : ''}
-              {addressLine ? ` | ${addressLine}` : ''}
+          {(empresa.telefone || empresa.email) && (
+            <p className="text-gray-500">
+              {empresa.telefone ? `Tel: ${safeText(empresa.telefone)}` : ''}
+              {empresa.email ? ` | ${safeText(empresa.email)}` : ''}
             </p>
-          </div>
+          )}
         </div>
       </div>
     );
   };
+
+  const renderCompactHeader = renderHeader;
 
   const renderFooter = (pageNumber: number, totalPages?: number) => {
     const footerCustom = empresa.rodapeContratos || '';
     return (
-      <div className="mt-auto pt-3 border-t border-gray-150 flex items-end justify-between text-[9.5px] text-gray-400 font-medium w-full">
-        <div className="max-w-[75%] leading-tight">
-          <p className="font-bold text-gray-500 mb-0.5">
+      <div className="mt-auto pt-2 border-t border-gray-200 flex items-center justify-between text-[9px] text-gray-500 font-medium w-full select-none shrink-0">
+        <div className="max-w-[75%] leading-tight text-left">
+          <p className="font-bold text-gray-600 mb-0.5">
             {footerCustom || `${safeText(empresa.nome)} | CNPJ: ${safeText(empresa.cnpj)} | CRECI PJ: ${safeText(empresa.creciPj)}`}
           </p>
-          <p>{safeText(empresa.razaoSocial)} • {safeText(empresa.endereco)}</p>
+          <p className="text-gray-400">{safeText(empresa.razaoSocial)} • {safeText(empresa.endereco)}</p>
         </div>
-        <div className="flex flex-col items-end gap-0.5 text-[9.5px] uppercase tracking-widest opacity-60">
-          <div className="px-2 py-0.5 bg-gray-50 rounded-full border border-gray-100 text-gray-500 font-bold">
+        <div className="flex flex-col items-end gap-0.5 text-[9px] uppercase tracking-widest">
+          <div className="px-2 py-0.5 bg-gray-50 rounded-full border border-gray-200 text-gray-600 font-extrabold">
             Página {pageNumber} {totalPages ? `de ${totalPages}` : ''}
           </div>
         </div>
@@ -1383,24 +1432,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
     );
   };
 
-  const renderCompactFooter = (pageNumber: number, totalPages?: number) => {
-    const footerCustom = empresa.rodapeContratos || '';
-    return (
-      <div className="pdf-footer">
-        <div className="max-w-[75%] leading-tight text-left">
-          <p className="font-bold text-gray-500 mb-0.5 text-gray-400">
-            {footerCustom || `${safeText(empresa.nome)} | CNPJ: ${safeText(empresa.cnpj)} | CRECI PJ: ${safeText(empresa.creciPj)}`}
-          </p>
-          <p>{safeText(empresa.razaoSocial)} • {safeText(empresa.endereco)}</p>
-        </div>
-        <div className="flex flex-col items-end gap-0.5 text-[9.5px] uppercase tracking-widest opacity-60">
-          <div className="px-2 py-0.5 bg-gray-50 rounded-full border border-gray-100 text-gray-600 font-extrabold">
-            Página {pageNumber} {totalPages ? `de ${totalPages}` : ''}
-          </div>
-        </div>
-      </div>
-    );
-  };
+  const renderCompactFooter = renderFooter;
 
   const normalizarTextoComparacao = (texto: any): string => {
     return String(texto || "")
@@ -1457,7 +1489,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
   };
 
   // Dynamic Blocks Compiler based on Contract Types
-  const buildContractPages = () => {
+  const buildContractPages = (isDenseMode: boolean) => {
     const blocks: { render: () => React.JSX.Element; estimatedHeight: number; isSignature?: boolean }[] = [];
 
     // estimatedHeight is now only a lightweight change-detector for the
@@ -1491,7 +1523,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
 
       // 1. Title Block
       addBlock(
-        <div className="pdf-document-title font-display font-black text-black">
+        <div className={`pdf-document-title font-display font-black text-black text-center ${isDenseMode ? 'text-[15px] mb-2' : 'text-[17px] mb-2.5'}`}>
           {isContra ? "CONTRAPROPOSTA DE COMPRA E VENDA" : "PROPOSTA DE COMPRA E VENDA DE IMÓVEL"}
         </div>,
         10
@@ -1500,9 +1532,9 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       // 2. Proponente Block
       const firstSectionHeight = compradorSpouse.nome || vendedorSpouse.nome ? 52 : 32;
       addBlock(
-        <PdfSection title={isContra ? "I - Proprietário Vendedor" : "I - Proponente Comprador"}>
+        <PdfSection title={isContra ? "I - Proprietário Vendedor" : "I - Proponente Comprador"} isDense={isDenseMode}>
           {isContra ? (
-            <PdfFieldGrid>
+            <PdfFieldGrid isDense={isDenseMode}>
               <p><strong>Nome:</strong> {safeText(contraParteAceitante.nome || "Não informado")}</p>
               <p><strong>CPF:</strong> {safeText(contraParteAceitante.cpf || "Não informado")}</p>
               <p><strong>RG:</strong> {safeText(contraParteAceitante.rg || "Não informado")}</p>
@@ -1526,7 +1558,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
               )}
             </PdfFieldGrid>
           ) : (
-            <PdfFieldGrid>
+            <PdfFieldGrid isDense={isDenseMode}>
               <p><strong>Nome:</strong> {safeText(p.nome || contract.nomeCliente || "Não informado")}</p>
               <p><strong>CPF:</strong> {safeText(p.cpf || "Não informado")}</p>
               <p><strong>RG:</strong> {safeText(p.rg || "Não informado")}</p>
@@ -1558,8 +1590,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       if (isContra) {
         const compSpouse = getSpouseDataPDF(comp || (contract as any).comprador, 'comprador', dados);
         addBlock(
-          <PdfSection title="II - Proponente Comprador">
-            <PdfFieldGrid>
+          <PdfSection title="II - Proponente Comprador" isDense={isDenseMode}>
+            <PdfFieldGrid isDense={isDenseMode}>
               <p><strong>Nome:</strong> {safeText(comp.nome || contract.nomeCliente || "Não informado")}</p>
               <p><strong>CPF/CNPJ:</strong> {safeText(comp.cpfCnpj || comp.cpf || (contract as any).comprador?.documento || "Não informado")}</p>
               <p><strong>RG:</strong> {safeText(comp.rg || (contract as any).comprador?.rg || "Não informado")}</p>
@@ -1589,9 +1621,9 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
 
       // 4. Imovel Block
       addBlock(
-        <PdfSection title={isContra ? "III - Identificação do Imóvel" : "II - Identificação do Imóvel"}>
-          <PdfPropertyBlock imovel={imov} tipoContrato={tipoContrato} contract={contract} />
-          <p className="mt-1.5 text-justify text-[11.5px] italic text-gray-500 leading-normal">
+        <PdfSection title={isContra ? "III - Identificação do Imóvel" : "II - Identificação do Imóvel"} isDense={isDenseMode}>
+          <PdfPropertyBlock imovel={imov} tipoContrato={tipoContrato} contract={contract} isDense={isDenseMode} />
+          <p className="mt-1 text-justify text-[10px] sm:text-[10.5px] italic text-gray-500 leading-normal">
             O imóvel objeto desta {isContra ? 'contraproposta' : 'proposta'} é aceito pelo proponente nas condições físicas em que se encontra, declarando ter vistoriado o mesmo.
           </p>
         </PdfSection>,
@@ -1599,10 +1631,6 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       );
 
       // 5. Pagamento Block
-      // Busca o valor total em todos os nomes de campo possíveis. O formulário
-      // grava "Valor Total Negociado" em chaves que variam (valorTotalNegociado,
-      // valorNegociado, valorTotal em dados/pagamento/termos, etc.), então
-      // percorremos todas as variantes conhecidas em vez de só 3 caminhos.
       const totalValor =
         parseValorNum(dados.pagamento?.valorTotal) ||
         parseValorNum(dados.pagamento?.valorTotalNegociado) ||
@@ -1618,7 +1646,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
         parseValorNum(contract.valor) ||
         0;
       addBlock(
-        <PdfPaymentBlock dados={dados} tipoContrato={tipoContrato} totalValor={totalValor} metodosDePagamento={metodosDePagamento} contract={contract} />,
+        <PdfPaymentBlock dados={dados} tipoContrato={tipoContrato} totalValor={totalValor} metodosDePagamento={metodosDePagamento} contract={contract} isDense={isDenseMode} />,
         25 + ((Array.isArray(metodosDePagamento) ? metodosDePagamento.length : 1) * 3.8) + (showDetalhes ? estimateHeight(rawDetalhes) + 8 : 0) + (showOutras ? estimateHeight(rawOutras) + 8 : 0)
       );
 
@@ -1629,8 +1657,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
         const formattedSinal = vSinal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const clauseText = `O(A) COMPRADOR(A) pagará à imobiliária intermediadora a quantia de R$ ${formattedSinal} (${vSinalExtenso}), a título de sinal de negócio, por meio da forma de pagamento convencionada pelas partes, servindo este valor como confirmação irrevogável do fechamento da transação imobiliária, sob pena de perda do sinal em caso de desistência imotivada do(a) COMPRADOR(A) ou devolução em dobro em caso de desistência imotivada do(a) VENDEDOR(A).`;
         addBlock(
-          <PdfSection title="CLÁUSULA – SINAL DO NEGÓCIO">
-            <p className="text-justify text-[11.5px] text-gray-800 leading-relaxed">
+          <PdfSection title="CLÁUSULA – SINAL DO NEGÓCIO" isDense={isDenseMode}>
+            <p className="text-justify text-[10.5px] sm:text-[11px] text-gray-800 leading-normal">
               O(A) COMPRADOR(A) pagará à imobiliária intermediadora a quantia de <strong>R$ {formattedSinal} ({vSinalExtenso})</strong>, a título de <strong>sinal de negócio</strong>, por meio da forma de pagamento convencionada pelas partes, servindo este valor como confirmação irrevogável do fechamento da transação imobiliária, sob pena de perda do sinal em caso de desistência imotivada do(a) COMPRADOR(A) ou devolução em dobro em caso de desistência imotivada do(a) VENDEDOR(A).
             </p>
           </PdfSection>,
@@ -1650,7 +1678,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
         listClauses.forEach((c: any, idx: number) => {
           const estimatedClauseHeight = estimateHeight(c.texto || '') + 8;
           addBlock(
-            <PdfClausesBlock clausulas={[c]} sectionTitle={idx === 0 ? titleClausesGerais : ""} startIndex={idx + 1} />,
+            <PdfClausesBlock clausulas={[c]} sectionTitle={idx === 0 ? titleClausesGerais : ""} startIndex={idx + 1} contract={contract} isDense={isDenseMode} />,
             estimatedClauseHeight
           );
         });
@@ -1663,8 +1691,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
           textosIguaisPDF(customClausulasText, rawOutras);
       if (customClausulasText && !isDuplicateCustomClause) {
         addBlock(
-          <PdfSection title={isContra ? "VI - Cláusulas Adicionais" : "Cláusulas Adicionais"}>
-            <div className="text-justify text-[11.5px] text-gray-800 whitespace-pre-wrap leading-relaxed">{renderFormattedText(customClausulasText)}</div>
+          <PdfSection title={isContra ? "VI - Cláusulas Adicionais" : "Cláusulas Adicionais"} isDense={isDenseMode}>
+            <div className="text-justify text-[10px] sm:text-[10.5px] text-gray-800 whitespace-pre-wrap leading-normal">{renderFormattedText(customClausulasText)}</div>
           </PdfSection>,
           14 + estimateHeight(customClausulasText)
         );
@@ -1673,11 +1701,11 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       // 7. Date & Signatures Block (Combined so they flow together and never break across pages)
       const sigHeight = estimateSignatureHeight(dados, tipoContrato, contract, empresa, contraParteAceitante);
       addBlock(
-        <div className="pdf-date-signatures mt-3 avoid-break signature-block text-[11.5px]">
-          <div className="text-right font-bold text-[12.5px] text-black pt-1 mb-3">
+        <div className={`pdf-date-signatures ${isDenseMode ? 'mt-2' : 'mt-3'} avoid-break signature-block text-[10.5px]`}>
+          <div className="text-right font-bold text-[11px] sm:text-[11.5px] text-black pt-1 mb-2">
             {safeText(dados.local || 'Balneário Camboriú')}, {safeText(dados.data || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }))}
           </div>
-          <PdfSignatures dados={dados} tipoContrato={tipoContrato} contract={contract} empresa={empresa} parteAceitante={contraParteAceitante} />
+          <PdfSignatures dados={dados} tipoContrato={tipoContrato} contract={contract} empresa={empresa} parteAceitante={contraParteAceitante} isDense={isDenseMode} />
         </div>,
         sigHeight,
         true
@@ -1691,7 +1719,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
 
       // 1. Title Block
       addBlock(
-        <div className="pdf-document-title font-display font-black text-black text-center">
+        <div className={`pdf-document-title font-display font-black text-black text-center ${isDenseMode ? 'text-[14px] mb-2' : 'text-[16px] mb-2.5'}`}>
           CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE ADMINISTRAÇÃO TEMPORÁRIA DE IMÓVEL
         </div>,
         12
@@ -1699,16 +1727,16 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
 
       // 2. Intro Text
       addBlock(
-        <p className="text-justify indent-6 text-[10.5px] text-gray-800 mt-2 leading-relaxed">
+        <p className="text-justify indent-6 text-[10px] sm:text-[10.5px] text-gray-800 mt-1 mb-1.5 leading-normal">
           Pelo presente instrumento particular, de um lado o <strong>CONTRATANTE</strong> (Proprietário do Imóvel), qualificado no item I, e de outro lado a <strong>CONTRATADA</strong> (Imobiliária Administradora), qualificada no item II, têm entre si justo e acordado o presente Contrato de Prestação de Serviços de Administração Temporária, regendo-se pelas cláusulas e condições a seguir estipuladas.
         </p>,
-        12
+        10
       );
 
       // 3. Contratante (Proprietário + Cônjuge)
       addBlock(
-        <PdfSection title="I - Contratante (Proprietário do Imóvel)">
-          <PdfFieldGrid>
+        <PdfSection title="I - Contratante (Proprietário do Imóvel)" isDense={isDenseMode}>
+          <PdfFieldGrid isDense={isDenseMode}>
             <p className="col-span-2"><strong>Nome Completo:</strong> {safeText(contract.nomeVendedor || p.nome)}</p>
             <p><strong>CPF/CNPJ:</strong> {safeText(p.cpf || p.cpfCnpj || p.documento || "---")}</p>
             <p><strong>RG:</strong> {safeText(p.rg || p.rgIe || "---")}</p>
@@ -1739,8 +1767,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
 
       // 4. Contratada (Imobiliária)
       addBlock(
-        <PdfSection title="II - Contratada (Imobiliária Administradora)">
-          <PdfFieldGrid>
+        <PdfSection title="II - Contratada (Imobiliária Administradora)" isDense={isDenseMode}>
+          <PdfFieldGrid isDense={isDenseMode}>
             <p className="col-span-2"><strong>Razão Social / Nome:</strong> {safeText(empresa.razaoSocial || empresa.nome || "MENTA NEGÓCIOS IMOBILIÁRIOS")}</p>
             <p><strong>CNPJ:</strong> {safeText(empresa.cnpj || "Não informado")}</p>
             <p><strong>CRECI PJ:</strong> {safeText(empresa.creciPj || "Não informado")}</p>
@@ -1757,8 +1785,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
 
       // 5. Imóvel
       addBlock(
-        <PdfSection title="III - Identificação e Descrição do Imóvel">
-          <PdfPropertyBlock imovel={imov} tipoContrato={tipoContrato} contract={contract} />
+        <PdfSection title="III - Identificação e Descrição do Imóvel" isDense={isDenseMode}>
+          <PdfPropertyBlock imovel={imov} tipoContrato={tipoContrato} contract={contract} isDense={isDenseMode} />
         </PdfSection>,
         28
       );
@@ -1773,8 +1801,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       const chavePix = adminTerms.chavePixRepasse || dados.chavePixRepasse || p.chavePix || "";
 
       addBlock(
-        <PdfSection title="IV - Condições Comerciais e Remuneração da Administração">
-          <PdfFieldGrid>
+        <PdfSection title="IV - Condições Comerciais e Remuneração da Administração" isDense={isDenseMode}>
+          <PdfFieldGrid isDense={isDenseMode}>
             <p><strong>Taxa de Administração:</strong> {taxaPercentual}% sobre o valor bruto das locações{taxaValor > 0 ? ` (Mínimo: ${safeMoney(taxaValor)})` : ''}</p>
             <p><strong>Prazo para Repasse:</strong> Até {prazoRepasse} dia(s) útil(eis) após recebimento</p>
             <p className="col-span-2"><strong>Prestação de Contas:</strong> {safeText(prestacaoContas)}</p>
@@ -1796,7 +1824,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       if (listClausesAdmin.length > 0) {
         listClausesAdmin.forEach((c: any, idx: number) => {
           addBlock(
-            <PdfClausesBlock clausulas={[c]} sectionTitle={idx === 0 ? "V - Cláusulas e Condições da Administração" : ""} startIndex={idx + 1} />,
+            <PdfClausesBlock clausulas={[c]} sectionTitle={idx === 0 ? "V - Cláusulas e Condições da Administração" : ""} startIndex={idx + 1} contract={contract} isDense={isDenseMode} />,
             estimateHeight(c.texto || '') + 8
           );
         });
@@ -1806,8 +1834,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       const customClausulasTextAdmin = getCleanVal(dados.clausulas || dados.clausulasPersonalizadas || '');
       if (customClausulasTextAdmin) {
         addBlock(
-          <PdfSection title="Cláusulas Adicionais">
-            <div className="text-justify text-[11.5px] text-gray-800 whitespace-pre-wrap leading-relaxed">{renderFormattedText(customClausulasTextAdmin)}</div>
+          <PdfSection title="Cláusulas Adicionais" isDense={isDenseMode}>
+            <div className="text-justify text-[10px] sm:text-[10.5px] text-gray-800 whitespace-pre-wrap leading-normal">{renderFormattedText(customClausulasTextAdmin)}</div>
           </PdfSection>,
           14 + estimateHeight(customClausulasTextAdmin)
         );
@@ -1816,11 +1844,11 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       // 9. Signatures Block
       const sigHeight = estimateSignatureHeight(dados, tipoContrato, contract, empresa);
       addBlock(
-        <div className="pdf-date-signatures mt-4 avoid-break signature-block text-[11.5px]">
-          <div className="text-right font-bold text-[12.5px] text-black pt-1 mb-3">
+        <div className={`pdf-date-signatures ${isDenseMode ? 'mt-2' : 'mt-3'} avoid-break signature-block text-[10.5px]`}>
+          <div className="text-right font-bold text-[11px] sm:text-[11.5px] text-black pt-1 mb-2">
             {safeText(dados.local || 'Balneário Camboriú/SC')}, {safeText(dados.data || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }))}
           </div>
-          <PdfSignatures dados={dados} tipoContrato={tipoContrato} contract={contract} empresa={empresa} />
+          <PdfSignatures dados={dados} tipoContrato={tipoContrato} contract={contract} empresa={empresa} isDense={isDenseMode} />
         </div>,
         sigHeight,
         true
@@ -1837,7 +1865,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
 
       // 1. Title
       addBlock(
-        <div className="pdf-document-title font-display font-black text-black">
+        <div className={`pdf-document-title font-display font-black text-black text-center ${isDenseMode ? 'text-[14px] mb-2' : 'text-[16px] mb-2.5'}`}>
           CONTRATO DE ARRAS CONFIRMATÓRIAS E COMPROMISSO DE COMPRA E VENDA
         </div>,
         12
@@ -1845,9 +1873,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
 
       // 2. Comprador
       addBlock(
-        <section className="section avoid-break">
-          <h3 className="section-title">I - Comprador / Proponente</h3>
-          <div className="grid grid-cols-2 gap-y-1.5 gap-x-6 text-[11px]">
+        <PdfSection title="I - Comprador / Proponente" isDense={isDenseMode}>
+          <PdfFieldGrid isDense={isDenseMode}>
             <p><strong>Nome:</strong> {safeText(contract.nomeCliente || comp.nome)}</p>
             <p><strong>CPF/CNPJ:</strong> {safeText(comp.cpf || comp.cpfCnpj || (contract as any).comprador?.documento || "---")}</p>
             <p><strong>RG:</strong> {safeText(comp.rg || (contract as any).comprador?.rg || "---")}</p>
@@ -1869,15 +1896,15 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
                 {compradorSpouse.endereco && <p className="col-span-2"><strong>Endereço Cônjuge:</strong> {compradorSpouse.endereco}</p>}
               </>
             )}
-          </div>
-        </section>,
+          </PdfFieldGrid>
+        </PdfSection>,
         compradorSpouse.nome ? 34 : 20
       );
 
       // 3. Vendedor
       addBlock(
-        <PdfSection title="II - Vendedor / Proprietário">
-          <PdfFieldGrid>
+        <PdfSection title="II - Vendedor / Proprietário" isDense={isDenseMode}>
+          <PdfFieldGrid isDense={isDenseMode}>
             <p><strong>Nome:</strong> {safeText(contract.nomeVendedor || vend.nome)}</p>
             <p><strong>CPF/CNPJ:</strong> {safeText(vend.cpf || vend.cpfCnpj || (contract as any).vendedor?.documento || "---")}</p>
             <p><strong>RG:</strong> {safeText(vend.rg || (contract as any).vendedor?.rg || "---")}</p>
@@ -1906,8 +1933,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
 
       // 4. Imovel
       addBlock(
-        <PdfSection title="III - Identificação do Imóvel">
-          <PdfPropertyBlock imovel={imov} tipoContrato={tipoContrato} contract={contract} />
+        <PdfSection title="III - Identificação do Imóvel" isDense={isDenseMode}>
+          <PdfPropertyBlock imovel={imov} tipoContrato={tipoContrato} contract={contract} isDense={isDenseMode} />
         </PdfSection>,
         28
       );
@@ -1924,7 +1951,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
         parseValorNum(contract.valorContrato) ||
         0;
       addBlock(
-        <PdfPaymentBlock dados={dados} tipoContrato={tipoContrato} totalValor={valorTotal} contract={contract} />,
+        <PdfPaymentBlock dados={dados} tipoContrato={tipoContrato} totalValor={valorTotal} contract={contract} isDense={isDenseMode} />,
         28 + (showDetalhes ? estimateHeight(rawDetalhes) + 8 : 0) + (showOutras ? estimateHeight(rawOutras) + 8 : 0)
       );
 
@@ -1935,8 +1962,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
         const formattedSinal = vSinalArras.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const clauseText = `O(A) COMPRADOR(A) pagará à imobiliária intermediadora a quantia de R$ ${formattedSinal} (${vSinalExtenso}), a título de sinal de negócio, por meio da forma de pagamento convencionada pelas partes, servindo este valor como confirmação irrevogável do fechamento da transação imobiliária, sob pena de perda do sinal em caso de desistência imotivada do(a) COMPRADOR(A) ou devolução em dobro em caso de desistência imotivada do(a) VENDEDOR(A).`;
         addBlock(
-          <PdfSection title="CLÁUSULA – SINAL DO NEGÓCIO">
-            <p className="text-justify text-[11.5px] text-gray-800 leading-relaxed">
+          <PdfSection title="CLÁUSULA – SINAL DO NEGÓCIO" isDense={isDenseMode}>
+            <p className="text-justify text-[10.5px] sm:text-[11px] text-gray-800 leading-normal">
               O(A) COMPRADOR(A) pagará à imobiliária intermediadora a quantia de <strong>R$ {formattedSinal} ({vSinalExtenso})</strong>, a título de <strong>sinal de negócio</strong>, por meio da forma de pagamento convencionada pelas partes, servindo este valor como confirmação irrevogável do fechamento da transação imobiliária, sob pena de perda do sinal em caso de desistência imotivada do(a) COMPRADOR(A) ou devolução em dobro em caso de desistência imotivada do(a) VENDEDOR(A).
             </p>
           </PdfSection>,
@@ -1954,7 +1981,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       if (listClausesArras.length > 0) {
         listClausesArras.forEach((c: any, idx: number) => {
           addBlock(
-            <PdfClausesBlock clausulas={[c]} sectionTitle={idx === 0 ? "Cláusulas e Condições Gerais" : ""} startIndex={idx + 1} />,
+            <PdfClausesBlock clausulas={[c]} sectionTitle={idx === 0 ? "Cláusulas e Condições Gerais" : ""} startIndex={idx + 1} contract={contract} isDense={isDenseMode} />,
             estimateHeight(c.texto || '') + 8
           );
         });
@@ -1967,8 +1994,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
         textosIguaisPDF(customClausulasTextArras, rawOutras);
       if (customClausulasTextArras && !isDuplicateCustomClauseArras) {
         addBlock(
-          <PdfSection title="Cláusulas Adicionais">
-            <div className="text-justify text-[11.5px] text-gray-800 whitespace-pre-wrap leading-relaxed">{renderFormattedText(customClausulasTextArras)}</div>
+          <PdfSection title="Cláusulas Adicionais" isDense={isDenseMode}>
+            <div className="text-justify text-[10px] sm:text-[10.5px] text-gray-800 whitespace-pre-wrap leading-normal">{renderFormattedText(customClausulasTextArras)}</div>
           </PdfSection>,
           14 + estimateHeight(customClausulasTextArras)
         );
@@ -1977,11 +2004,11 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       // 7. Date & Signatures Block (Combined so they flow together and never break across pages)
       const sigHeight = estimateSignatureHeight(dados, tipoContrato, contract, empresa);
       addBlock(
-        <div className="pdf-date-signatures mt-4 avoid-break signature-block text-[11.5px]">
-          <div className="text-right font-bold text-[12.5px] text-black mb-3">
+        <div className={`pdf-date-signatures ${isDenseMode ? 'mt-2' : 'mt-3'} avoid-break signature-block text-[10.5px]`}>
+          <div className="text-right font-bold text-[11px] sm:text-[11.5px] text-black pt-1 mb-2">
             {safeText(dados.local || 'Balneário Camboriú')}, {safeText(dados.data || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }))}
           </div>
-          <PdfSignatures dados={dados} tipoContrato={tipoContrato} contract={contract} empresa={empresa} />
+          <PdfSignatures dados={dados} tipoContrato={tipoContrato} contract={contract} empresa={empresa} isDense={isDenseMode} />
         </div>,
         sigHeight,
         true
@@ -2001,15 +2028,15 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
 
       // 1. Title Block
       addBlock(
-        <div className="text-center space-y-0.5 mb-2">
-          <h1 className="text-[16px] font-bold uppercase tracking-tight border-b border-gray-200 pb-1 text-black">CONTRATO DE LOCAÇÃO TEMPORÁRIA DE IMÓVEL</h1>
+        <div className={`pdf-document-title font-display font-black text-black text-center ${isDenseMode ? 'text-[14px] mb-2' : 'text-[16px] mb-2.5'}`}>
+          CONTRATO DE LOCAÇÃO TEMPORÁRIA DE IMÓVEL
         </div>,
         10
       );
 
       // 2. Intro Text
       addBlock(
-        <p className="text-justify indent-6 text-[10.5px] text-gray-800 mt-2 leading-relaxed">
+        <p className="text-justify indent-6 text-[10px] sm:text-[10.5px] text-gray-800 mt-1 mb-1.5 leading-normal">
           Pelo presente instrumento particular, de um lado o <strong>LOCADOR</strong>, qualificado neste contrato, e de outro lado o <strong>LOCATÁRIO</strong>, também qualificado, têm entre si justo e contratado a locação temporária do imóvel descrito, mediante as cláusulas e condições abaixo.
         </p>,
         10
@@ -2018,8 +2045,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       // 3. Locador Block
       const locadorSpouse = getSpouseDataPDF(l, 'locador', dados);
       addBlock(
-        <PdfSection title="I - Dados do Locador (Proprietário)">
-          <PdfFieldGrid>
+        <PdfSection title="I - Dados do Locador (Proprietário)" isDense={isDenseMode}>
+          <PdfFieldGrid isDense={isDenseMode}>
             <p className="col-span-2"><strong>Nome/Razão Social:</strong> {safeText(l.nome)}</p>
             <p><strong>CPF/CNPJ:</strong> {safeText(l.cpfCnpj || l.cpf || l.cnpj)}</p>
             <p><strong>RG/IE:</strong> {safeText(l.rgIe || l.rg)}</p>
@@ -2048,8 +2075,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       // 4. Locatario Block
       const locatarioSpouse = getSpouseDataPDF(t, 'locatario', dados);
       addBlock(
-        <PdfSection title="II - Dados do Locatário (Hóspede/Inquilino)">
-          <PdfFieldGrid>
+        <PdfSection title="II - Dados do Locatário (Hóspede/Inquilino)" isDense={isDenseMode}>
+          <PdfFieldGrid isDense={isDenseMode}>
             <p className="col-span-2"><strong>Nome Completo:</strong> {safeText(t.nome)}</p>
             <p><strong>CPF:</strong> {safeText(t.cpf || t.documento)}</p>
             <p><strong>RG:</strong> {safeText(t.rg)}</p>
@@ -2082,10 +2109,10 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       const acompanhantesList = dados.acompanhantes || dados.locatario?.acompanhantes || contract.acompanhantes || contract.dados?.acompanhantes || [];
       if (acompanhantesList && acompanhantesList.length > 0) {
         addBlock(
-          <PdfSection title="II.1 - Relação de Acompanhantes Autorizados">
-            <div className="space-y-1 text-[11px] text-gray-800">
+          <PdfSection title="II.1 - Relação de Acompanhantes Autorizados" isDense={isDenseMode}>
+            <div className="space-y-1 text-[10px] sm:text-[10.5px] text-gray-800">
               {acompanhantesList.map((acomp: any, idx: number) => (
-                <div key={idx} className="flex justify-between py-1 border-b border-gray-100 last:border-0">
+                <div key={idx} className="flex justify-between py-0.5 border-b border-gray-100 last:border-0">
                   <span><strong>{idx + 1}. {safeText(acomp.nomeCompleto || acomp.nome)}</strong></span>
                   <span className="text-gray-600">{acomp.parentesco ? `Parentesco: ${acomp.parentesco} ` : ''}{acomp.documento ? `• Doc/CPF: ${acomp.documento}` : ''}</span>
                 </div>
@@ -2099,8 +2126,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       // 5. Fiador (Optional)
       if (dados.fiador && dados.fiador.nome) {
         addBlock(
-          <PdfSection title="II.2 - Dados do Fiador">
-            <PdfFieldGrid>
+          <PdfSection title="II.2 - Dados do Fiador" isDense={isDenseMode}>
+            <PdfFieldGrid isDense={isDenseMode}>
               <p className="col-span-2"><strong>Nome Completo:</strong> {safeText(dados.fiador.nome)}</p>
               <p><strong>CPF/CNPJ:</strong> {safeText(dados.fiador.cpfCnpj)}</p>
               <p><strong>Telefone:</strong> {safeText(dados.fiador.telefone)}</p>
@@ -2114,8 +2141,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
 
       // 6. Imovel Locacao
       addBlock(
-        <PdfSection title="III - Dados do Imóvel">
-          <PdfPropertyBlock imovel={imov} tipoContrato={tipoContrato} contract={contract} />
+        <PdfSection title="III - Dados do Imóvel" isDense={isDenseMode}>
+          <PdfPropertyBlock imovel={imov} tipoContrato={tipoContrato} contract={contract} isDense={isDenseMode} />
         </PdfSection>,
         26
       );
@@ -2125,12 +2152,12 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       const veiculosList = dados.veiculos || dados.locatario?.veiculos || contract.veiculos || [];
       if (possuiVeiculo && veiculosList && veiculosList.length > 0) {
         addBlock(
-          <PdfSection title="III.1 - Veículos Autorizados para a Garagem">
-            <div className="space-y-1 text-[11px] text-gray-800">
+          <PdfSection title="III.1 - Veículos Autorizados para a Garagem" isDense={isDenseMode}>
+            <div className="space-y-1 text-[10px] sm:text-[10.5px] text-gray-800">
               {veiculosList.map((veh: any, idx: number) => (
-                <div key={idx} className="flex justify-between py-1 border-b border-gray-100 last:border-0">
+                <div key={idx} className="flex justify-between py-0.5 border-b border-gray-100 last:border-0">
                   <span><strong>{idx + 1}. {veh.tipo || 'Veículo'}: {safeText(veh.marca)} {safeText(veh.modelo)} {veh.cor ? `(${veh.cor})` : ''}</strong></span>
-                  <span className="font-mono font-bold uppercase bg-gray-100 px-2 py-0.5 rounded text-[11px]">Placa: {safeText(veh.placa?.toUpperCase())}</span>
+                  <span className="font-mono font-bold uppercase bg-gray-100 px-2 py-0.5 rounded text-[10px]">Placa: {safeText(veh.placa?.toUpperCase())}</span>
                 </div>
               ))}
             </div>
@@ -2154,11 +2181,11 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       }
 
       addBlock(
-        <PdfSection title="IV - Prazo da Locação">
-          <PdfFieldGrid>
+        <PdfSection title="IV - Prazo da Locação" isDense={isDenseMode}>
+          <PdfFieldGrid isDense={isDenseMode}>
             <p><strong>Início:</strong> {safeDate(p.dataInicio)} às {safeText(p.horarioEntrada || '14:00')}</p>
             <p><strong>Término:</strong> {safeDate(p.dataTermino)} às {safeText(p.horarioSaida || '10:00')}</p>
-            <p className="col-span-2 font-bold text-[11.5px] text-gray-700">Total de diárias: {totalDiariasContrato} diária(s)</p>
+            <p className="col-span-2 font-bold text-[10.5px] sm:text-[11px] text-gray-700">Total de diárias: {totalDiariasContrato} diária(s)</p>
           </PdfFieldGrid>
         </PdfSection>,
         18
@@ -2173,37 +2200,35 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       );
 
       addBlock(
-        <PdfPaymentBlock dados={dados} tipoContrato={tipoContrato} totalValor={totalLocacaoParaPdf} contract={contract} />,
+        <PdfPaymentBlock dados={dados} tipoContrato={tipoContrato} totalValor={totalLocacaoParaPdf} contract={contract} isDense={isDenseMode} />,
         28 + (showDetalhes ? estimateHeight(rawDetalhes) + 8 : 0) + (showOutras ? estimateHeight(rawOutras) + 8 : 0)
       );
 
       // 9. Standard static locacao clauses
       const clausesList = [
-        { title: "Cláusula 1ª - Da Destinação", text: "O imóvel locado destina-se exclusivamente a uso residencial temporário (turismo), sendo vedada a sublocação, cessão ou empréstimo, total ou parcial, sob pena de rescisão contratual imediata e multa." },
-        { title: "Cláusula 2ª - Das Limitações de Hóspedes", text: `O limite máximo de pessoas no imóvel é de ${safeText(r.limiteHospedes || 'Não informado')} hóspede(s). A permanência de pessoas acima do limite estipulado acarretará em multa diária adicional de 20% do valor da diária acumulada por pessoa excedente.` },
-        { title: "Cláusula 3ª - Das Obrigações do Locatário", text: "O LOCATÁRIO obriga-se a manter o imóvel nas mesmas condições de higiene, limpeza e conservação em que o recebeu, respeitando as normas internas e regulamento do condomínio, inclusive horários of silêncio (lei de contravenções penais)." },
-        { title: "Cláusula 4ª - Das Vistorias e Danos", text: "Caso ocorra qualquer dano estrutural, em móvel, eletrodoméstico ou utente decorrente de dolo ou culpa, o LOCATÁRIO autoriza o desconto correspondente do valor da caução descrita no item V ou indenização direta imediatamente." },
-        { title: "Cláusula 5ª - Da Desocupação", text: "O LOCATÁRIO desocupará o imóvel impreterivelmente na data e horários estabelecidos sob pena de multa de 1 (uma) diária cheia para cada hora de atraso, mais as diárias correntes." }
+        { titulo: "Da Destinação", texto: "O imóvel locado destina-se exclusivamente a uso residencial temporário (turismo), sendo vedada a sublocação, cessão ou empréstimo, total ou parcial, sob pena de rescisão contratual imediata e multa." },
+        { titulo: "Das Limitações de Hóspedes", texto: `O limite máximo de pessoas no imóvel é de ${safeText(r.limiteHospedes || 'Não informado')} hóspede(s). A permanência de pessoas acima do limite estipulado acarretará em multa diária adicional de 20% do valor da diária acumulada por pessoa excedente.` },
+        { titulo: "Das Obrigações do Locatário", texto: "O LOCATÁRIO obriga-se a manter o imóvel nas mesmas condições de higiene, limpeza e conservação em que o recebeu, respeitando as normas internas e regulamento do condomínio, inclusive horários de silêncio." },
+        { titulo: "Das Vistorias e Danos", texto: "Caso ocorra qualquer dano estrutural, em móvel, eletrodoméstico ou utensílio decorrente de dolo ou culpa, o LOCATÁRIO autoriza o desconto correspondente do valor da caução descrita no item V ou indenização direta imediatamente." },
+        { titulo: "Da Desocupação", texto: "O LOCATÁRIO desocupará o imóvel impreterivelmente na data e horários estabelecidos sob pena de multa de 1 (uma) diária cheia para cada hora de atraso, mais as diárias correntes." }
       ];
 
-      clausesList.forEach((c) => {
+      clausesList.forEach((c, idx) => {
         addBlock(
-          <div className="text-justify leading-relaxed text-[11.5px] text-gray-800 mt-1 avoid-break">
-            <strong className="block text-gray-900 mb-0.5 text-[12px]">{c.title}</strong>
-            <p>{c.text}</p>
-          </div>,
-          16
+          <PdfClausesBlock clausulas={[c]} sectionTitle={idx === 0 ? "VI - Cláusulas e Condições da Locação" : ""} startIndex={idx + 1} contract={contract} isDense={isDenseMode} />,
+          estimateHeight(c.texto || '') + 8
         );
       });
 
       // Optional Caucao Cláusula
       if (Number(v.taxaCaucao) > 0) {
+        const caucaoClause = {
+          titulo: "Da Caução e Garantia Locatícia",
+          texto: `O LOCATÁRIO prestou a título de garantia e reembolso de eventuais perdas e danos, caução no valor de ${safeMoney(v.taxaCaucao)}, que será devolvido integralmente em até 48 horas úteis após a vistoria de saída, caso nenhum dano seja verificado.`
+        };
         addBlock(
-          <div className="text-justify leading-relaxed text-[11.5px] text-gray-800 mt-1 avoid-break">
-            <strong className="block text-gray-900 mb-0.5 text-[12px]">Cláusula 6ª - Da Caução/Garantia</strong>
-            <p>O LOCATÁRIO prestou a título de garantia e reembolso de eventuais perdas e danos, caução no valor de {safeMoney(v.taxaCaucao)}, que será devolvido integralmente em até 48 hours úteis após a vistoria de saída, caso nenhum dano seja verificado.</p>
-          </div>,
-          17
+          <PdfClausesBlock clausulas={[caucaoClause]} startIndex={6} contract={contract} isDense={isDenseMode} />,
+          estimateHeight(caucaoClause.texto) + 8
         );
       }
 
@@ -2215,10 +2240,10 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
           textosIguaisPDF(customClausesTextLoc, rawOutras);
         if (!isDuplicateCustomClauseLoc) {
           addBlock(
-            <PdfSection title="Cláusulas Adicionais do Contrato">
-              <div className="text-justify text-[11.5px] text-gray-800 whitespace-pre-wrap leading-relaxed">{renderFormattedText(customClausesTextLoc)}</div>
+            <PdfSection title="Cláusulas Adicionais do Contrato" isDense={isDenseMode}>
+              <div className="text-justify text-[10px] sm:text-[10.5px] text-gray-800 whitespace-pre-wrap leading-normal">{renderFormattedText(customClausesTextLoc)}</div>
             </PdfSection>,
-            16 + estimateHeight(customClausesTextLoc)
+            14 + estimateHeight(customClausesTextLoc)
           );
         }
       }
@@ -2234,7 +2259,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
         const startIdx = Number(v.taxaCaucao) > 0 ? 7 : 6;
         listSelection.forEach((c: any, idx: number) => {
           addBlock(
-            <PdfClausesBlock clausulas={[c]} sectionTitle={idx === 0 ? "Cláusulas e Condições do Acervo" : ""} startIndex={startIdx + idx} />,
+            <PdfClausesBlock clausulas={[c]} startIndex={startIdx + idx} contract={contract} isDense={isDenseMode} />,
             estimateHeight(c.texto || '') + 8
           );
         });
@@ -2243,11 +2268,11 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       // 12. Date & Signatures Block (Combined so they flow together and never break across pages)
       const sigHeight = estimateSignatureHeight(dados, tipoContrato, contract, empresa);
       addBlock(
-        <div className="pdf-date-signatures mt-4 avoid-break signature-block text-[11.5px]">
-          <div className="text-right font-bold text-[12.5px] text-black border-t border-gray-100 pt-2 mb-3">
+        <div className={`pdf-date-signatures ${isDenseMode ? 'mt-2' : 'mt-3'} avoid-break signature-block text-[10.5px]`}>
+          <div className="text-right font-bold text-[11px] sm:text-[11.5px] text-black pt-1 mb-2">
             {safeText(dados.local || 'Balneário Camboriú')}, {safeText(dados.data || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }))}
           </div>
-          <PdfSignatures dados={dados} tipoContrato={tipoContrato} contract={contract} empresa={empresa} />
+          <PdfSignatures dados={dados} tipoContrato={tipoContrato} contract={contract} empresa={empresa} isDense={isDenseMode} />
         </div>,
         sigHeight,
         true
@@ -2272,7 +2297,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       };
 
       addBlock(
-        <div className="pdf-document-title font-display font-black text-black">
+        <div className={`pdf-document-title font-display font-black text-black text-center ${isDenseMode ? 'text-[15px] mb-2' : 'text-[17px] mb-2.5'}`}>
           ACEITE DE TERMOS DE PROPOSTA
         </div>,
         10
@@ -2282,8 +2307,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       const parteSpouse = getSpouseDataPDF(parte, 'comprador', dados);
       const hasConjuge = !!(parteSpouse.nome || parte.hasConjuge || parte.conjugeNome);
       addBlock(
-        <PdfSection title="I - Identificação da Parte que Manifesta o Aceite">
-          <PdfFieldGrid>
+        <PdfSection title="I - Identificação da Parte que Manifesta o Aceite" isDense={isDenseMode}>
+          <PdfFieldGrid isDense={isDenseMode}>
             <p><strong>Nome Completo:</strong> {safeText(parte.nome || "Não informado")}</p>
             <p><strong>CPF:</strong> {safeText(parte.cpf || "Não informado")}</p>
             <p><strong>RG:</strong> {safeText(parte.rg || "Não informado")}</p>
@@ -2296,9 +2321,9 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
           </PdfFieldGrid>
 
           {hasConjuge && (
-            <div className="mt-1.5 pt-1.5 border-t border-gray-100">
-              <h4 className="font-bold text-[10px] uppercase tracking-wider text-gray-700 mb-1">Cônjuge / Companheiro(a)</h4>
-              <div className="grid grid-cols-2 gap-y-1 gap-x-6 text-[10px] leading-normal text-gray-600">
+            <div className="mt-1 pt-1 border-t border-gray-150">
+              <h4 className="font-bold text-[9.5px] uppercase tracking-wider text-gray-700 mb-0.5">Cônjuge / Companheiro(a)</h4>
+              <div className="grid grid-cols-2 gap-y-0.5 gap-x-5 text-[10px] leading-snug text-gray-700">
                 <p><strong>Nome Completo:</strong> {safeText(parteSpouse.nome || parte.conjugeNome || "Não informado")}</p>
                 <p><strong>CPF:</strong> {safeText(parteSpouse.cpf || parte.conjugeCpf || "Não informado")}</p>
                 <p><strong>RG:</strong> {safeText(parteSpouse.rg || parte.conjugeRg || "Não informado")}</p>
@@ -2326,17 +2351,6 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
         0
       );
 
-      let dataDocumentoBase = "";
-      if (mergedDados.dataProposta) {
-        dataDocumentoBase = formatarDataBR(mergedDados.dataProposta);
-      } else if (mergedDados.criadoEm) {
-        dataDocumentoBase = formatarDataBR(mergedDados.criadoEm);
-      } else if (mergedDados.data) {
-        dataDocumentoBase = mergedDados.data;
-      } else {
-        dataDocumentoBase = format(new Date(), "dd/MM/yyyy");
-      }
-
       const formaPag = 
         mergedDados.formaPagamento || 
         (Array.isArray(mergedDados.formasPagamento) ? mergedDados.formasPagamento.join(", ") : "") || 
@@ -2345,18 +2359,18 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
 
       // 2. Objeto (strictly clean)
       addBlock(
-        <PdfSection title="II - Objeto e Efeitos do Aceite">
-          <p className="text-justify text-[11.5px] leading-normal mb-1.5 text-gray-700">
+        <PdfSection title="II - Objeto e Efeitos do Aceite" isDense={isDenseMode}>
+          <p className="text-justify text-[10.5px] sm:text-[11px] leading-snug mb-1 text-gray-800">
             A parte qualificada no Item I manifesta o seu inequívoco e pelo <strong>ACEITE</strong> aos termos e condições de pagamento propostos para a transação imobiliária do bem imóvel especificado abaixo:
           </p>
-          <PdfPropertyBlock imovel={imov} tipoContrato={tipoContrato} contract={contract} />
+          <PdfPropertyBlock imovel={imov} tipoContrato={tipoContrato} contract={contract} isDense={isDenseMode} />
         </PdfSection>,
         32
       );
 
       // 3. Condições / Pagamento Block
       addBlock(
-        <PdfPaymentBlock dados={dados} tipoContrato={tipoContrato} totalValor={vAceite} formaPagamentoSimple={formaPag} contract={contract} />,
+        <PdfPaymentBlock dados={dados} tipoContrato={tipoContrato} totalValor={vAceite} formaPagamentoSimple={formaPag} contract={contract} isDense={isDenseMode} />,
         24 + (showDetalhes ? estimateHeight(rawDetalhes) + 8 : 0) + (showOutras ? estimateHeight(rawOutras) + 8 : 0)
       );
 
@@ -2367,8 +2381,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
         const formattedSinal = vSinalAceite.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const clauseText = `O(A) COMPRADOR(A) pagará à imobiliária intermediadora a quantia de R$ ${formattedSinal} (${vSinalExtenso}), a título de sinal de negócio, por meio da forma de pagamento convencionada pelas partes, servindo este valor como confirmação irrevogável do fechamento da transação imobiliária, sob pena de perda do sinal em caso de desistência imotivada do(a) COMPRADOR(A) ou devolução em dobro em caso de desistência imotivada do(a) VENDEDOR(A).`;
         addBlock(
-          <PdfSection title="CLÁUSULA – SINAL DO NEGÓCIO">
-            <p className="text-justify text-[11.5px] text-gray-800 leading-relaxed">
+          <PdfSection title="CLÁUSULA – SINAL DO NEGÓCIO" isDense={isDenseMode}>
+            <p className="text-justify text-[10.5px] sm:text-[11px] text-gray-800 leading-normal">
               O(A) COMPRADOR(A) pagará à imobiliária intermediadora a quantia de <strong>R$ {formattedSinal} ({vSinalExtenso})</strong>, a título de <strong>sinal de negócio</strong>, por meio da forma de pagamento convencionada pelas partes, servindo este valor como confirmação irrevogável do fechamento da transação imobiliária, sob pena de perda do sinal em caso de desistência imotivada do(a) COMPRADOR(A) ou devolução em dobro em caso de desistência imotivada do(a) VENDEDOR(A).
             </p>
           </PdfSection>,
@@ -2386,7 +2400,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       if (listSelectionAceite.length > 0) {
         listSelectionAceite.forEach((c: any, idx: number) => {
           addBlock(
-            <PdfClausesBlock clausulas={[c]} sectionTitle={idx === 0 ? "Cláusulas Vinculadas" : ""} startIndex={idx + 1} />,
+            <PdfClausesBlock clausulas={[c]} sectionTitle={idx === 0 ? "Cláusulas Vinculadas" : ""} startIndex={idx + 1} contract={contract} isDense={isDenseMode} />,
             estimateHeight(c.texto || '') + 8
           );
         });
@@ -2399,8 +2413,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
         textosIguaisPDF(customClausulasTextAceite, rawOutras);
       if (customClausulasTextAceite && !isDuplicateCustomClauseAceite) {
         addBlock(
-          <PdfSection title="Cláusulas Adicionais">
-            <div className="text-justify text-[11.5px] text-gray-800 whitespace-pre-wrap leading-relaxed">{renderFormattedText(customClausulasTextAceite)}</div>
+          <PdfSection title="Cláusulas Adicionais" isDense={isDenseMode}>
+            <div className="text-justify text-[10px] sm:text-[10.5px] text-gray-800 whitespace-pre-wrap leading-normal">{renderFormattedText(customClausulasTextAceite)}</div>
           </PdfSection>,
           14 + estimateHeight(customClausulasTextAceite)
         );
@@ -2409,11 +2423,11 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       // 5. Date & Signatures Block (Combined so they flow together and never break across pages)
       const sigHeight = estimateSignatureHeight(dados, tipoContrato, contract, empresa, parte);
       addBlock(
-        <div className="pdf-date-signatures mt-3 avoid-break signature-block text-[11.5px]">
-          <div className="text-right font-bold text-[12.5px] text-black pt-1 mb-3">
+        <div className={`pdf-date-signatures ${isDenseMode ? 'mt-2' : 'mt-3'} avoid-break signature-block text-[10.5px]`}>
+          <div className="text-right font-bold text-[11px] sm:text-[11.5px] text-black pt-1 mb-2">
             {safeText(mergedDados.local || 'Balneário Camboriú')}, {safeText(mergedDados.data || (mergedDados.dataProposta ? formatarDataBR(mergedDados.dataProposta) : "") || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }))}
           </div>
-          <PdfSignatures dados={dados} tipoContrato={tipoContrato} contract={contract} empresa={empresa} parteAceitante={parte} />
+          <PdfSignatures dados={dados} tipoContrato={tipoContrato} contract={contract} empresa={empresa} parteAceitante={parte} isDense={isDenseMode} />
         </div>,
         sigHeight,
         true
@@ -2427,7 +2441,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
 
       // 1. Title Block
       addBlock(
-        <div className="pdf-document-title font-display font-black text-black">
+        <div className={`pdf-document-title font-display font-black text-black text-center ${isDenseMode ? 'text-[14px] mb-2' : 'text-[16px] mb-2.5'}`}>
           INSTRUMENTO PARTICULAR DE COMPROMISSO DE COMPRA E VENDA DE IMÓVEL
         </div>,
         10
@@ -2435,7 +2449,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
 
       // 2. Preâmbulo
       addBlock(
-        <p className="text-justify indent-6 text-[11px] text-gray-800 mt-2 mb-2 leading-relaxed">
+        <p className="text-justify indent-6 text-[10px] sm:text-[10.5px] text-gray-800 mt-1 mb-1.5 leading-normal">
           Pelo presente Instrumento Particular de Compromisso de Compra e Venda de Imóvel, as partes contratantes, devidamente qualificadas, têm entre si, justo e acertado, em caráter irrevogável e irretratável, a transação imobiliária regida pelas cláusulas e condições seguintes:
         </p>,
         10
@@ -2443,8 +2457,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
 
       // 3. Vendedor Block
       addBlock(
-        <PdfSection title="I - Promitente(s) Vendedor(es)">
-          <PdfFieldGrid>
+        <PdfSection title="I - Promitente(s) Vendedor(es)" isDense={isDenseMode}>
+          <PdfFieldGrid isDense={isDenseMode}>
             <p><strong>Nome Completo:</strong> {safeText(contract.nomeVendedor || vend.nome || "Não informado")}</p>
             <p><strong>CPF/CNPJ:</strong> {safeText(vend.cpf || vend.cpfCnpj || (contract as any).vendedor?.documento || "Não informado")}</p>
             <p><strong>RG:</strong> {safeText(vend.rg || (contract as any).vendedor?.rg || "Não informado")}</p>
@@ -2473,8 +2487,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
 
       // 4. Comprador Block
       addBlock(
-        <PdfSection title="II - Promitente(s) Comprador(es)">
-          <PdfFieldGrid>
+        <PdfSection title="II - Promitente(s) Comprador(es)" isDense={isDenseMode}>
+          <PdfFieldGrid isDense={isDenseMode}>
             <p><strong>Nome Completo:</strong> {safeText(contract.nomeCliente || p.nome || (contract as any).comprador?.nome || "Não informado")}</p>
             <p><strong>CPF/CNPJ:</strong> {safeText(p.cpf || p.cpfCnpj || (contract as any).comprador?.documento || "Não informado")}</p>
             <p><strong>RG:</strong> {safeText(p.rg || (contract as any).comprador?.rg || "Não informado")}</p>
@@ -2503,8 +2517,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
 
       // 5. Imovel Block
       addBlock(
-        <PdfSection title="III - Do Objeto e Identificação do Imóvel">
-          <PdfPropertyBlock imovel={imov} tipoContrato={tipoContrato} contract={contract} />
+        <PdfSection title="III - Do Objeto e Identificação do Imóvel" isDense={isDenseMode}>
+          <PdfPropertyBlock imovel={imov} tipoContrato={tipoContrato} contract={contract} isDense={isDenseMode} />
         </PdfSection>,
         28
       );
@@ -2512,7 +2526,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       // 6. Preco e Condicoes de Pagamento
       const valorTotalCompraVenda = parseValorNum(contract.valor) || parseValorNum(contract.valorTotalNegociado) || parseValorNum(dados.valorTotalNegociado) || 0;
       addBlock(
-        <PdfPaymentBlock dados={dados} tipoContrato={tipoContrato} totalValor={valorTotalCompraVenda} contract={contract} />,
+        <PdfPaymentBlock dados={dados} tipoContrato={tipoContrato} totalValor={valorTotalCompraVenda} contract={contract} isDense={isDenseMode} />,
         28 + (showDetalhes ? estimateHeight(rawDetalhes) + 8 : 0) + (showOutras ? estimateHeight(rawOutras) + 8 : 0)
       );
 
@@ -2523,8 +2537,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
         const formattedSinal = vSinalCV.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const clauseText = `O(A) PROMITENTE COMPRADOR(A) pagará o valor de R$ ${formattedSinal} (${vSinalExtenso}), a título de sinal e princípio de pagamento (arras confirmatórias), servindo este como garantia de cumprimento das obrigações pactuadas pelas partes.`;
         addBlock(
-          <PdfSection title="CLÁUSULA – DO SINAL E PRINCÍPIO DE PAGAMENTO">
-            <p className="text-justify text-[11.5px] text-gray-800 leading-relaxed">
+          <PdfSection title="CLÁUSULA – DO SINAL E PRINCÍPIO DE PAGAMENTO" isDense={isDenseMode}>
+            <p className="text-justify text-[10.5px] sm:text-[11px] text-gray-800 leading-normal">
               O(A) PROMITENTE COMPRADOR(A) pagará o valor de <strong>R$ {formattedSinal} ({vSinalExtenso})</strong>, a título de <strong>sinal e princípio de pagamento (arras confirmatórias)</strong>, servindo este como garantia de cumprimento das obrigações pactuadas pelas partes.
             </p>
           </PdfSection>,
@@ -2542,7 +2556,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       if (listClausesCV.length > 0) {
         listClausesCV.forEach((c: any, idx: number) => {
           addBlock(
-            <PdfClausesBlock clausulas={[c]} sectionTitle={idx === 0 ? "Cláusulas Contratuais" : ""} startIndex={idx + 1} />,
+            <PdfClausesBlock clausulas={[c]} sectionTitle={idx === 0 ? "Cláusulas Contratuais" : ""} startIndex={idx + 1} contract={contract} isDense={isDenseMode} />,
             estimateHeight(c.texto || '') + 8
           );
         });
@@ -2555,8 +2569,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
         textosIguaisPDF(customClausulasTextCV, rawOutras);
       if (customClausulasTextCV && !isDuplicateCustomClauseCV) {
         addBlock(
-          <PdfSection title="Cláusulas Adicionais">
-            <div className="text-justify text-[11.5px] text-gray-800 whitespace-pre-wrap leading-relaxed">{renderFormattedText(customClausulasTextCV)}</div>
+          <PdfSection title="Cláusulas Adicionais" isDense={isDenseMode}>
+            <div className="text-justify text-[10px] sm:text-[10.5px] text-gray-800 whitespace-pre-wrap leading-normal">{renderFormattedText(customClausulasTextCV)}</div>
           </PdfSection>,
           14 + estimateHeight(customClausulasTextCV)
         );
@@ -2565,11 +2579,11 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       // Date & Signatures Block
       const sigHeight = estimateSignatureHeight(dados, tipoContrato, contract, empresa);
       addBlock(
-        <div className="pdf-date-signatures mt-4 avoid-break signature-block text-[11.5px]">
-          <div className="text-right font-bold text-[12.5px] text-black mb-3">
+        <div className={`pdf-date-signatures ${isDenseMode ? 'mt-2' : 'mt-3'} avoid-break signature-block text-[10.5px]`}>
+          <div className="text-right font-bold text-[11px] sm:text-[11.5px] text-black pt-1 mb-2">
             {safeText(dados.local || 'Balneário Camboriú')}, {safeText(dados.data || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }))}
           </div>
-          <PdfSignatures dados={dados} tipoContrato={tipoContrato} contract={contract} empresa={empresa} />
+          <PdfSignatures dados={dados} tipoContrato={tipoContrato} contract={contract} empresa={empresa} isDense={isDenseMode} />
         </div>,
         sigHeight,
         true
@@ -2581,15 +2595,15 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       const imov = dados.imovel || {};
 
       addBlock(
-        <div className="pdf-document-title font-display font-black text-black">
+        <div className={`pdf-document-title font-display font-black text-black text-center ${isDenseMode ? 'text-[15px] mb-2' : 'text-[17px] mb-2.5'}`}>
           {safeText(contract.tipoContratoLabel || (tipoContrato === 'proposta' ? 'PROPOSTA DE COMPRA' : tipoContrato === 'contraproposta' ? 'CONTRAPROPOSTA' : tipoContrato === 'aceite' ? 'ACEITE DE TERMOS' : tipoContrato === 'compra_venda' ? 'COMPROMISSO DE COMPRA E VENDA' : tipoContrato === 'locacao_temporaria' ? 'LOCAÇÃO POR TEMPORADA' : tipoContrato === 'administracao_temporaria' ? 'ADMINISTRAÇÃO TEMPORÁRIA' : 'DOCUMENTO CONTRATUAL'))}
         </div>,
         10
       );
 
       addBlock(
-        <PdfSection title="I - Identificação das Partes">
-          <PdfFieldGrid>
+        <PdfSection title="I - Identificação das Partes" isDense={isDenseMode}>
+          <PdfFieldGrid isDense={isDenseMode}>
             <p><strong>Parte 1 (Vendedor/Locador):</strong> {safeText(contract.nomeVendedor || vend.nome || "Não informado")}</p>
             <p><strong>Documento:</strong> {safeText(vend.cpf || vend.cpfCnpj || "Não informado")}</p>
             <p className="col-span-2"><strong>Endereço:</strong> {formatFullAddress(vend)}</p>
@@ -2602,15 +2616,15 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       );
 
       addBlock(
-        <PdfSection title="II - Objeto e Imóvel">
-          <PdfPropertyBlock imovel={imov} tipoContrato={tipoContrato} contract={contract} />
+        <PdfSection title="II - Objeto e Imóvel" isDense={isDenseMode}>
+          <PdfPropertyBlock imovel={imov} tipoContrato={tipoContrato} contract={contract} isDense={isDenseMode} />
         </PdfSection>,
         28
       );
 
       const valorTotalGenerico = parseValorNum(contract.valor) || parseValorNum(contract.valorTotalNegociado) || 0;
       addBlock(
-        <PdfPaymentBlock dados={dados} tipoContrato={tipoContrato} totalValor={valorTotalGenerico} contract={contract} />,
+        <PdfPaymentBlock dados={dados} tipoContrato={tipoContrato} totalValor={valorTotalGenerico} contract={contract} isDense={isDenseMode} />,
         28
       );
 
@@ -2624,7 +2638,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       if (listClausesGen.length > 0) {
         listClausesGen.forEach((c: any, idx: number) => {
           addBlock(
-            <PdfClausesBlock clausulas={[c]} sectionTitle={idx === 0 ? "Cláusulas Contratuais" : ""} startIndex={idx + 1} />,
+            <PdfClausesBlock clausulas={[c]} sectionTitle={idx === 0 ? "Cláusulas Contratuais" : ""} startIndex={idx + 1} contract={contract} isDense={isDenseMode} />,
             estimateHeight(c.texto || '') + 8
           );
         });
@@ -2634,8 +2648,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       const customClausulasTextGen = getCleanVal(dados?.clausulas || dados?.clausulasPersonalizadas || '');
       if (customClausulasTextGen) {
         addBlock(
-          <PdfSection title="Cláusulas Adicionais">
-            <div className="text-justify text-[11.5px] text-gray-800 whitespace-pre-wrap leading-relaxed">{renderFormattedText(customClausulasTextGen)}</div>
+          <PdfSection title="Cláusulas Adicionais" isDense={isDenseMode}>
+            <div className="text-justify text-[10px] sm:text-[10.5px] text-gray-800 whitespace-pre-wrap leading-normal">{renderFormattedText(customClausulasTextGen)}</div>
           </PdfSection>,
           14 + estimateHeight(customClausulasTextGen)
         );
@@ -2643,67 +2657,39 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
 
       const sigHeight = estimateSignatureHeight(dados, tipoContrato, contract, empresa);
       addBlock(
-        <div className="pdf-date-signatures mt-4 avoid-break signature-block text-[11.5px]">
-          <div className="text-right font-bold text-[12.5px] text-black mb-3">
+        <div className={`pdf-date-signatures ${isDenseMode ? 'mt-2' : 'mt-3'} avoid-break signature-block text-[10.5px]`}>
+          <div className="text-right font-bold text-[11px] sm:text-[11.5px] text-black pt-1 mb-2">
             {safeText(dados.local || 'Balneário Camboriú')}, {safeText(dados.data || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }))}
           </div>
-          <PdfSignatures dados={dados} tipoContrato={tipoContrato} contract={contract} empresa={empresa} />
+          <PdfSignatures dados={dados} tipoContrato={tipoContrato} contract={contract} empresa={empresa} isDense={isDenseMode} />
         </div>,
         sigHeight,
         true
       );
     }
 
-    // Return the flat block list. Real pagination is done by measuring the
-    // rendered DOM (see the measurement layer in the component body), which is
-    // the only reliable way — character-based mm estimates never match the
-    // actual rendered height and were the root cause of both the signature
-    // clipping and the huge blank gaps between pages.
     const totalEstimated = blocks.reduce((sum, b) => sum + b.estimatedHeight, 0);
     return { blocks, totalEstimated };
   };
 
-  const { blocks, totalEstimated } = buildContractPages();
+  const { blocks, totalEstimated } = buildContractPages(isDense);
 
   // ---- Real-DOM pagination via measurement ----------------------------------
   // Usable content height per page, in CSS px (96dpi). A4 = 1122.5px tall.
   // We subtract page padding + header + footer to get the printable band.
   const PX_PER_MM = 96 / 25.4;
-  const PAGE_PX = 295 * PX_PER_MM;                 // matches the .pdf-page height
 
-  const getPageLimits = (isCompactMode: boolean) => {
-    let topPadMm = 15;
-    let botPadMm = 20;
-    let headerFirstPx = 92;
-    let headerSubPx = 34;
-    let footerPx = 46;
-
-    if (isCompactMode) {
-      topPadMm = 8;
-      botPadMm = 12;
-      headerFirstPx = 80;
-      headerSubPx = 30;
-      footerPx = 40;
-    } else if (isCompact) {
-      topPadMm = 24 / PX_PER_MM;
-      botPadMm = 30 / PX_PER_MM;
-      headerFirstPx = 85;
-      headerSubPx = 32;
-      footerPx = 42;
-    }
-
-    const vPaddingPx = (topPadMm + botPadMm) * PX_PER_MM;
-    const usableFirst = PAGE_PX - vPaddingPx - headerFirstPx - footerPx - 12;
-    const usableSub = PAGE_PX - vPaddingPx - headerSubPx - footerPx - 12;
+  const getPageLimits = (dense: boolean) => {
+    // Exact A4 usable height (297mm = 1122.5px at 96dpi)
+    // Page 1: 1122.5px - padding (18-22mm) - header (~58px) - footer (~28px) - clearance
+    // Subsequent pages: 1122.5px - padding (18-22mm) - runningHeader (~22px) - footer (~28px) - clearance
+    const usableFirst = dense ? 970 : 944;
+    const usableSub = dense ? 1006 : 982;
     return { usableFirst, usableSub };
   };
 
   const measureRef = useRef<HTMLDivElement | null>(null);
-  // Each entry = measured height (px) of the block with the same index.
   const [measuredHeights, setMeasuredHeights] = useState<number[] | null>(null);
-  // Compact mode is only turned on if, even after normal layout, the whole
-  // thing would overflow into an almost-empty extra page. Decided post-measure.
-  const [shouldUseCompactMode, setShouldUseCompactMode] = useState(false);
 
   useLayoutEffect(() => {
     if (!measureRef.current) return;
@@ -2713,40 +2699,38 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
     if (nodes.length !== blocks.length) return;
 
     const heights = nodes.map((n) => n.getBoundingClientRect().height);
+    const totalH = heights.reduce((sum, h) => sum + h, 0);
+    const { usableFirst, usableSub } = getPageLimits(isDense);
 
-    const { usableFirst, usableSub } = getPageLimits(false);
+    // Single-Page Absorption:
+    // If not yet dense and total content can fit on Page 1 under dense spacing (within 18%),
+    // trigger dense mode so the document is neatly consolidated onto a SINGLE sheet!
+    if (!isDense && totalH > usableFirst && totalH <= usableFirst * 1.18) {
+      setIsDense(true);
+      return;
+    }
 
-    // Simulate pagination with the REAL heights to see how many pages result
-    // and how full the last page is.
-    const simulate = (first: number, sub: number) => {
-      const pages: number[][] = [[]];
-      let h = 0;
-      heights.forEach((rawH, i) => {
-        if (!blocks[i]) return;
-        const isFirst = pages.length === 1;
-        const limit = isFirst ? first : sub;
-        const isSig = !!blocks[i]?.isSignature;
-        const breakHere =
-          (isSig && limit - h < rawH + 10) || (h + rawH > limit);
-        if (breakHere && pages[pages.length - 1].length > 0) {
-          pages.push([i]);
-          h = rawH;
-        } else {
-          pages[pages.length - 1].push(i);
-          h += rawH;
-        }
-      });
-      return { pages, lastH: h };
-    };
+    // Multi-page Trailing Page Squeeze:
+    // If the contract spans 2+ pages and the last page has less than 120px (e.g. only signatures),
+    // dense mode squeezes earlier pages to pull the signatures onto the previous page.
+    const pages: number[][] = [[]];
+    let currentH = 0;
+    heights.forEach((h, i) => {
+      const limit = pages.length === 1 ? usableFirst : usableSub;
+      if (currentH + h > limit && pages[pages.length - 1].length > 0) {
+        pages.push([i]);
+        currentH = h;
+      } else {
+        pages[pages.length - 1].push(i);
+        currentH += h;
+      }
+    });
 
-    const normal = simulate(usableFirst, usableSub);
-    // Only switch to compact mode when the document spills onto an extra page
-    // whose tail is nearly empty (e.g. just the signature block). In that case
-    // a slight squeeze pulls everything back up and removes the blank page.
-    const lastIsThin = normal.lastH < usableSub * 0.35;
-    const useCompact = normal.pages.length >= 2 && lastIsThin;
+    if (!isDense && pages.length >= 2 && currentH < 120) {
+      setIsDense(true);
+      return;
+    }
 
-    setShouldUseCompactMode((prev) => (prev !== useCompact ? useCompact : prev));
     setMeasuredHeights((prev) => {
       if (
         prev &&
@@ -2757,32 +2741,37 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       }
       return heights;
     });
-  }, [totalEstimated, blocks.length, isCompact]);
+  }, [totalEstimated, blocks.length, isDense]);
 
   // Reset measured heights whenever block count or contract type changes
   useEffect(() => {
     setMeasuredHeights(null);
-    setShouldUseCompactMode(false);
+    setIsDense(false);
   }, [blocks.length, tipoContrato]);
 
-  // Build the final pages from measured heights (falls back to a single page
-  // with everything before measurement completes, then re-renders).
+  // Build the final pages from measured heights (or estimates before measurement)
   const buildPagesFromMeasured = (): number[][] => {
-    if (!measuredHeights || measuredHeights.length !== blocks.length) {
-      // Pre-measure pass: put everything on one page so it can be measured.
-      return [blocks.map((_, i) => i)];
-    }
-    const { usableFirst, usableSub } = getPageLimits(shouldUseCompactMode);
-
+    const { usableFirst, usableSub } = getPageLimits(isDense);
     const pages: number[][] = [[]];
     let h = 0;
-    measuredHeights.forEach((rawH, i) => {
+
+    const heightsToUse = (measuredHeights && measuredHeights.length === blocks.length)
+      ? measuredHeights
+      : blocks.map(b => (b.estimatedHeight || 18) * PX_PER_MM);
+
+    const totalH = heightsToUse.reduce((sum, val) => sum + val, 0);
+
+    // PRIORITY 1: If all content fits in Page 1, strictly guarantee a SINGLE sheet!
+    if (totalH <= usableFirst + 6) {
+      return [blocks.map((_, i) => i)];
+    }
+
+    heightsToUse.forEach((rawH, i) => {
       if (!blocks[i]) return;
       const isFirst = pages.length === 1;
       const limit = isFirst ? usableFirst : usableSub;
-      const isSig = !!blocks[i]?.isSignature;
-      const breakHere =
-        (isSig && limit - h < rawH + 10) || (h + rawH > limit);
+      const breakHere = (h + rawH > limit);
+
       if (breakHere && pages[pages.length - 1].length > 0) {
         pages.push([i]);
         h = rawH;
@@ -2791,6 +2780,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
         h += rawH;
       }
     });
+
     return pages.filter(p => p.length > 0);
   };
 
@@ -2805,7 +2795,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
     <div 
       id="contrato-pdf" 
       ref={printRef} 
-      className={`pdf-export-container font-sans bg-transparent mx-auto ${isCompact ? 'pdf-compact' : ''} ${shouldUseCompactMode ? 'pdf-compact-mode' : ''}`}
+      className={`pdf-export-container font-sans bg-transparent mx-auto ${isDense ? 'pdf-dense' : ''}`}
       style={{
         boxSizing: 'border-box'
       }}
@@ -2816,12 +2806,12 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       <div
         ref={measureRef}
         aria-hidden="true"
-        className={`no-print font-sans ${isCompact ? 'pdf-compact' : ''}`}
+        className={`no-print font-sans ${isDense ? 'pdf-dense' : ''}`}
         style={{
           position: 'absolute',
           left: '-99999px',
           top: 0,
-          width: isCompact ? 'calc(210mm - 84px)' : 'calc(210mm - 28mm)',
+          width: isDense ? 'calc(210mm - 24mm)' : 'calc(210mm - 28mm)',
           visibility: 'hidden',
           pointerEvents: 'none',
           zIndex: -1,
@@ -2840,17 +2830,19 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       {pages.map((pageBlocks, pageIndex) => (
         <div 
           key={pageIndex}
-          className={`pdf-page bg-white relative flex flex-col justify-between print:shadow-none print:m-0`}
+          className="pdf-page bg-white relative flex flex-col justify-between print:shadow-none print:m-0"
           style={{
             width: '210mm',
-            height: '295mm', // Slightly below 297 to strictly prevent any page count overflows during physical print
-            padding: shouldUseCompactMode ? '8mm 10mm 12mm 10mm' : (isCompact ? '24px 42px 30px 42px' : '15mm 14mm 20mm 14mm'),
+            height: '297mm',
+            minHeight: '297mm',
+            maxHeight: '297mm',
+            padding: isDense ? '8mm 12mm 10mm 12mm' : '10mm 14mm 12mm 14mm',
             boxSizing: 'border-box',
             position: 'relative',
             pageBreakAfter: 'always',
             breakAfter: 'page',
             margin: '0 auto 24px auto',
-            minHeight: '295mm'
+            overflow: 'hidden'
           }}
         >
           {/* Watermark in each page */}
@@ -2866,16 +2858,15 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
 
           {/* Header on page 1, elegant top bar on pages 2+ */}
           {pageIndex === 0 ? (
-            (shouldUseCompactMode || isCompact) ? renderCompactHeader() : renderHeader()
+            renderHeader()
           ) : (
-            <div className="flex items-center justify-between border-b border-gray-200 pb-1 mb-3 text-[9.5px] uppercase tracking-wider text-gray-400 select-none no-print">
-              <span>{safeText(contract.dados?.proponente?.nome || contract.nomeCliente || 'Contrato')}</span>
-              <span>{safeText(empresa.nome || 'Menta Imóveis')}</span>
+            <div className="flex items-center justify-between border-b border-gray-200 pb-1 mb-2 text-[9px] uppercase tracking-wider text-gray-400 select-none shrink-0">
+              <span className="font-medium text-gray-500">{safeText(contract.dados?.proponente?.nome || contract.nomeCliente || 'Contrato')} — {safeText(contract.tipoContratoLabel || 'Menta Imóveis')}</span>
+              <span className="font-bold text-gray-600">{safeText(empresa.nome || 'Menta Imóveis')}</span>
             </div>
           )}
 
-          {/* Content Block Wrapper — overflow visible so nothing is ever
-              silently clipped; correct page breaks come from measurement. */}
+          {/* Content Block Wrapper — overflow hidden strictly keeps each page to A4 */}
           <div className="flex-grow flex flex-col justify-start overflow-visible relative z-10">
             {pageBlocks.map((block, bIndex) => (
               block && typeof block.render === 'function' ? (
@@ -2887,7 +2878,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
           </div>
 
           {/* Footer on each page */}
-          {(shouldUseCompactMode || isCompact) ? renderCompactFooter(pageIndex + 1, pages.length) : renderFooter(pageIndex + 1, pages.length)}
+          {renderFooter(pageIndex + 1, pages.length)}
         </div>
       ))}
 
@@ -2895,21 +2886,25 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       <style>{`
         @media print {
           @page {
-            size: A4;
+            size: A4 portrait;
             margin: 0;
           }
           body {
             -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
             margin: 0 !important;
             padding: 0 !important;
           }
           .pdf-page {
             margin: 0 !important;
             box-shadow: none !important;
+            border: none !important;
             page-break-after: always !important;
             break-after: page !important;
-            height: 295mm !important;
-            min-height: 295mm !important;
+            height: 297mm !important;
+            min-height: 297mm !important;
+            max-height: 297mm !important;
+            overflow: hidden !important;
           }
           .no-print {
             display: none !important;
@@ -2917,105 +2912,46 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
         }
 
         .pdf-page {
-          box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
-          border: 1px solid #f1f2f4;
+          box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06);
+          border: 1px solid #e5e7eb;
           transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
 
-        .pdf-compact p {
-          margin: 2.5px 0 !important;
-          line-height: 1.4 !important;
-        }
-        .pdf-compact h1,
-        .pdf-compact h2,
-        .pdf-compact h3 {
-          margin: 3px 0 5px 0 !important;
-          line-height: 1.15 !important;
-        }
-        .pdf-compact .section {
-          margin-bottom: 5px !important;
-        }
-        .pdf-compact .section-title {
-          font-size: 13px !important;
-          font-weight: 800 !important;
-          margin: 5px 0 3px 0 !important;
-          padding-bottom: 1.5px !important;
-          text-transform: uppercase !important;
-          color: #000000 !important;
-          letter-spacing: 0.5px !important;
-        }
-        .pdf-compact-header {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          border-bottom: 2px solid #111827;
-          padding-bottom: 6px;
-          margin-bottom: 8px;
-        }
-        .pdf-compact-header img {
-          width: 60px;
-          height: 60px;
-          object-fit: contain;
-        }
-        .pdf-compact-header .company-name {
-          font-size: 15px;
-          font-weight: 900;
-          letter-spacing: 0.5px;
-        }
-        .pdf-compact-header .company-info {
-          font-size: 11px;
-          line-height: 1.35;
-          color: #4b5563;
-        }
         .pdf-document-title {
-          text-align: center;
-          font-size: 18px;
           font-weight: 900;
-          letter-spacing: 1.5px;
-          margin: 8px 0 12px 0;
+          letter-spacing: 1px;
           text-transform: uppercase;
+          line-height: 1.2;
         }
+
         .pdf-signatures {
-          margin-top: 16px;
-          padding-top: 4px;
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 20px 40px;
+          gap: 12px 32px;
           align-items: end;
           page-break-inside: avoid !important;
           break-inside: avoid !important;
         }
+
         .pdf-signature-line {
           border-top: 1.2px solid #111827;
-          padding-top: 8px;
-          margin-top: 4px;
+          padding-top: 5px;
           text-align: center;
-          font-size: 12.5px;
+          font-size: 11px;
           font-weight: 700;
-          line-height: 1.4;
+          line-height: 1.35;
           overflow: visible;
         }
+
         .pdf-signature-role {
-          font-size: 10.5px;
+          font-size: 9.5px;
           color: #4b5563;
           margin-top: 2px;
           text-align: center;
           text-transform: uppercase;
           letter-spacing: 0.3px;
         }
-        .pdf-footer {
-          position: absolute;
-          left: 42px;
-          right: 42px;
-          bottom: 14px;
-          border-top: 1px solid #e5e7eb;
-          padding-top: 4px;
-          font-size: 10px;
-          color: #6b7280;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
+
         .pdf-watermark {
           position: absolute;
           inset: 0;
@@ -3026,111 +2962,89 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
           pointer-events: none;
           opacity: 0.018;
         }
+
         .pdf-watermark img {
-          width: 55%;
-          max-width: 380px;
+          width: 50%;
+          max-width: 340px;
           object-fit: contain;
         }
-        .pdf-compact-content {
-          font-size: 9.5px !important;
-          line-height: 1.25 !important;
-          color: #111827;
-        }
-        .pdf-compact-content section {
-          margin-bottom: 4px !important;
-        }
+
         .avoid-break,
-        .clause-block,
-        .signature-block {
+        .clause-item,
+        .signature-block,
+        .property-block {
           page-break-inside: avoid !important;
           break-inside: avoid !important;
           position: relative !important;
-          page-break-before: auto !important;
-          break-before: auto !important;
         }
 
-        /* Dynamic Compact Mode Overrides */
-        .pdf-compact-mode {
-          font-size: 10.5px !important;
+        /* Dense Mode Overrides to Consolidate into Minimum Pages */
+        .pdf-dense {
+          font-size: 10px !important;
         }
         
-        .pdf-compact-mode p,
-        .pdf-compact-mode div,
-        .pdf-compact-mode span,
-        .pdf-compact-mode td,
-        .pdf-compact-mode strong,
-        .pdf-compact-mode li {
-          font-size: 10.5px !important;
-          line-height: 1.32 !important;
+        .pdf-dense p,
+        .pdf-dense div,
+        .pdf-dense span,
+        .pdf-dense td,
+        .pdf-dense strong,
+        .pdf-dense li {
+          font-size: 10px !important;
+          line-height: 1.3 !important;
         }
 
-        .pdf-compact-mode .section {
-          margin-bottom: 3px !important;
+        .pdf-dense .section {
+          margin-bottom: 4px !important;
         }
         
-        .pdf-compact-mode .section-title {
-          font-size: 12px !important;
-          margin: 3px 0 2px 0 !important;
+        .pdf-dense .section-title {
+          font-size: 10.5px !important;
+          margin-bottom: 2px !important;
+          padding-top: 1px !important;
           padding-bottom: 1px !important;
         }
 
-        .pdf-compact-mode .clause-block {
-          margin-bottom: 2px !important;
-          padding-bottom: 1.5px !important;
+        .pdf-dense .clause-item {
+          margin-bottom: 3px !important;
         }
 
-        .pdf-compact-mode .clause-block p {
-          line-height: 1.32 !important;
-          font-size: 10.5px !important;
-        }
-
-        .pdf-compact-mode .signature-block {
-          margin-top: 8px !important;
-        }
-
-        .pdf-compact-mode .pdf-signatures {
-          margin-top: 12px !important;
-          gap: 14px 32px !important;
-          display: grid !important;
-          grid-template-columns: 1fr 1fr !important;
-        }
-
-        .pdf-compact-mode .pdf-signature-line {
-          font-size: 11.5px !important;
-          border-top: 1px solid #111827 !important;
-          padding-top: 6px !important;
-          margin-top: 3px !important;
-          line-height: 1.4 !important;
-        }
-
-        .pdf-compact-mode .pdf-signature-role {
+        .pdf-dense .clause-item p {
           font-size: 10px !important;
+          line-height: 1.3 !important;
+        }
+
+        .pdf-dense .signature-block {
+          margin-top: 6px !important;
+        }
+
+        .pdf-dense .pdf-signatures {
+          margin-top: 8px !important;
+          gap: 10px 24px !important;
+        }
+
+        .pdf-dense .pdf-signature-line {
+          font-size: 10px !important;
+          border-top: 1px solid #111827 !important;
+          padding-top: 4px !important;
           margin-top: 2px !important;
         }
 
-        .pdf-compact-mode .pdf-watermark {
-          opacity: 0.012 !important;
-        }
-        .pdf-compact-mode .pdf-watermark img {
-          width: 45% !important;
+        .pdf-dense .pdf-signature-role {
+          font-size: 9px !important;
+          margin-top: 1px !important;
         }
 
-        .pdf-compact-mode .pdf-page {
-          padding: 8mm 10mm 12mm 10mm !important;
+        .pdf-dense .pdf-document-title {
+          font-size: 14px !important;
+          margin-bottom: 6px !important;
         }
 
-        .pdf-compact-mode .pdf-document-title {
-          font-size: 15px !important;
-          margin: 6px 0 8px 0 !important;
+        .pdf-dense .grid {
+          gap-y: 2px !important;
         }
 
-        .pdf-compact-mode .grid-cols-2 {
-          gap: 2.5px 14px !important;
-        }
-
-        /* Assinaturas nunca herdam o gap apertado do grid genérico */
-        .pdf-compact-mode .pdf-signatures {
-          gap: 14px 32px !important;
+        .pdf-dense .pdf-signatures {
+          gap: 10px 24px !important;
         }
       `}</style>
     </div>

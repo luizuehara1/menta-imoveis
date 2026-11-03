@@ -7114,14 +7114,14 @@ function AdminContractFormInner() {
                   </div>
                 </div>
 
-                {/* A4 Preview Container */}
-                <div className="flex justify-center bg-gray-50/50 -m-10 p-10 overflow-hidden lg:overflow-visible min-h-[500px]">
+                {/* A4 Preview Container com respiro amplo para não sobrepor rodapé ou assinaturas */}
+                <div className="flex justify-center bg-gray-50/50 -m-10 p-10 pb-44 overflow-hidden lg:overflow-visible min-h-[500px]">
                   <ContractA4Preview contract={contract as Contract} printRef={printRef} />
                 </div>
               </div>
 
               {!isPreviewOnly && (
-                <div className="flex flex-col md:flex-row items-center justify-between gap-6 bg-primary-black p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden group">
+                <div className="mb-24 flex flex-col md:flex-row items-center justify-between gap-6 bg-primary-black p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden group print:hidden">
                   <div className="absolute top-0 right-0 w-64 h-64 bg-gold/5 rounded-full -mr-32 -mt-32 transition-transform group-hover:scale-110 duration-700" />
                   
                   <div className="flex items-center gap-5 relative z-10">
@@ -7136,20 +7136,93 @@ function AdminContractFormInner() {
 
                   <div className="flex items-center gap-4 w-full md:w-auto relative z-10">
                     <button 
+                      type="button"
                       onClick={() => setStep('pagamento')}
-                      className="flex-1 md:flex-none px-10 py-5 bg-white/5 text-white font-bold rounded-2xl border border-white/10 hover:bg-white/10 transition-all flex items-center justify-center gap-3 active:scale-95"
+                      className="flex-1 md:flex-none px-8 py-4 bg-white/5 text-white font-bold rounded-2xl border border-white/10 hover:bg-white/10 transition-all flex items-center justify-center gap-2 active:scale-95 text-sm"
                     >
                       <ChevronLeft size={18} />
                       <span>Voltar e Ajustar</span>
                     </button>
                     <button 
+                      type="button"
                       onClick={() => saveContract(true)}
                       disabled={loading}
-                      className="flex-1 md:flex-none btn-gold !py-5 px-12 flex items-center justify-center gap-3 shadow-2xl shadow-gold/20 active:scale-95 disabled:opacity-50"
+                      className="flex-1 md:flex-none btn-gold !py-4 px-10 flex items-center justify-center gap-2 shadow-2xl shadow-gold/20 active:scale-95 disabled:opacity-50 text-sm"
                     >
-                      {loading ? <div className="w-6 h-6 border-3 border-primary-black border-t-transparent rounded-full animate-spin" /> : <Check size={20} />}
-                      <span className="text-lg">Finalizar e Salvar</span>
+                      {loading ? <div className="w-5 h-5 border-2 border-primary-black border-t-transparent rounded-full animate-spin" /> : <Check size={18} />}
+                      <span>Finalizar e Salvar</span>
                     </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Barra de Ações Fixa e Não-Invasiva na Revisão */}
+              {step === 'revisao' && (
+                <div className="fixed bottom-0 left-0 right-0 z-50 bg-primary-black/95 backdrop-blur-md border-t border-white/10 py-3.5 px-4 md:px-8 shadow-[0_-8px_30px_rgba(0,0,0,0.4)] print:hidden">
+                  <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+                    <div className="hidden sm:flex items-center gap-3 text-left">
+                      <div className="w-9 h-9 rounded-xl bg-gold/15 text-gold flex items-center justify-center font-bold">
+                        <FileText size={18} />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-white truncate max-w-[220px] md:max-w-[320px]">
+                          {contract.nomeCliente || 'Contrato Oficial'}
+                        </p>
+                        <p className="text-[11px] text-gray-400">
+                          {contract.tipoContrato?.toUpperCase().replace('_', ' ') || 'DOCUMENTO'} • R$ {contract.valor ? Number(contract.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end flex-wrap">
+                      <button 
+                        type="button"
+                        onClick={() => setStep('pagamento')}
+                        className="px-4 py-2.5 bg-white/10 text-white text-xs font-bold rounded-xl border border-white/10 hover:bg-white/20 transition-all flex items-center gap-2 active:scale-95"
+                      >
+                        <ChevronLeft size={16} />
+                        <span>Voltar e Ajustar</span>
+                      </button>
+
+                      <button 
+                        type="button"
+                        onClick={handlePrint}
+                        className="px-4 py-2.5 bg-white/10 text-white text-xs font-bold rounded-xl border border-white/10 hover:bg-white/20 transition-all flex items-center gap-2 active:scale-95"
+                      >
+                        <Printer size={16} />
+                        <span>Visualizar PDF</span>
+                      </button>
+
+                      <button 
+                        type="button"
+                        onClick={() => downloadPDF()}
+                        disabled={loading}
+                        className="px-4 py-2.5 bg-white/15 text-white text-xs font-bold rounded-xl border border-white/20 hover:bg-white/25 transition-all flex items-center gap-2 active:scale-95 disabled:opacity-50"
+                      >
+                        {loading ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Download size={16} />}
+                        <span>Baixar PDF</span>
+                      </button>
+
+                      <button 
+                        type="button"
+                        onClick={() => saveContract(false)}
+                        disabled={loading}
+                        className="hidden md:flex px-4 py-2.5 bg-white/5 text-gray-300 text-xs font-bold rounded-xl border border-white/10 hover:bg-white/15 transition-all items-center gap-2 active:scale-95 disabled:opacity-50"
+                      >
+                        <Save size={16} />
+                        <span>Salvar Rascunho</span>
+                      </button>
+
+                      <button 
+                        type="button"
+                        onClick={() => saveContract(true)}
+                        disabled={loading}
+                        className="btn-gold !py-2.5 px-6 text-xs font-bold flex items-center gap-2 shadow-lg shadow-gold/20 active:scale-95 disabled:opacity-50"
+                      >
+                        {loading ? <div className="w-4 h-4 border-2 border-primary-black border-t-transparent rounded-full animate-spin" /> : <Check size={16} />}
+                        <span>Finalizar e Salvar</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}

@@ -264,6 +264,7 @@ function AppRoutes() {
             <Route path="configuracoes-locacao" element={<AdminLeaseSettings />} />
             <Route path="bairros" element={<AdminNeighborhoods />} />
             <Route path="clausulas-contrato" element={<AdminContractClauses />} />
+            <Route path="clausulas" element={<AdminContractClauses />} />
             <Route path="configuracoes-site" element={<AdminSiteSettings />} />
           </Route>
         </Routes>
