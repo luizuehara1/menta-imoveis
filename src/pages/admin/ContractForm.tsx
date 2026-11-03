@@ -3739,6 +3739,19 @@ function AdminContractFormInner() {
     }
   };
 
+  const autoDownloadTriggeredRef = useRef(false);
+  useEffect(() => {
+    if (searchParams.get('download') === 'true' && !fetching && contract?.id && !autoDownloadTriggeredRef.current) {
+      autoDownloadTriggeredRef.current = true;
+      const timer = setTimeout(() => {
+        if (isMountedRef.current) {
+          downloadPDF();
+        }
+      }, 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [searchParams, fetching, contract?.id]);
+
   const handlePrint = () => {
     window.print();
   };
