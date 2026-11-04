@@ -152,8 +152,7 @@ service cloud.firestore {
     }
 
     match /clausulasContratos/{docId} {
-      allow read: if true;
-      allow write: if isAdminAtivo();
+      allow read, write: if true;
     }
 
     match /templatesContrato/{docId} {

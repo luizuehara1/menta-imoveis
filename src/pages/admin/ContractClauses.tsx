@@ -57,27 +57,59 @@ export const TEXTO_OFICIAL_SINAL_PADRAO = `O(A) COMPRADOR(A) pagará à imobili�
 Caso o negócio não seja concretizado, o valor será devolvido ao(à) COMPRADOR(A), descontadas exclusivamente as despesas efetivamente realizadas e previamente autorizadas pelo(a) COMPRADOR(A) com elaboração do contrato, emissão de certidões negativas e demais documentos necessários à negociação, mediante apresentação de notas fiscais ou recibos e prestação de contas discriminada. O desconto ficará limitado ao valor adiantado, sendo vedada a retenção de valores a título de multa, arras ou comissão de corretagem com fundamento nesta cláusula.`;
 
 export const CLAUSULAS_PADRAO_OFICIAIS = [
-  // 1. Proposta de Compra e Venda
+  // As 6 Cláusulas Oficiais da Menta Imóveis para Proposta de Compra e Venda e Contraproposta
   {
-    titulo: "Do Objeto e Caráter Irretratável",
-    texto: "A presente proposta tem por objeto manifestar o interesse inequívoco na aquisição do imóvel descrito neste instrumento, em caráter irrevogável e irretratável após o aceite formal do vendedor, obrigando as partes, seus herdeiros e sucessores.",
+    titulo: "CLÁUSULA 1ª — DO VALOR, DA FORMA DE PAGAMENTO E DA POSSE",
+    texto: "O valor total da transação é de R$ 840.000,00 (oitocentos e quarenta mil reais), sendo R$ 50.000,00 (cinquenta mil reais) pagos na assinatura do contrato e o saldo remanescente na assinatura da escritura e do contrato de financiamento bancário, ocasião em que ocorrerão a entrega das chaves e a transmissão da posse do imóvel à compradora.",
     ordem: 1,
-    obrigatorio: true,
+    obrigatorio: false,
     ativo: true,
     tipo: 'proposta' as const
   },
   {
-    titulo: "Da Validade da Proposta",
-    texto: "Esta proposta tem validade de 5 (cinco) dias úteis a contar de sua emissão e assinatura, findos os quais caducará de pleno direito sem ônus de qualquer natureza para as partes caso não haja aceite formal.",
+    titulo: "CLÁUSULA 2ª — DO SINAL DO NEGÓCIO",
+    texto: "O(A) COMPRADOR(A) pagará à imobiliária intermediadora a quantia de R$ 5.000,00 (cinco mil reais), a título de adiantamento para despesas iniciais e reserva do imóvel, valor este que será integralmente abatido do montante total negociado.",
     ordem: 2,
-    obrigatorio: true,
+    obrigatorio: false,
+    ativo: true,
+    tipo: 'proposta' as const
+  },
+  {
+    titulo: "CLÁUSULA 3ª — DO FINANCIAMENTO BANCÁRIO",
+    texto: "O saldo remanescente de R$ 790.000,00 (setecentos e noventa mil reais) será quitado por meio de financiamento bancário a ser obtido pelo(a) COMPRADOR(A) junto à instituição financeira de sua preferência, ficando a eficácia plena do presente negócio condicionada à respectiva aprovação e liberação do crédito.",
+    ordem: 3,
+    obrigatorio: false,
+    ativo: true,
+    tipo: 'proposta' as const
+  },
+  {
+    titulo: "CLÁUSULA 4ª — DA DOCUMENTAÇÃO E DOS DÉBITOS",
+    texto: "O(A) VENDEDOR(A) obriga-se a apresentar toda a documentação necessária à concretização do negócio e à aprovação do financiamento imobiliário, garantindo que o bem se encontra livre e desembaraçado de quaisquer ônus, dívidas fiscais, condominiais ou gravames judiciais e extrajudiciais até a presente data.",
+    ordem: 4,
+    obrigatorio: false,
+    ativo: true,
+    tipo: 'proposta' as const
+  },
+  {
+    titulo: "CLÁUSULA 5ª — DA VALIDADE DA PROPOSTA",
+    texto: "A presente proposta tem prazo de validade de 5 (cinco) dias úteis contados de sua assinatura, período durante o qual o(a) VENDEDOR(A) poderá manifestar seu aceite formal, findo o qual, sem manifestação expressa, o negócio será considerado desfeito sem qualquer penalidade para as partes.",
+    ordem: 5,
+    obrigatorio: false,
+    ativo: true,
+    tipo: 'proposta' as const
+  },
+  {
+    titulo: "CLÁUSULA 6ª — DO OBJETO E DO CARÁTER IRRETRATÁVEL",
+    texto: "O presente instrumento tem por objeto a formalização de proposta firme para aquisição do imóvel discriminado, assumindo caráter irrevogável e irretratável após a anuência e assinatura de ambas as partes, obrigando-as por si, seus herdeiros e sucessores a qualquer título.",
+    ordem: 6,
+    obrigatorio: false,
     ativo: true,
     tipo: 'proposta' as const
   },
   {
     titulo: "CLÁUSULA – ADIANTAMENTO REEMBOLSÁVEL E DESPESAS INICIAIS",
     texto: TEXTO_OFICIAL_SINAL_PADRAO,
-    ordem: 3,
+    ordem: 7,
     obrigatorio: false,
     ativo: true,
     tipo: 'proposta' as const,
@@ -222,7 +254,7 @@ export const CLAUSULAS_PADRAO_ADMINISTRACAO_TEMPORARIA = CLAUSULAS_PADRAO_OFICIA
 
 export const CONTRACT_TYPE_LABELS: Record<string, string> = {
   todos: 'Todos os Contratos',
-  proposta: 'Proposta de Compra',
+  proposta: 'Proposta / Contraproposta',
   contraproposta: 'Contraproposta',
   aceite: 'Aceite de Termos',
   compra_venda: 'Compra e Venda',
@@ -230,6 +262,18 @@ export const CONTRACT_TYPE_LABELS: Record<string, string> = {
   administracao_temporaria: 'Administração Temporária',
   arras_confirmatorios: 'Arras Confirmatórios',
   locacao: 'Locatício Anual'
+};
+
+export const CONTRACT_TYPE_APPLIES_TO: Record<string, string> = {
+  todos: 'Propostas, Contrapropostas, Compra e Venda e demais modelos',
+  proposta: 'Proposta de Compra e Venda, Contraproposta e Compra e Venda',
+  contraproposta: 'Contraproposta e Proposta de Compra e Venda',
+  aceite: 'Termo de Aceite de Proposta',
+  compra_venda: 'Contrato de Compra e Venda de Imóvel',
+  locacao_temporaria: 'Contrato de Locação por Temporada',
+  administracao_temporaria: 'Contrato de Gestão e Administração',
+  arras_confirmatorios: 'Contrato de Sinal e Arras Confirmatórias',
+  locacao: 'Contrato de Locação Residencial Anual'
 };
 
 // Available dynamic placeholders that administrators can insert into clauses
@@ -260,6 +304,7 @@ export default function ContractClauses() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<string>('todos_filtros');
+  const [filterStatus, setFilterStatus] = useState<'todas' | 'ativas' | 'inativas'>('todas');
   
   // Form State for Adding / Editing
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -556,8 +601,17 @@ export default function ContractClauses() {
     const matchesSearch = c.titulo.toLowerCase().includes(search.toLowerCase()) || 
                           c.texto.toLowerCase().includes(search.toLowerCase());
     const matchesFilter = filterType === 'todos_filtros' || c.tipo === filterType;
-    return matchesSearch && matchesFilter;
+    const isAtivo = c.ativo !== false && (c.ativo as any) !== 'false';
+    const matchesStatus = filterStatus === 'todas' 
+      ? true 
+      : filterStatus === 'ativas' 
+        ? isAtivo 
+        : !isAtivo;
+    return matchesSearch && matchesFilter && matchesStatus;
   });
+
+  const totalAtivas = clauses.filter(c => c.ativo !== false && (c.ativo as any) !== 'false').length;
+  const totalInativas = clauses.filter(c => c.ativo === false || (c.ativo as any) === 'false').length;
 
   return (
     <motion.div 
@@ -599,7 +653,7 @@ export default function ContractClauses() {
             Cláusulas dos Contratos
           </h1>
           <p className="text-gray-400 mt-2 text-base font-medium leading-relaxed max-w-3xl">
-            Gerenciamento oficial de cláusulas contratuais personalizadas e regras padrão para Propostas, Compra e Venda, Locações e Arras.
+            Gerenciamento oficial de cláusulas contratuais da Menta Imóveis. Cadastre, edite, ative ou desative cláusulas para Propostas, Compra e Venda, Locações e Arras.
           </p>
         </div>
 
@@ -617,9 +671,10 @@ export default function ContractClauses() {
       {/* Search and filter toolbar */}
       <motion.div 
         variants={slideUp} 
-        className="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-xl shadow-gray-200/20 flex flex-col md:flex-row gap-4 items-center justify-between"
+        className="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-xl shadow-gray-200/20 flex flex-col lg:flex-row gap-5 items-stretch lg:items-center justify-between"
       >
-        <div className="relative w-full md:max-w-md">
+        {/* Search */}
+        <div className="relative w-full lg:max-w-md">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
           <input 
             type="text"
@@ -630,24 +685,62 @@ export default function ContractClauses() {
           />
         </div>
 
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
-          <div className="flex items-center gap-2 text-gray-400 text-xs font-bold uppercase tracking-wider select-none shrink-0">
-            <Filter size={14} className="text-gold" />
-            <span>Filtrar por Modelo:</span>
+        {/* Status Filter Tabs (Todas, Ativas, Inativas) */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center p-1 bg-gray-100/80 rounded-2xl border border-gray-200/60">
+            <button
+              type="button"
+              onClick={() => setFilterStatus('todas')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                filterStatus === 'todas'
+                  ? 'bg-white text-primary-black shadow-sm'
+                  : 'text-gray-500 hover:text-primary-black'
+              }`}
+            >
+              Todas ({clauses.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterStatus('ativas')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-extrabold transition-all flex items-center gap-1.5 cursor-pointer ${
+                filterStatus === 'ativas'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-gray-500 hover:text-emerald-700'
+              }`}
+            >
+              <span className={`w-2 h-2 rounded-full ${filterStatus === 'ativas' ? 'bg-white' : 'bg-emerald-500'}`} />
+              Ativas ({totalAtivas})
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterStatus('inativas')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-extrabold transition-all flex items-center gap-1.5 cursor-pointer ${
+                filterStatus === 'inativas'
+                  ? 'bg-gray-800 text-white shadow-sm'
+                  : 'text-gray-500 hover:text-gray-800'
+              }`}
+            >
+              <span className={`w-2 h-2 rounded-full ${filterStatus === 'inativas' ? 'bg-white' : 'bg-gray-400'}`} />
+              Inativas ({totalInativas})
+            </button>
           </div>
-          <select
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
-            className="px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl text-xs font-bold text-gray-700 focus:outline-none focus:ring-4 focus:ring-gold/10 focus:bg-white cursor-pointer"
-          >
-            <option value="todos_filtros">Exibir Todos os Modelos ({clauses.length})</option>
-            {Object.entries(CONTRACT_TYPE_LABELS).map(([k, label]) => {
-              const count = clauses.filter(c => c.tipo === k).length;
-              return (
-                <option key={k} value={k}>{label} ({count})</option>
-              );
-            })}
-          </select>
+
+          {/* Model filter */}
+          <div className="flex items-center gap-2">
+            <select
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-xs font-bold text-gray-700 focus:outline-none focus:ring-4 focus:ring-gold/10 focus:bg-white cursor-pointer"
+            >
+              <option value="todos_filtros">Exibir Todos os Modelos</option>
+              {Object.entries(CONTRACT_TYPE_LABELS).map(([k, label]) => {
+                const count = clauses.filter(c => c.tipo === k).length;
+                return (
+                  <option key={k} value={k}>{label} ({count})</option>
+                );
+              })}
+            </select>
+          </div>
         </div>
       </motion.div>
 
@@ -707,18 +800,24 @@ export default function ContractClauses() {
                   <span className="text-[10px] font-black uppercase text-gold bg-gold/10 px-3 py-1 border border-gold/20 rounded-full select-none">
                     Ordem {clause.ordem}
                   </span>
-                  <span className="text-[10px] font-black uppercase text-gray-600 bg-gray-100 px-3 py-1 rounded-full select-none">
+                  <span className="text-[10px] font-black uppercase text-gray-700 bg-gray-100 px-3 py-1 rounded-full select-none">
                     {CONTRACT_TYPE_LABELS[clause.tipo] || clause.tipo}
                   </span>
+                  {clause.ativo ? (
+                    <span className="text-[10px] font-black uppercase text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full select-none flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                      Ativa
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-black uppercase text-gray-600 bg-gray-200 border border-gray-300 px-3 py-1 rounded-full select-none flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
+                      Desativada (Oculta na criação)
+                    </span>
+                  )}
                   {clause.obrigatorio && (
                     <span className="text-[10px] font-black uppercase text-rose-700 bg-rose-50 px-3 py-1 border border-rose-200 rounded-full select-none flex items-center gap-1">
                       <CheckSquare size={11} />
                       Obrigatória no Modelo
-                    </span>
-                  )}
-                  {!clause.ativo && (
-                    <span className="text-[10px] font-black uppercase text-gray-500 bg-gray-200 px-3 py-1 rounded-full select-none">
-                      Desativada
                     </span>
                   )}
                   {clause.variaveis && clause.variaveis.length > 0 && (
@@ -738,7 +837,11 @@ export default function ContractClauses() {
                   <h3 className="text-lg font-display font-bold text-primary-black">
                     {clause.titulo}
                   </h3>
-                  <p className="text-gray-700 font-normal leading-relaxed whitespace-pre-wrap text-xs sm:text-sm mt-2 font-serif bg-gray-50/70 p-4 rounded-2xl border border-gray-100">
+                  <div className="text-[11px] text-gray-500 font-medium flex items-center gap-1.5 mt-1">
+                    <FileText size={12} className="text-gold shrink-0" />
+                    <span className="font-semibold text-gray-700">Modelos compatíveis:</span> {CONTRACT_TYPE_APPLIES_TO[clause.tipo] || CONTRACT_TYPE_LABELS[clause.tipo]}
+                  </div>
+                  <p className="text-gray-700 font-normal leading-relaxed whitespace-pre-wrap text-xs sm:text-sm mt-3 font-serif bg-gray-50/70 p-4 rounded-2xl border border-gray-100">
                     {clause.texto}
                   </p>
                 </div>

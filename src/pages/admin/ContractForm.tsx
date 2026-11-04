@@ -851,22 +851,46 @@ function AdminContractFormInner() {
   const clausulasPadrao: Record<string, Array<{id: string, titulo: string, texto: string, ordem: number}>> = {
     proposta: [
       {
-        id: "fallback-prop-1",
-        titulo: "Do Objeto e Caráter Irretratável",
-        texto: "A presente proposta tem por objeto manifestar o interesse inequívoco na aquisição/locação do imóvel, em caráter irrevogável e irretratável após o aceite do vendedor/locador.",
+        id: "clausula-1-valor-pagamento-posse",
+        titulo: "CLÁUSULA 1ª — DO VALOR, DA FORMA DE PAGAMENTO E DA POSSE",
+        texto: "O valor total da transação é de R$ 840.000,00 (oitocentos e quarenta mil reais), sendo R$ 50.000,00 (cinquenta mil reais) pagos na assinatura do contrato e o saldo remanescente na assinatura da escritura e do contrato de financiamento bancário, ocasião em que ocorrerão a entrega das chaves e a transmissão da posse do imóvel à compradora.",
         ordem: 1
       },
       {
-        id: "fallback-prop-2",
-        titulo: "Da Validade da Proposta",
-        texto: "Esta proposta é válida por 5 (cinco) dias úteis a contar de sua assinatura, findo os quais decairá sem ônus adicionais se não aceita expressamente.",
+        id: "clausula-2-sinal-do-negocio",
+        titulo: "CLÁUSULA 2ª — DO SINAL DO NEGÓCIO",
+        texto: "O(A) COMPRADOR(A) pagará à imobiliária intermediadora a quantia de R$ 5.000,00 (cinco mil reais), a título de adiantamento para despesas iniciais e reserva do imóvel, valor este que será integralmente abatido do montante total negociado.",
         ordem: 2
       },
       {
-        id: "fallback-prop-3",
+        id: "clausula-3-financiamento-bancario",
+        titulo: "CLÁUSULA 3ª — DO FINANCIAMENTO BANCÁRIO",
+        texto: "O saldo remanescente de R$ 790.000,00 (setecentos e noventa mil reais) será quitado por meio de financiamento bancário a ser obtido pelo(a) COMPRADOR(A) junto à instituição financeira de sua preferência, ficando a eficácia plena do presente negócio condicionada à respectiva aprovação e liberação do crédito.",
+        ordem: 3
+      },
+      {
+        id: "clausula-4-documentacao-debitos",
+        titulo: "CLÁUSULA 4ª — DA DOCUMENTAÇÃO E DOS DÉBITOS",
+        texto: "O(A) VENDEDOR(A) obriga-se a apresentar toda a documentação necessária à concretização do negócio e à aprovação do financiamento imobiliário, garantindo que o bem se encontra livre e desembaraçado de quaisquer ônus, dívidas fiscais, condominiais ou gravames judiciais e extrajudiciais até a presente data.",
+        ordem: 4
+      },
+      {
+        id: "clausula-5-validade-da-proposta",
+        titulo: "CLÁUSULA 5ª — DA VALIDADE DA PROPOSTA",
+        texto: "A presente proposta tem prazo de validade de 5 (cinco) dias úteis contados de sua assinatura, período durante o qual o(a) VENDEDOR(A) poderá manifestar seu aceite formal, findo o qual, sem manifestação expressa, o negócio será considerado desfeito sem qualquer penalidade para as partes.",
+        ordem: 5
+      },
+      {
+        id: "clausula-6-objeto-carater-irretratavel",
+        titulo: "CLÁUSULA 6ª — DO OBJETO E DO CARÁTER IRRETRATÁVEL",
+        texto: "O presente instrumento tem por objeto a formalização de proposta firme para aquisição do imóvel discriminado, assumindo caráter irrevogável e irretratável após a anuência e assinatura de ambas as partes, obrigando-as por si, seus herdeiros e sucessores a qualquer título.",
+        ordem: 6
+      },
+      {
+        id: "clausula-sinal-adiantamento-reembolsavel",
         titulo: "CLÁUSULA – ADIANTAMENTO REEMBOLSÁVEL E DESPESAS INICIAIS",
         texto: TEXTO_OFICIAL_SINAL_PADRAO,
-        ordem: 3
+        ordem: 7
       }
     ],
     compra_venda: [
@@ -1039,7 +1063,7 @@ function AdminContractFormInner() {
               texto: c.texto,
               ordem: c.ordem,
               ativo: true,
-              obrigatorio: true,
+              obrigatorio: false,
               tipo: tipo
             }))
           );
@@ -1057,7 +1081,7 @@ function AdminContractFormInner() {
             texto: c.texto,
             ordem: c.ordem,
             ativo: true,
-            obrigatorio: true,
+            obrigatorio: false,
             tipo: tipo
           }))
         );
@@ -1070,14 +1094,14 @@ function AdminContractFormInner() {
   useEffect(() => {
     if (allSysClauses.length === 0) return;
     
-    // Check if contract already has selected clauses
+    // Check if contract already has selected clauses (e.g. existing contract or user already made selections)
     if (contract.dados?.clausulasSelecionadas && contract.dados.clausulasSelecionadas.length > 0) {
       return;
     }
 
-    // Auto-select mandatory clauses for the current contract type
+    // Auto-select ONLY strictly mandatory active clauses (optional clauses remain unselected for user choice)
     const mandatory = allSysClauses
-      .filter(c => c.ativo && c.obrigatorio && (
+      .filter(c => (c.ativo === true || c.ativo === 'true') && c.obrigatorio === true && (
         c.tipo === 'todos' || 
         c.tipo === contract.tipoContrato ||
         (contract.tipoContrato === 'compra_venda' && (c.tipo === 'venda' || c.tipo === 'compra_venda')) ||
@@ -3831,7 +3855,7 @@ function AdminContractFormInner() {
 
   const handleRemoveClause = (clauseId: string, idx: number) => {
     const selectedClauses = contract.dados?.clausulasSelecionadas || [];
-    const updated = selectedClauses.filter((c: any, i: number) => c.id !== clauseId && i !== idx);
+    const updated = selectedClauses.filter((c: any, i: number) => clauseId ? c.id !== clauseId : i !== idx);
     setContract(prev => ({
       ...prev,
       dados: {
@@ -6761,7 +6785,17 @@ function AdminContractFormInner() {
                     <p className="text-[10px] font-black uppercase text-gold tracking-widest mb-3 select-none">Ativar Clausulas do Banco de Dados</p>
                     <div className="flex flex-wrap gap-2">
                       {allSysClauses
-                        .filter(sys => sys.ativo && (sys.tipo === 'todos' || sys.tipo === contract.tipoContrato))
+                        .filter(sys => {
+                          const isAtivo = sys.ativo === true || sys.ativo === 'true';
+                          if (!isAtivo) return false;
+                          const contractTipo = contract.tipoContrato || 'proposta';
+                          if (sys.tipo === 'todos') return true;
+                          if (sys.tipo === contractTipo) return true;
+                          if ((contractTipo === 'proposta' || contractTipo === 'contraproposta') && (sys.tipo === 'proposta' || sys.tipo === 'contraproposta')) return true;
+                          if (contractTipo === 'compra_venda' && (sys.tipo === 'compra_venda' || sys.tipo === 'venda' || sys.tipo === 'proposta')) return true;
+                          if (contractTipo === 'arras_confirmatorios' && (sys.tipo === 'arras' || sys.tipo === 'arras_confirmatorios')) return true;
+                          return false;
+                        })
                         .map(sys => {
                           const isSelected = (contract.dados?.clausulasSelecionadas || []).some((c: any) => c.id === sys.id);
                           return (
@@ -6776,14 +6810,15 @@ function AdminContractFormInner() {
                                   handleAddClauseFromSys(sys);
                                 }
                               }}
-                              className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold border transition-all ${
+                              className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold border transition-all cursor-pointer ${
                                 isSelected 
-                                  ? 'bg-gold/10 text-gold border-gold/30' 
-                                  : 'bg-white hover:bg-gray-100 text-gray-500 border-gray-150 shadow-sm'
+                                  ? 'bg-gold/15 text-primary-black border-gold/40 shadow-sm' 
+                                  : 'bg-white hover:bg-gray-100 text-gray-600 border-gray-200 shadow-sm'
                               }`}
+                              title={isSelected ? "Clique para remover deste contrato" : "Clique para incluir neste contrato"}
                             >
                               <span>{sys.titulo}</span>
-                              {isSelected ? <Check size={14} className="text-gold" /> : <Plus size={14} />}
+                              {isSelected ? <Check size={14} className="text-gold font-bold" /> : <Plus size={14} className="text-gray-400" />}
                             </button>
                           );
                         })}

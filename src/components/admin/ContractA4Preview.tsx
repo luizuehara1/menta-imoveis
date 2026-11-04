@@ -496,7 +496,7 @@ export function estimateSignatureHeight(dados: any, tipoContrato: string, contra
   }
 
   const numRows = Math.ceil(count / 2);
-  return 24 + (numRows * 30);
+  return 8 + (numRows * 15);
 }
 
 const formatFullAddress = (obj: any): string => {
@@ -1086,17 +1086,18 @@ export function splitClauseIntoSegments(texto: string): string[] {
     }
   }
 
-  // 2. Long single paragraph (> 230 characters) with multiple sentences:
-  // break into balanced chunks of ~120-180 chars at sentence boundary
-  if (clean.length > 230) {
-    const sentences = clean.split(/(?<=[.;])\s+(?=[A-Z0-9À-Ú])/).map(s => s.trim()).filter(Boolean);
+  // 2. Sentences splitting:
+  // If text is at least 140 characters with multiple sentences, split cleanly at sentence boundary
+  // so text can continue onto the next page naturally without leaving large empty holes on the current page
+  if (clean.length > 140) {
+    const sentences = clean.split(/(?<=[.!?])\s+(?=[A-Z0-9À-Ú])/).map(s => s.trim()).filter(Boolean);
     if (sentences.length >= 2) {
       const chunks: string[] = [];
       let current = '';
       for (const sent of sentences) {
         if (!current) {
           current = sent;
-        } else if ((current + ' ' + sent).length <= 220) {
+        } else if ((current + ' ' + sent).length <= 260) {
           current += ' ' + sent;
         } else {
           chunks.push(current);
@@ -1109,6 +1110,27 @@ export function splitClauseIntoSegments(texto: string): string[] {
       if (chunks.length > 1) {
         return chunks;
       }
+    }
+  }
+
+  // 3. Long single sentence without period breaks (> 280 chars)
+  if (clean.length > 280) {
+    const subParts = clean.split(/(?<=[;])\s+|(?<=,)\s+(?=(?:sendo|bem como|ficando|facultando-se|mediante|ressalvado|sob pena|devendo)\b)/i).map(s => s.trim()).filter(Boolean);
+    if (subParts.length >= 2) {
+      const chunks: string[] = [];
+      let current = '';
+      for (const part of subParts) {
+        if (!current) {
+          current = part;
+        } else if ((current + ' ' + part).length <= 260) {
+          current += ' ' + part;
+        } else {
+          chunks.push(current);
+          current = part;
+        }
+      }
+      if (current) chunks.push(current);
+      if (chunks.length > 1) return chunks;
     }
   }
 
@@ -1230,7 +1252,7 @@ export const PdfSignatures: React.FC<PdfSignaturesProps> = ({
   const d = dados || {};
   const c = contract || {};
   const emp = empresa || {};
-  const ptGap = isDense ? 'pt-5' : 'pt-7';
+  const ptGap = isDense ? 'pt-2.5' : 'pt-3.5';
 
   // 1. Identificar Parte Contratante (Comprador / Locatário / Aceitante / Proprietário na Administração)
   let nomeContratante = '';
@@ -1300,7 +1322,7 @@ export const PdfSignatures: React.FC<PdfSignaturesProps> = ({
   const showIntermediadora = tipoContrato !== 'administracao_temporaria' && tipoContrato !== 'aceite';
 
   return (
-    <div className={`pdf-signatures grid grid-cols-2 ${isDense ? 'gap-x-8 gap-y-3 mt-2' : 'gap-x-10 gap-y-4 mt-2.5'} avoid-break signature-block text-[10.5px] sm:text-[11px]`}>
+    <div className={`pdf-signatures grid grid-cols-2 ${isDense ? 'gap-x-8 gap-y-2 mt-1.5' : 'gap-x-10 gap-y-2.5 mt-2'} avoid-break signature-block text-[10.5px] sm:text-[11px]`}>
       {/* 1. PARTE CONTRATANTE */}
       <div className={`flex flex-col justify-end text-center ${ptGap}`}>
         <div className="pdf-signature-line text-black font-bold max-w-full truncate">
@@ -1354,11 +1376,9 @@ export const PdfSignatures: React.FC<PdfSignaturesProps> = ({
           {t1Nome ? safeText(t1Nome) : <span className="opacity-0 select-none">ASSINATURA TESTEMUNHA 1</span>}
         </div>
         <div className="pdf-signature-role">TESTEMUNHA 1</div>
-        <div className="pdf-signature-doc text-[9.5px] text-gray-600 font-medium">
-          Nome: {t1Nome ? safeText(t1Nome) : '_________________________________'}
-        </div>
-        <div className="pdf-signature-doc text-[9.5px] text-gray-600 font-medium">
-          CPF: {t1Cpf ? safeText(t1Cpf) : '_________________________'}
+        <div className="pdf-signature-doc text-[9px] text-gray-600 font-medium leading-tight">
+          {t1Nome ? `Nome: ${safeText(t1Nome)}` : 'Nome: ____________________________'}
+          {t1Cpf ? ` • CPF: ${safeText(t1Cpf)}` : ' • CPF: ___________________'}
         </div>
       </div>
 
@@ -1368,17 +1388,15 @@ export const PdfSignatures: React.FC<PdfSignaturesProps> = ({
           {t2Nome ? safeText(t2Nome) : <span className="opacity-0 select-none">ASSINATURA TESTEMUNHA 2</span>}
         </div>
         <div className="pdf-signature-role">TESTEMUNHA 2</div>
-        <div className="pdf-signature-doc text-[9.5px] text-gray-600 font-medium">
-          Nome: {t2Nome ? safeText(t2Nome) : '_________________________________'}
-        </div>
-        <div className="pdf-signature-doc text-[9.5px] text-gray-600 font-medium">
-          CPF: {t2Cpf ? safeText(t2Cpf) : '_________________________'}
+        <div className="pdf-signature-doc text-[9px] text-gray-600 font-medium leading-tight">
+          {t2Nome ? `Nome: ${safeText(t2Nome)}` : 'Nome: ____________________________'}
+          {t2Cpf ? ` • CPF: ${safeText(t2Cpf)}` : ' • CPF: ___________________'}
         </div>
       </div>
 
       {/* 5. INTERMEDIADORA (MENTA IMÓVEIS) */}
       {showIntermediadora && (
-        <div className={`flex flex-col justify-end text-center col-span-2 max-w-[280px] mx-auto w-full mt-1.5 ${ptGap}`}>
+        <div className={`flex flex-col justify-end text-center col-span-2 max-w-[320px] mx-auto w-full mt-1 ${ptGap}`}>
           <div className="pdf-signature-line text-gray-900 font-bold max-w-full truncate">
             {safeText(emp.razaoSocial || emp.nome || 'MENTA NEGÓCIOS IMOBILIÁRIOS')}
           </div>
@@ -1624,7 +1642,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
   }
 
   // Text height estimator (in mm)
-  const estimateHeight = (text: string, divisor: number = 56, mmPerLine: number = 5.0): number => {
+  const estimateHeight = (text: string, divisor: number = 75, mmPerLine: number = 3.8): number => {
     if (!text) return 0;
     const lines = text.split('\n');
     let totalLines = 0;
@@ -1928,10 +1946,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
         : (Array.isArray((contract as any)?.clausulasSelecionadas) ? (contract as any).clausulasSelecionadas : []);
       const listClauses = rawListClauses.filter(
         (c: any) => c && c.texto && c.texto.trim() !== "" &&
-          c.campoVinculado !== 'valorSinalNegocio' &&
-          !String(c.titulo || '').toUpperCase().includes('ADIANTAMENTO REEMBOLSÁVEL') &&
-          !String(c.titulo || '').toUpperCase().includes('SINAL DO NEGÓCIO') &&
-          !String(c.titulo || '').toUpperCase().includes('DO SINAL E PRINCÍPIO DE PAGAMENTO')
+          c.ativo !== false && (c.ativo as any) !== 'false' &&
+          !(vSinal > 0 && (c.campoVinculado === 'valorSinalNegocio' || String(c.titulo || '').toUpperCase().includes('ADIANTAMENTO REEMBOLSÁVEL')))
       );
       if (listClauses.length > 0) {
         const titleClausesGerais = isContra ? "V - Cláusulas e Condições Gerais" : "Cláusulas e Condições Gerais";
@@ -1950,8 +1966,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       // 7. Date & Signatures Block (Combined so they flow together and never break across pages)
       const sigHeight = estimateSignatureHeight(dados, tipoContrato, contract, empresa, contraParteAceitante);
       addBlock(
-        <div className={`pdf-date-signatures ${isDenseMode ? 'mt-2' : 'mt-3'} avoid-break signature-block text-[10.5px]`}>
-          <div className="text-right font-bold text-[11px] sm:text-[11.5px] text-black pt-1 mb-2">
+        <div className={`pdf-date-signatures ${isDenseMode ? 'mt-1.5' : 'mt-2'} avoid-break signature-block text-[10.5px]`}>
+          <div className="text-right font-bold text-[10.5px] sm:text-[11px] text-black pt-0.5 mb-1.5">
             {safeText(dados.local || 'Balneário Camboriú')}, {safeText(dados.data || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }))}
           </div>
           <PdfSignatures dados={dados} tipoContrato={tipoContrato} contract={contract} empresa={empresa} parteAceitante={contraParteAceitante} isDense={isDenseMode} />
@@ -2068,7 +2084,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
         ? dados.clausulasSelecionadas 
         : (Array.isArray((contract as any)?.clausulasSelecionadas) ? (contract as any).clausulasSelecionadas : []);
       const listClausesAdmin = rawListClausesAdmin.filter(
-        (c: any) => c && c.texto && c.texto.trim() !== ""
+        (c: any) => c && c.texto && c.texto.trim() !== "" &&
+          c.ativo !== false && (c.ativo as any) !== 'false'
       );
       if (listClausesAdmin.length > 0) {
         addClauseBlocks(listClausesAdmin, "V - Cláusulas e Condições da Administração", 1);
@@ -2083,8 +2100,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       // 9. Signatures Block
       const sigHeight = estimateSignatureHeight(dados, tipoContrato, contract, empresa);
       addBlock(
-        <div className={`pdf-date-signatures ${isDenseMode ? 'mt-2' : 'mt-3'} avoid-break signature-block text-[10.5px]`}>
-          <div className="text-right font-bold text-[11px] sm:text-[11.5px] text-black pt-1 mb-2">
+        <div className={`pdf-date-signatures ${isDenseMode ? 'mt-1.5' : 'mt-2'} avoid-break signature-block text-[10.5px]`}>
+          <div className="text-right font-bold text-[10.5px] sm:text-[11px] text-black pt-0.5 mb-1.5">
             {safeText(dados.local || 'Balneário Camboriú/SC')}, {safeText(dados.data || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }))}
           </div>
           <PdfSignatures dados={dados} tipoContrato={tipoContrato} contract={contract} empresa={empresa} isDense={isDenseMode} />
@@ -2220,10 +2237,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
         : (Array.isArray((contract as any)?.clausulasSelecionadas) ? (contract as any).clausulasSelecionadas : []);
       const listClausesArras = rawListClausesArras.filter(
         (c: any) => c && c.texto && c.texto.trim() !== "" &&
-          c.campoVinculado !== 'valorSinalNegocio' &&
-          !String(c.titulo || '').toUpperCase().includes('ADIANTAMENTO REEMBOLSÁVEL') &&
-          !String(c.titulo || '').toUpperCase().includes('SINAL DO NEGÓCIO') &&
-          !String(c.titulo || '').toUpperCase().includes('DO SINAL E PRINCÍPIO DE PAGAMENTO')
+          c.ativo !== false && (c.ativo as any) !== 'false' &&
+          !(vSinalArras > 0 && (c.campoVinculado === 'valorSinalNegocio' || String(c.titulo || '').toUpperCase().includes('ADIANTAMENTO REEMBOLSÁVEL')))
       );
       if (listClausesArras.length > 0) {
         addClauseBlocks(listClausesArras, "Cláusulas e Condições Gerais", 1);
@@ -2241,8 +2256,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       // 7. Date & Signatures Block (Combined so they flow together and never break across pages)
       const sigHeight = estimateSignatureHeight(dados, tipoContrato, contract, empresa);
       addBlock(
-        <div className={`pdf-date-signatures ${isDenseMode ? 'mt-2' : 'mt-3'} avoid-break signature-block text-[10.5px]`}>
-          <div className="text-right font-bold text-[11px] sm:text-[11.5px] text-black pt-1 mb-2">
+        <div className={`pdf-date-signatures ${isDenseMode ? 'mt-1.5' : 'mt-2'} avoid-break signature-block text-[10.5px]`}>
+          <div className="text-right font-bold text-[10.5px] sm:text-[11px] text-black pt-0.5 mb-1.5">
             {safeText(dados.local || 'Balneário Camboriú')}, {safeText(dados.data || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }))}
           </div>
           <PdfSignatures dados={dados} tipoContrato={tipoContrato} contract={contract} empresa={empresa} isDense={isDenseMode} />
@@ -2477,7 +2492,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
         ? dados.clausulasSelecionadas 
         : (Array.isArray((contract as any)?.clausulasSelecionadas) ? (contract as any).clausulasSelecionadas : []);
       const listSelection = rawListSelection.filter(
-        (c: any) => c && c.texto && c.texto.trim() !== ""
+        (c: any) => c && c.texto && c.texto.trim() !== "" &&
+          c.ativo !== false && (c.ativo as any) !== 'false'
       );
       if (listSelection.length > 0) {
         addClauseBlocks(listSelection, "", nextClauseIdx);
@@ -2486,8 +2502,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       // 12. Date & Signatures Block (Combined so they flow together and never break across pages)
       const sigHeight = estimateSignatureHeight(dados, tipoContrato, contract, empresa);
       addBlock(
-        <div className={`pdf-date-signatures ${isDenseMode ? 'mt-2' : 'mt-3'} avoid-break signature-block text-[10.5px]`}>
-          <div className="text-right font-bold text-[11px] sm:text-[11.5px] text-black pt-1 mb-2">
+        <div className={`pdf-date-signatures ${isDenseMode ? 'mt-1.5' : 'mt-2'} avoid-break signature-block text-[10.5px]`}>
+          <div className="text-right font-bold text-[10.5px] sm:text-[11px] text-black pt-0.5 mb-1.5">
             {safeText(dados.local || 'Balneário Camboriú')}, {safeText(dados.data || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }))}
           </div>
           <PdfSignatures dados={dados} tipoContrato={tipoContrato} contract={contract} empresa={empresa} isDense={isDenseMode} />
@@ -2618,10 +2634,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
         : (Array.isArray((contract as any)?.clausulasSelecionadas) ? (contract as any).clausulasSelecionadas : []);
       const listSelectionAceite = rawListSelectionAceite.filter(
         (c: any) => c && c.texto && c.texto.trim() !== "" &&
-          c.campoVinculado !== 'valorSinalNegocio' &&
-          !String(c.titulo || '').toUpperCase().includes('ADIANTAMENTO REEMBOLSÁVEL') &&
-          !String(c.titulo || '').toUpperCase().includes('SINAL DO NEGÓCIO') &&
-          !String(c.titulo || '').toUpperCase().includes('DO SINAL E PRINCÍPIO DE PAGAMENTO')
+          c.ativo !== false && (c.ativo as any) !== 'false' &&
+          !(vSinalAceite > 0 && (c.campoVinculado === 'valorSinalNegocio' || String(c.titulo || '').toUpperCase().includes('ADIANTAMENTO REEMBOLSÁVEL')))
       );
       if (listSelectionAceite.length > 0) {
         addClauseBlocks(listSelectionAceite, "Cláusulas Vinculadas", 1);
@@ -2639,8 +2653,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       // 5. Date & Signatures Block (Combined so they flow together and never break across pages)
       const sigHeight = estimateSignatureHeight(dados, tipoContrato, contract, empresa, parte);
       addBlock(
-        <div className={`pdf-date-signatures ${isDenseMode ? 'mt-2' : 'mt-3'} avoid-break signature-block text-[10.5px]`}>
-          <div className="text-right font-bold text-[11px] sm:text-[11.5px] text-black pt-1 mb-2">
+        <div className={`pdf-date-signatures ${isDenseMode ? 'mt-1.5' : 'mt-2'} avoid-break signature-block text-[10.5px]`}>
+          <div className="text-right font-bold text-[10.5px] sm:text-[11px] text-black pt-0.5 mb-1.5">
             {safeText(mergedDados.local || 'Balneário Camboriú')}, {safeText(mergedDados.data || (mergedDados.dataProposta ? formatarDataBR(mergedDados.dataProposta) : "") || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }))}
           </div>
           <PdfSignatures dados={dados} tipoContrato={tipoContrato} contract={contract} empresa={empresa} parteAceitante={parte} isDense={isDenseMode} />
@@ -2772,10 +2786,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
         : (Array.isArray((contract as any)?.clausulasSelecionadas) ? (contract as any).clausulasSelecionadas : []);
       const listClausesCV = rawListClausesCV.filter(
         (c: any) => c && c.texto && c.texto.trim() !== "" &&
-          c.campoVinculado !== 'valorSinalNegocio' &&
-          !String(c.titulo || '').toUpperCase().includes('ADIANTAMENTO REEMBOLSÁVEL') &&
-          !String(c.titulo || '').toUpperCase().includes('SINAL DO NEGÓCIO') &&
-          !String(c.titulo || '').toUpperCase().includes('DO SINAL E PRINCÍPIO DE PAGAMENTO')
+          c.ativo !== false && (c.ativo as any) !== 'false' &&
+          !(vSinalCV > 0 && (c.campoVinculado === 'valorSinalNegocio' || String(c.titulo || '').toUpperCase().includes('ADIANTAMENTO REEMBOLSÁVEL')))
       );
       if (listClausesCV.length > 0) {
         addClauseBlocks(listClausesCV, "Cláusulas Contratuais", 1);
@@ -2793,8 +2805,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       // Date & Signatures Block
       const sigHeight = estimateSignatureHeight(dados, tipoContrato, contract, empresa);
       addBlock(
-        <div className={`pdf-date-signatures ${isDenseMode ? 'mt-2' : 'mt-3'} avoid-break signature-block text-[10.5px]`}>
-          <div className="text-right font-bold text-[11px] sm:text-[11.5px] text-black pt-1 mb-2">
+        <div className={`pdf-date-signatures ${isDenseMode ? 'mt-1.5' : 'mt-2'} avoid-break signature-block text-[10.5px]`}>
+          <div className="text-right font-bold text-[10.5px] sm:text-[11px] text-black pt-0.5 mb-1.5">
             {safeText(dados.local || 'Balneário Camboriú')}, {safeText(dados.data || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }))}
           </div>
           <PdfSignatures dados={dados} tipoContrato={tipoContrato} contract={contract} empresa={empresa} isDense={isDenseMode} />
@@ -2847,7 +2859,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
         ? dados.clausulasSelecionadas 
         : (Array.isArray((contract as any)?.clausulasSelecionadas) ? (contract as any).clausulasSelecionadas : []);
       const listClausesGen = rawListClausesGen.filter(
-        (c: any) => c && c.texto && c.texto.trim() !== ""
+        (c: any) => c && c.texto && c.texto.trim() !== "" &&
+          c.ativo !== false && (c.ativo as any) !== 'false'
       );
       if (listClausesGen.length > 0) {
         addClauseBlocks(listClausesGen, "Cláusulas Contratuais", 1);
@@ -2861,8 +2874,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
 
       const sigHeight = estimateSignatureHeight(dados, tipoContrato, contract, empresa);
       addBlock(
-        <div className={`pdf-date-signatures ${isDenseMode ? 'mt-2' : 'mt-3'} avoid-break signature-block text-[10.5px]`}>
-          <div className="text-right font-bold text-[11px] sm:text-[11.5px] text-black pt-1 mb-2">
+        <div className={`pdf-date-signatures ${isDenseMode ? 'mt-1.5' : 'mt-2'} avoid-break signature-block text-[10.5px]`}>
+          <div className="text-right font-bold text-[10.5px] sm:text-[11px] text-black pt-0.5 mb-1.5">
             {safeText(dados.local || 'Balneário Camboriú')}, {safeText(dados.data || format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }))}
           </div>
           <PdfSignatures dados={dados} tipoContrato={tipoContrato} contract={contract} empresa={empresa} isDense={isDenseMode} />
@@ -2885,12 +2898,12 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
 
   const getPageLimits = (dense: boolean) => {
     // Exact A4 usable height (297mm = 1122.5px at 96dpi)
-    // Page 1: 1122.5px - padding (15-17mm = ~60px) - header (~48px) - footer (~24px)
-    // Usable Page 1: 980px in normal mode, 1000px in dense mode.
-    // Subsequent pages: 1122.5px - padding (15-17mm) - runningHeader (~20px) - footer (~24px)
-    // Usable Sub: 1010px in normal mode, 1025px in dense mode.
-    const usableFirst = dense ? 1000 : 980;
-    const usableSub = dense ? 1025 : 1010;
+    // Page 1: 1122.5px - padding (14-16mm) - header (~45px) - footer (~22px)
+    // Usable Page 1: 1005px in normal mode, 1025px in dense mode.
+    // Subsequent pages: 1122.5px - padding (14-16mm) - runningHeader (~18px) - footer (~22px)
+    // Usable Sub: 1025px in normal mode, 1045px in dense mode.
+    const usableFirst = dense ? 1025 : 1005;
+    const usableSub = dense ? 1045 : 1025;
     return { usableFirst, usableSub };
   };
 
@@ -2909,21 +2922,23 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
     const { usableFirst, usableSub } = getPageLimits(isDense);
 
     // Single-Page Absorption:
-    // If not yet dense and total content can fit on Page 1 under dense spacing (within 18%),
+    // If not yet dense and total content can fit on Page 1 under dense spacing (within 28%),
     // trigger dense mode so the document is neatly consolidated onto a SINGLE sheet!
-    if (!isDense && totalH > usableFirst && totalH <= usableFirst * 1.18) {
+    if (!isDense && totalH > usableFirst && totalH <= usableFirst * 1.28) {
       setIsDense(true);
       return;
     }
 
     // Multi-page Trailing Page Squeeze:
-    // If the contract spans 2+ pages and the last page has only signatures or minimal content (<= 240px),
+    // If the contract spans 2+ pages and the last page has only signatures or minimal content (<= 260px),
     // dense mode squeezes earlier pages to pull the signatures onto the previous page, avoiding an isolated signature page.
     const pages: number[][] = [[]];
     let currentH = 0;
     heights.forEach((h, i) => {
       const limit = pages.length === 1 ? usableFirst : usableSub;
-      if (currentH + h > limit && pages[pages.length - 1].length > 0) {
+      const isSig = !!blocks[i]?.isSignature;
+      const effectiveLimit = isSig ? (limit + (isDense ? 45 : 30)) : limit;
+      if (currentH + h > effectiveLimit && pages[pages.length - 1].length > 0) {
         pages.push([i]);
         currentH = h;
       } else {
@@ -2934,7 +2949,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
 
     const lastPageBlocks = pages[pages.length - 1] || [];
     const isOnlySignaturesOnLastPage = lastPageBlocks.length === 1 && !!blocks[lastPageBlocks[0]]?.isSignature;
-    const isMinimalOnLastPage = currentH <= 240;
+    const isMinimalOnLastPage = currentH <= 260;
 
     if (!isDense && pages.length >= 2 && (isOnlySignaturesOnLastPage || isMinimalOnLastPage)) {
       setIsDense(true);
@@ -2972,7 +2987,8 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
     const totalH = heightsToUse.reduce((sum, val) => sum + val, 0);
 
     // PRIORITY 1: If all content fits in Page 1, strictly guarantee a SINGLE sheet!
-    if (totalH <= usableFirst + 6) {
+    const singlePageAllowance = isDense ? 45 : 25;
+    if (totalH <= usableFirst + singlePageAllowance) {
       return [blocks.map((_, i) => i)];
     }
 
@@ -2980,7 +2996,12 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
       if (!blocks[i]) return;
       const isFirst = pages.length === 1;
       const limit = isFirst ? usableFirst : usableSub;
-      const breakHere = (h + rawH > limit);
+      
+      // For signature blocks, permit a small flex allowance (up to 30px in normal, 45px in dense)
+      // to avoid pushing signatures alone to an empty trailing page when they fit comfortably
+      const isSig = !!blocks[i]?.isSignature;
+      const effectiveLimit = isSig ? (limit + (isDense ? 45 : 30)) : limit;
+      const breakHere = (h + rawH > effectiveLimit);
 
       if (breakHere && pages[pages.length - 1].length > 0) {
         pages.push([i]);
@@ -3021,7 +3042,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
           position: 'absolute',
           left: '-99999px',
           top: 0,
-          width: isDense ? 'calc(210mm - 24mm)' : 'calc(210mm - 28mm)',
+          width: 'calc(210mm - 24mm)',
           visibility: 'hidden',
           pointerEvents: 'none',
           zIndex: -1,
@@ -3046,7 +3067,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
             height: '297mm',
             minHeight: '297mm',
             maxHeight: '297mm',
-            padding: isDense ? '7mm 12mm 8mm 12mm' : '8mm 12mm 9mm 12mm',
+            padding: isDense ? '6.5mm 12mm 7.5mm 12mm' : '7.5mm 12mm 8.5mm 12mm',
             boxSizing: 'border-box',
             position: 'relative',
             pageBreakAfter: 'always',
@@ -3141,7 +3162,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
         .pdf-signatures {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 14px 28px;
+          gap: 10px 24px;
           align-items: end;
           page-break-inside: avoid !important;
           break-inside: avoid !important;
@@ -3149,26 +3170,26 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
 
         .pdf-signature-line {
           border-top: 1.2px solid #111827;
-          padding-top: 4px;
+          padding-top: 3px;
           text-align: center;
-          font-size: 11px;
+          font-size: 10.5px;
           font-weight: 700;
-          line-height: 1.35;
+          line-height: 1.3;
           overflow: visible;
         }
 
         .pdf-signature-role {
-          font-size: 9.5px;
+          font-size: 9px;
           font-weight: 700;
           color: #374151;
-          margin-top: 2px;
+          margin-top: 1px;
           text-align: center;
           text-transform: uppercase;
           letter-spacing: 0.3px;
         }
 
         .pdf-signature-doc {
-          font-size: 9.5px;
+          font-size: 9px;
           color: #4b5563;
           margin-top: 1px;
           text-align: center;
