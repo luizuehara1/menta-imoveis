@@ -45,11 +45,16 @@ export interface ContractClause {
   ordem: number;
   ativo: boolean;
   obrigatorio: boolean;
+  campoVinculado?: string;
   variaveis?: string[];
   criadoEm?: any;
   atualizadoEm?: any;
   atualizadoPor?: string;
 }
+
+export const TEXTO_OFICIAL_SINAL_PADRAO = `O(A) COMPRADOR(A) pagará à imobiliária intermediadora **{{valor_sinal}}** ({{valor_sinal_extenso}}), a título de adiantamento, sem natureza de arras confirmatórias ou penitenciais. Concretizado o negócio, esse valor será integralmente abatido do preço total do imóvel.
+
+Caso o negócio não seja concretizado, o valor será devolvido ao(à) COMPRADOR(A), descontadas exclusivamente as despesas efetivamente realizadas e previamente autorizadas pelo(a) COMPRADOR(A) com elaboração do contrato, emissão de certidões negativas e demais documentos necessários à negociação, mediante apresentação de notas fiscais ou recibos e prestação de contas discriminada. O desconto ficará limitado ao valor adiantado, sendo vedada a retenção de valores a título de multa, arras ou comissão de corretagem com fundamento nesta cláusula.`;
 
 export const CLAUSULAS_PADRAO_OFICIAIS = [
   // 1. Proposta de Compra e Venda
@@ -70,12 +75,14 @@ export const CLAUSULAS_PADRAO_OFICIAIS = [
     tipo: 'proposta' as const
   },
   {
-    titulo: "Do Sinal e Princípio de Pagamento",
-    texto: "O proponente comprador efetuará o pagamento do sinal e princípio de pagamento (arras) nas condições acordadas, servindo este valor como confirmação irrevogável do fechamento da transação imobiliária.",
+    titulo: "CLÁUSULA – ADIANTAMENTO REEMBOLSÁVEL E DESPESAS INICIAIS",
+    texto: TEXTO_OFICIAL_SINAL_PADRAO,
     ordem: 3,
     obrigatorio: false,
     ativo: true,
-    tipo: 'proposta' as const
+    tipo: 'proposta' as const,
+    campoVinculado: 'valorSinalNegocio',
+    variaveis: ['{{valor_sinal}}', '{{valor_sinal_extenso}}']
   },
 
   // 2. Compra e Venda
@@ -118,6 +125,16 @@ export const CLAUSULAS_PADRAO_OFICIAIS = [
     obrigatorio: true,
     ativo: true,
     tipo: 'compra_venda' as const
+  },
+  {
+    titulo: "CLÁUSULA – ADIANTAMENTO REEMBOLSÁVEL E DESPESAS INICIAIS",
+    texto: TEXTO_OFICIAL_SINAL_PADRAO,
+    ordem: 6,
+    obrigatorio: false,
+    ativo: true,
+    tipo: 'compra_venda' as const,
+    campoVinculado: 'valorSinalNegocio',
+    variaveis: ['{{valor_sinal}}', '{{valor_sinal_extenso}}']
   },
 
   // 3. Locação por Temporada
@@ -231,7 +248,8 @@ export const VARIAVEIS_DINAMICAS = [
   { key: '{imovel_cri}', label: 'CRI do Imóvel' },
   { key: '{valor_total}', label: 'Valor Total Negociado' },
   { key: '{valor_extenso}', label: 'Valor por Extenso' },
-  { key: '{valor_sinal}', label: 'Valor do Sinal / Arras' },
+  { key: '{{valor_sinal}}', label: 'Valor do Sinal Numérico (ex: R$ 10.000,00)' },
+  { key: '{{valor_sinal_extenso}}', label: 'Valor do Sinal por Extenso (ex: dez mil reais)' },
   { key: '{data_atual}', label: 'Data Atual Formatada' },
   { key: '{cidade}', label: 'Cidade do Contrato' }
 ];
@@ -252,6 +270,7 @@ export default function ContractClauses() {
   const [ordem, setOrdem] = useState(1);
   const [ativo, setAtivo] = useState(true);
   const [obrigatorio, setObrigatorio] = useState(false);
+  const [campoVinculado, setCampoVinculado] = useState<string>('');
 
   // Preview Modal State
   const [previewClause, setPreviewClause] = useState<ContractClause | null>(null);
@@ -301,6 +320,37 @@ export default function ContractClauses() {
         setClauses(created);
         showToast("Cláusulas oficiais inicializadas com sucesso no banco de dados!");
       } else {
+        // Ensure the official Sinal clause is registered in Firestore without duplicate
+        const hasSinalClause = data.some(c => 
+          (c.titulo && (c.titulo.toUpperCase().includes('ADIANTAMENTO REEMBOLSÁVEL') || c.titulo === 'CLÁUSULA – ADIANTAMENTO REEMBOLSÁVEL E DESPESAS INICIAIS')) ||
+          c.campoVinculado === 'valorSinalNegocio'
+        );
+
+        if (!hasSinalClause) {
+          const adminEmail = user?.email || user?.displayName || 'Sistema';
+          const maxOrder = data.length > 0 ? Math.max(...data.map(c => Number(c.ordem) || 0)) : 0;
+          const sinalPayload = {
+            titulo: "CLÁUSULA – ADIANTAMENTO REEMBOLSÁVEL E DESPESAS INICIAIS",
+            texto: TEXTO_OFICIAL_SINAL_PADRAO,
+            ordem: maxOrder + 1,
+            obrigatorio: false,
+            ativo: true,
+            tipo: 'proposta' as const,
+            campoVinculado: 'valorSinalNegocio',
+            variaveis: ['{{valor_sinal}}', '{{valor_sinal_extenso}}'],
+            criadoEm: serverTimestamp(),
+            atualizadoEm: serverTimestamp(),
+            atualizadoPor: adminEmail
+          };
+          try {
+            const docRef = await addDoc(collection(db, 'clausulasContratos'), sinalPayload);
+            data.push({ id: docRef.id, ...sinalPayload } as ContractClause);
+            console.log("Cláusula oficial de sinal persistida no Firestore:", docRef.id);
+          } catch (err) {
+            console.error("Erro ao registrar cláusula oficial de sinal:", err);
+          }
+        }
+
         setClauses(data);
       }
     } catch (e: any) {
@@ -320,6 +370,7 @@ export default function ContractClauses() {
     setOrdem(maxOrder + 1);
     setAtivo(true);
     setObrigatorio(false);
+    setCampoVinculado('');
     setIsFormOpen(true);
   };
 
@@ -331,6 +382,7 @@ export default function ContractClauses() {
     setOrdem(clause.ordem);
     setAtivo(clause.ativo);
     setObrigatorio(clause.obrigatorio || false);
+    setCampoVinculado(clause.campoVinculado || (clause.titulo?.toUpperCase().includes('ADIANTAMENTO REEMBOLSÁVEL') ? 'valorSinalNegocio' : ''));
     setIsFormOpen(true);
   };
 
@@ -398,6 +450,11 @@ export default function ContractClauses() {
       const matchedVars = VARIAVEIS_DINAMICAS
         .map(v => v.key)
         .filter(key => texto.includes(key));
+      
+      if (campoVinculado === 'valorSinalNegocio') {
+        if (!matchedVars.includes('{{valor_sinal}}')) matchedVars.push('{{valor_sinal}}');
+        if (!matchedVars.includes('{{valor_sinal_extenso}}')) matchedVars.push('{{valor_sinal_extenso}}');
+      }
 
       const payload: any = {
         titulo: titulo.trim(),
@@ -406,6 +463,7 @@ export default function ContractClauses() {
         ordem: Number(ordem) || 1,
         ativo,
         obrigatorio,
+        campoVinculado: campoVinculado || '',
         variaveis: matchedVars,
         atualizadoEm: serverTimestamp(),
         atualizadoPor: adminEmail
@@ -666,6 +724,12 @@ export default function ContractClauses() {
                   {clause.variaveis && clause.variaveis.length > 0 && (
                     <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-full select-none border border-blue-100">
                       {clause.variaveis.length} variável(is) dinâmica(s)
+                    </span>
+                  )}
+                  {(clause.campoVinculado === 'valorSinalNegocio' || clause.titulo?.toUpperCase().includes('ADIANTAMENTO REEMBOLSÁVEL')) && (
+                    <span className="text-[10px] font-black uppercase text-gold bg-gold/15 px-3 py-1 border border-gold/30 rounded-full select-none flex items-center gap-1 shadow-2xs">
+                      <Sparkles size={11} className="text-gold" />
+                      Vínculo: Sinal do Negócio (Automático)
                     </span>
                   )}
                 </div>
@@ -950,6 +1014,27 @@ export default function ContractClauses() {
                       onChange={(e) => setOrdem(parseInt(e.target.value) || 1)}
                       className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-gold/10 focus:bg-white text-sm text-primary-black font-semibold"
                     />
+                  </div>
+
+                  {/* Campo Vinculado (Opcional - ex: Sinal de Negócio) */}
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-xs uppercase font-extrabold tracking-wider text-gray-500 flex items-center justify-between">
+                      <span>Vínculo a Campo do Formulário</span>
+                      <span className="text-[10px] text-gold font-bold">Opcional</span>
+                    </label>
+                    <select
+                      value={campoVinculado}
+                      onChange={(e) => setCampoVinculado(e.target.value)}
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-gold/10 focus:bg-white text-sm text-primary-black font-semibold cursor-pointer"
+                    >
+                      <option value="">Nenhum vínculo automático (Cláusula Padrão/Geral)</option>
+                      <option value="valorSinalNegocio">Sinal do Negócio (valorSinalNegocio - ativa dinamicamente)</option>
+                    </select>
+                    {campoVinculado === 'valorSinalNegocio' && (
+                      <p className="text-[11px] text-gold font-medium">
+                        Esta cláusula será acionada automaticamente nos contratos de compra e venda e propostas sempre que o campo de sinal for preenchido com valor &gt; 0. As variáveis &#123;&#123;valor_sinal&#125;&#125; e &#123;&#123;valor_sinal_extenso&#125;&#125; serão preenchidas em tempo real.
+                      </p>
+                    )}
                   </div>
 
                   {/* Dynamic Variables Selector Helper */}

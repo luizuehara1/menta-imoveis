@@ -50,7 +50,7 @@ import { getProprietarioFromImovel, maskCurrency, parseCurrencyToNumber, formatC
 import { staggerContainer, slideUp, fadeIn, scaleIn } from '../../constants/animations';
 import { ContractA4Preview } from '../../components/admin/ContractA4Preview';
 import { obterDadosAutomaticosDoContrato } from '../../services/contractAutoFill';
-import { CLAUSULAS_PADRAO_ADMINISTRACAO_TEMPORARIA } from './ContractClauses';
+import { CLAUSULAS_PADRAO_ADMINISTRACAO_TEMPORARIA, TEXTO_OFICIAL_SINAL_PADRAO } from './ContractClauses';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -861,6 +861,12 @@ function AdminContractFormInner() {
         titulo: "Da Validade da Proposta",
         texto: "Esta proposta é válida por 5 (cinco) dias úteis a contar de sua assinatura, findo os quais decairá sem ônus adicionais se não aceita expressamente.",
         ordem: 2
+      },
+      {
+        id: "fallback-prop-3",
+        titulo: "CLÁUSULA – ADIANTAMENTO REEMBOLSÁVEL E DESPESAS INICIAIS",
+        texto: TEXTO_OFICIAL_SINAL_PADRAO,
+        ordem: 3
       }
     ],
     compra_venda: [
@@ -1418,7 +1424,8 @@ function AdminContractFormInner() {
     return {
       ...docObj,
       ...flatData,
-      valorSinal: docObj.valorSinal || flatData.valorSinal || docObj.dados?.pagamento?.valorSinal || docObj.dados?.arras?.valorArras || 0,
+      valorSinal: docObj.valorSinal || docObj.valorSinalNegocio || flatData.valorSinal || flatData.valorSinalNegocio || docObj.dados?.pagamento?.valorSinal || docObj.dados?.pagamento?.valorSinalNegocio || docObj.dados?.arras?.valorArras || 0,
+      valorSinalNegocio: docObj.valorSinal || docObj.valorSinalNegocio || flatData.valorSinal || flatData.valorSinalNegocio || docObj.dados?.pagamento?.valorSinal || docObj.dados?.pagamento?.valorSinalNegocio || docObj.dados?.arras?.valorArras || 0,
       detalhesPagamento: detalhesFinal,
       detalhesPagamentoContraproposta: detalhesFinal,
       outrasCondicoes: detalhesFinal,
@@ -3049,7 +3056,8 @@ function AdminContractFormInner() {
         imovelMatricula: String((contract as any).imovelMatricula || contract.dados?.imovel?.matricula || '').trim(),
         imovelCri: String((contract as any).imovelCri || contract.dados?.imovel?.cri || '').trim(),
         valorTotalNegociado: Number(contract.valor || 0),
-        valorSinal: Number(contract.valorSinal || contract.dados?.pagamento?.valorSinal || contract.dados?.termos?.valorSinal || contract.dados?.arras?.valorArras || 0),
+        valorSinal: Number(contract.valorSinal || contract.valorSinalNegocio || contract.dados?.pagamento?.valorSinal || contract.dados?.pagamento?.valorSinalNegocio || contract.dados?.termos?.valorSinal || contract.dados?.termos?.valorSinalNegocio || contract.dados?.arras?.valorArras || 0),
+        valorSinalNegocio: Number(contract.valorSinal || contract.valorSinalNegocio || contract.dados?.pagamento?.valorSinal || contract.dados?.pagamento?.valorSinalNegocio || contract.dados?.termos?.valorSinal || contract.dados?.termos?.valorSinalNegocio || contract.dados?.arras?.valorArras || 0),
         valorPorExtenso: contract.dados?.[contract.tipoContrato === 'proposta' ? 'pagamento' : 'termos']?.valorExtenso || valorMonetarioPorExtenso(Number(contract.valor || 0)),
         locadorNome: contract.dados?.locador?.nome || contract.nomeVendedor || '',
         locadorDocumento: contract.dados?.locador?.cpf || '',
@@ -6441,17 +6449,23 @@ function AdminContractFormInner() {
                           <input 
                             type="text" 
                             className="input-field" 
-                            value={maskCurrency(contract.dados?.arras?.valorArras ?? contract.valorSinal ?? '')}
+                            value={maskCurrency(contract.dados?.arras?.valorArras ?? contract.valorSinal ?? contract.valorSinalNegocio ?? '')}
                             onChange={e => {
                               const num = parseCurrencyToNumber(e.target.value);
                               setContract(prev => ({
                                 ...prev,
                                 valorSinal: num,
+                                valorSinalNegocio: num,
                                 dados: {
                                   ...prev.dados,
                                   arras: {
                                     ...prev.dados?.arras,
                                     valorArras: num
+                                  },
+                                  pagamento: {
+                                    ...prev.dados?.pagamento,
+                                    valorSinal: num,
+                                    valorSinalNegocio: num
                                   }
                                 }
                               }));
@@ -6575,26 +6589,32 @@ function AdminContractFormInner() {
                           </div>
 
                           <div className="space-y-2">
-                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1 text-gold">Sinal do Negócio (R$)</label>
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1 text-gold flex items-center justify-between">
+                              <span>Sinal do Negócio (R$)</span>
+                              <span className="text-[10px] text-gold/80 font-normal lowercase">(gera cláusula de adiantamento reembolsável)</span>
+                            </label>
                             <input 
                               type="text" 
                               className="w-full bg-gray-50 border border-transparent rounded-[1.5rem] py-5 px-7 text-2xl font-display font-bold text-primary-black focus:ring-4 focus:ring-gold/10 focus:border-gold/20 focus:bg-white outline-none transition-all"
-                              value={maskCurrency(contract.valorSinal || '')}
+                              value={maskCurrency(contract.valorSinal || contract.valorSinalNegocio || '')}
                               onChange={e => {
                                 const num = parseCurrencyToNumber(e.target.value);
                                 setContract(prev => ({
                                   ...prev,
                                   valorSinal: num,
+                                  valorSinalNegocio: num,
                                   dados: {
                                     ...prev.dados,
                                     pagamento: {
                                       ...prev.dados?.pagamento,
                                       valorSinal: num,
+                                      valorSinalNegocio: num,
                                       sinal: num
                                     },
                                     termos: {
                                       ...prev.dados?.termos,
                                       valorSinal: num,
+                                      valorSinalNegocio: num,
                                       sinal: num
                                     }
                                   }

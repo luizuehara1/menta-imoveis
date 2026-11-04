@@ -397,6 +397,7 @@ export interface Contract {
   valorImovel?: number;
   valorArras?: number;
   valorSinal?: number;
+  valorSinalNegocio?: number;
   formaPagamentoArras?: string;
   dataPagamentoArras?: string;
   prazoContratoDefinitivo?: string;
