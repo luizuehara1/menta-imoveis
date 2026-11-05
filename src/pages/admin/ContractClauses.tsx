@@ -42,6 +42,7 @@ export interface ContractClause {
   titulo: string;
   texto: string;
   tipo: 'todos' | 'proposta' | 'contraproposta' | 'aceite' | 'locacao_temporaria' | 'administracao_temporaria' | 'compra_venda' | 'locacao' | 'arras_confirmatorios';
+  modelosCompativeis?: string[];
   ordem: number;
   ativo: boolean;
   obrigatorio: boolean;
@@ -197,28 +198,121 @@ export const CLAUSULAS_PADRAO_OFICIAIS = [
 
   // 4. Administração Temporária
   {
-    titulo: "Da Identificação das Partes e Qualificação",
-    texto: "O presente contrato é celebrado entre o(a) PROPRIETÁRIO(A) CONTRATANTE e a IMOBILIÁRIA ADMINISTRADORA, sociedade empresária especializada em gestão e intermediação imobiliária.",
+    titulo: "CLÁUSULA 1ª — DA IDENTIFICAÇÃO DAS PARTES E QUALIFICAÇÃO",
+    texto: "O presente contrato é celebrado entre o(a) PROPRIETÁRIO(A) CONTRATANTE e a IMOBILIÁRIA ADMINISTRADORA, sociedade empresária especializada em gestão e intermediação imobiliária, qualificadas no preâmbulo deste instrumento.",
     ordem: 1,
     obrigatorio: true,
     ativo: true,
-    tipo: 'administracao_temporaria' as const
+    tipo: 'administracao_temporaria' as const,
+    modelosCompativeis: ['administracao_temporaria']
   },
   {
-    titulo: "Do Objeto e Poderes de Administração",
+    titulo: "CLÁUSULA 2ª — DO OBJETO E PODERES DE ADMINISTRAÇÃO",
     texto: "O(A) PROPRIETÁRIO(A) confere à ADMINISTRADORA a gestão, representação e administração exclusiva para fins de locação por temporada do imóvel, outorgando-lhe poderes para promover a publicidade, intermediar estadias e formalizar locações temporárias.",
     ordem: 2,
     obrigatorio: true,
     ativo: true,
-    tipo: 'administracao_temporaria' as const
+    tipo: 'administracao_temporaria' as const,
+    modelosCompativeis: ['administracao_temporaria']
   },
   {
-    titulo: "Da Remuneração e Prestação de Contas",
-    texto: "Pelos serviços prestados, a ADMINISTRADORA perceberá a remuneração estipulada, prestando contas de todas as receitas e repassando os valores líquidos pertencentes ao proprietário nos prazos convencionados.",
+    titulo: "CLÁUSULA 3ª — DA DESTINAÇÃO DO IMÓVEL E LOCAÇÃO POR TEMPORADA",
+    texto: "O imóvel objeto da presente administração destina-se exclusivamente para locação residencial por temporada, na forma dos artigos 48 e seguintes da Lei Federal nº 8.245/1991, competindo à ADMINISTRADORA zelar pela adequada ocupação residencial temporária e cumprimento da convenção e regulamento interno.",
     ordem: 3,
     obrigatorio: true,
     ativo: true,
-    tipo: 'administracao_temporaria' as const
+    tipo: 'administracao_temporaria' as const,
+    modelosCompativeis: ['administracao_temporaria']
+  },
+  {
+    titulo: "CLÁUSULA 4ª — DAS RESERVAS E CONTRATOS DE LOCAÇÃO",
+    texto: "A ADMINISTRADORA poderá divulgar o imóvel, atender interessados, organizar reservas, celebrar contratos de locação por temporada em nome do PROPRIETÁRIO e receber os respectivos pagamentos, observados os poderes conferidos neste instrumento. Os valores mínimos das diárias, descontos e condições de pagamento deverão ser previamente ajustados com o PROPRIETÁRIO por escrito, inclusive por meio eletrônico.\n\nParágrafo único. Cada locação deverá ser formalizada com identificação dos ocupantes, período de permanência, valores, regras de utilização e condições de cancelamento. A confirmação da reserva dependerá do cumprimento das condições de contratação e pagamento informadas ao locatário.",
+    ordem: 4,
+    obrigatorio: true,
+    ativo: true,
+    tipo: 'administracao_temporaria' as const,
+    modelosCompativeis: ['administracao_temporaria']
+  },
+  {
+    titulo: "CLÁUSULA 5ª — DAS OBRIGAÇÕES DO PROPRIETÁRIO",
+    texto: "O PROPRIETÁRIO deverá entregar e manter o imóvel em condições adequadas de uso, segurança, higiene e habitabilidade, com móveis, utensílios e equipamentos em funcionamento, fornecendo as chaves, documentos e informações necessários à administração.\n\nParágrafo único. Compete ao PROPRIETÁRIO informar restrições legais ou condominiais à locação por temporada e arcar com tributos, condomínio, manutenção estrutural, substituição de equipamentos por desgaste natural e demais despesas de sua responsabilidade, ressalvados os encargos validamente atribuídos ao locatário.",
+    ordem: 5,
+    obrigatorio: true,
+    ativo: true,
+    tipo: 'administracao_temporaria' as const,
+    modelosCompativeis: ['administracao_temporaria']
+  },
+  {
+    titulo: "CLÁUSULA 6ª — DAS OBRIGAÇÕES DA ADMINISTRADORA",
+    texto: "Compete à ADMINISTRADORA acompanhar as reservas, orientar os locatários, coordenar a entrega e devolução das chaves, organizar a limpeza entre as locações e realizar ou providenciar a conferência das condições aparentes do imóvel, comunicando ao PROPRIETÁRIO as ocorrências relevantes.\n\nParágrafo único. A ADMINISTRADORA deverá atuar com diligência, manter os registros das movimentações financeiras e disponibilizar os comprovantes das receitas e despesas vinculadas à administração.",
+    ordem: 6,
+    obrigatorio: true,
+    ativo: true,
+    tipo: 'administracao_temporaria' as const,
+    modelosCompativeis: ['administracao_temporaria']
+  },
+  {
+    titulo: "CLÁUSULA 7ª — DA REMUNERAÇÃO, DESPESAS E REPASSES",
+    texto: "A remuneração da ADMINISTRADORA observará o percentual e a base de cálculo definidos no quadro de condições comerciais deste contrato. Taxas de plataformas, despesas de limpeza, manutenção e outros encargos deverão ser discriminados separadamente na prestação de contas, com indicação do responsável pelo pagamento.\n\n§ 1º. A taxa de limpeza cobrada do locatário, quando destinada ao pagamento desse serviço, e a caução reembolsável não integrarão a base de cálculo da remuneração da ADMINISTRADORA.\n\n§ 2º. Os repasses ao PROPRIETÁRIO observarão o prazo previsto no quadro de condições comerciais, contado da efetiva disponibilidade dos recursos para a ADMINISTRADORA, inclusive nas reservas intermediadas por plataformas.\n\n§ 3º. Somente poderão ser descontados dos repasses a remuneração contratada, os encargos expressamente previstos e as despesas autorizadas ou realizadas em situação de urgência, devidamente comprovadas.",
+    ordem: 7,
+    obrigatorio: true,
+    ativo: true,
+    tipo: 'administracao_temporaria' as const,
+    modelosCompativeis: ['administracao_temporaria']
+  },
+  {
+    titulo: "CLÁUSULA 8ª — DA LIMPEZA, CONSERVAÇÃO E REPAROS",
+    texto: "A limpeza entre as locações será organizada pela ADMINISTRADORA, com cobrança e destinação do respectivo valor informadas na prestação de contas. Reparos e contratações extraordinárias dependerão de autorização prévia do PROPRIETÁRIO.\n\nParágrafo único. Em situação de urgência, quando a demora puder comprometer a segurança das pessoas, agravar danos ou impedir o uso regular do imóvel, a ADMINISTRADORA poderá providenciar o serviço estritamente necessário, comunicando o PROPRIETÁRIO assim que possível e apresentando os comprovantes.",
+    ordem: 8,
+    obrigatorio: true,
+    ativo: true,
+    tipo: 'administracao_temporaria' as const,
+    modelosCompativeis: ['administracao_temporaria']
+  },
+  {
+    titulo: "CLÁUSULA 9ª — DO INVENTÁRIO, AVARIAS E RESPONSABILIDADES",
+    texto: "Os móveis, utensílios e equipamentos deverão constar de inventário anexo, com descrição de seu estado de conservação, preferencialmente acompanhado de fotografias.\n\n§ 1º. Identificados danos além do desgaste decorrente do uso normal, a ADMINISTRADORA deverá registrar a ocorrência, informar o PROPRIETÁRIO e adotar as medidas de cobrança cabíveis perante o responsável, inclusive mediante os procedimentos da plataforma utilizada, quando aplicáveis.\n\n§ 2º. A ADMINISTRADORA não garante o ressarcimento de danos causados por terceiros, respondendo, entretanto, pelos prejuízos decorrentes de sua própria ação ou omissão culposa ou dolosa, ou do descumprimento de suas obrigações contratuais.",
+    ordem: 9,
+    obrigatorio: true,
+    ativo: true,
+    tipo: 'administracao_temporaria' as const,
+    modelosCompativeis: ['administracao_temporaria']
+  },
+  {
+    titulo: "CLÁUSULA 10ª — DO USO PELO PROPRIETÁRIO E DA EXCLUSIVIDADE",
+    texto: "Durante a vigência da administração exclusiva, o PROPRIETÁRIO deverá encaminhar à ADMINISTRADORA as solicitações de reserva recebidas diretamente, evitando contratações paralelas e conflitos de agenda.\n\nParágrafo único. O uso do imóvel pelo PROPRIETÁRIO ou por pessoas por ele autorizadas dependerá de comunicação prévia e confirmação escrita do bloqueio das datas pela ADMINISTRADORA, respeitadas as reservas já confirmadas. O uso próprio, sem cobrança de aluguel, não gerará comissão de locação, permanecendo devidas as despesas dos serviços solicitados.",
+    ordem: 10,
+    obrigatorio: true,
+    ativo: true,
+    tipo: 'administracao_temporaria' as const,
+    modelosCompativeis: ['administracao_temporaria']
+  },
+  {
+    titulo: "CLÁUSULA 11ª — DOS CANCELAMENTOS E REEMBOLSOS",
+    texto: "Os cancelamentos e reembolsos observarão as condições informadas no momento da contratação, as regras da plataforma utilizada e a legislação aplicável. A ADMINISTRADORA deverá registrar os valores recebidos, devolvidos e eventualmente retidos, demonstrando-os na prestação de contas.\n\nParágrafo único. A remuneração da ADMINISTRADORA sobre valores retidos em razão de cancelamento ficará limitada à parcela efetivamente destinada ao PROPRIETÁRIO a título de receita locatícia. Não haverá comissão sobre valores integralmente devolvidos ao locatário.",
+    ordem: 11,
+    obrigatorio: true,
+    ativo: true,
+    tipo: 'administracao_temporaria' as const,
+    modelosCompativeis: ['administracao_temporaria']
+  },
+  {
+    titulo: "CLÁUSULA 12ª — DA VIGÊNCIA E DO ENCERRAMENTO",
+    texto: "A vigência e a renovação observarão o prazo indicado no quadro de condições comerciais. Qualquer das partes poderá solicitar o encerramento mediante comunicação escrita com antecedência mínima de 30 (trinta) dias.\n\n§ 1º. As reservas confirmadas antes da comunicação deverão ser respeitadas, salvo solução diversa formalizada entre as partes e aceita pelos locatários afetados, preservados seus direitos.\n\n§ 2º. Encerrada a administração e concluídas as reservas pendentes, a ADMINISTRADORA apresentará a prestação de contas final em até 10 (dez) dias úteis, repassando o saldo disponível e devolvendo as chaves e documentos sob sua guarda. Valores ainda não liberados por plataformas serão informados e repassados no prazo contratual após sua efetiva disponibilização.",
+    ordem: 12,
+    obrigatorio: true,
+    ativo: true,
+    tipo: 'administracao_temporaria' as const,
+    modelosCompativeis: ['administracao_temporaria']
+  },
+  {
+    titulo: "CLÁUSULA 13ª — DAS COMUNICAÇÕES E DOS DADOS PESSOAIS",
+    texto: "As autorizações, comunicações e aprovações relativas à administração poderão ocorrer pelos e-mails ou números de WhatsApp informados pelas partes, desde que seja possível identificar o remetente e conservar o registro.\n\nParágrafo único. Os dados pessoais coletados serão utilizados para a administração do imóvel, formalização das locações, cumprimento de obrigações legais e exercício de direitos, com compartilhamento limitado ao necessário para essas finalidades.",
+    ordem: 13,
+    obrigatorio: true,
+    ativo: true,
+    tipo: 'administracao_temporaria' as const,
+    modelosCompativeis: ['administracao_temporaria']
   },
 
   // 5. Arras Confirmatórias
@@ -298,6 +392,79 @@ export const VARIAVEIS_DINAMICAS = [
   { key: '{cidade}', label: 'Cidade do Contrato' }
 ];
 
+export const AVAILABLE_CONTRACT_MODELS = [
+  { id: 'proposta', label: 'Proposta de Compra', shortLabel: 'Proposta' },
+  { id: 'contraproposta', label: 'Contraproposta', shortLabel: 'Contraproposta' },
+  { id: 'aceite', label: 'Aceite de Termos', shortLabel: 'Aceite' },
+  { id: 'compra_venda', label: 'Compra e Venda', shortLabel: 'Compra e Venda' },
+  { id: 'arras_confirmatorios', label: 'Arras e Sinal', shortLabel: 'Arras' },
+  { id: 'locacao_temporaria', label: 'Locação Temporária', shortLabel: 'Locação Temp.' },
+  { id: 'administracao_temporaria', label: 'Administração Temporária', shortLabel: 'Admin Temp.' },
+  { id: 'locacao', label: 'Locatício Anual', shortLabel: 'Locação Anual' }
+];
+
+export function isClauseCompatible(clause: any, contractTipo: string): boolean {
+  if (!clause) return false;
+  
+  // 1. If explicit modelosCompativeis array is present
+  if (Array.isArray(clause.modelosCompativeis) && clause.modelosCompativeis.length > 0) {
+    if (clause.modelosCompativeis.includes('todos') || clause.modelosCompativeis.includes(contractTipo)) {
+      return true;
+    }
+    return false;
+  }
+
+  // 2. Compatibility rules based on clause.tipo
+  const t = clause.tipo;
+  if (!t || t === 'todos') return true;
+  if (t === contractTipo) return true;
+
+  // The 3 core negotiation models share clauses: Proposta, Contraproposta and Aceite
+  if ((contractTipo === 'proposta' || contractTipo === 'contraproposta' || contractTipo === 'aceite') &&
+      (t === 'proposta' || t === 'contraproposta' || t === 'aceite')) {
+    return true;
+  }
+
+  // Compra e Venda
+  if (contractTipo === 'compra_venda' && (t === 'compra_venda' || t === 'venda' || t === 'proposta')) {
+    return true;
+  }
+
+  // Arras
+  if (contractTipo === 'arras_confirmatorios' && (t === 'arras' || t === 'arras_confirmatorios' || t === 'proposta')) {
+    return true;
+  }
+
+  return false;
+}
+
+export function getCompatibleModelLabels(clause: any): string[] {
+  if (Array.isArray(clause.modelosCompativeis) && clause.modelosCompativeis.length > 0) {
+    if (clause.modelosCompativeis.includes('todos')) {
+      return ['Todos os Contratos'];
+    }
+    return clause.modelosCompativeis.map((id: string) => {
+      const found = AVAILABLE_CONTRACT_MODELS.find(m => m.id === id);
+      return found ? found.shortLabel : id;
+    });
+  }
+
+  if (clause.tipo === 'proposta') {
+    return ['Proposta', 'Contraproposta', 'Aceite', 'Compra e Venda'];
+  }
+  if (clause.tipo === 'contraproposta') {
+    return ['Contraproposta', 'Aceite', 'Proposta'];
+  }
+  if (clause.tipo === 'aceite') {
+    return ['Aceite', 'Contraproposta', 'Proposta'];
+  }
+  if (clause.tipo === 'todos') {
+    return ['Todos os Contratos'];
+  }
+  const found = AVAILABLE_CONTRACT_MODELS.find(m => m.id === clause.tipo);
+  return [found ? found.shortLabel : (CONTRACT_TYPE_LABELS[clause.tipo] || clause.tipo)];
+}
+
 export default function ContractClauses() {
   const { user } = useAuth();
   const [clauses, setClauses] = useState<ContractClause[]>([]);
@@ -312,6 +479,7 @@ export default function ContractClauses() {
   const [titulo, setTitulo] = useState('');
   const [texto, setTexto] = useState('');
   const [tipo, setTipo] = useState<ContractClause['tipo']>('todos');
+  const [modelosCompativeis, setModelosCompativeis] = useState<string[]>(['proposta', 'contraproposta', 'aceite', 'compra_venda']);
   const [ordem, setOrdem] = useState(1);
   const [ativo, setAtivo] = useState(true);
   const [obrigatorio, setObrigatorio] = useState(false);
@@ -396,6 +564,35 @@ export default function ContractClauses() {
           }
         }
 
+        // Ensure official Administração Temporária clauses are registered in Firestore
+        const adminClausesMissing = CLAUSULAS_PADRAO_OFICIAIS
+          .filter(c => c.tipo === 'administracao_temporaria')
+          .filter(c => !data.some(existing => 
+            existing.tipo === 'administracao_temporaria' && (
+              existing.titulo === c.titulo || 
+              (c.titulo.includes('—') && existing.titulo?.toUpperCase().includes(c.titulo.split('—')[1]?.trim().toUpperCase()))
+            )
+          ));
+
+        if (adminClausesMissing.length > 0) {
+          const adminEmail = user?.email || user?.displayName || 'Sistema';
+          for (const padrao of adminClausesMissing) {
+            const payload = {
+              ...padrao,
+              modelosCompativeis: ['administracao_temporaria'],
+              criadoEm: serverTimestamp(),
+              atualizadoEm: serverTimestamp(),
+              atualizadoPor: adminEmail
+            };
+            try {
+              const docRef = await addDoc(collection(db, 'clausulasContratos'), payload);
+              data.push({ id: docRef.id, ...payload } as ContractClause);
+            } catch (err) {
+              console.error("Erro ao registrar cláusula de administração:", err);
+            }
+          }
+        }
+
         setClauses(data);
       }
     } catch (e: any) {
@@ -411,6 +608,7 @@ export default function ContractClauses() {
     setTitulo('');
     setTexto('');
     setTipo('todos');
+    setModelosCompativeis(['proposta', 'contraproposta', 'aceite', 'compra_venda']);
     const maxOrder = clauses.length > 0 ? Math.max(...clauses.map(c => Number(c.ordem) || 0)) : 0;
     setOrdem(maxOrder + 1);
     setAtivo(true);
@@ -424,6 +622,14 @@ export default function ContractClauses() {
     setTitulo(clause.titulo);
     setTexto(clause.texto);
     setTipo(clause.tipo);
+    const initialModels = Array.isArray(clause.modelosCompativeis) && clause.modelosCompativeis.length > 0
+      ? clause.modelosCompativeis
+      : (clause.tipo === 'proposta' 
+          ? ['proposta', 'contraproposta', 'aceite', 'compra_venda'] 
+          : clause.tipo === 'todos' 
+            ? ['proposta', 'contraproposta', 'aceite', 'compra_venda', 'arras_confirmatorios', 'locacao_temporaria', 'administracao_temporaria', 'locacao']
+            : [clause.tipo]);
+    setModelosCompativeis(initialModels);
     setOrdem(clause.ordem);
     setAtivo(clause.ativo);
     setObrigatorio(clause.obrigatorio || false);
@@ -442,9 +648,14 @@ export default function ContractClauses() {
         titulo: `${clause.titulo} (Cópia)`,
         texto: clause.texto,
         tipo: clause.tipo,
+        modelosCompativeis: Array.isArray(clause.modelosCompativeis) && clause.modelosCompativeis.length > 0
+          ? clause.modelosCompativeis
+          : (clause.tipo === 'proposta' ? ['proposta', 'contraproposta', 'aceite', 'compra_venda'] : [clause.tipo]),
         ordem: maxOrder + 1,
         ativo: true,
         obrigatorio: false,
+        campoVinculado: clause.campoVinculado || '',
+        variaveis: clause.variaveis || [],
         criadoEm: serverTimestamp(),
         atualizadoEm: serverTimestamp(),
         atualizadoPor: adminEmail
@@ -505,6 +716,7 @@ export default function ContractClauses() {
         titulo: titulo.trim(),
         texto: texto.trim(),
         tipo,
+        modelosCompativeis: modelosCompativeis.length > 0 ? modelosCompativeis : [tipo],
         ordem: Number(ordem) || 1,
         ativo,
         obrigatorio,
@@ -600,7 +812,7 @@ export default function ContractClauses() {
   const filteredClauses = clauses.filter(c => {
     const matchesSearch = c.titulo.toLowerCase().includes(search.toLowerCase()) || 
                           c.texto.toLowerCase().includes(search.toLowerCase());
-    const matchesFilter = filterType === 'todos_filtros' || c.tipo === filterType;
+    const matchesFilter = filterType === 'todos_filtros' || isClauseCompatible(c, filterType);
     const isAtivo = c.ativo !== false && (c.ativo as any) !== 'false';
     const matchesStatus = filterStatus === 'todas' 
       ? true 
@@ -837,9 +1049,16 @@ export default function ContractClauses() {
                   <h3 className="text-lg font-display font-bold text-primary-black">
                     {clause.titulo}
                   </h3>
-                  <div className="text-[11px] text-gray-500 font-medium flex items-center gap-1.5 mt-1">
-                    <FileText size={12} className="text-gold shrink-0" />
-                    <span className="font-semibold text-gray-700">Modelos compatíveis:</span> {CONTRACT_TYPE_APPLIES_TO[clause.tipo] || CONTRACT_TYPE_LABELS[clause.tipo]}
+                  <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                    <span className="text-[11px] font-semibold text-gray-500 flex items-center gap-1 mr-1">
+                      <FileText size={12} className="text-gold shrink-0" />
+                      Compatível com:
+                    </span>
+                    {getCompatibleModelLabels(clause).map((label, idx) => (
+                      <span key={idx} className="text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-200/60 px-2 py-0.5 rounded-md">
+                        {label}
+                      </span>
+                    ))}
                   </div>
                   <p className="text-gray-700 font-normal leading-relaxed whitespace-pre-wrap text-xs sm:text-sm mt-3 font-serif bg-gray-50/70 p-4 rounded-2xl border border-gray-100">
                     {clause.texto}
@@ -1091,11 +1310,25 @@ export default function ContractClauses() {
                   {/* Contract Type Selector */}
                   <div className="space-y-2">
                     <label className="text-xs uppercase font-extrabold tracking-wider text-gray-500">
-                      Categoria / Tipo de Contrato <span className="text-red-500">*</span>
+                      Categoria Principal <span className="text-red-500">*</span>
                     </label>
                     <select
                       value={tipo}
-                      onChange={(e) => setTipo(e.target.value as any)}
+                      onChange={(e) => {
+                        const newTipo = e.target.value as any;
+                        setTipo(newTipo);
+                        if (newTipo === 'proposta') {
+                          setModelosCompativeis(['proposta', 'contraproposta', 'aceite', 'compra_venda']);
+                        } else if (newTipo === 'contraproposta') {
+                          setModelosCompativeis(['contraproposta', 'proposta', 'aceite']);
+                        } else if (newTipo === 'aceite') {
+                          setModelosCompativeis(['aceite', 'proposta', 'contraproposta']);
+                        } else if (newTipo === 'todos') {
+                          setModelosCompativeis(AVAILABLE_CONTRACT_MODELS.map(m => m.id));
+                        } else {
+                          setModelosCompativeis([newTipo]);
+                        }
+                      }}
                       className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-gold/10 focus:bg-white text-sm text-primary-black font-semibold cursor-pointer"
                     >
                       {Object.entries(CONTRACT_TYPE_LABELS).map(([k, label]) => (
@@ -1117,6 +1350,63 @@ export default function ContractClauses() {
                       onChange={(e) => setOrdem(parseInt(e.target.value) || 1)}
                       className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-gold/10 focus:bg-white text-sm text-primary-black font-semibold"
                     />
+                  </div>
+
+                  {/* Modelos de Contrato Compatíveis Multi-Select */}
+                  <div className="space-y-2 md:col-span-2 p-4 bg-gray-50/80 border border-gray-200/80 rounded-2xl">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs uppercase font-extrabold tracking-wider text-gray-700 flex items-center gap-1.5">
+                        <FileText size={14} className="text-gold" />
+                        <span>Modelos de Contrato Onde Esta Cláusula Estará Disponível</span>
+                        <span className="text-red-500">*</span>
+                      </label>
+                      <div className="flex gap-2 text-[10px]">
+                        <button 
+                          type="button" 
+                          onClick={() => setModelosCompativeis(AVAILABLE_CONTRACT_MODELS.map(m => m.id))}
+                          className="text-gold hover:underline font-bold cursor-pointer"
+                        >
+                          Marcar Todos
+                        </button>
+                        <span className="text-gray-300">|</span>
+                        <button 
+                          type="button" 
+                          onClick={() => setModelosCompativeis([])}
+                          className="text-gray-400 hover:text-gray-600 font-bold cursor-pointer"
+                        >
+                          Limpar
+                        </button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1.5">
+                      {AVAILABLE_CONTRACT_MODELS.map(m => {
+                        const isSelected = modelosCompativeis.includes(m.id);
+                        return (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => {
+                              if (isSelected) {
+                                setModelosCompativeis(prev => prev.filter(x => x !== m.id));
+                              } else {
+                                setModelosCompativeis(prev => [...prev, m.id]);
+                              }
+                            }}
+                            className={`px-3 py-2.5 rounded-xl text-xs font-bold border transition-all text-left flex items-center justify-between cursor-pointer ${
+                              isSelected 
+                                ? 'bg-gold/15 text-primary-black border-gold shadow-2xs font-extrabold' 
+                                : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100/70'
+                            }`}
+                          >
+                            <span className="truncate">{m.shortLabel}</span>
+                            {isSelected && <Check size={14} className="text-gold shrink-0 ml-1" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[11px] text-gray-500 font-medium pt-1">
+                      Marque <strong>Contraproposta</strong> e <strong>Aceite de Termos</strong> para que a cláusula possa ser selecionada diretamente nessas etapas.
+                    </p>
                   </div>
 
                   {/* Campo Vinculado (Opcional - ex: Sinal de Negócio) */}

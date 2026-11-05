@@ -50,7 +50,7 @@ import { getProprietarioFromImovel, maskCurrency, parseCurrencyToNumber, formatC
 import { staggerContainer, slideUp, fadeIn, scaleIn } from '../../constants/animations';
 import { ContractA4Preview } from '../../components/admin/ContractA4Preview';
 import { obterDadosAutomaticosDoContrato } from '../../services/contractAutoFill';
-import { CLAUSULAS_PADRAO_ADMINISTRACAO_TEMPORARIA, TEXTO_OFICIAL_SINAL_PADRAO } from './ContractClauses';
+import { CLAUSULAS_PADRAO_ADMINISTRACAO_TEMPORARIA, TEXTO_OFICIAL_SINAL_PADRAO, isClauseCompatible } from './ContractClauses';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -465,7 +465,8 @@ function normalizarDadosAceite(origem: any = {}) {
         tipoAceite: origem.origem || origem.tipoDocumento || 'proposta',
         dataDocumentoBase: dDocumentoBase,
         valorAceite: vAceite,
-      }
+      },
+      clausulasSelecionadas: origem.dados?.clausulasSelecionadas || origem.clausulasSelecionadas || parsedDados.clausulasSelecionadas || []
     }
   };
 }
@@ -707,14 +708,20 @@ function mesclarDadosPropostaEContra(dados: any, proposta: any) {
     imovelCri: dados.imovelCri || proposta.imovelCri,
     imovelEndereco: dados.imovelEndereco || proposta.imovelEndereco,
 
-    condicoesPagamento: dados.condicoesPagamento || proposta.condicoesPagamento || "",
-    outrasCondicoes: dados.outrasCondicoes || proposta.outrasCondicoes || "",
+    valor: dados.valor || dados.valorContraproposta || proposta.valor,
+    valorTotalNegociado: dados.valorTotalNegociado || dados.valorContraproposta || dados.valor || proposta.valorTotalNegociado,
+    valorContraproposta: dados.valorContraproposta || dados.valor || proposta.valorContraproposta,
+    condicoesPagamento: dados.condicoesPagamento || dados.detalhesPagamentoContraproposta || proposta.condicoesPagamento || "",
+    detalhesPagamentoContraproposta: dados.detalhesPagamentoContraproposta || dados.condicoesPagamento || "",
+    outrasCondicoes: dados.outrasCondicoes || dados.condicoesPagamento || proposta.outrasCondicoes || "",
     valorPorExtenso: dados.valorPorExtenso || proposta.valorPorExtenso,
     dataProposta: dados.dataProposta || proposta.dataProposta,
+    clausulasSelecionadas: dados.dados?.clausulasSelecionadas || dados.clausulasSelecionadas || proposta.dados?.clausulasSelecionadas || proposta.clausulasSelecionadas || [],
     
     dados: {
       ...proposta.dados,
       ...dados.dados,
+      clausulasSelecionadas: dados.dados?.clausulasSelecionadas || dados.clausulasSelecionadas || proposta.dados?.clausulasSelecionadas || proposta.clausulasSelecionadas || [],
       proponente: {
         ...proposta.dados?.proponente,
         ...dados.dados?.proponente,
@@ -1100,13 +1107,9 @@ function AdminContractFormInner() {
     }
 
     // Auto-select ONLY strictly mandatory active clauses (optional clauses remain unselected for user choice)
+    const contractTipo = contract.tipoContrato || 'proposta';
     const mandatory = allSysClauses
-      .filter(c => (c.ativo === true || c.ativo === 'true') && c.obrigatorio === true && (
-        c.tipo === 'todos' || 
-        c.tipo === contract.tipoContrato ||
-        (contract.tipoContrato === 'compra_venda' && (c.tipo === 'venda' || c.tipo === 'compra_venda')) ||
-        (contract.tipoContrato === 'arras_confirmatorios' && (c.tipo === 'arras' || c.tipo === 'arras_confirmatorios'))
-      ))
+      .filter(c => (c.ativo !== false && (c.ativo as any) !== 'false') && c.obrigatorio === true && isClauseCompatible(c, contractTipo))
       .map(c => ({
         id: c.id,
         titulo: c.titulo,
@@ -2103,6 +2106,7 @@ function AdminContractFormInner() {
                 dados: {
                   ...prev.dados,
                   ...dAceite.dados,
+                  clausulasSelecionadas: dAceite.dados?.clausulasSelecionadas || dAceite.clausulasSelecionadas || (documentoBase as any)?.dados?.clausulasSelecionadas || (documentoBase as any)?.clausulasSelecionadas || prev.dados?.clausulasSelecionadas || [],
                   proponente: {
                     ...prev.dados?.proponente,
                     ...dAceite.dados?.proponente,
@@ -6786,15 +6790,10 @@ function AdminContractFormInner() {
                     <div className="flex flex-wrap gap-2">
                       {allSysClauses
                         .filter(sys => {
-                          const isAtivo = sys.ativo === true || sys.ativo === 'true';
+                          const isAtivo = sys.ativo !== false && (sys.ativo as any) !== 'false';
                           if (!isAtivo) return false;
                           const contractTipo = contract.tipoContrato || 'proposta';
-                          if (sys.tipo === 'todos') return true;
-                          if (sys.tipo === contractTipo) return true;
-                          if ((contractTipo === 'proposta' || contractTipo === 'contraproposta') && (sys.tipo === 'proposta' || sys.tipo === 'contraproposta')) return true;
-                          if (contractTipo === 'compra_venda' && (sys.tipo === 'compra_venda' || sys.tipo === 'venda' || sys.tipo === 'proposta')) return true;
-                          if (contractTipo === 'arras_confirmatorios' && (sys.tipo === 'arras' || sys.tipo === 'arras_confirmatorios')) return true;
-                          return false;
+                          return isClauseCompatible(sys, contractTipo);
                         })
                         .map(sys => {
                           const isSelected = (contract.dados?.clausulasSelecionadas || []).some((c: any) => c.id === sys.id);

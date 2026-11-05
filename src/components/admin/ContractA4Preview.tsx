@@ -954,8 +954,9 @@ export function formatarTituloClausula(titulo: string, numero: number): string {
   
   let cleanTitle = String(titulo).trim();
   cleanTitle = cleanTitle
-    .replace(/^(cl[aá]usula\s*\d+[ªºa-z]?\s*[-–:.]*)/i, '')
-    .replace(/^(\d+[ªº.]\s*[-–:]*)/i, '')
+    .replace(/^(cl[aá]usula\s*\d+[ªºa-z]?\s*[-–—:.]*)/i, '')
+    .replace(/^(\d+[ªº.]\s*[-–—:]*)/i, '')
+    .replace(/^[-–—:\s]+/, '')
     .trim();
     
   if (!cleanTitle) {
@@ -2638,7 +2639,7 @@ const ContractA4PreviewInner: React.FC<ContractA4PreviewProps> = ({ contract: or
           !(vSinalAceite > 0 && (c.campoVinculado === 'valorSinalNegocio' || String(c.titulo || '').toUpperCase().includes('ADIANTAMENTO REEMBOLSÁVEL')))
       );
       if (listSelectionAceite.length > 0) {
-        addClauseBlocks(listSelectionAceite, "Cláusulas Vinculadas", 1);
+        addClauseBlocks(listSelectionAceite, "IV - Cláusulas e Condições do Aceite", 1);
       }
 
       // 4.5. Cláusulas Adicionais / Personalizadas
